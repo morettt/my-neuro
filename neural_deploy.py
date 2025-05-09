@@ -60,6 +60,44 @@ def download_file(url, file_name=None, target_folder=None):
     print("\n下载完成!")
     return file_name
 
+def download_file_from_github(url, file_name=None, target_folder=None):
+    """下载文件并显示进度条"""
+    if file_name is None:
+        file_name = url.split('/')[-1]
+    
+    print(f"正在下载: {file_name}...")
+    response = requests.get(url, stream=True, verify=False)
+    
+    # 获取文件总大小
+    total_size = int(response.headers.get('content-length', 0))
+    downloaded_size = 0
+    
+    # 打开文件准备写入
+    with open(file_name, 'wb') as file:
+        # 逐块下载
+        for chunk in response.iter_content(chunk_size=1024*1024):  # 每次下载1MB
+            if chunk:
+                file.write(chunk)
+                downloaded_size += len(chunk)
+                
+                # 计算下载百分比
+                percent = int(downloaded_size * 100 / total_size) if total_size > 0 else 0
+                
+                # 计算下载的MB
+                mb_downloaded = downloaded_size / (1024 * 1024)
+                mb_total = total_size / (1024 * 1024)
+                
+                # 显示进度条
+                display_progress_bar(
+                    percent, 
+                    "下载进度", 
+                    mb_downloaded=mb_downloaded, 
+                    mb_total=mb_total
+                )
+    
+    print("\n下载完成!")
+    return file_name
+
 def extract_zip(zip_file, target_folder):
     """解压ZIP文件到指定文件夹并显示进度"""
     print(f"正在解压 {zip_file} 到 {target_folder}...")
@@ -220,7 +258,7 @@ def download_live2d_model():
     """下载并解压Live 2D模型"""
     print("\n========== 下载Live 2D模型 ==========")
     # GitHub文件下载链接
-    url = "https://github.com/morettt/my-neuro/releases/download/v3.9.2/live-2d.zip"
+    url = "https://gh-proxy.com/github.com/morettt/my-neuro/releases/download/v3.9.2/live-2d.zip"
     # 获取文件名
     file_name = url.split('/')[-1]
     
@@ -228,7 +266,7 @@ def download_live2d_model():
     target_folder = "live 2d"
     
     # 下载文件
-    downloaded_file = download_file(url, file_name)
+    downloaded_file = download_file_from_github(url, file_name)
     
     # 解压文件
     extract_success = extract_zip(downloaded_file, target_folder)
