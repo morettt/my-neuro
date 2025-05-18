@@ -1,4 +1,5 @@
 from typing import Tuple, Optional
+from torch import Tensor
 from torch.nn.functional import *
 from torch.nn.functional import (
     _mha_shape_check,
