@@ -4,31 +4,26 @@ Live2D模型控制器 - 负责显示和控制Live2D模型
 
 import os
 import sys
+import time
 import win32gui
 import win32con
 import OpenGL.GL as gl
-import numpy as np
 import logging
-import asyncio
-from PyQt5.QtCore import QTimerEvent, Qt, pyqtSignal, QThread, QEvent, pyqtSlot, QMetaObject, Q_ARG
-from PyQt5.QtGui import QMouseEvent, QCursor, QSurfaceFormat
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QCursor, QSurfaceFormat
 from PyQt5.QtWidgets import QOpenGLWidget, QApplication
 from PyQt5.QtGui import QGuiApplication
 
-from lip_sync_thread import LipSyncThread
 import live2d.v3 as live2d
 from live2d.v3 import StandardParams
+from live2d.utils.lipsync import WavHandler
+import numpy as np
 
 logger = logging.getLogger("live2d_model")
 
 class Live2DModel(QOpenGLWidget):
     """Live2D模型控制器类，继承自QOpenGLWidget"""
-    
-    # 定义信号
-    model_clicked = pyqtSignal(float, float)  # 点击模型信号
-    model_dragged = pyqtSignal(float, float)  # 拖拽模型信号
-    model_loaded = pyqtSignal()               # 模型加载完成信号
-    
+
     def __init__(self, config=None, event_bus=None):
         """初始化Live2D模型控制器
         
@@ -104,15 +99,10 @@ class Live2DModel(QOpenGLWidget):
         
         # Live2D模型相关
         self.model = None  # 存储Live2D模型实例
+        self.wav_handler = None # 口型匹配
         self.is_talking = False  # 是否正在说话
         self.is_listening = False  # 是否正在聆听
         self.current_expression = ""  # 当前表情
-
-        # 初始化WavHandler用于嘴型同步
-        self.lip_sync_intensity = 3.0  # 嘴型动作强度系数
-
-        # 添加嘴型同步线程引用
-        self.lip_sync_thread = None
         
         logger.info("Live2D模型控制器初始化完成")
     
@@ -133,13 +123,15 @@ class Live2DModel(QOpenGLWidget):
             # 创建模型实例
             try:
                 self.model = live2d.LAppModel()
+                self.wav_handler = WavHandler()
                 logger.info("Live2D 模型实例创建成功")
             except Exception as e:
                 logger.error(f"Live2D 模型实例创建失败: {e}")
                 raise
-            
+
             # 加载模型
             model_loaded = False
+            # 加载模型
             if self.model_path and os.path.exists(self.model_path):
                 try:
                     self.model.LoadModelJson(self.model_path)
@@ -147,7 +139,7 @@ class Live2DModel(QOpenGLWidget):
                     model_loaded = True
                 except Exception as e:
                     logger.error(f"从配置路径加载模型失败: {self.model_path}, 错误: {e}")
-            
+
             if not model_loaded and hasattr(live2d, 'LIVE2D_VERSION') and live2d.LIVE2D_VERSION == 3:
                 # 尝试加载默认模型
                 default_paths = [
@@ -178,9 +170,6 @@ class Live2DModel(QOpenGLWidget):
             # 启动高帧率定时器
             self.startTimer(int(1000 / 60))  # 启动60FPS定时器
             
-            # 发送模型加载完成信号
-            self.model_loaded.emit()
-            
             logger.info("Live2D模型初始化完成")
         
         except Exception as e:
@@ -202,6 +191,12 @@ class Live2DModel(QOpenGLWidget):
             if self.model:
                 # 更新模型参数(物理、动作等)
                 self.model.Update()
+
+                if self.wav_handler.Update():
+                    # 利用 wav 响度更新 嘴部张合
+                    self.model.SetParameterValue(
+                        StandardParams.ParamMouthOpenY, self.wav_handler.GetRms() * 3.0
+                    )
                 
                 # # 如果模型动作结束，根据当前状态触发不同动作
                 # if self.model.IsMotionFinished():
@@ -262,7 +257,6 @@ class Live2DModel(QOpenGLWidget):
         except Exception as e:
             logger.error(f"定时器事件处理失败: {e}")
 
-    # 将原方法名改为check_in_model_area，以避免与属性名冲突
     def check_in_model_area(self, x, y):
         """判断坐标是否在模型区域内
         
@@ -311,9 +305,6 @@ class Live2DModel(QOpenGLWidget):
             # 记录按下时的初始偏移量
             self.drag_start_offset_x = self.model_offset_x
             self.drag_start_offset_y = self.model_offset_y
-            
-            # 发送模型点击信号
-            self.model_clicked.emit(x, y)
             
             logger.debug("模型被点击")
     
@@ -366,9 +357,6 @@ class Live2DModel(QOpenGLWidget):
                         (self.model_offset_x - canvas_w/2)/(self.screen_size.height()/2),
                         (-self.model_offset_y + canvas_h/2)/(self.screen_size.height()/2)
                     )
-                
-                # 发送模型拖拽信号
-                self.model_dragged.emit(dx, dy)
             else:
                 # 非拖拽模式：移动窗口
                 self.move(int(self.x() + x - self.clickX), int(self.y() + y - self.clickY))
@@ -384,11 +372,6 @@ class Live2DModel(QOpenGLWidget):
         # 根据滚轮方向缩放模型
         new_scale = self.scale * (1.07 if delta > 0 else 0.93)
         
-        # 限制缩放范围
-        min_scale = 0.5
-        max_scale = 5.0
-        new_scale = max(min_scale, min(max_scale, new_scale))
-        
         # 应用新的缩放比例
         if new_scale != self.scale:
             self.scale = new_scale
@@ -397,113 +380,38 @@ class Live2DModel(QOpenGLWidget):
             
             logger.debug(f"模型缩放比例: {self.scale}")
 
-    def start_lip_sync(self, audio_path):
-        """开始嘴型同步
-        
-        Args:
-            audio_path: 音频文件路径
-        """
-        # 确保路径存在
-        if not audio_path or not os.path.exists(audio_path):
-            logger.error(f"音频文件不存在: {audio_path}")
-            return False
-        
-        # 停止之前的嘴型同步
-        self.stop_lip_sync()
-        
+    def wav_handler_start(self, data:dict):
+        self.wav_handler.ReleasePcmData()
         try:
-            # 创建并启动嘴型同步线程
-            logger.info(f"嘴型同步已启动: {audio_path}")
-            self.lip_sync_thread = LipSyncThread(audio_path, self.lip_sync_intensity)
-            
-            # 连接信号
-            self.lip_sync_thread.finished_signal.connect(self.on_lip_sync_finished)
-            self.lip_sync_thread.error_signal.connect(self.on_lip_sync_error)
-            
-            # 启动线程
-            self.lip_sync_thread.start()
-            
-            return True
-            
+            self.wav_handler.numFrames = data.get('num_frames')
+            self.wav_handler.sampleRate = data.get('framerate')
+            self.wav_handler.sampleWidth = data.get('sample_width')
+            self.wav_handler.numChannels = data.get('channels')
+            # 双声道 / 单声道
+            self.wav_handler.pcmData = data.get('pcm_data')
+            # 标准化
+            self.wav_handler.pcmData = self.wav_handler.pcmData / np.max(np.abs(self.wav_handler.pcmData))
+            # 拆分通道
+            self.wav_handler.pcmData = self.wav_handler.pcmData.reshape(-1, self.wav_handler.numChannels).T
+
+            self.wav_handler.startTime = time.time()
+            self.wav_handler.lastOffset = 0
+
         except Exception as e:
-            logger.error(f"启动嘴型同步失败: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            return False
-    
-    def stop_lip_sync(self):
-        """停止嘴型同步"""
-        if self.lip_sync_thread:
-            logger.info("停止正在运行的嘴型同步")
-            # 调用线程的stop方法
-            self.lip_sync_thread.stop()
-            # 清除引用
-            self.lip_sync_thread = None
-            
-            # 重置嘴部参数
-            if self.model:
-                try:
-                    self.model.SetParameterValue(StandardParams.ParamMouthOpenY, 0.0)
-                except Exception as e:
-                    logger.error(f"重置嘴部参数失败: {e}")
+            self.wav_handler.ReleasePcmData()
 
-    @pyqtSlot(float)
-    def _update_mouth(self, value):
-        """更新嘴部参数 - 在主线程中执行"""
-        if self.model:
-            try:
-                # 确保参数名正确
-                if hasattr(self.model, 'SetParameterValue'):
-                    # 尝试使用标准参数名
-                    try:
-                        from live2d.v3 import StandardParams
-                        self.model.SetParameterValue(StandardParams.ParamMouthOpenY, value)
-                    except:
-                        # 如果StandardParams不可用，使用字符串
-                        self.model.SetParameterValue("ParamMouthOpenY", value)
-                logger.debug(f"更新嘴部参数: {value}")
-            except Exception as e:
-                logger.error(f"更新嘴部参数失败: {e}")
-    
-    def on_lip_sync_finished(self):
-        """嘴型同步完成回调"""
-        logger.info("嘴型同步完成")
-        # 重置嘴部参数
-        if self.model:
-            try:
-                self.model.SetParameterValue(StandardParams.ParamMouthOpenY, 0.0)
-            except Exception as e:
-                logger.error(f"重置嘴部参数失败: {e}")
-    
-    def on_lip_sync_error(self, error_msg):
-        """嘴型同步错误回调"""
-        logger.error(f"嘴型同步错误: {error_msg}")
-    
-    # 确保在窗口关闭时停止嘴型同步
-    def closeEvent(self, event):
-        """窗口关闭事件"""
-        try:
-            # 尝试获取现有事件循环
-            loop = asyncio.get_event_loop()
-            loop.create_task(self.async_stop_lip_sync())
-        except RuntimeError:
-            # 如果没有事件循环，创建新的
-            asyncio.run(self.async_stop_lip_sync())
-        
-        super().closeEvent(event)
+    def mouth_match_motion(self, on_start_motion_callback):
+        # 播放一个不存在的动作
+        self.model.StartMotion(
+            "",
+            0,
+            live2d.MotionPriority.FORCE,
+            on_start_motion_callback,
+            self.on_finish_motion_callback,
+        )
 
-    async def async_stop_lip_sync(self):
-        """异步停止嘴型同步"""
-        self.stop_lip_sync()
-        # 取消事件订阅
-        if self.event_bus:
-            await self.event_bus.unsubscribe("lip_sync_start", self.start_lip_sync)
-            await self.event_bus.unsubscribe("set_talking", self.set_talking)
-        
-    # 确保在析构时停止嘴型同步
-    def __del__(self):
-        """析构函数"""
-        self.stop_lip_sync()
+    def on_finish_motion_callback(self):
+        logger.debug("motion finished")
 
     def set_talking(self, is_talking):
         """设置说话状态
