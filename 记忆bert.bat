@@ -1,3 +1,4 @@
+chcp 65001
 @echo off
 title 启动所有API服务
 :: 使用脚本所在目录作为工作目录
