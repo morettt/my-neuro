@@ -13,7 +13,7 @@ servers = [
     },
     {
         "name": "TTS服务端",
-        "command": "call conda activate my-neuro && cd tts-studio && python tts_api.py -p 5000 -s tts-model/merge.pth -dr tts-model/neuro/01.wav -dt \"Hold on please, I'm busy. Okay, I think I heard him say he wants me to stream Hollow Knight on Tuesday and Thursday.\" -dl \"en\"",
+        "command": "call conda activate my-neuro && python tts_launcher.py",
         "log_file": "logs/tts.log"
     },
     {

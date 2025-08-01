@@ -43,3 +43,4 @@ g2p-en
 wordsegment
 jieba_fast
 opencc
+faster-whisper
