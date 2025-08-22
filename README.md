@@ -10,7 +10,7 @@
 
 English Documentation: [English Version](./README_English.md)
 
-## PR提交规范  [pr提交要求](./PR_README.md)
+## PR提交规范：[pr提交要求](./PR_README.md)
 
 
 ### PS:当前项目只支持N卡，也就是英伟达的显卡。A卡虽然也能使用。但是TTS会报错，也就是没有AI的声音。不介意可以尝试。
@@ -266,6 +266,7 @@ QQ群:感谢 菊花茶洋参 帮忙制作肥牛app的封面
 
 感谢大佬开源十分好用的tts：
 GPT-SoVITS：https://github.com/RVC-Boss/GPT-SoVITS
+
 
 
 
