@@ -14,10 +14,17 @@ import logging
 # 导入事件总线
 try:
     from UI.simple_event_bus import event_bus, Events
-
     HAS_EVENT_BUS = True
 except ImportError:
     HAS_EVENT_BUS = False
+
+# 导入文本过滤器
+try:
+    from utils.text_filter import filter_for_tts
+except ImportError:
+    # 如果导入失败，提供一个简单的替代函数
+    def filter_for_tts(text):
+        return text
 
 logger = logging.getLogger("audio_player")
 
@@ -139,18 +146,22 @@ class AudioPlayer:
         if not text_segment.strip():
             return
 
+        # 🆕 应用文本过滤器
+        filtered_text = filter_for_tts(text_segment)
+        
         # 🔥 发布文本处理事件
         if HAS_EVENT_BUS:
-            event_bus.publish("text_processing", {"text": text_segment})
+            event_bus.publish("text_processing", {"text": filtered_text})
 
         # 如果有情绪处理器，预处理文本
         if self.emotion_handler:
-            processed_data = self.emotion_handler.prepare_text_for_audio(text_segment)
+            processed_data = self.emotion_handler.prepare_text_for_audio(filtered_text)
             clean_text = processed_data['clean_text']
             emotion_markers = processed_data['emotion_markers']
 
             sync_data = {
                 'original_text': text_segment,
+                'filtered_text': filtered_text,
                 'clean_text': clean_text,
                 'emotion_markers': emotion_markers
             }
@@ -158,7 +169,8 @@ class AudioPlayer:
         else:
             sync_data = {
                 'original_text': text_segment,
-                'clean_text': text_segment,
+                'filtered_text': filtered_text,
+                'clean_text': filtered_text,
                 'emotion_markers': []
             }
             self.sync_data_queue.put(sync_data)

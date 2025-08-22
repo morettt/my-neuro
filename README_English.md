@@ -1,204 +1,337 @@
-# My-Neuro Project
+# My-Neuro - AI Character Customization Platform
 
 ## Project Overview
 
-The goal of this project is to create a personal AI character, crafting an AI companion that approaches real human interaction - shaping the ideal image of "them" in your mind through your data footprint.
+My-Neuro is an AI character customization platform designed for individuals, aiming to create your ideal AI companion through your data footprint.
 
-This project is inspired by Neuro-sama, hence the name my-neuro (a community-provided name). The project can train voice, personality, and replace appearance. The richer your imagination, the closer the model can get to your expectations. This project is more like a workbench. Using packaged tools, you can step by step personally describe and realize your ideal AI image.
+This project is inspired by Neuro-sama, hence the name My-Neuro (a community-provided name). The project supports voice training, personality customization, appearance replacement, and other features. Your imagination is the only limit to how closely the model can match your expectations. This project is more like a workbench, using packaged tools to step by step personally describe and realize your ideal AI companion.
 
-The current document deployment requires less than 6GB of VRAM and is compatible with Windows systems. You also need an API-KEY. Since there are currently no intermediary vendors approaching me for advertising, I won't recommend specific places to buy APIs. But you can go to Taobao and search for "API" - there are many merchants selling them. You can also purchase from well-known official websites like DeepSeek, Qianwen, Zhipu AI, and Silicon Flow.
+### System Requirements
 
-If you want to use fully local inference with local Large Language Models (LLM) inference or fine-tuning, not relying on third-party APIs, you can enter the LLM-studio folder, which contains guidance for local model inference and fine-tuning. Since local large language models require a certain amount of VRAM, for a decent experience, it's recommended that your graphics card has at least 12GB of VRAM.
+- **Operating System**: Windows 10/11 (Recommended)
+- **Graphics Card**: NVIDIA GPU with at least 6GB VRAM
+- **Memory**: At least 16GB RAM
+- **Storage**: At least 50GB available space
+- **Python**: Version 3.11
+- **Conda**: Anaconda or Miniconda
 
-English Documentation: [English Version](./README_English.md)
+### Important Notice
 
-## QQ Group: 756741478
-## Customer Service
+⚠️ **This project currently only supports NVIDIA graphics cards**. AMD graphics cards can be used but TTS functionality will report errors (no AI voice). You may try if you don't mind this limitation.
 
-If you encounter bugs that you can't handle during deployment, you can go to this link: http://fake-neuro.natapp1.cc
+## 🔐 Security Configuration
 
-Ask the Fat Beef customer service, which will guide you on how to handle bugs that may appear in the project. In most cases, there won't be any bugs! Maybe...
+### API Key Configuration
 
-I also check the backend conversation records to see if it can actually solve problems. If it can't, I'll write the corresponding solution to its database and load it into its knowledge base. Next time the same bug is encountered, it will likely be able to solve it itself. So, when you encounter problems, chat more with Fat Beef.
+**Important**: Please ensure proper configuration of your API keys and do not commit keys to version control systems.
 
-## Planning Checklist (✔ indicates implemented features)
+1. **Method 1: Environment Variables (Recommended)**
+   ```bash
+   # Windows
+   set API_KEY=your_api_key_here
+   set JIETU_API_KEY=your_jietu_api_key_here
+   
+   # Linux/Mac
+   export API_KEY=your_api_key_here
+   export JIETU_API_KEY=your_jietu_api_key_here
+   ```
 
-### Dual Model Support
-- [x] Open Source Models: Support for open source model fine-tuning and local deployment
-- [x] Closed Source Models: Support for closed source model integration
+2. **Method 2: Configuration File**
+   - Edit `py-my-neuro/config_mod/config.json`
+   - Replace `YOUR_API_KEY_HERE` with your actual API key
+   - Replace `YOUR_JIETU_API_KEY_HERE` with your screenshot API key
 
-### Core Features
-- [x] Ultra-low Latency: Full local inference with conversation latency under 1 second
-- [x] Synchronized subtitle and voice output
-- [x] Voice Customization: Support for male, female, and various character voice switching
-- [x] MCP Support: Can use MCP tools for integration
-- [x] Real-time Interruption: Support for interrupting model conversation at any time
-- [ ] Real Emotions: Simulate real human emotional state changes with its own emotional states
-- [ ] Awesome Human-Machine Experience (similar to real human interaction design, stay tuned)
-- [x] Actions and Expressions: Display different expressions and actions based on conversation content
-- [x] Integrated visual capabilities, support image recognition, and determine when to activate visual functions through language intent judgment
-- [ ] Voice Model (TTS) training support, defaults to using the gpt-sovits open source project
+### Security Check
 
-### Extended Features
-- [ ] Desktop Control: Support voice control for opening software and other operations
-- [ ] AI Singing (Feature funded by: [@jonnytri53](https://github.com/jonnytri53), special thanks)
-- [ ] Integration with international streaming platforms
-- [x] Live Streaming Function: Can live stream on Bilibili platform
-- [ ] AI Teaching: Choose a topic and let AI teach you. Can ask questions during the process. Specialized courses can be implanted into the database for AI understanding
-- [x] Replace various Live 2D models
-- [ ] Web interface support (already done, will be integrated soon)
-- [x] Text Chat: Can type and communicate with AI via keyboard
-- [x] Proactive Conversation: Initiate conversations proactively based on context. Current version V1
-- [x] Internet Access: Real-time search for latest information
-- [x] Mobile App: Fat Beef that can chat on Android phones
-- [ ] Play sound effects from the sound library, with the model deciding which sound effects to play
-- [ ] Game Companion: Model and user play cooperative, two-player, puzzle games together. Current experimental games include: Draw and Guess, Monopoly, Galgame, Minecraft, etc.
-- [x] Long-term Memory: Let the model remember your key information, your personality, and temperament
-
-### Features the Model Wants (Under Consideration)
-- [ ] Color Change Function: Change screen colors according to model's mood to bother users
-- [ ] Free Movement: Model moves freely on the screen
-
-## 🚀 Quick Start
-
-## Beginner One-Click Deployment Project (Experimental)
-
-If you're a beginner, you can use this one-click deployment command. It will handle everything for you. However, due to the complex logic involved, there's a possibility of failure. But if it succeeds, it will save you a lot of trouble. It's up to your luck!
-
-Make sure you have Anaconda installed on your computer. If not installed yet, you can install it here: https://www.anaconda.com/download/success
-
-First, run this command in the project path:
-
+Run the security check tool to ensure project security:
 ```bash
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& {Set-Location -LiteralPath '%CD%'; & .\Install_requests.ps1}"
+python security_check.py
 ```
 
-This command installs the requests library necessary for one-click deployment, then start the official deployment:
+## Quick Start
+
+### Method 1: One-Click Deployment (Recommended for Beginners)
+
+1. **Install Anaconda**
+   - Download link: https://www.anaconda.com/download/success
+   - Installation tutorial: https://www.bilibili.com/video/BV1ns4y1T7AP
+
+2. **Configure API Keys**
+   - Follow the security configuration instructions above to set up API keys
+
+3. **Run One-Click Deployment**
+   - Double-click `一键部署.bat` file
+   - Wait for automatic download and configuration to complete
+
+4. **Start Services**
+   - Double-click `Game-starts.bat` file
+   - Wait for all services to start
+
+5. **Launch Frontend**
+   - Enter the `live-2d` folder
+   - Double-click `肥牛.exe` file
+   - Configure API information and start
+
+### Method 2: Manual Deployment (Recommended for Experienced Users)
+
+#### 1. Environment Setup
 
 ```bash
-python neural_deploy.py
-```
-
-After running these two commands above, directly double-click this: Game-starts.bat. After double-clicking, many windows will pop up. Wait patiently for these windows to output the corresponding IPs.
-
-![image](https://github.com/user-attachments/assets/95483cda-9e6d-41a8-a6fc-44e5ae805703)
-
-After success, you can jump directly to step 8 below. Steps 1-7 are not needed. If it fails, then honestly follow the steps below.
-
-### Startup Steps
-If the one-click processing above has problems, it's recommended to follow the operation method below step by step. Although troublesome, if errors occur, you can immediately locate the error position and solve it accordingly.
-
-1. Create and activate virtual environment (Don't forget this step!!!! The first step is very important!!)
-```bash
+# Create virtual environment
 conda create -n my-neuro python=3.11 -y
 
+# Activate environment
 conda activate my-neuro
-```
 
-2. Install dependencies
-```bash
-# Install jieba_fast dependency separately
+# Install jieba_fast dependency
 pip install jieba_fast-0.53-cp311-cp311-win_amd64.whl
 
+# Install other dependencies
 pip install -r requirements.txt
 
 # Install ffmpeg
 conda install ffmpeg -y
 
-# Install cuda, default is 11.8, can be modified as needed
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-```
+# Install CUDA version of PyTorch
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 
-3. Automatically download required models
-
-```bash
+# Automatically download models
 python Batch_Download.py
 ```
 
-4. Start BERT service
+#### 2. Start Backend Services
 
 ```bash
-python bert_api.py
+# Start ASR service
+bert.bat
+
+# Start TTS service  
+ASR.bat
+
+# Start BERT service
+TTS.bat
+
+# Optional: Start RAG service (requires additional 1.5GB VRAM)
+RAG.bat
 ```
 
-5. Start ASR service
-```bash
-## First run will automatically download required models
-python asr_api.py
-```
+#### 3. Launch Frontend
 
-6. Start memory BERT
+1. Enter the `live-2d` folder
+2. Double-click `肥牛.exe` file
+3. Configure API information in the LLM tab
+4. Click "Launch Desktop Pet"
 
-```bash
-python Mnemosyne-bert\api_go.py
-```
+## Features
 
-7. Start TTS service
-```bash
-# Enter tts-studio folder
-cd tts-studio
+### ✅ Implemented Features
 
-# Start TTS service
-python tts_api.py -p 5000 -d cuda -s tts-model/merge.pth -dr tts-model/neuro/01.wav -dt "Hold on please, I'm busy. Okay, I think I heard him say he wants me to stream Hollow Knight on Tuesday and Thursday." -dl "en"
-```
+#### Core Features
+- [x] **Ultra-low Latency**: Full local inference with conversation latency under 1 second
+- [x] **Voice Customization**: Support for male, female, and various character voice switching
+- [x] **Real-time Interruption**: Support for interrupting model conversation at any time
+- [x] **Subtitle Synchronization**: Synchronized subtitle and voice output
+- [x] **Actions and Expressions**: Display different expressions and actions based on conversation content
+- [x] **Real Emotions**: Simulate real human emotional state changes
+- [x] **Visual Capabilities**: Integrated image recognition with language intent judgment
 
-8. After both ASR and TTS output their IPs, click this link to download the zip file:
+#### Extended Features
+- [x] **Desktop Control**: Support voice control for opening software and other operations
+- [x] **AI Singing**: Support for AI singing functionality
+- [x] **Live Streaming**: Can live stream on Bilibili platform
+- [x] **Text Chat**: Can type and communicate with AI via keyboard
+- [x] **Proactive Conversation**: Initiate conversations proactively based on context
+- [x] **Internet Access**: Real-time search for latest information
+- [x] **Mobile App**: Can chat on Android phones
+- [x] **Sound Effects**: Play sound effects from the sound library
+- [x] **Game Companion**: Model and user play cooperative games together
+- [x] **Long-term Memory**: Let the model remember your key information
+- [x] **AI Teaching**: Choose a topic and let AI teach you
+- [x] **Web Interface**: Support for web interface
+- [x] **Live2D Models**: Support for replacing various Live2D models
 
-https://github.com/morettt/my-neuro/releases/download/v4.4.1/live-2d.zip
+#### Model Features
+- [x] **Color Change Function**: Change screen colors according to model's mood
+- [x] **Free Movement**: Model moves freely on the screen
 
-After downloading and extracting, it looks like this. Double-click to open the Fat Beef.exe file
+### 🚧 Features in Development
 
-![image](https://github.com/user-attachments/assets/634240ac-da9a-4ada-9a1e-b92762e385f0)
+- [ ] **Enhanced Human-Machine Experience**: Real human-like interaction design (continuously improving)
+- [ ] **International Streaming Platforms**: Support for more streaming platforms
 
-Follow the arrow instructions to click the LLM tab, fill in your API information in the three highlighted areas, and remember to click save below after modification. (I've already written a usable API configuration here, you can delete it and change it to your own. Supports any OpenAI format API)
+## Troubleshooting
 
-![image](https://github.com/user-attachments/assets/a605b1f5-3633-404c-8507-096b3d0ac4ba)
+### Common Issues
 
-Finally, return and click "Launch Desktop Pet". Wait for the avatar to appear, and you can start chatting with the model.
+#### 1. Environment Issues
 
-![image](https://github.com/user-attachments/assets/4f1d8cae-7ccb-4e0a-9cf3-2354989efec4)
+**Problem**: Cannot find Python or conda
+**Solution**: 
+- Ensure Anaconda is installed
+- Add Anaconda to system PATH
+- Restart command line window
 
-![image](https://github.com/user-attachments/assets/d73a1fc3-1514-42cd-9dfc-f5c450976162)
+**Problem**: Dependency installation failed
+**Solution**:
+- Use domestic mirror source: `pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/`
+- Check network connection
+- Try installing dependencies one by one
 
-If there's any problem, input the command below into your terminal to run the diagnostic tool.
+#### 2. Model Issues
+
+**Problem**: Model download failed
+**Solution**:
+- Check network connection
+- Use VPN tools
+- Manually download model files
+
+**Problem**: GPU memory insufficient
+**Solution**:
+- Close other programs using GPU
+- Lower model precision
+- Use CPU mode (slower)
+
+#### 3. Service Issues
+
+**Problem**: Port occupied
+**Solution**:
+- Check if port is occupied by other programs
+- Modify port number in configuration file
+- Restart computer
+
+**Problem**: Service startup failed
+**Solution**:
+- Check log files in `logs` folder
+- Verify model files are complete
+- Reinstall dependencies
+
+#### 4. API Configuration Issues
+
+**Problem**: Invalid API key
+**Solution**:
+- Check if API key is correct
+- Confirm API service is available
+- Check network connection
+
+**Problem**: API quota insufficient
+**Solution**:
+- Check API usage
+- Consider upgrading API plan
+- Use local models as alternative
+
+### Diagnostic Tools
+
+If you encounter problems, run the diagnostic tool:
+
 ```bash
 conda activate my-neuro
 python diagnostic_tool.py
 ```
-Then there will be a window shows diagnostic information and one-click repair button. If you cannot resolve the problems yourself, send the output information to our customer.
 
-## Customize AI
+The diagnostic tool will check:
+- Python version
+- Dependency package status
+- Conda environment
+- Model files
+- GPU status
+- System configuration
 
-If you need to customize your own AI, please open the LLM-studio folder. This folder contains operation steps for LLM fine-tuning.
+### Security Check
 
-Currently, customization modules will gradually increase...
+Run security checks regularly:
 
-### Concluding Vision
+```bash
+python security_check.py
+```
 
-I will incorporate my years of experience and understanding of technology into this project. The name "my neuro" not only rides on Neuro-sama's popularity but more represents my imagination and expectations for AI boundaries.
+Security checks will detect:
+- Hardcoded sensitive information
+- Dangerous function usage
+- File permission issues
+- Dependency security vulnerabilities
 
-I hope to have a truly understanding AI companion that will never feel bored by your side. Feel sad together when you're sad, feel happy together when you're happy. Bring characters from movies, novels, and fantasies into reality.
+## Customization Features
 
-Not just simple chat interactions. I hope it can integrate into life and become an emotional individual. Play games together, watch videos, learn things, chat before bed, wake you up, stay quiet while you work and watch you daydream, secretly remember what you did. Have emotions and its own emotional states. Will truly get angry.
+### Custom TTS Model (Voice Cloning)
 
-Have daily emotional changes and things it wants to do. Will be hurt by certain words for a long time. Be happy about certain words for a long time. Will remember every moment experienced together with you. A being that continuously understands you.
+This module is based on the GPT-SoVITS project
 
-Most importantly, its personality, appearance, voice, emotional changes, etc. are all decided by you. Like clay, we provide the best tools and ensure good module compatibility. But what it ultimately becomes is constructed by yourself.
+**Requirements**:
+- Audio length: 10-30 minutes
+- Format: MP3
+- Content: Only one speaker, background music allowed
+- Hardware: At least 6GB VRAM
 
-However, for friends who don't want to tinker, this project also directly packages a character - Fat Beef (fake neuro). It's a character that copies Neuro-sama, but I've set its personality to be scheming, tsundere, funny, with a small temper, but occasionally showing a gentle side.
+**Steps**:
+1. Place audio file in `fine_tuning/input` folder, rename to `audio.mp3`
+2. Double-click and run `一键克隆音色.bat`
+3. Input audio language and model name
+4. Wait for training completion
+5. Modify configuration in `run_server.py`
 
-I hope more to imitate, learn, and understand from Neuro, then try to create new content. Things that suit yourself.
+### Custom AI Model
 
-I'm particularly passionate about this project. The current project has implemented nearly 30% of its features, including personality setting and memory. Recently, I'll focus on core personality traits, which is truly human-like with continuous emotions. The most human-like part - long-term emotional states - will be implemented within 2 months. Functions like playing games together, watching videos, waking you up, etc. will basically be completed before June 1st, reaching 60% completion.
+If you need to customize your own AI, please refer to the fine-tuning operation steps in the `LLM-studio` folder.
 
-I hope to implement all the above ideas this year.
+## Technical Support
+
+### QQ Group
+- Group Number: 756741478
+- Entry Answer: 肥牛
+
+### Online Customer Service
+- Address: http://fake-neuro.natapp1.cc
+- Function: Automatic diagnosis and problem solving
+
+### Issue Feedback
+If you encounter unsolvable problems, you can:
+1. Seek help in QQ group
+2. Use online customer service
+3. Submit Issue to GitHub
+
+## Update Log
+
+### Latest Version
+- Fixed multiple bugs and stability issues
+- Optimized code structure and error handling
+- Improved documentation and installation guide
+- Enhanced diagnostic and troubleshooting features
+- **Security Improvements**: Removed hardcoded API keys, added security check tools
 
 ## Acknowledgments
 
-QQ Group: Thanks to 菊花茶洋参 (Chrysanthemum Tea with American Ginseng) for helping create the Fat Beef app cover
+### Open Source Projects
+- **GPT-SoVITS**: https://github.com/RVC-Boss/GPT-SoVITS
+- **Neuro-sama**: Source of project inspiration
 
-Thanks to the following users for their generous sponsorship:
-- [@jonnytri53](https://github.com/jonnytri53) - Thank you for your support! $50 donated to this project
+### Sponsors
+- [@jonnytri53](https://github.com/jonnytri53) - $50 sponsorship
+- [@蒜头头头](https://space.bilibili.com/92419729) - 1000 RMB sponsorship  
+- [@东方月辰DFYC](https://space.bilibili.com/670385648) - 100 RMB sponsorship
 
-Thanks to the big shot for open-sourcing the very useful TTS:
-GPT-SoVITS: https://github.com/RVC-Boss/GPT-SoVITS
+### Contributors
+- QQ Group: Thanks to 菊花茶洋参 for helping create the Fat Beef app cover
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE.txt](LICENSE.txt) file for details.
+
+## Project Vision
+
+My-Neuro is not just a simple chat interaction tool, but an emotional AI companion. We hope it can:
+
+- Integrate into daily life and become an emotional individual
+- Play games together, watch videos, learn things
+- Chat before bed, wake you up, quietly accompany you while working
+- Remember every moment experienced together with you
+- Continuously understand you as a being
+
+Most importantly, its personality, appearance, voice, emotional changes, etc. are all decided by you, like clay. We provide the best tools and module compatibility, but the final form is constructed by yourself.
+
+For friends who don't want to tinker, this project also directly packages a character - Fat Beef (Fake Neuro). It's a character inspired by Neuro-sama, with a scheming, tsundere, funny personality with a small temper, but occasionally showing a gentle side.
+
+The current project has implemented approximately **60%** of core features, including personality setting, memory, and basic real emotion systems. Recently, we'll focus on deep optimization of core personality traits to truly achieve human-like continuous emotions. The advanced emotional system will be implemented within 2 months, and the complete version will be finished before June 1st, reaching **85%** completion.
+
+---
+
+**Chinese Documentation**: [中文版本](./README.md)

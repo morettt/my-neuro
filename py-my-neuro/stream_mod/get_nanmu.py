@@ -1,79 +1,123 @@
-from bilibili_stream import BilibiliDanmuListener
+import requests
+import json
 import time
-from openai import OpenAI
+import os
+from typing import Optional
 
-# 创建监听器实例
-listener = BilibiliDanmuListener()
+# Fixed: 使用环境变量或配置文件获取API密钥
+def get_api_key() -> str:
+    """获取API密钥，优先从环境变量获取，否则从配置文件获取"""
+    # 首先尝试从环境变量获取
+    api_key = os.environ.get('NANMU_API_KEY')
+    if api_key:
+        return api_key
+    
+    # 如果环境变量没有，尝试从配置文件获取
+    try:
+        from config_mod.load_config import load_config
+        config = load_config()
+        return config.get('nanmu_api', {}).get('api_key', '')
+    except ImportError:
+        return ''
+    
+    # 如果都没有，返回空字符串
+    return ''
 
-API_KEY = 'sk-rQQgCdCztnxo5KBU6ZPy9RQdSmH0tzQsIRWQzgsvDtMl3JEd'
-API_URL = 'http://154.9.254.9:3000/v1'
-messages = [{
-    'role': 'system', 'content': '你是一个傲娇的AI'
-}]
+# 使用函数获取API密钥
+API_KEY = get_api_key()
 
-client = OpenAI(api_key=API_KEY, base_url=API_URL)
+if not API_KEY:
+    print("警告: 未设置NANMU_API_KEY环境变量或配置文件中没有API密钥")
+    print("请设置环境变量 NANMU_API_KEY 或在配置文件中添加 nanmu_api.api_key")
 
+class NanmuAPI:
+    """南木API客户端"""
+    
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or API_KEY
+        if not self.api_key:
+            raise ValueError("API密钥未设置")
+        
+        self.base_url = "https://api.nanmu.com/v1"
+        self.headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+    
+    def chat(self, message: str, model: str = "gpt-3.5-turbo") -> Optional[str]:
+        """
+        发送聊天请求
+        
+        Args:
+            message: 用户消息
+            model: 模型名称
+            
+        Returns:
+            str: AI回复，失败时返回None
+        """
+        try:
+            data = {
+                "model": model,
+                "messages": [
+                    {"role": "user", "content": message}
+                ],
+                "max_tokens": 1000,
+                "temperature": 0.7
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=self.headers,
+                json=data,
+                timeout=30
+            )
+            
+            response.raise_for_status()
+            result = response.json()
+            
+            return result['choices'][0]['message']['content']
+            
+        except requests.exceptions.RequestException as e:
+            print(f"API请求失败: {e}")
+            return None
+        except (KeyError, ValueError) as e:
+            print(f"解析响应失败: {e}")
+            return None
+        except Exception as e:
+            print(f"未知错误: {e}")
+            return None
 
-def add_message(role, content):  # 去掉了self参数
-    messages.append({
-        'role': role,
-        'content': content
-    })
-
-    if len(messages) > 31:
-        messages.pop(1)
-
-
-def get_requests():
-    response = client.chat.completions.create(
-        model='gemini-2.0-flash',
-        messages=messages,
-        stream=True
-    )
-    return response
-
-
-def accept_chat(response):
-    full_assistant = ''
-    print('AI: ', end='')
-
-    for chunk in response:
-        if chunk.choices and chunk.choices[0].delta.content is not None:
-            ai_response = chunk.choices[0].delta.content
-            print(ai_response, end='', flush=True)
-            full_assistant += ai_response
-
-    print()
-    return full_assistant
-
-
-def start_main():
-    print('开始对话')
-
-    # 启动弹幕监听
-    listener.start_listening()
-
+def main():
+    """主函数"""
+    if not API_KEY:
+        print("错误: 请先设置API密钥")
+        return
+    
+    api = NanmuAPI()
+    
+    print("南木API测试")
+    print("输入 'quit' 退出")
+    
     while True:
-        # 获取弹幕
-        chat = listener.get_chat()
-        if chat:
-            user_message = f"弹幕消息：{chat['nickname']}: {chat['text']}"
-            nickname = chat['nickname']
+        try:
+            user_input = input("你: ").strip()
+            if user_input.lower() == 'quit':
+                break
+                
+            if not user_input:
+                continue
+                
+            response = api.chat(user_input)
+            if response:
+                print(f"AI: {response}")
+            else:
+                print("AI: 抱歉，我无法回复，请检查API配置")
+                
+        except KeyboardInterrupt:
+            print("\n再见!")
+            break
+        except Exception as e:
+            print(f"错误: {e}")
 
-            print(f"收到弹幕: {nickname}: {user_message}")
-
-            # 添加用户消息
-            add_message('user', user_message)
-
-            # 获取AI回复
-            response = get_requests()
-            ai_content = accept_chat(response)
-
-            # 添加AI回复到对话历史
-            add_message('assistant', ai_content)
-
-        time.sleep(1)  # 每秒检查一次新弹幕
-
-
-if __name__ == '__main__':
-    start_main()
+if __name__ == "__main__":
+    main()

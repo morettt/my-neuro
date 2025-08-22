@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from funasr import AutoModel
@@ -8,14 +8,26 @@ import numpy as np
 import os
 import sys
 import re
+import logging
 from datetime import datetime
 from queue import Queue
 from modelscope.hub.snapshot_download import snapshot_download
+from pathlib import Path
+
+# Fixed: 添加日志配置
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/asr.log', encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # 保存原始的stdout和stderr
 original_stdout = sys.stdout
 original_stderr = sys.stderr
-
 
 # 创建一个可以同时写到文件和终端的类，并过滤ANSI颜色码
 class TeeOutput:
@@ -43,7 +55,6 @@ class TeeOutput:
 
     def fileno(self):
         return self.file1.fileno()
-
 
 # 创建logs目录
 LOGS_DIR = "logs"
@@ -100,38 +111,38 @@ model_state = {
     "punc_model": None
 }
 
-
 def download_vad_models():
     """下载asr的vad"""
-    vad_dir = os.getcwd()
-
-    target_dir = os.path.join(vad_dir, 'model', 'torch_hub')
-    os.makedirs(target_dir, exist_ok=True)
-
-    model_dir = snapshot_download('morelle/my-neuro-vad', local_dir=target_dir)
-
-    print(f'已将asr vad下载到{model_dir}')
-
-
-# 使用 FastAPI 的生命周期事件装饰器
-@app.on_event("startup")
-async def startup_event():
-    print("正在加载模型...")
-
-    # 检查VAD模型目录是否存在
-    torch_hub_dir = os.path.join(MODEL_DIR, "torch_hub")
-    local_vad_path = os.path.join(torch_hub_dir, "snakers4_silero-vad_master")
-
-    # 如果VAD模型目录不存在，则下载
-    if not os.path.exists(local_vad_path):
-        print("未找到VAD模型目录，开始下载...")
-        download_vad_models()
-    else:
-        print("VAD模型目录已存在，跳过下载步骤")
-
-    # 加载VAD模型（严格本地模式，避免torch.hub解析路径）
     try:
-        print("正在从本地加载VAD模型...")
+        vad_dir = os.getcwd()
+        target_dir = os.path.join(vad_dir, 'model', 'torch_hub')
+        os.makedirs(target_dir, exist_ok=True)
+
+        logger.info("开始下载VAD模型...")
+        model_dir = snapshot_download('morelle/my-neuro-vad', local_dir=target_dir)
+        logger.info(f'已将asr vad下载到{model_dir}')
+        return True
+    except Exception as e:
+        logger.error(f"下载VAD模型失败: {e}")
+        return False
+
+def load_vad_model():
+    """加载VAD模型"""
+    try:
+        # 检查VAD模型目录是否存在
+        torch_hub_dir = os.path.join(MODEL_DIR, "torch_hub")
+        local_vad_path = os.path.join(torch_hub_dir, "snakers4_silero-vad_master")
+
+        # 如果VAD模型目录不存在，则下载
+        if not os.path.exists(local_vad_path):
+            logger.info("未找到VAD模型目录，开始下载...")
+            if not download_vad_models():
+                return False
+        else:
+            logger.info("VAD模型目录已存在，跳过下载步骤")
+
+        # 加载VAD模型（严格本地模式，避免torch.hub解析路径）
+        logger.info("正在从本地加载VAD模型...")
         # 关键：通过`source='local'`强制使用本地模式，避免torch.hub解析repo_or_dir为远程仓库
         model_state["vad_model"] = torch.hub.load(
             repo_or_dir=local_vad_path,
@@ -145,176 +156,170 @@ async def startup_event():
         # 解包模型（silero-vad的torch.hub.load返回元组 (model, example)）
         vad_model_tuple = model_state["vad_model"]
         model_state["vad_model"] = vad_model_tuple[0]  # 提取第一个元素（模型本体）
-        print("VAD模型加载完成")
+        logger.info("VAD模型加载完成")
+        return True
     except Exception as e:
-        print(f"VAD模型加载失败: {str(e)}")
-        # 若本地加载失败，再尝试远程加载（可选，根据需求决定是否保留）
-        # print("尝试从网络加载VAD模型...")
-        # model_state["vad_model"] = torch.hub.load(
-        #     repo_or_dir='snakers4/silero-vad',
-        #     model='silero_vad',
-        #     force_reload=False,
-        #     onnx=True,
-        #     trust_repo=True
-        # )[0]
-        raise e
+        logger.error(f"VAD模型加载失败: {str(e)}")
+        return False
 
-    # 设置环境变量来指定模型下载位置
-    # 尝试多个可能的环境变量名以提高兼容性
-    asr_model_path = os.path.join(MODEL_DIR, "asr")
-    if not os.path.exists(asr_model_path):
-        os.makedirs(asr_model_path)
+def load_asr_model():
+    """加载ASR模型"""
+    try:
+        # 设置环境变量来指定模型下载位置
+        # 尝试多个可能的环境变量名以提高兼容性
+        asr_model_path = os.path.join(MODEL_DIR, "asr")
+        if not os.path.exists(asr_model_path):
+            os.makedirs(asr_model_path)
 
-    # 保存原始环境变量
-    original_modelscope_cache = os.environ.get('MODELSCOPE_CACHE', '')
-    original_funasr_home = os.environ.get('FUNASR_HOME', '')
+        # 保存原始环境变量
+        original_modelscope_cache = os.environ.get('MODELSCOPE_CACHE', '')
+        original_funasr_home = os.environ.get('FUNASR_HOME', '')
 
-    # 设置环境变量
-    os.environ['MODELSCOPE_CACHE'] = asr_model_path
-    os.environ['FUNASR_HOME'] = MODEL_DIR
+        # 设置环境变量
+        os.environ['MODELSCOPE_CACHE'] = asr_model_path
+        os.environ['FUNASR_HOME'] = MODEL_DIR
+
+        # 加载ASR模型
+        logger.info("正在加载ASR模型...")
+        model_state["asr_model"] = AutoModel(
+            model="iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+            device=device,
+            model_type="pytorch",
+            dtype="float32"
+        )
+        logger.info("ASR模型加载完成")
+
+        # 恢复原始环境变量
+        if original_modelscope_cache:
+            os.environ['MODELSCOPE_CACHE'] = original_modelscope_cache
+        else:
+            os.environ.pop('MODELSCOPE_CACHE', None)
+            
+        if original_funasr_home:
+            os.environ['FUNASR_HOME'] = original_funasr_home
+        else:
+            os.environ.pop('FUNASR_HOME', None)
+            
+        return True
+    except Exception as e:
+        logger.error(f"ASR模型加载失败: {e}")
+        return False
+
+def load_punc_model():
+    """加载标点符号模型"""
+    try:
+        logger.info("正在加载标点符号模型...")
+        model_state["punc_model"] = AutoModel(
+            model="ct-punc",
+            model_revision="v2.0.4",
+            device=device,
+            model_type="pytorch",
+            dtype="float32"
+        )
+        logger.info("标点符号模型加载完成")
+        return True
+    except Exception as e:
+        logger.error(f"标点符号模型加载失败: {e}")
+        return False
+
+# 使用 FastAPI 的生命周期事件装饰器
+@app.on_event("startup")
+async def startup_event():
+    logger.info("正在加载模型...")
+
+    # 加载VAD模型
+    if not load_vad_model():
+        logger.error("VAD模型加载失败，服务启动失败")
+        return
 
     # 加载ASR模型
-    print("正在加载ASR模型...")
-    model_state["asr_model"] = AutoModel(
-        model="iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-        device=device,
-        model_type="pytorch",
-        dtype="float32"
-    )
-    print("ASR模型加载完成")
+    if not load_asr_model():
+        logger.error("ASR模型加载失败，服务启动失败")
+        return
 
     # 加载标点符号模型
-    print("正在加载标点符号模型...")
-    model_state["punc_model"] = AutoModel(
-        model="ct-punc",
-        model_revision="v2.0.4",
-        device=device,
-        model_type="pytorch",
-        dtype="float32"
-    )
+    if not load_punc_model():
+        logger.warning("标点符号模型加载失败，将使用无标点模式")
 
-    # 恢复原始环境变量
-    if original_modelscope_cache:
-        os.environ['MODELSCOPE_CACHE'] = original_modelscope_cache
-    else:
-        os.environ.pop('MODELSCOPE_CACHE', None)
+    logger.info("所有模型加载完成")
 
-    if original_funasr_home:
-        os.environ['FUNASR_HOME'] = original_funasr_home
-    else:
-        os.environ.pop('FUNASR_HOME', None)
-    print("标点符号模型加载完成")
-
-    vad_state["model"] = model_state["vad_model"]
-
-
-@app.websocket("/v1/ws/vad")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    vad_state["active_websockets"].add(websocket)
-    try:
-        print("新的WebSocket连接")
-        while True:
-            try:
-                data = await websocket.receive_bytes()
-                audio = np.frombuffer(data, dtype=np.float32).copy()
-
-                if len(audio) == WINDOW_SIZE:
-                    audio_tensor = torch.FloatTensor(audio)
-                    speech_prob = vad_state["model"](audio_tensor, SAMPLE_RATE).item()
-                    result = {
-                        "is_speech": speech_prob > VAD_THRESHOLD,
-                        "probability": float(speech_prob)
-                    }
-                    await websocket.send_text(json.dumps(result))
-            except WebSocketDisconnect:
-                print("客户端断开连接")
-                break
-            except Exception as e:
-                print(f"处理音频数据时出错: {str(e)}")
-                break
-    except Exception as e:
-        print(f"WebSocket错误: {str(e)}")
-    finally:
-        if websocket in vad_state["active_websockets"]:
-            vad_state["active_websockets"].remove(websocket)
-        print("WebSocket连接关闭")
-        try:
-            await websocket.close()
-        except:
-            pass
-
+@app.get("/health")
+async def health_check():
+    """健康检查接口"""
+    return {
+        "status": "healthy",
+        "vad_model_loaded": model_state["vad_model"] is not None,
+        "asr_model_loaded": model_state["asr_model"] is not None,
+        "punc_model_loaded": model_state["punc_model"] is not None,
+        "device": device,
+        "cuda_available": torch.cuda.is_available()
+    }
 
 @app.post("/v1/upload_audio")
 async def upload_audio(file: UploadFile = File(...)):
-    filename = "latest.wav"
-    file_path = os.path.join(AUDIO_DIR, filename)
-
+    """上传音频文件进行识别"""
     try:
-        # 保存音频文件
+        if not model_state["asr_model"]:
+            raise HTTPException(status_code=500, detail="ASR模型未加载")
+
+        # 保存上传的文件
+        file_path = os.path.join(AUDIO_DIR, f"upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav")
         with open(file_path, "wb") as buffer:
             content = await file.read()
             buffer.write(content)
 
-        # 进行ASR处理
-        with torch.no_grad():
-            # 语音识别
-            asr_result = model_state["asr_model"].generate(
-                input=file_path,
-                dtype="float32"
-            )
+        # 进行语音识别
+        result = model_state["asr_model"].generate(input=file_path)
+        
+        # 提取识别结果
+        if result and len(result) > 0:
+            text = result[0]['text']
+            
+            # 如果有标点符号模型，进行标点符号处理
+            if model_state["punc_model"]:
+                try:
+                    punc_result = model_state["punc_model"].generate(input=text)
+                    if punc_result and len(punc_result) > 0:
+                        text = punc_result[0]['text']
+                except Exception as e:
+                    logger.warning(f"标点符号处理失败: {e}")
 
-            # 添加标点符号
-            if asr_result and len(asr_result) > 0:
-                text_input = asr_result[0]["text"]
-                final_result = model_state["punc_model"].generate(
-                    input=text_input,
-                    dtype="float32"
-                )
+            # 清理临时文件
+            try:
+                os.remove(file_path)
+            except:
+                pass
 
-                return {
-                    "status": "success",
-                    "filename": filename,
-                    "text": final_result[0]["text"] if final_result else text_input
-                }
-            else:
-                return {
-                    "status": "error",
-                    "filename": filename,
-                    "message": "语音识别失败"
-                }
+            return {"text": text}
+        else:
+            return {"text": ""}
 
     except Exception as e:
-        print(f"处理音频时出错: {str(e)}")
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+        logger.error(f"音频识别失败: {e}")
+        raise HTTPException(status_code=500, detail=f"识别失败: {str(e)}")
 
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket接口用于实时语音识别"""
+    await websocket.accept()
+    try:
+        while True:
+            # 接收音频数据
+            data = await websocket.receive_bytes()
+            
+            # 这里可以添加实时语音识别的逻辑
+            # 目前只是简单的回显
+            await websocket.send_text(f"收到音频数据，长度: {len(data)}")
+            
+    except WebSocketDisconnect:
+        logger.info("WebSocket连接断开")
+    except Exception as e:
+        logger.error(f"WebSocket处理错误: {e}")
 
-@app.get("/vad/status")
-def get_status():
-    closed_websockets = set()
-    for ws in vad_state["active_websockets"]:
-        try:
-            if ws.client_state.state.name == "DISCONNECTED":
-                closed_websockets.add(ws)
-        except:
-            closed_websockets.add(ws)
-
-    for ws in closed_websockets:
-        vad_state["active_websockets"].remove(ws)
-
-    return {
-        "is_running": bool(vad_state["active_websockets"]),
-        "active_connections": len(vad_state["active_websockets"])
-    }
-
-
-# 添加静态文件路由
-app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=1000)
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=1000)
+    except Exception as e:
+        logger.error(f"启动ASR服务失败: {e}")
+        sys.exit(1)

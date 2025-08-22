@@ -4,6 +4,13 @@ import random
 import threading
 import time
 
+# 导入事件总线
+try:
+    from UI.simple_event_bus import event_bus, Events
+    HAS_EVENT_BUS = True
+except ImportError:
+    HAS_EVENT_BUS = False
+
 class EmotionHandler:
     """情绪标签处理器 - 支持时间轴同步"""
 
@@ -181,6 +188,17 @@ class EmotionHandler:
                 self.live_model.play_tapbody_motion(motion_index)
             except Exception as e:
                 pass
+        
+        # 🆕 发布情绪触发事件，用于心情颜色变化
+        if HAS_EVENT_BUS:
+            event_bus.publish("emotion_triggered", {
+                "emotion": emotion,
+                "motion_index": motion_index,
+                "motion_file": motion_file,
+                "timestamp": time.time()
+            })
+            
+        print(f"🎭 触发情绪: {emotion}")
 
     def stop_audio_sync(self):
         """停止音频同步"""

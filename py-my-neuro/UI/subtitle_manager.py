@@ -8,6 +8,14 @@ from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QRectF, QPoint, QMetaObject, Q_
 from PyQt5.QtGui import QPainter, QFont, QColor, QPainterPath, QPen, QFontMetrics
 from PyQt5.QtWidgets import QWidget, QApplication
 
+# 导入文本过滤器
+try:
+    from utils.text_filter import clean_subtitle_text
+except ImportError:
+    # 如果导入失败，提供一个简单的替代函数
+    def clean_subtitle_text(text):
+        return text
+
 logger = logging.getLogger("subtitle_manager")
 
 class SubtitleManager(QWidget):
@@ -129,9 +137,12 @@ class SubtitleManager(QWidget):
             self.start_fade_out()
             return
         
+        # 🆕 应用文本过滤器
+        filtered_text = clean_subtitle_text(text)
+        
         if stream:
             # 流式显示处理
-            self.stream_text += text
+            self.stream_text += filtered_text
             
             # 如果当前没有在显示，开始显示
             if not self.is_visible:
@@ -141,7 +152,7 @@ class SubtitleManager(QWidget):
         else:
             # 完整文本显示
             self.stream_timer.stop()  # 停止任何正在进行的流式显示
-            self.display_text = self._text_assembler(text)
+            self.display_text = self._text_assembler(filtered_text)
             self._update_size_and_position()
             
             # 确保窗口可见

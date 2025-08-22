@@ -1,42 +1,40 @@
-#ASR+LLM依赖
-
-fastapi
-uvicorn
-python-multipart
-torch>=1.7.0
-torchaudio
-numpy
-funasr>=0.9.6
-websockets
-modelscope
-onnxruntime
-datasets
-peft
-
-#TTS依赖
-
-torch>=1.12.0
-numpy>=1.20.0
-librosa>=0.9.2
-soundfile>=0.10.3
+# Core dependencies
 fastapi>=0.95.0
 uvicorn>=0.22.0
-transformers>=4.30.0
-pydantic>=1.10.8
 python-multipart>=0.0.6
 starlette>=0.27.0
+pydantic>=1.10.8
 typing-extensions>=4.5.0
+
+# PyTorch and ML dependencies
+torch>=1.12.0
+torchvision
+torchaudio
+numpy>=1.20.0
+scipy>=1.10.1
+scikit-learn>=1.0.0
+
+# ASR dependencies
+funasr>=0.9.6
+modelscope
+onnxruntime
+websockets
+
+# TTS dependencies
+librosa>=0.9.2
+soundfile>=0.10.3
+transformers>=4.30.0
 tqdm>=4.65.0
 matplotlib>=3.7.1
-scipy>=1.10.1
 protobuf>=3.20.0
 ffmpeg-python>=0.2.0
 LangSegment
 py3langid
-transformers
 einops
 pytorch-lightning
 gradio
+
+# Text processing
 cn2an
 pypinyin
 g2p-en
@@ -44,11 +42,26 @@ wordsegment
 jieba_fast
 opencc
 
-#TTS训练依赖
+# TTS training dependencies
 faster-whisper
 x_transformers
 tensorboard
 
-#RAG依赖
+# RAG dependencies
 sentence-transformers
 watchdog
+
+# PEFT for fine-tuning
+peft
+datasets
+
+# Additional utilities
+requests>=2.28.0
+pillow>=9.0.0
+opencv-python>=4.5.0
+keyboard>=0.13.5
+pyperclip>=1.8.2
+pyautogui>=0.9.53
+sounddevice>=0.4.5
+flask>=2.0.0
+flask-cors>=3.0.10
