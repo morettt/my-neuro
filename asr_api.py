@@ -1,6 +1,5 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from funasr import AutoModel
 import torch
 import json
@@ -8,6 +7,7 @@ import numpy as np
 import os
 import sys
 import re
+
 from datetime import datetime
 from queue import Queue
 from modelscope.hub.snapshot_download import snapshot_download
@@ -51,7 +51,7 @@ if not os.path.exists(LOGS_DIR):
     os.makedirs(LOGS_DIR)
 
 # 设置双重输出
-log_file = open(os.path.join(LOGS_DIR, 'asr.log'), 'w', encoding='utf-8')  # 保存到logs文件夹
+log_file = open(os.path.join(LOGS_DIR, 'asr.log'), 'w', encoding='utf-8')
 sys.stdout = TeeOutput(original_stdout, log_file)
 sys.stderr = TeeOutput(original_stderr, log_file)
 
@@ -65,11 +65,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# 创建存储音频文件的目录
-AUDIO_DIR = "recorded_audio"
-if not os.path.exists(AUDIO_DIR):
-    os.makedirs(AUDIO_DIR)
 
 # 创建模型存储目录
 MODEL_DIR = "model"
@@ -148,19 +143,9 @@ async def startup_event():
         print("VAD模型加载完成")
     except Exception as e:
         print(f"VAD模型加载失败: {str(e)}")
-        # 若本地加载失败，再尝试远程加载（可选，根据需求决定是否保留）
-        # print("尝试从网络加载VAD模型...")
-        # model_state["vad_model"] = torch.hub.load(
-        #     repo_or_dir='snakers4/silero-vad',
-        #     model='silero_vad',
-        #     force_reload=False,
-        #     onnx=True,
-        #     trust_repo=True
-        # )[0]
         raise e
 
     # 设置环境变量来指定模型下载位置
-    # 尝试多个可能的环境变量名以提高兼容性
     asr_model_path = os.path.join(MODEL_DIR, "asr")
     if not os.path.exists(asr_model_path):
         os.makedirs(asr_model_path)
@@ -247,20 +232,34 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.post("/v1/upload_audio")
 async def upload_audio(file: UploadFile = File(...)):
-    filename = "latest.wav"
-    file_path = os.path.join(AUDIO_DIR, filename)
-
     try:
-        # 保存音频文件
-        with open(file_path, "wb") as buffer:
-            content = await file.read()
-            buffer.write(content)
-
-        # 进行ASR处理
+        # 直接读取音频数据到内存
+        audio_bytes = await file.read()
+        
+        # 使用 soundfile 或 librosa 直接从内存中解析音频
+        import io
+        try:
+            import soundfile as sf
+            # 直接从内存中读取音频数据
+            audio_data, sample_rate = sf.read(io.BytesIO(audio_bytes))
+            print(f"音频数据形状: {audio_data.shape}, 采样率: {sample_rate}")
+        except ImportError:
+            print("soundfile 不可用，尝试使用 librosa")
+            try:
+                import librosa
+                audio_data, sample_rate = librosa.load(io.BytesIO(audio_bytes), sr=16000)
+                print(f"音频数据形状: {audio_data.shape}, 采样率: {sample_rate}")
+            except ImportError:
+                return {
+                    "status": "error",
+                    "message": "需要安装 soundfile 或 librosa 库来处理音频"
+                }
+        
+        # 进行ASR处理 - 直接传入音频数组
         with torch.no_grad():
-            # 语音识别
+            # 语音识别 - 传入 numpy 数组而不是文件路径
             asr_result = model_state["asr_model"].generate(
-                input=file_path,
+                input=audio_data,  # 直接传入音频数组！
                 dtype="float32"
             )
 
@@ -274,13 +273,13 @@ async def upload_audio(file: UploadFile = File(...)):
 
                 return {
                     "status": "success",
-                    "filename": filename,
+                    "filename": file.filename or "uploaded_audio",
                     "text": final_result[0]["text"] if final_result else text_input
                 }
             else:
                 return {
                     "status": "error",
-                    "filename": filename,
+                    "filename": file.filename or "uploaded_audio",
                     "message": "语音识别失败"
                 }
 
@@ -311,10 +310,6 @@ def get_status():
     }
 
 
-# 添加静态文件路由
-app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
-
 if __name__ == '__main__':
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=1000)
