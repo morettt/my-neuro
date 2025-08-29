@@ -76,9 +76,7 @@ English Documentation: [English Version](./README_English.md)
 
 如果你是新手，可以使用这个一键部署指令。它会把所有的东西都处理好。但是由于涉及的逻辑处理过于多。所以有失败的可能性。但是成功了就会省去很多的麻烦。看你的运气了！
 
-确保你电脑里安装了anaconda 如果还没有安装，请直接点击这个下载安装包：
-
-[@下载conda安装包](https://mirrors.tuna.tsinghua.edu.cn/anaconda/archive/Anaconda3-5.3.1-Windows-x86_64.exe)
+确保你电脑里安装了anaconda 如果还没有安装，请直接点击这个下载：[conda安装包](https://mirrors.tuna.tsinghua.edu.cn/anaconda/archive/Anaconda3-5.3.1-Windows-x86_64.exe)
 
 
 安装流程可以参考这个视频，讲的很详细：https://www.bilibili.com/video/BV1ns4y1T7AP
@@ -273,6 +271,7 @@ QQ群:感谢 菊花茶洋参 帮忙制作肥牛app的封面
 
 感谢大佬开源十分好用的tts：
 GPT-SoVITS：https://github.com/RVC-Boss/GPT-SoVITS
+
 
 
 
