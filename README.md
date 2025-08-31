@@ -41,7 +41,7 @@ English Documentation: [English Version](./README_English.md)
 - [x] 字幕和语音同步输出
 - [x] 语音定制：支持男、女声、各种角色声线切换等
 - [x] MCP支持：可使用MCP工具接入
-- [x] 实时打断：支持随时打断模型对话
+- [x] 实时打断：支持语音、键盘打断AI说话
 - [ ] 真实情感：模拟真人的情绪变化状态，有自己的情绪状态。
 - [ ] 超吊的人机体验(类似真人交互设计，敬请期待)
 - [x] 动作表情：根据对话内容展示不同的表情与动作
@@ -271,6 +271,7 @@ QQ群:感谢 菊花茶洋参 帮忙制作肥牛app的封面
 
 感谢大佬开源十分好用的tts：
 GPT-SoVITS：https://github.com/RVC-Boss/GPT-SoVITS
+
 
 
 
