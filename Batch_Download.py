@@ -136,7 +136,7 @@ def download_live2d_model():
     """下载并解压Live 2D模型到live-2d文件夹"""
     print("\n========== 下载Live 2D模型 ==========")
 
-    url = "https://github.com/morettt/my-neuro/releases/download/v4.9/live-2d.zip"
+    url = "https://github.com/morettt/my-neuro/releases/download/v4.9.1/live-2d.7z"
     file_name = url.split('/')[-1]
     target_folder = "live-2d"
 
@@ -472,6 +472,7 @@ else:
     print("nltk_data下载成功！")
 
 print("\n所有下载操作全部完成！")
+
 
 
 
