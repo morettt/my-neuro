@@ -114,7 +114,7 @@ pip install jieba_fast-0.53-cp311-cp311-win_amd64.whl
 #独立安装pyopenjtalk依赖
 pip install pyopenjtalk-0.4.1-cp311-cp311-win_amd64.whl
 
-pip install -r requirements.txt
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
 
 #安装ffmpedg
 conda install ffmpeg -y
@@ -271,6 +271,7 @@ QQ群:感谢 菊花茶洋参 帮忙制作肥牛app的封面
 
 感谢大佬开源十分好用的tts：
 GPT-SoVITS：https://github.com/RVC-Boss/GPT-SoVITS
+
 
 
 
