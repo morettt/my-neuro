@@ -43,6 +43,7 @@ g2p-en
 wordsegment
 jieba_fast
 opencc
+py7zr
 
 #TTS训练依赖
 faster-whisper
