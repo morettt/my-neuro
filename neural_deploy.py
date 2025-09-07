@@ -266,7 +266,7 @@ def download_live2d_model():
     """下载并解压Live 2D模型"""
     print("\n========== 下载Live 2D模型 ==========")
     # GitHub文件下载链接
-    url = "https://github.com/morettt/my-neuro/releases/download/v4.9.3/live-2d.7z"
+    url = "https://github.com/morettt/my-neuro/releases/download/v4.9.4/live-2d.7z"
     # 获取文件名
     file_name = url.split('/')[-1]
     
@@ -613,5 +613,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
