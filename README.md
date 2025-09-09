@@ -30,6 +30,18 @@
 
 我就可以看见对话记录，从而针对性的修复bug或者告诉肥牛如何解决这个bug 下次再遇到就可以解决了！！
 
+如果还是解决不了，不想搞那么多可以直接下载整合包，解压即可使用：
+
+```bash
+百度网盘：
+链接: https://pan.baidu.com/s/1n1Tqd2VYGjfWt1hPRvmSHw?pwd=jhav 提取码: jhav
+
+123网盘：
+https://www.123912.com/s/MJqQvd-Bps5H
+
+```
+
+
 ## 计划清单（打✔的是已经实现的功能）
 
 ### 双模型支持
@@ -271,6 +283,7 @@ QQ群:感谢 菊花茶洋参 帮忙制作肥牛app的封面
 
 感谢大佬开源十分好用的tts：
 GPT-SoVITS：https://github.com/RVC-Boss/GPT-SoVITS
+
 
 
 
