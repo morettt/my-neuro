@@ -10,6 +10,8 @@
 
 [English Version](./README_English.md)
 
+
+## [常见问题汇总](常见问题汇总.md)
 ## [pr提交规范](./PR_README.md)
 
 
@@ -283,6 +285,7 @@ QQ群:感谢 菊花茶洋参 帮忙制作肥牛app的封面
 
 感谢大佬开源十分好用的tts：
 GPT-SoVITS：https://github.com/RVC-Boss/GPT-SoVITS
+
 
 
 
