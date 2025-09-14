@@ -7,6 +7,12 @@ import modelscope
 
 import requests
 import sys
+import urllib3
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+# 禁用SSL警告
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # 添加7z支持
 try:
@@ -46,7 +52,33 @@ def download_file(url, file_name=None):
         file_name = url.split('/')[-1]
 
     print(f"正在下载: {file_name}...")
-    response = requests.get(url, stream=True)
+
+    # 创建一个会话来设置参数
+    session = requests.Session()
+
+    # 设置重试策略
+    retry_strategy = Retry(
+        total=3,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "OPTIONS"]
+    )
+
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
+    # 设置请求头和参数
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+
+    try:
+        # 尝试正常的SSL验证
+        response = session.get(url, stream=True, headers=headers, timeout=30)
+    except requests.exceptions.SSLError:
+        print("SSL验证失败，使用不安全模式重新尝试...")
+        # 如果SSL验证失败，跳过SSL验证
+        response = session.get(url, stream=True, headers=headers, timeout=30, verify=False)
 
     total_size = int(response.headers.get('content-length', 0))
     downloaded_size = 0
@@ -180,9 +212,15 @@ def download_live2d_model():
     """下载并解压Live 2D模型到live-2d文件夹"""
     print("\n========== 下载Live 2D模型 ==========")
 
+    target_folder = "live-2d"
+
+    # 检查live-2d文件夹是否已存在且不为空
+    if os.path.exists(target_folder) and os.listdir(target_folder):
+        print(f"检测到 {target_folder} 文件夹已存在且包含文件，跳过下载。")
+        return True
+
     url = "https://github.com/morettt/my-neuro/releases/download/v5.0/live-2d.7z"
     file_name = url.split('/')[-1]
-    target_folder = "live-2d"
 
     # 下载文件
     downloaded_file = download_file(url, file_name)
