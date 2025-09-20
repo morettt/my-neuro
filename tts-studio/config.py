@@ -2,6 +2,21 @@ import sys,os
 
 import torch
 
+# 导入设备检测工具
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from device_utils import get_optimal_device, get_device_info
+    DEVICE, DEVICE_TYPE = get_optimal_device()
+    device_info = get_device_info()
+    print(f"TTS推理设备: {DEVICE} (类型: {DEVICE_TYPE})")
+    infer_device = DEVICE_TYPE if DEVICE_TYPE in ['cuda', 'cpu'] else 'cpu'  # DirectML映射到cpu用于兼容性
+except ImportError:
+    # 如果导入失败，使用原有的设备检测逻辑
+    if torch.cuda.is_available():
+        infer_device = "cuda"
+    else:
+        infer_device = "cpu"
+
 # 推理用的指定模型
 sovits_path = ""
 gpt_path = ""
@@ -17,10 +32,12 @@ pretrained_gpt_path = "GPT_SoVITS/pretrained_models/s1bert25hz-2kh-longer-epoch=
 
 exp_root = "logs"
 python_exec = sys.executable or "python"
-if torch.cuda.is_available():
-    infer_device = "cuda"
-else:
-    infer_device = "cpu"
+
+# 设备检测逻辑已经在上面处理，这里注释掉原有逻辑
+# if torch.cuda.is_available():
+#     infer_device = "cuda"
+# else:
+#     infer_device = "cpu"
 
 webui_port_main = 9874
 webui_port_uvr5 = 9873
@@ -40,6 +57,9 @@ if infer_device == "cuda":
             or "1080" in gpu_name
     ):
         is_half=False
+elif DEVICE_TYPE == 'directml':
+    # DirectML 设备通常使用半精度会更好
+    is_half = True
 
 if(infer_device=="cpu"):is_half=False
 

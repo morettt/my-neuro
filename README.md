@@ -15,7 +15,14 @@
 ## [pr提交规范](./PR_README.md)
 
 
-### PS:当前项目只支持N卡，也就是英伟达的显卡。A卡虽然也能使用。但是TTS会报错，也就是没有AI的声音。不介意可以尝试。
+### PS:当前项目现已支持多种显卡类型！
+
+- ✅ **NVIDIA 显卡** - 通过 CUDA 支持，性能最佳
+- ✅ **AMD 显卡** - 通过 DirectML 支持，适用于 RX 系列等
+- ✅ **Intel 显卡** - 通过 DirectML 支持，适用于 Arc 系列等  
+- ✅ **CPU 推理** - 兜底方案，适用于无独立显卡的情况
+
+**DirectML 支持详情请查看 [DirectML_README.md](DirectML_README.md)**
 
 ## QQ群：756741478 （入群答案：肥牛）
 ## 客服

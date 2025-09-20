@@ -12,7 +12,18 @@ from feature_extractor import cnhubert
 opt_dir=                            os.environ.get("opt_dir")
 cnhubert.cnhubert_base_path=                os.environ.get("cnhubert_base_dir")
 import torch
-is_half = eval(os.environ.get("is_half", "True")) and torch.cuda.is_available()
+
+# 导入设备检测工具
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+try:
+    from device_utils import get_optimal_device, is_gpu_available
+    device, device_type = get_optimal_device()
+    is_half = eval(os.environ.get("is_half", "True")) and is_gpu_available()
+    print(f"Hubert特征提取设备: {device} (类型: {device_type})")
+except ImportError:
+    # 兜底逻辑
+    is_half = eval(os.environ.get("is_half", "True")) and torch.cuda.is_available()
 
 import pdb,traceback,numpy as np,logging
 from scipy.io import wavfile
@@ -50,12 +61,22 @@ os.makedirs(wav32dir,exist_ok=True)
 
 maxx=0.95
 alpha=0.5
-if torch.cuda.is_available():
-    device = "cuda:0"
-# elif torch.backends.mps.is_available():
-#     device = "mps"
-else:
-    device = "cpu"
+
+# 使用设备检测工具设置设备
+try:
+    from device_utils import get_optimal_device
+    device, device_type = get_optimal_device()
+    device = str(device)  # 转换为字符串格式
+except ImportError:
+    # 原有的设备检测逻辑
+    if torch.cuda.is_available():
+        device = "cuda:0"
+    # elif torch.backends.mps.is_available():
+    #     device = "mps"
+    else:
+        device = "cpu"
+
+print(f"使用设备: {device}")
 model=cnhubert.get_model()
 # is_half=False
 if(is_half==True):

@@ -85,7 +85,14 @@ vad_state = {
 }
 
 # 设置设备和数据类型
-device = "cuda" if torch.cuda.is_available() else "cpu"
+try:
+    from device_utils import get_optimal_device
+    device_obj, device_type = get_optimal_device()
+    device = str(device_obj).split(':')[0]  # 获取设备类型字符串
+    print(f"ASR设备: {device_obj} (类型: {device_type})")
+except ImportError:
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    
 torch.set_default_dtype(torch.float32)
 
 # 初始化模型状态

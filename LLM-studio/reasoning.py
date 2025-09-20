@@ -1,6 +1,16 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 from peft import PeftModel
+import sys
+import os
+
+# 添加项目根目录到路径，以便导入设备工具
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from device_utils import get_optimal_device, move_to_device, clear_device_cache
+
+# 获取最优推理设备
+DEVICE, DEVICE_TYPE = get_optimal_device()
+print(f"LLM推理设备: {DEVICE} (类型: {DEVICE_TYPE})")
 
 model_path = '模型本体路径'
 lora_path = '训练后的lora权重路径'
@@ -9,9 +19,14 @@ lora_path = '训练后的lora权重路径'
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 model = AutoModelForCausalLM.from_pretrained(
     model_path, 
-    device_map="auto",
-    torch_dtype=torch.bfloat16
+    device_map="auto" if DEVICE_TYPE == 'cuda' else None,  # DirectML 不支持 device_map="auto"
+    torch_dtype=torch.bfloat16 if DEVICE_TYPE != 'cpu' else torch.float32
 )
+
+# 如果不是CUDA，手动移动模型到设备
+if DEVICE_TYPE != 'cuda':
+    model = move_to_device(model, DEVICE)
+
 model = PeftModel.from_pretrained(model, lora_path)
 
 # 自行选择适合自己的prompt
@@ -32,7 +47,8 @@ def chat(prompt):
         )
         
         # 生成回复
-        model_inputs = tokenizer([text], return_tensors="pt").to('cuda')
+        model_inputs = tokenizer([text], return_tensors="pt")
+        model_inputs = move_to_device(model_inputs, DEVICE)
         generated_ids = model.generate(
             model_inputs.input_ids,
             max_new_tokens=512,
@@ -59,9 +75,12 @@ def chat(prompt):
         return response
         
     finally:
-        # 清理显存
-        del model_inputs, generated_ids
-        torch.cuda.empty_cache()
+        # 清理显存 - 支持多种设备类型
+        if 'model_inputs' in locals():
+            del model_inputs
+        if 'generated_ids' in locals():
+            del generated_ids
+        clear_device_cache()
 
 # 交互式对话循环
 print("开始对话，输入 'quit' 结束对话")
