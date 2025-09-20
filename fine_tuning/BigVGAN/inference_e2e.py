@@ -1,6 +1,3 @@
-# Adapted from https://github.com/jik876/hifi-gan under the MIT license.
-#   LICENSE is in incl_licenses directory.
-
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import glob
@@ -9,10 +6,20 @@ import numpy as np
 import argparse
 import json
 import torch
+import sys
 from scipy.io.wavfile import write
 from env import AttrDict
 from meldataset import MAX_WAV_VALUE
 from bigvgan import BigVGAN as Generator
+
+# 导入设备检测工具
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+try:
+    from device_utils import get_optimal_device, move_to_device
+    use_device_utils = True
+except ImportError:
+    use_device_utils = False
+    print("Warning: device_utils not found, using original device detection")
 
 h = None
 device = None
@@ -36,7 +43,8 @@ def scan_checkpoint(cp_dir, prefix):
 
 
 def inference(a, h):
-    generator = Generator(h, use_cuda_kernel=a.use_cuda_kernel).to(device)
+    generator = Generator(h, use_cuda_kernel=a.use_cuda_kernel)
+    generator = move_to_device(generator, device) if use_device_utils else generator.to(device)
 
     state_dict_g = load_checkpoint(a.checkpoint_file, device)
     generator.load_state_dict(state_dict_g["generator"])
@@ -51,7 +59,8 @@ def inference(a, h):
         for i, filname in enumerate(filelist):
             # Load the mel spectrogram in .npy format
             x = np.load(os.path.join(a.input_mels_dir, filname))
-            x = torch.FloatTensor(x).to(device)
+            x = torch.FloatTensor(x)
+            x = move_to_device(x, device) if use_device_utils else x.to(device)
             if len(x.shape) == 2:
                 x = x.unsqueeze(0)
 
@@ -87,11 +96,20 @@ def main():
 
     torch.manual_seed(h.seed)
     global device
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(h.seed)
-        device = torch.device("cuda")
+    
+    # 使用设备检测工具获取最优设备
+    if use_device_utils:
+        device, device_type = get_optimal_device()
+        print(f"BigVGAN E2E推理设备: {device} (类型: {device_type})")
+        if device_type == 'cuda':
+            torch.cuda.manual_seed(h.seed)
     else:
-        device = torch.device("cpu")
+        # 原有的设备检测逻辑
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(h.seed)
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
 
     inference(a, h)
 

@@ -47,7 +47,19 @@ torch.set_float32_matmul_precision("medium")  # 最低精度但最快（也就�
 # from config import pretrained_s2G,pretrained_s2D
 global_step = 0
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+# 导入设备检测工具
+try:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from device_utils import get_optimal_device, move_to_device
+    device_obj, device_type = get_optimal_device()
+    device = str(device_obj).split(':')[0]  # 获取设备类型字符串 'cuda' 或 'cpu'
+    print(f"训练设备: {device_obj} (类型: {device_type})")
+    use_device_utils = True
+except ImportError:
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    use_device_utils = False
 
 
 def main():
