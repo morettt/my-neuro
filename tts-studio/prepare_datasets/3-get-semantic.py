@@ -11,7 +11,17 @@ pretrained_s2G = os.environ.get("pretrained_s2G")
 s2config_path = os.environ.get("s2config_path")
 version=os.environ.get("version","v2")
 import torch
-is_half = eval(os.environ.get("is_half", "True")) and torch.cuda.is_available()
+
+# 导入设备检测工具
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+try:
+    from device_utils import get_optimal_device, is_gpu_available
+    device, device_type = get_optimal_device()
+    is_half = eval(os.environ.get("is_half", "True")) and is_gpu_available()
+    print(f"语义特征提取设备: {device} (类型: {device_type})")
+except ImportError:
+    # 兜底逻辑
+    is_half = eval(os.environ.get("is_half", "True")) and torch.cuda.is_available()
 import math, traceback
 import multiprocessing
 import sys, pdb
@@ -43,12 +53,19 @@ semantic_path = "%s/6-name2semantic-%s.tsv" % (opt_dir, i_part)
 if os.path.exists(semantic_path) == False:
     os.makedirs(opt_dir, exist_ok=True)
 
-    if torch.cuda.is_available():
-        device = "cuda"
-    # elif torch.backends.mps.is_available():
-    #     device = "mps"
-    else:
-        device = "cpu"
+    # 使用设备检测工具设置设备
+    try:
+        from device_utils import get_optimal_device
+        device, device_type = get_optimal_device()
+        device = str(device)  # 转换为字符串格式
+    except ImportError:
+        # 原有的设备检测逻辑
+        if torch.cuda.is_available():
+            device = "cuda"
+        # elif torch.backends.mps.is_available():
+        #     device = "mps"
+        else:
+            device = "cpu"
     hps = utils.get_hparams_from_file(s2config_path)
     vq_model = SynthesizerTrn(
         hps.data.filter_length // 2 + 1,
