@@ -67,7 +67,7 @@ class KnowledgeBaseHandler(FileSystemEventHandler):
             reload_knowledge_base()
 
 
-def load_knowledge_base(file_path="./live-2d/记忆库.txt"):
+def load_knowledge_base(file_path="./live-2d/AI记录室/记忆库.txt"):
     """加载知识库文件 - 使用连续横线分割段落"""
     try:
         with open(file_path, 'r', encoding='utf-8') as f:

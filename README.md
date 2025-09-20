@@ -8,9 +8,11 @@
 
 如果你想用全部都用本地推理，使用本地的大语言模型（LLM）推理或者微调。不基于第三方的API的话，那可以进入LLM-studio文件夹，里面有本地模型的推理、微调指导。同时，因为本地的大语言模型需要一定的显存，要想有一个还算不错的体验，建议显卡至少保证有12G显存大小。
 
-English Documentation: [English Version](./README_English.md)
+[English Version](./README_English.md)
 
-## PR提交规范：[pr提交要求](./PR_README.md)
+
+## [常见问题汇总](常见问题汇总.md)
+## [pr提交规范](./PR_README.md)
 
 
 ### PS:当前项目只支持N卡，也就是英伟达的显卡。A卡虽然也能使用。但是TTS会报错，也就是没有AI的声音。不介意可以尝试。
@@ -30,6 +32,18 @@ English Documentation: [English Version](./README_English.md)
 
 我就可以看见对话记录，从而针对性的修复bug或者告诉肥牛如何解决这个bug 下次再遇到就可以解决了！！
 
+如果还是解决不了，不想搞那么多可以直接下载整合包，解压即可使用：
+
+```bash
+百度网盘：
+链接: https://pan.baidu.com/s/1n1Tqd2VYGjfWt1hPRvmSHw?pwd=jhav 提取码: jhav
+
+123网盘：
+https://www.123912.com/s/MJqQvd-Bps5H
+
+```
+
+
 ## 计划清单（打✔的是已经实现的功能）
 
 ### 双模型支持
@@ -41,7 +55,7 @@ English Documentation: [English Version](./README_English.md)
 - [x] 字幕和语音同步输出
 - [x] 语音定制：支持男、女声、各种角色声线切换等
 - [x] MCP支持：可使用MCP工具接入
-- [x] 实时打断：支持随时打断模型对话
+- [x] 实时打断：支持语音、键盘打断AI说话
 - [ ] 真实情感：模拟真人的情绪变化状态，有自己的情绪状态。
 - [ ] 超吊的人机体验(类似真人交互设计，敬请期待)
 - [x] 动作表情：根据对话内容展示不同的表情与动作
@@ -76,11 +90,12 @@ English Documentation: [English Version](./README_English.md)
 
 如果你是新手，可以使用这个一键部署指令。它会把所有的东西都处理好。但是由于涉及的逻辑处理过于多。所以有失败的可能性。但是成功了就会省去很多的麻烦。看你的运气了！
 
-确保你电脑里安装了anaconda 如果还没有安装，可以去这里安装：https://www.anaconda.com/download/success
+确保你电脑里安装了conda 如果还没有安装，请直接点击这个下载：[conda安装包](https://github.com/morettt/my-neuro/releases/download/v4.12.0/Miniconda3-py39_4.12.0-Windows-x86_64.exe)
 
-anaconda的安装流程可以参考这个视频，讲的很详细：https://www.bilibili.com/video/BV1ns4y1T7AP
 
-已经有了anaconda环境后，就可以开始动手了！
+安装流程可以参考这个视频，讲的很详细：https://www.bilibili.com/video/BV1ns4y1T7AP  （从1分40秒开始观看）
+
+已经有了conda环境后，就可以开始动手了！
 
 ### 直接双击这个文件
 
@@ -101,7 +116,7 @@ anaconda的安装流程可以参考这个视频，讲的很详细：https://www.
 也能立刻定位出错的位置，从而针对性的解决
 
 
-## 1. 按顺序依次执行以下指令（打开终端在项目路径下运行）
+## 1. 按顺序依次执行以下指令（打开终端在项目路径下运行,如果有梯子建议开一下。下载会更快更稳）
 ```bash
 conda create -n my-neuro python=3.11 -y
 
@@ -113,7 +128,7 @@ pip install jieba_fast-0.53-cp311-cp311-win_amd64.whl
 #独立安装pyopenjtalk依赖
 pip install pyopenjtalk-0.4.1-cp311-cp311-win_amd64.whl
 
-pip install -r requirements.txt
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
 
 #安装ffmpedg
 conda install ffmpeg -y
@@ -263,27 +278,13 @@ QQ群:感谢 菊花茶洋参 帮忙制作肥牛app的封面
 
 
 感谢以下用户的资金赞助：
-- [@jonnytri53](https://github.com/jonnytri53) - 感谢您的支持！ 为本项目捐赠的50美元
-- [@蒜头头头](https://space.bilibili.com/92419729?spm_id_from=333.337.0.0) 感谢您的大力支持！为本项目捐赠的1000人民币
-- [@东方月辰DFYC](https://space.bilibili.com/670385648?spm_id_from=333.337.0.0) 感谢您的支持！！为本项目捐赠100人民币
-- [@大米若叶](https://space.bilibili.com/3546392377166058?spm_id_from=333.337.0.0) 感谢您的支持！！为本项目捐赠 68人民币
+- [jonnytri53](https://github.com/jonnytri53) - 感谢您的支持！ 为本项目捐赠的50美元
+- [蒜头头头](https://space.bilibili.com/92419729?spm_id_from=333.337.0.0) 感谢您的大力支持！为本项目捐赠的1000人民币
+- [东方月辰DFYC](https://space.bilibili.com/670385648?spm_id_from=333.337.0.0) 感谢您的支持！！8月捐赠100元 9月持续捐赠100元 共200人民币。
+- [大米若叶](https://space.bilibili.com/3546392377166058?spm_id_from=333.337.0.0) 感谢您的支持！！为本项目捐赠 68人民币
 
 感谢大佬开源十分好用的tts：
 GPT-SoVITS：https://github.com/RVC-Boss/GPT-SoVITS
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
