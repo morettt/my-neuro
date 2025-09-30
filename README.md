@@ -196,6 +196,8 @@ python diagnostic_tool.py
 ## 更新前端
 
 当前端需要更新时，运行 更新前端.bat
+<img width="1016" height="1024" alt="image" src="https://github.com/user-attachments/assets/85cff8c9-ee08-45b2-a935-4dd2cd629508" />
+
 
 ## 定制tts模型（克隆音色）
 
@@ -291,6 +293,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
