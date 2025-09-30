@@ -76,7 +76,7 @@ https://www.123912.com/s/MJqQvd-Uus5H
 - [x] 联网接入，实时搜索最新信息
 - [x] 手机app应用：可在安卓手机上对话的肥牛
 - [x] 播放音效库中的音效，由模型自己决定播放何种音效
-- [ ] 游戏陪玩，模型和用户共同游玩配合、双人、解密等游戏。目前实验游戏为：你画我猜、大富翁、galgame、我的世界等游戏
+- [x] 游戏陪玩，模型和用户共同游玩配合、双人、解密等游戏。目前实验游戏为：你画我猜、大富翁、galgame、我的世界等游戏（当前接入：我的世界）
 - [x] 长期记忆，让模型记住你的关键信息，你的个性，脾气
 
 ### 模型自己想要的功能（待定考虑）
@@ -102,9 +102,10 @@ https://www.123912.com/s/MJqQvd-Uus5H
 <img width="967" height="412" alt="image" src="https://github.com/user-attachments/assets/2d69f8c0-f9af-46a5-aba0-9aa667561407" />
 
 
-### 一键部署.bat 全都处理完了以后。再直接双击这个：Game-starts.bat 双击后会跳出来一个窗口，默默等在这些窗口输出对应的ip
+### 一键部署.bat 全都处理完了以后。再直接双击这个3个:ASR.bat 、TTS.bat bert.bat 双击后会跳出来窗口，默默等在这些窗口输出对应的ip
 
-![image](https://github.com/user-attachments/assets/95483cda-9e6d-41a8-a6fc-44e5ae805703)
+<img width="1059" height="1008" alt="image" src="https://github.com/user-attachments/assets/b19b4600-5add-4f6f-94a6-323c7cc6e147" />
+
 
 成功了后，你就可以直接跳到下面的第3步了，1、2步都不需要做。如果失败了，就老实做下面的这些步骤吧
 
@@ -289,6 +290,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
