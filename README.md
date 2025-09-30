@@ -39,7 +39,7 @@
 链接: https://pan.baidu.com/s/1murCG0G8Z4Hbvg27s_KrUw?pwd=dgbb
 
 123网盘：
-[https://www.123912.com/s/MJqQvd-Bps5H](https://www.123912.com/s/MJqQvd-Uus5H)
+https://www.123912.com/s/MJqQvd-Uus5H
 
 ```
 
@@ -285,6 +285,7 @@ QQ群:感谢 菊花茶洋参 帮忙制作肥牛app的封面
 
 感谢大佬开源十分好用的tts：
 GPT-SoVITS：https://github.com/RVC-Boss/GPT-SoVITS
+
 
 
 
