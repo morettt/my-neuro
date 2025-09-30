@@ -172,18 +172,19 @@ RAG.bat
 
 
 
-按照箭头指示点击LLM标签，在框选的这三个地方填写你的API信息，修改好了记得点击下面的保存。（我在这里已经写了一个可以用的api配置，你可以删除改成你自己的。支持任何openai格式的api）
+按照箭头指示点击LLM标签，在框选的这三个地方填写你的API信息，修改好了记得点击下面的保存。（支持任何openai格式的api）
 
-![image](https://github.com/user-attachments/assets/a605b1f5-3633-404c-8507-096b3d0ac4ba)
+<img width="1311" height="857" alt="image" src="https://github.com/user-attachments/assets/84a35e09-37ba-45d0-b516-74b28085d0ce" />
 
 
 
 最后返回点击"启动桌宠" 等待皮套出现，就可以开始和模型聊天了
 
-![image](https://github.com/user-attachments/assets/4f1d8cae-7ccb-4e0a-9cf3-2354989efec4)
+<img width="1152" height="803" alt="image" src="https://github.com/user-attachments/assets/de87207f-00df-4acf-a03a-6944ba6acb1a" />
+
+<img width="1541" height="1078" alt="image" src="https://github.com/user-attachments/assets/24b473ba-439c-4f57-a9da-8edd1b3bb4c5" />
 
 
-![image](https://github.com/user-attachments/assets/d73a1fc3-1514-42cd-9dfc-f5c450976162)
 
 如果有任何问题，在终端运行以下命令以启动诊断工具
 ```bash
@@ -290,6 +291,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
