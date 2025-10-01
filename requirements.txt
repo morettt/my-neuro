@@ -13,6 +13,11 @@ onnxruntime
 datasets
 peft
 
+#屏幕点击工具依赖
+openai
+pillow
+pyautogui
+
 #TTS依赖
 
 torch>=1.12.0
