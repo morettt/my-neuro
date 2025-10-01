@@ -11,13 +11,6 @@ import json
 current_path = os.path.dirname(os.path.realpath(__file__))
 
 
-try:
-    import py7zr
-    HAS_PY7ZR = True
-except ImportError:
-    HAS_PY7ZR = False
-
-
 def now_version():
     with open(r"live-2d\config.json", 'r', encoding="utf-8") as f:
         return json.load(f)['version']
@@ -102,38 +95,19 @@ def extract_archive(archive_file, target_folder):
 
     try:
         if file_ext == '7z':
-            # 首先尝试使用py7zr库
-            if HAS_PY7ZR:
-                print("使用py7zr库解压7z文件...")
-                with py7zr.SevenZipFile(archive_file, mode='r') as archive:
-                    archive.extractall(path=target_folder)
-            else:
-                # 如果没有py7zr库，尝试使用系统的7z命令
-                print("py7zr库未安装，尝试使用系统7z命令...")
-
-                # 检查是否安装了7z
-                try:
-                    result = subprocess.run(['7z'], capture_output=True, check=False)
-                except FileNotFoundError:
-                    print("错误: 系统中未找到7z命令行工具")
-                    print("请安装以下之一:")
-                    print("1. Python库: pip install py7zr")
-                    print("2. 系统工具:")
-                    print("   Windows: 下载并安装7-Zip")
-                    print("   Linux: sudo apt-get install p7zip-full")
-                    print("   macOS: brew install p7zip")
-                    return False
-
-                # 解压命令
-                result = subprocess.run(
-                    ['7z', 'x', archive_file, f'-o{target_folder}', '-y'],
-                    capture_output=True,
-                    text=True
-                )
-
-                if result.returncode != 0:
-                    print(f"7z解压失败: {result.stderr}")
-                    return False
+            # 使用patoolib解压7z文件
+            try:
+                import patoolib
+            except ImportError:
+                print("正在安装patool库以支持7z格式...")
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "patool", "-q"])
+                import patoolib
+            
+            print("使用patoolib解压7z文件...")
+            patoolib.extract_archive(archive_file, outdir=target_folder)
+            print("\n解压完成!")
+            print(f"所有文件已解压到 '{target_folder}' 文件夹")
+            return True
 
         elif file_ext == 'zip':
             print("解压ZIP文件...")
@@ -185,90 +159,17 @@ def extract_archive(archive_file, target_folder):
                         current=index + 1,
                         total=total_files
                     )
+            
+            print("\n解压完成!")
+            print(f"所有文件已解压到 '{target_folder}' 文件夹")
+            return True
         else:
             print(f"不支持的压缩格式: {file_ext}")
             return False
 
-        print("\n解压完成!")
-        print(f"所有文件已解压到 '{target_folder}' 文件夹")
-        return True
-
     except Exception as e:
         print(f"解压过程中出错: {e}")
         return False
-
-
-# 旧的解压方法
-'''
-def extract_zip(zip_file, target_folder):
-    """解压ZIP文件到指定文件夹并显示进度"""
-    print(f"正在解压 {zip_file} 到 {target_folder}...")
-
-    if not os.path.exists(target_folder):
-        os.makedirs(target_folder)
-        print(f"已创建目标文件夹: {target_folder}")
-
-    try:
-        with zipfile.ZipFile(zip_file, 'r') as zip_ref:
-            # 获取zip文件中的所有文件列表
-            file_list = zip_ref.namelist()
-            total_files = len(file_list)
-
-            # 逐个解压文件并显示进度
-            for index, file in enumerate(file_list):
-                # 修复中文文件名编码问题
-                try:
-                    # 尝试使用CP437解码然后使用GBK/GB2312重新编码
-                    correct_filename = file.encode('cp437').decode('gbk')
-                    # 创建目标路径
-                    target_path = os.path.join(target_folder, correct_filename)
-
-                    # 创建必要的目录
-                    if os.path.dirname(target_path) and not os.path.exists(os.path.dirname(target_path)):
-                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
-
-                    # 提取文件到目标路径
-                    data = zip_ref.read(file)
-                    # 如果是目录项则跳过写入文件
-                    if not correct_filename.endswith('/'):
-                        with open(target_path, 'wb') as f:
-                            f.write(data)
-                except Exception as e:
-                    # 如果编码转换失败，直接使用原始路径
-                    # 先提取到临时位置
-                    zip_ref.extract(file)
-
-                    # 如果解压成功，移动文件到目标文件夹
-                    if os.path.exists(file):
-                        target_path = os.path.join(target_folder, file)
-                        # 确保目标目录存在
-                        if os.path.dirname(target_path) and not os.path.exists(os.path.dirname(target_path)):
-                            os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                        # 移动文件
-                        shutil.move(file, target_path)
-
-                # 计算解压百分比
-                percent = int((index + 1) * 100 / total_files)
-
-                # 显示进度条
-                display_progress_bar(
-                    percent,
-                    "解压进度",
-                    current=index + 1,
-                    total=total_files
-                )
-
-        print("\n解压完成!")
-        print(f"所有文件已解压到 '{target_folder}' 文件夹")
-        return True
-
-    except zipfile.BadZipFile:
-        print("错误: 下载的文件不是有效的ZIP格式")
-        return False
-    except Exception as e:
-        print(f"解压过程中出错: {e}")
-        return False
-'''
 
 
 # Live2D下载函数
@@ -304,10 +205,10 @@ def download_live2d_model():
     # 解压文件
     extract_success = extract_archive(downloaded_file, target_folder)
 
-    # 清理：删除ZIP文件
+    # 清理：删除压缩文件
     if extract_success and os.path.exists(downloaded_file):
         os.remove(downloaded_file)
-        print(f"原ZIP文件 {downloaded_file} 已删除")
+        print(f"原压缩文件 {downloaded_file} 已删除")
 
     return extract_success
 
@@ -360,6 +261,10 @@ def backup_and_restore_memory():
                 with open(memory_file, 'w', encoding='utf-8') as file:
                     file.write(memory_content)
                 print("成功恢复记忆库内容")
+
+                os.remove(backup_path)
+                print('清理记忆库缓存文本')
+
             except Exception as e:
                 print(f"恢复文件时出错: {e}")
         else:
