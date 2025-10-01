@@ -1,3 +1,4 @@
+import glob
 import logging
 import os
 import traceback
@@ -109,6 +110,29 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
             torch.cuda.empty_cache()
     yield "\n".join(infos)
 
+
+def filename_process():
+    """音频文件后处理"""
+    global script_dir
+    wav_dir = os.path.join(os.path.dirname(os.path.dirname(script_dir)),"output/uvr5/")
+
+    all_files = glob.glob(os.path.join(wav_dir, "*"))
+
+    for file_path in all_files:
+        if os.path.isfile(file_path):
+            filename = os.path.basename(file_path).lower()
+
+            # 检查是否是音频文件（通过扩展名判断）
+            if filename.split('.')[-1] in ['wav', 'mp3', 'flac', 'aac', 'ogg', 'm4a']:
+                if "vocal" in filename:
+                    new_path = os.path.join(wav_dir, "vocal.wav")
+                    os.rename(file_path, new_path)
+                    # print(f"重命名vocal文件: {new_path}")
+                elif "instrument" in filename:
+                    os.remove(file_path)
+                    # print(f"已删除instrument文件: {file_path}")
+
+
 model_choose = "HP2_all_vocals"
 dir_wav_input = os.path.join(os.path.dirname(os.path.dirname(script_dir)),"input")
 wav_inputs = ""
@@ -138,5 +162,4 @@ if __name__ == '__main__':
         print(result)
 
     # 处理输出文件
-    os.remove(os.path.join(os.path.dirname(os.path.dirname(script_dir)),"output/uvr5/instrument_audio.mp3.reformatted.wav_10.wav"))
-    os.rename(os.path.join(os.path.dirname(os.path.dirname(script_dir)),"output/uvr5/vocal_audio.mp3.reformatted.wav_10.wav"),os.path.join(os.path.dirname(os.path.dirname(script_dir)),"output/uvr5/vocal.wav"))
+    filename_process()
