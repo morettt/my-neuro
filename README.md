@@ -83,6 +83,16 @@ https://www.123912.com/s/MJqQvd-Uus5H
 - [ ] 变色功能：按照模型心情让屏幕变色妨碍用户
 - [ ] 自由走动：模型自由在屏幕中移动
 
+
+
+### 前期准备
+
+确保你电脑里安装了conda 如果还没有安装，请直接点击这个下载：[conda安装包](https://github.com/morettt/my-neuro/releases/download/v4.12.0/Miniconda3-py39_4.12.0-Windows-x86_64.exe)
+
+安装流程可以参考这个视频，讲的很详细：https://www.bilibili.com/video/BV1ns4y1T7AP  （从1分40秒开始观看）
+
+已经有了conda环境后，就可以开始动手了！
+
 ## 🚀 正式开始
 
 ### 只需要3个步骤：1.环境模型安装 2.启动服务 3.开始使用
@@ -263,6 +273,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
