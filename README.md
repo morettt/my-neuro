@@ -85,7 +85,7 @@ https://www.123912.com/s/MJqQvd-Uus5H
 
 
 
-### 前期准备
+## 前期准备
 
 确保你电脑里安装了conda 如果还没有安装，请直接点击这个下载：[conda安装包](https://github.com/morettt/my-neuro/releases/download/v4.12.0/Miniconda3-py39_4.12.0-Windows-x86_64.exe)
 
@@ -273,6 +273,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
