@@ -83,39 +83,9 @@ https://www.123912.com/s/MJqQvd-Uus5H
 - [ ] 变色功能：按照模型心情让屏幕变色妨碍用户
 - [ ] 自由走动：模型自由在屏幕中移动
 
-## 🚀 快速开始
+## 🚀 正式开始
 
-
-## 新手设计一键部署项目（实验）
-
-如果你是新手，可以使用这个一键部署指令。它会把所有的东西都处理好。但是由于涉及的逻辑处理过于多。所以有失败的可能性。但是成功了就会省去很多的麻烦。看你的运气了！
-
-确保你电脑里安装了conda 如果还没有安装，请直接点击这个下载：[conda安装包](https://github.com/morettt/my-neuro/releases/download/v4.12.0/Miniconda3-py39_4.12.0-Windows-x86_64.exe)
-
-
-安装流程可以参考这个视频，讲的很详细：https://www.bilibili.com/video/BV1ns4y1T7AP  （从1分40秒开始观看）
-
-已经有了conda环境后，就可以开始动手了！
-
-### 直接双击这个文件
-
-<img width="967" height="412" alt="image" src="https://github.com/user-attachments/assets/2d69f8c0-f9af-46a5-aba0-9aa667561407" />
-
-
-### 一键部署.bat 全都处理完了以后。再直接双击这个3个:ASR.bat 、TTS.bat bert.bat 双击后会跳出来窗口，默默等在这些窗口输出对应的ip
-
-<img width="1059" height="1008" alt="image" src="https://github.com/user-attachments/assets/b19b4600-5add-4f6f-94a6-323c7cc6e147" />
-
-
-成功了后，你就可以直接跳到下面的第3步了，1、2步都不需要做。如果失败了，就老实做下面的这些步骤吧
-
-
-
-### 原版启动步骤
-如果上面的一键处理出问题了。那么建议一步一步按照下方的操作方法。虽然麻烦。但是如果出错了。
-
-也能立刻定位出错的位置，从而针对性的解决
-
+### 只需要3个步骤：1.环境模型安装 2.启动服务 3.开始使用
 
 ## 1. 按顺序依次执行以下指令（打开终端在项目路径下运行,如果有梯子建议开一下。下载会更快更稳）
 ```bash
@@ -293,6 +263,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
