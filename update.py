@@ -1,9 +1,14 @@
+import subprocess
+
 import requests
 import os
 import sys
 import zipfile
 import shutil
 import json
+
+
+current_path = os.path.dirname(os.path.realpath(__file__))
 
 
 def now_version():
@@ -78,77 +83,96 @@ def download_file(url, file_name=None):
     return file_name
 
 
-def extract_zip(zip_file, target_folder):
-    """解压ZIP文件到指定文件夹并显示进度"""
-    print(f"正在解压 {zip_file} 到 {target_folder}...")
+def extract_archive(archive_file, target_folder):
+    """解压压缩文件（支持zip和7z格式）"""
+    print(f"正在解压 {archive_file} 到 {target_folder}...")
 
     if not os.path.exists(target_folder):
         os.makedirs(target_folder)
         print(f"已创建目标文件夹: {target_folder}")
 
+    file_ext = archive_file.lower().split('.')[-1]
+
     try:
-        with zipfile.ZipFile(zip_file, 'r') as zip_ref:
-            # 获取zip文件中的所有文件列表
-            file_list = zip_ref.namelist()
-            total_files = len(file_list)
+        if file_ext == '7z':
+            # 使用patoolib解压7z文件
+            try:
+                import patoolib
+            except ImportError:
+                print("正在安装patool库以支持7z格式...")
+                subprocess.check_call([sys.executable, "-m", "pip", "install", "patool", "-q"])
+                import patoolib
+            
+            print("使用patoolib解压7z文件...")
+            patoolib.extract_archive(archive_file, outdir=target_folder)
+            print("\n解压完成!")
+            print(f"所有文件已解压到 '{target_folder}' 文件夹")
+            return True
 
-            # 逐个解压文件并显示进度
-            for index, file in enumerate(file_list):
-                # 修复中文文件名编码问题
-                try:
-                    # 尝试使用CP437解码然后使用GBK/GB2312重新编码
-                    correct_filename = file.encode('cp437').decode('gbk')
-                    # 创建目标路径
-                    target_path = os.path.join(target_folder, correct_filename)
+        elif file_ext == 'zip':
+            print("解压ZIP文件...")
+            with zipfile.ZipFile(archive_file, 'r') as zip_ref:
+                # 获取zip文件中的所有文件列表
+                file_list = zip_ref.namelist()
+                total_files = len(file_list)
 
-                    # 创建必要的目录
-                    if os.path.dirname(target_path) and not os.path.exists(os.path.dirname(target_path)):
-                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                # 逐个解压文件并显示进度
+                for index, file in enumerate(file_list):
+                    # 修复中文文件名编码问题
+                    try:
+                        # 尝试使用CP437解码然后使用GBK/GB2312重新编码
+                        correct_filename = file.encode('cp437').decode('gbk')
+                        # 创建目标路径
+                        target_path = os.path.join(target_folder, correct_filename)
 
-                    # 提取文件到目标路径
-                    data = zip_ref.read(file)
-                    # 如果是目录项则跳过写入文件
-                    if not correct_filename.endswith('/'):
-                        with open(target_path, 'wb') as f:
-                            f.write(data)
-                except Exception as e:
-                    # 如果编码转换失败，直接使用原始路径
-                    # 先提取到临时位置
-                    zip_ref.extract(file)
-
-                    # 如果解压成功，移动文件到目标文件夹
-                    if os.path.exists(file):
-                        target_path = os.path.join(target_folder, file)
-                        # 确保目标目录存在
+                        # 创建必要的目录
                         if os.path.dirname(target_path) and not os.path.exists(os.path.dirname(target_path)):
                             os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                        # 移动文件
-                        shutil.move(file, target_path)
 
-                # 计算解压百分比
-                percent = int((index + 1) * 100 / total_files)
+                        # 提取文件到目标路径
+                        data = zip_ref.read(file)
+                        # 如果是目录项则跳过写入文件
+                        if not correct_filename.endswith('/'):
+                            with open(target_path, 'wb') as f:
+                                f.write(data)
+                    except Exception as e:
+                        # 如果编码转换失败，直接使用原始路径
+                        # 先提取到临时位置
+                        zip_ref.extract(file)
 
-                # 显示进度条
-                display_progress_bar(
-                    percent,
-                    "解压进度",
-                    current=index + 1,
-                    total=total_files
-                )
+                        # 如果解压成功，移动文件到目标文件夹
+                        if os.path.exists(file):
+                            target_path = os.path.join(target_folder, file)
+                            # 确保目标目录存在
+                            if os.path.dirname(target_path) and not os.path.exists(os.path.dirname(target_path)):
+                                os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                            # 移动文件
+                            shutil.move(file, target_path)
 
-        print("\n解压完成!")
-        print(f"所有文件已解压到 '{target_folder}' 文件夹")
-        return True
+                    # 计算解压百分比
+                    percent = int((index + 1) * 100 / total_files)
 
-    except zipfile.BadZipFile:
-        print("错误: 下载的文件不是有效的ZIP格式")
-        return False
+                    # 显示进度条
+                    display_progress_bar(
+                        percent,
+                        "解压进度",
+                        current=index + 1,
+                        total=total_files
+                    )
+            
+            print("\n解压完成!")
+            print(f"所有文件已解压到 '{target_folder}' 文件夹")
+            return True
+        else:
+            print(f"不支持的压缩格式: {file_ext}")
+            return False
+
     except Exception as e:
         print(f"解压过程中出错: {e}")
         return False
 
 
-# 修正后的Live2D下载函数
+# Live2D下载函数
 def download_live2d_model():
     """下载并解压Live 2D模型到live-2d文件夹"""
     print("\n========== 下载Live 2D模型 ==========")
@@ -179,55 +203,74 @@ def download_live2d_model():
     downloaded_file = download_file(live2d_url, filename)
 
     # 解压文件
-    extract_success = extract_zip(downloaded_file, target_folder)
+    extract_success = extract_archive(downloaded_file, target_folder)
 
-    # 清理：删除ZIP文件
+    # 清理：删除压缩文件
     if extract_success and os.path.exists(downloaded_file):
         os.remove(downloaded_file)
-        print(f"原ZIP文件 {downloaded_file} 已删除")
+        print(f"原压缩文件 {downloaded_file} 已删除")
 
     return extract_success
 
 
 def backup_and_restore_memory():
     folder_path = "live-2d"
-    memory_file = os.path.join(folder_path, "记忆库.txt")
+    memory_file = os.path.join(folder_path, "AI记录室/记忆库.txt")
     memory_content = None  # 用来标记是否有备份内容
+    global current_path
+    backup_path = os.path.join(current_path, "memory_backup.txt")
 
     # 尝试读取记忆库内容（如果存在的话）
     if os.path.exists(memory_file):
-        try:
-            with open(memory_file, 'r', encoding='utf-8') as file:
-                memory_content = file.read()
-            print("成功读取记忆库内容，已备份")
-        except Exception as e:
-            print(f"读取记忆库文件时出错: {e}")
-            memory_content = None
+        if input("读取到存在的记忆文件，如果你已经备份过记忆，备份操作将覆盖旧的备份文件\n是否备份(y/n):") == "y":
+            try:
+                with open(memory_file, 'r', encoding='utf-8') as file:
+                    memory_content = file.read()
+                    with open(backup_path, 'w', encoding='utf-8') as file2:
+                        file2.write(memory_content)
+                print("成功读取记忆库内容，已备份")
+            except Exception as e:
+                print(f"读取记忆库文件时出错: {e}")
+                memory_content = None
+        else:
+            print("跳过备份")
     else:
         print("记忆库文件不存在，跳过备份")
 
     # 删除整个live-2d文件夹
-    try:
-        if os.path.exists(folder_path):
-            shutil.rmtree(folder_path)
-            print(f"成功删除 {folder_path} 文件夹")
-    except Exception as e:
-        print(f"删除文件夹时出错: {e}")
-        return
-
-    # 下载最新文件
-    download_live2d_model()
-
-    # 只有原来存在记忆库文件时才恢复
-    if memory_content is not None:
+    if input("确认更新(y/n):") == 'y':
+        print("开始更新")
         try:
-            with open(memory_file, 'w', encoding='utf-8') as file:
-                file.write(memory_content)
-            print("成功恢复记忆库内容")
+            print("正在删除旧版文件...")
+            if os.path.exists(folder_path):
+                shutil.rmtree(folder_path)
+                print(f"成功删除 {folder_path} 文件夹")
         except Exception as e:
-            print(f"恢复文件时出错: {e}")
+            print(f"删除文件夹时出错: {e}")
+            return
+
+        # 下载最新文件
+        download_live2d_model()
+
+        # 只有原来存在记忆库文件时才恢复
+        if os.path.exists(backup_path):
+            print("开始恢复记忆库...")
+            try:
+                with open(backup_path, 'r', encoding='utf-8') as file:
+                    memory_content = file.read()
+                with open(memory_file, 'w', encoding='utf-8') as file:
+                    file.write(memory_content)
+                print("成功恢复记忆库内容")
+
+                os.remove(backup_path)
+                print('清理记忆库缓存文本')
+
+            except Exception as e:
+                print(f"恢复文件时出错: {e}")
+        else:
+            print("无备份记忆库文件，不恢复")
     else:
-        print("无需恢复记忆库文件")
+        print("已停止更新")
 
 
 current_version = now_version()
