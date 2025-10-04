@@ -58,3 +58,7 @@ tensorboard
 #RAG依赖
 sentence-transformers
 watchdog
+
+#PyQT5
+PyQt5
+
