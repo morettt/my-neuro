@@ -256,6 +256,10 @@ python diagnostic_tool.py
 
 希望能在今年可以把上述所有的想法都实现。
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=morettt/my-neuro&type=Date)](https://www.star-history.com/#morettt/my-neuro&Date)
+
 ## 致谢
 
 QQ群:感谢 菊花茶洋参 帮忙制作肥牛app的封面
@@ -273,6 +277,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
