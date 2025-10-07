@@ -1,0 +1,97 @@
+body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+#subtitle-container {
+    position: fixed;
+    bottom: 20px;
+    left: 70%;
+    transform: translateX(-50%);
+    max-width: 80%;
+    max-height: 300px;
+    padding: 10px 20px;
+    border-radius: 10px;
+    z-index: 1000;
+    display: none;
+    text-align: center;
+    overflow-y: hidden; /* 可能的丢包问题 */
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+#subtitle-text {
+    color: white;
+    font-size: 30px;
+    margin: 0;
+    font-family: 'Patrick Hand', 'ZCOOL QingKe HuangYou', sans-serif;
+    line-height: 1.5;
+    font-weight: 900;
+    text-shadow: 
+          -0.5px -0.5px 0 black,
+          0.5px -0.5px 0 black,
+          -0.5px 0.5px 0 black,
+          1.5px 1.5px 0 black;
+}
+
+#text-chat-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px; /* 已修改：从left改为right */
+    width: 300px;
+    max-height: 400px;
+    background-color: rgba(0, 0, 0, 0.7);
+    border-radius: 10px;
+    padding: 10px;
+    z-index: 1000;
+    display: none;
+    pointer-events: auto; /* 确保鼠标事件能正常触发 */
+}
+
+#chat-messages {
+    display: none; /* 隐藏消息记录区域 */
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+    color: white;
+    font-family: 'Patrick Hand', sans-serif;
+}
+
+#chat-input-container {
+    display: flex;
+    gap: 5px;
+}
+
+#chat-input {
+    flex: 1;
+    padding: 5px;
+    border-radius: 5px;
+    border: none;
+}
+
+#chat-send-btn {
+    padding: 5px 10px;
+    border-radius: 5px;
+    border: none;
+    background-color: #4CAF50;
+    color: white;
+    cursor: pointer;
+}
+
+#chat-send-btn:hover {
+    background-color: #45a049;
+}
