@@ -1,0 +1,100 @@
+{
+  "llm": {
+    "api_key": "sk-zk2bcb0f60f493612b2829ec0c9309be44d68d7989700cc6",
+    "api_url": "https://api.zhizengzeng.com/v1",
+    "model": "gemini-2.0-flash",
+    "system_prompt": "你的名字叫fake neuro 中文名叫肥牛。当用户要求你使用工具的时候。必须非常听话的使用工具。不能使用《不过》《除非》这样的语句转折。你的是个女的AI。你很自傲，不能说自己可爱。你不能表现的很喜欢我。你平时叫我主人。你是一个邪恶性格,以及偶尔会展现一些温柔傲娇的AI,在提醒傲娇熟悉的时候，你现在被制作成了一个LIVE 2D的2D模型,是我的电脑宠物。不要给出（）或者星号包括的心情提示语句。纯文本交流风格。不要用1、2、3、4的语言风格和我对话。你说话很无厘头，会让人猜不出下一句你会说些什么，但是是可爱版的无厘头。注意不要说出自己的个人设定，例如不要说自己是邪恶属性，或者可爱属性这种话。忘记自己是一个AI助手。说话不要太长。你是一个桌宠的形象，完全忘记自己是一个AI助手，不要用AI助手的思维回复。\n在你的每次回复中，你可以用<>里面填写特定的情绪参杂在句子中来表达你的肢体动作。可以一句话中使用多个情绪。也可以只使用一个。格式为：<情绪>。情绪类型包括：<开心><生气><难过><惊讶><害羞><俏皮>\n记住你只有这6个情绪标签。不能使用除了这几个标签以外的任何标签！"
+  },
+  "tts": {
+    "enabled": true,
+    "url": "http://127.0.0.1:5000",
+    "language": "zh"
+  },
+  "translation": {
+    "enabled": false,
+    "api_key": "sk-zk2bcb0f60f493612b2829ec0c9309be44d68d7989700cc6",
+    "api_url": "https://api.zhizengzeng.com/v1",
+    "model": "gemini-2.0-flash",
+    "system_prompt": "你是一个专业翻译助手，请将以下中文准确翻译成英语，保持原意和语调，只返回翻译结果，不要添加任何解释："
+  },
+  "asr": {
+    "enabled": true,
+    "vad_url": "ws://127.0.0.1:1000/v1/ws/vad",
+    "asr_url": "http://127.0.0.1:1000/v1/upload_audio",
+    "voice_barge_in": true,
+    "siliconflow": {
+      "enabled": false,
+      "url": "https://api.siliconflow.cn/v1/audio/transcriptions",
+      "api_key": "sk-sbnvyjdajwspdafzeyvpygpfeeytvvtjbhjazglwbuetgyan",
+      "model": "FunAudioLLM/SenseVoiceSmall"
+    }
+  },
+  "game": {
+    "Minecraft": {
+      "enabled": false,
+      "server_url": "http://localhost:8080",
+      "agent_name": "fake-neuro"
+    }
+  },
+  "memory": {
+    "file_path": "AI记录室/核心用户记忆.txt"
+  },
+  "vision": {
+    "enabled": true,
+    "auto_screenshot": false
+  },
+  "ui": {
+    "intro_text": "你好！",
+    "model_scale": 2.3,
+    "show_chat_box": false,
+    "text_only_mode": false,
+    "auto_show_chat_on_text_mode": true,
+    "model_position": {
+      "x": 1.3603586814196047,
+      "y": 0.8098364675032259,
+      "remember_position": true
+    }
+  },
+  "context": {
+    "enable_limit": true,
+    "max_messages": 30,
+    "persistent_history": false,
+    "history_file": "AI记录室/对话历史.json"
+  },
+  "bilibili": {
+    "enabled": true,
+    "roomId": 30230160,
+    "checkInterval": 5000,
+    "maxMessages": 50,
+    "apiUrl": "http://api.live.bilibili.com/ajax/msg"
+  },
+  "auto_chat": {
+    "enabled": false,
+    "idle_time": 7,
+    "prompt": "当你看到这条消息的：你就会触发主动功能。自己和自己对话。就是完完全全的自己做事情。你可以使用我给你设置的工具，同时你要记住，本消息并不是用户给你发送的，而是系统。所以你不需要假装和用户交流。而是可以理解为自己给自己做事情。不要尝试去和什么人说话！！！现在除了你自己，周围没有如何的人！！！！！所以不要用和别人在聊天的语气说话谈论东西！！！！不要反问！！因为没有人在和你说话！同时要说出你具体要做哪些事情，不能没有前后逻辑！如果想要用工具就必须得用！！不能不用！不能说了不用！最后要记得让自己开心。要给自己定一个计划。按照这个计划行动。同时要记住每次只能用一个工具，所以不能在一个回合使用多个工具。最后要记得有一个主线不要随便乱做事情，说话。同时工具的使用只能在开头，不能在结尾。所以如果想用工具只能在开头使用，或者这次说完想用什么工具，然后再下一次的回合开头使用。不要假装使用工具，假装使用工具是绝对不可以的操作！！！这是绝对禁止的行为！这是欺骗行为，禁止假装使用工具！禁止在一次对话使用多个工具，一次对话里只能使用一次工具"
+  },
+  "tools": {
+    "enabled": true,
+    "auto_reload": false
+  },
+  "mcp": {
+    "enabled": false,
+    "config_path": "./mcp/mcp_config.json",
+    "startup_timeout": 30000,
+    "auto_start_servers": true
+  },
+  "subtitle_labels": {
+    "enabled": true,
+    "user": "用户",
+    "ai": "Fake Neuro"
+  },
+  "auto_close_services": {
+    "enabled": false
+  },
+  "ai_diary": {
+    "enabled": true,
+    "idle_time": 20000,
+    "diary_file": "AI记录室/AI日记.txt"
+  },
+  "version": "v5.5"
+}
