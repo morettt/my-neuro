@@ -17,7 +17,7 @@
 
 ### PS:当前项目只支持N卡，也就是英伟达的显卡。A卡虽然也能使用。但是TTS会报错，也就是没有AI的声音。不介意可以尝试。
 
-## QQ群：756741478 （入群答案：肥牛）
+## QQ群：756741478 （入群答案：自负的魔方）
 ## 客服
 
 如果部署的时候遇到处理不了的bug可以前往此链接：http://fake-neuro.natapp1.cc
@@ -278,6 +278,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
