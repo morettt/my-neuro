@@ -270,6 +270,7 @@ QQ群:感谢 菊花茶洋参 帮忙制作肥牛app的封面
 - [蒜头头头](https://space.bilibili.com/92419729?spm_id_from=333.337.0.0) 感谢您的大力支持！为本项目捐赠的1000人民币
 - [东方月辰DFYC](https://space.bilibili.com/670385648?spm_id_from=333.337.0.0) 感谢您的支持！！8月捐赠100元 9月持续捐赠100元 共200人民币。
 - [大米若叶](https://space.bilibili.com/3546392377166058?spm_id_from=333.337.0.0) 感谢您的支持！！为本项目捐赠 68人民币
+- [StrongerFatTiger](https://space.bilibili.com/28869393?spm_id_from=333.337.0.0) 感谢您的支持！！为本项目捐赠 68人民币
 
 本项目使用接入的开源项目：
 
@@ -278,6 +279,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
