@@ -9,7 +9,7 @@ import json
 
 
 current_path = os.path.dirname(os.path.realpath(__file__))
-
+current_dir = os.getcwd()
 
 def now_version():
     with open(r"live-2d\config.json", 'r', encoding="utf-8") as f:
@@ -84,93 +84,63 @@ def download_file(url, file_name=None):
 
 
 def extract_archive(archive_file, target_folder):
-    """解压压缩文件（支持zip和7z格式）"""
+    """解压压缩文件（自动下载7z工具）"""
     print(f"正在解压 {archive_file} 到 {target_folder}...")
 
     if not os.path.exists(target_folder):
         os.makedirs(target_folder)
         print(f"已创建目标文件夹: {target_folder}")
 
-    file_ext = archive_file.lower().split('.')[-1]
-
     try:
-        if file_ext == '7z':
-            # 使用patoolib解压7z文件
-            try:
-                import patoolib
-            except ImportError:
-                print("正在安装patool库以支持7z格式...")
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "patool", "-q"])
-                import patoolib
-            
-            print("使用patoolib解压7z文件...")
-            patoolib.extract_archive(archive_file, outdir=target_folder)
-            print("\n解压完成!")
-            print(f"所有文件已解压到 '{target_folder}' 文件夹")
-            return True
+        if archive_file.endswith('.7z'):
+            # 检查本地是否有7z.exe
+            local_7z = os.path.join(current_dir, "7z", "7z.exe")
+            local_7z_dll = os.path.join(current_dir, "7z", "7z.dll")
 
-        elif file_ext == 'zip':
-            print("解压ZIP文件...")
+            # 如果本地没有7z，自动下载
+            if not os.path.exists(local_7z):
+                print("正在自动下载7z工具...")
+                sevenz_dir = os.path.join(current_dir, "7z")
+                if not os.path.exists(sevenz_dir):
+                    os.makedirs(sevenz_dir)
+
+                # 下载7z便携版（官方链接）
+                seven_zip_url = "https://www.7-zip.org/a/7zr.exe"
+
+                try:
+                    response = requests.get(seven_zip_url, timeout=30)
+                    with open(local_7z, 'wb') as f:
+                        f.write(response.content)
+                    print("7z工具下载完成!")
+                except Exception as e:
+                    print(f"下载7z失败: {e}")
+                    print("\n请手动下载7-Zip并安装，或手动解压 live-2d.7z 文件")
+                    return False
+
+            print('正在解压live-2d文件，请耐心等待.......')
+
+            # 使用7z解压
+            cmd = f'"{local_7z}" x "{archive_file}" -o"{target_folder}" -y'
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+            if result.returncode == 0:
+                print("\n解压完成!")
+                print(f"所有文件已解压到 '{target_folder}' 文件夹")
+                return True
+            else:
+                print(f"\n解压失败: {result.stderr}")
+                return False
+
+        elif archive_file.endswith('.zip'):
+            print("使用zipfile解压zip文件...")
             with zipfile.ZipFile(archive_file, 'r') as zip_ref:
-                # 获取zip文件中的所有文件列表
-                file_list = zip_ref.namelist()
-                total_files = len(file_list)
-
-                # 逐个解压文件并显示进度
-                for index, file in enumerate(file_list):
-                    # 修复中文文件名编码问题
-                    try:
-                        # 尝试使用CP437解码然后使用GBK/GB2312重新编码
-                        correct_filename = file.encode('cp437').decode('gbk')
-                        # 创建目标路径
-                        target_path = os.path.join(target_folder, correct_filename)
-
-                        # 创建必要的目录
-                        if os.path.dirname(target_path) and not os.path.exists(os.path.dirname(target_path)):
-                            os.makedirs(os.path.dirname(target_path), exist_ok=True)
-
-                        # 提取文件到目标路径
-                        data = zip_ref.read(file)
-                        # 如果是目录项则跳过写入文件
-                        if not correct_filename.endswith('/'):
-                            with open(target_path, 'wb') as f:
-                                f.write(data)
-                    except Exception as e:
-                        # 如果编码转换失败，直接使用原始路径
-                        # 先提取到临时位置
-                        zip_ref.extract(file)
-
-                        # 如果解压成功，移动文件到目标文件夹
-                        if os.path.exists(file):
-                            target_path = os.path.join(target_folder, file)
-                            # 确保目标目录存在
-                            if os.path.dirname(target_path) and not os.path.exists(os.path.dirname(target_path)):
-                                os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                            # 移动文件
-                            shutil.move(file, target_path)
-
-                    # 计算解压百分比
-                    percent = int((index + 1) * 100 / total_files)
-
-                    # 显示进度条
-                    display_progress_bar(
-                        percent,
-                        "解压进度",
-                        current=index + 1,
-                        total=total_files
-                    )
-            
+                zip_ref.extractall(target_folder)
             print("\n解压完成!")
-            print(f"所有文件已解压到 '{target_folder}' 文件夹")
             return True
-        else:
-            print(f"不支持的压缩格式: {file_ext}")
-            return False
 
     except Exception as e:
         print(f"解压过程中出错: {e}")
         return False
-
 
 # Live2D下载函数
 def download_live2d_model():
