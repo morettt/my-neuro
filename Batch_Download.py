@@ -14,6 +14,9 @@ from urllib3.util.retry import Retry
 # 禁用SSL警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# 获取当前工作目录
+current_dir = os.getcwd()
+
 # 添加7z支持
 try:
     import py7zr
@@ -100,7 +103,7 @@ def download_file(url, file_name=None):
 
 
 def extract_archive(archive_file, target_folder):
-    """解压压缩文件（支持zip和7z格式）"""
+    """解压压缩文件（自动下载7z工具）"""
     print(f"正在解压 {archive_file} 到 {target_folder}...")
 
     if not os.path.exists(target_folder):
@@ -108,20 +111,52 @@ def extract_archive(archive_file, target_folder):
         print(f"已创建目标文件夹: {target_folder}")
 
     try:
-        # 使用patoolib解压文件
-        try:
-            import patoolib
-        except ImportError:
-            print("正在安装patool库...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "patool", "-q"])
-            import patoolib
+        if archive_file.endswith('.7z'):
+            # 检查本地是否有7z.exe
+            local_7z = os.path.join(current_dir, "7z", "7z.exe")
+            local_7z_dll = os.path.join(current_dir, "7z", "7z.dll")
 
-        print("使用patoolib解压文件...")
-        print('正在解压live-2d文件，请耐心等待.......')
-        patoolib.extract_archive(archive_file, outdir=target_folder)
-        print("\n解压完成!")
-        print(f"所有文件已解压到 '{target_folder}' 文件夹")
-        return True
+            # 如果本地没有7z，自动下载
+            if not os.path.exists(local_7z):
+                print("正在自动下载7z工具...")
+                sevenz_dir = os.path.join(current_dir, "7z")
+                if not os.path.exists(sevenz_dir):
+                    os.makedirs(sevenz_dir)
+
+                # 下载7z便携版（官方链接）
+                seven_zip_url = "https://www.7-zip.org/a/7zr.exe"
+
+                try:
+                    response = requests.get(seven_zip_url, timeout=30)
+                    with open(local_7z, 'wb') as f:
+                        f.write(response.content)
+                    print("7z工具下载完成!")
+                except Exception as e:
+                    print(f"下载7z失败: {e}")
+                    print("\n请手动下载7-Zip并安装，或手动解压 live-2d.7z 文件")
+                    return False
+
+            print('正在解压live-2d文件，请耐心等待.......')
+            print('你问要等多久？呃...我也不是很清楚，我电脑差不多2、3分钟左右？反正不会很慢的啦，耐心')
+
+            # 使用7z解压
+            cmd = f'"{local_7z}" x "{archive_file}" -o"{target_folder}" -y'
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+            if result.returncode == 0:
+                print("\n解压完成!")
+                print(f"所有文件已解压到 '{target_folder}' 文件夹")
+                return True
+            else:
+                print(f"\n解压失败: {result.stderr}")
+                return False
+
+        elif archive_file.endswith('.zip'):
+            print("使用zipfile解压zip文件...")
+            with zipfile.ZipFile(archive_file, 'r') as zip_ref:
+                zip_ref.extractall(target_folder)
+            print("\n解压完成!")
+            return True
 
     except Exception as e:
         print(f"解压过程中出错: {e}")
@@ -139,7 +174,7 @@ def download_live2d_model():
         print(f"检测到 {target_folder} 文件夹已存在且包含文件，跳过下载。")
         return True
 
-    url = "https://github.com/morettt/my-neuro/releases/download/v5.5/live-2d.7z"
+    url = "https://github.com/morettt/my-neuro/releases/download/v5.5.2/live-2d.7z"
     file_name = url.split('/')[-1]
 
     # 下载文件
@@ -186,8 +221,7 @@ def download_with_retry(command, max_retry=MAX_RETRY, wait_time=RETRY_WAIT):
     print(f"经过 {max_retry} 次尝试后，下载仍然失败")
     return False
 
-# 获取当前工作目录
-current_dir = os.getcwd()
+
 
 # 1. 下载Omni_fn_bert模型到omni_bert文件夹
 omni_bert_dir = os.path.join(current_dir, "omni_bert")
