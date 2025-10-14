@@ -1,3 +1,19 @@
+# My-neuro
+
+<div align="center">
+
+<a href="https://github.com/morettt/my-neuro/releases">
+    <img src="https://img.shields.io/github/v/release/morettt/my-neuro" alt="latest version" /></a>
+
+<a href="https://github.com/morettt/my-neuro/graphs/contributors">
+    <img alt="GitHub contributors" src="https://img.shields.io/github/contributors/morettt/my-neuro"></a>
+
+<a href="https://deepwiki.com/morettt/my-neuro">
+    <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" /></a>
+
+</div>
+
+
 ## 项目简介
 
 本项目的目标是打造专属个人的 AI 角色,打造出逼近真人的AI伙伴 - 通过您的数据印记,塑造出心目中理想的 TA 的形象。
