@@ -1,3 +1,19 @@
+# My-neuro
+
+<div align="center">
+
+<a href="https://github.com/morettt/my-neuro/releases">
+    <img src="https://img.shields.io/github/v/release/morettt/my-neuro" alt="latest version" /></a>
+
+<a href="https://github.com/morettt/my-neuro/graphs/contributors">
+    <img alt="GitHub contributors" src="https://img.shields.io/github/contributors/morettt/my-neuro"></a>
+
+<a href="https://deepwiki.com/morettt/my-neuro">
+    <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" /></a>
+
+</div>
+
+
 ## About This Project
 
 Build your own personal AI companion - a lifelike AI partner shaped by your digital footprint to bring your ideal companion to life.
