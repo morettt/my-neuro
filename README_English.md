@@ -34,7 +34,9 @@ Want to go fully local? Head to the LLM-studio folder for guidance on local LLM 
 ## QQ Group: 756741478 (Entry password: 肥牛)
 ## Support
 
-Run into deployment issues? Visit: http://fake-neuro.natapp1.cc
+1.Click "Ask DeepWiki" at the beginning of this README to ask AI about problems of deploying
+
+2.Run into deployment issues? Visit: http://fake-neuro.natapp1.cc
 
 Ask FeiNiu (Fat Cow) support bot for help - it'll walk you through troubleshooting. Most of the time things run smoothly... probably!
 
