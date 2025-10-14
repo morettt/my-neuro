@@ -1,3 +1,19 @@
+# My-neuro
+
+<div align="center">
+
+<a href="https://github.com/morettt/my-neuro/releases">
+    <img src="https://img.shields.io/github/v/release/morettt/my-neuro" alt="latest version" /></a>
+
+<a href="https://github.com/morettt/my-neuro/graphs/contributors">
+    <img alt="GitHub contributors" src="https://img.shields.io/github/contributors/morettt/my-neuro"></a>
+
+<a href="https://deepwiki.com/morettt/my-neuro">
+    <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" /></a>
+
+</div>
+
+
 ## About This Project
 
 Build your own personal AI companion - a lifelike AI partner shaped by your digital footprint to bring your ideal companion to life.
@@ -18,7 +34,9 @@ Want to go fully local? Head to the LLM-studio folder for guidance on local LLM 
 ## QQ Group: 756741478 (Entry password: 肥牛)
 ## Support
 
-Run into deployment issues? Visit: http://fake-neuro.natapp1.cc
+1.Click "Ask DeepWiki" at the beginning of this README to ask AI about problems of deploying
+
+2.Run into deployment issues? Visit: http://fake-neuro.natapp1.cc
 
 Ask FeiNiu (Fat Cow) support bot for help - it'll walk you through troubleshooting. Most of the time things run smoothly... probably!
 

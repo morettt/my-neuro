@@ -1,3 +1,19 @@
+# My-neuro
+
+<div align="center">
+
+<a href="https://github.com/morettt/my-neuro/releases">
+    <img src="https://img.shields.io/github/v/release/morettt/my-neuro" alt="latest version" /></a>
+
+<a href="https://github.com/morettt/my-neuro/graphs/contributors">
+    <img alt="GitHub contributors" src="https://img.shields.io/github/contributors/morettt/my-neuro"></a>
+
+<a href="https://deepwiki.com/morettt/my-neuro">
+    <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" /></a>
+
+</div>
+
+
 ## 项目简介
 
 本项目的目标是打造专属个人的 AI 角色,打造出逼近真人的AI伙伴 - 通过您的数据印记,塑造出心目中理想的 TA 的形象。
@@ -20,7 +36,9 @@
 ## QQ群：756741478 （入群答案：自负的魔方）
 ## 客服
 
-如果部署的时候遇到处理不了的bug可以前往此链接：http://fake-neuro.natapp1.cc
+1.可以点击本文档开头“Ask DeepWiki”按钮向AI提问部署本项目遇到的问题
+
+2.如果部署的时候遇到处理不了的bug可以前往此链接：http://fake-neuro.natapp1.cc
 
 
 向肥牛客服询问，它会指导你如何处理项目可能出现的bug 不过大多数情况下不会有什么bug！也许..
