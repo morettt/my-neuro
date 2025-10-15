@@ -276,7 +276,7 @@ python diagnostic_tool.py
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=morettt/my-neuro&type=Date)](https://www.star-history.com/#morettt/my-neuro&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=morettt/my-neuro&type=Date&t=20251015)](https://www.star-history.com/#morettt/my-neuro&Date)
 
 ## 致谢
 
@@ -297,6 +297,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
