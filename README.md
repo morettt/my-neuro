@@ -13,7 +13,7 @@
 
 </div>
 
-#### [EnglishVersion](./README_English.md)
+#### [English-Version](./README_English.md)
 
 
 ## 项目简介
@@ -302,6 +302,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
