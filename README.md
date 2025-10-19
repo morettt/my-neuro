@@ -27,7 +27,7 @@
 [English Version](./README_English.md)
 
 
-## [常见问题汇总](常见问题汇总.md)   
+## [功能使用教程](live-2d-README.md)   
 ## [开发者必看](./live-2d-develop)
 
 
@@ -297,6 +297,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
