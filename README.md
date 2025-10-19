@@ -186,6 +186,7 @@ RAG.bat
 ## [功能使用教程](live-2d-README.md)  
 
 
+---
 
 
 
@@ -302,6 +303,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
