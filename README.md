@@ -182,7 +182,7 @@ RAG.bat
 <img width="1541" height="1078" alt="image" src="https://github.com/user-attachments/assets/24b473ba-439c-4f57-a9da-8edd1b3bb4c5" />
 
 
-这个UI界面里面的功能介绍以及使用可通过观看这个文档来理解：
+### 这个UI里面的功能使用可查看这个文档来理解：
 ## [功能使用教程](live-2d-README.md)  
 
 
@@ -303,6 +303,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
