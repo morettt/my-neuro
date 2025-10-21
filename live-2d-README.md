@@ -41,11 +41,11 @@
 
 ![alt text](screenshots/image5.png)
 
-- care_server: 事件记录，用于让AI记录事件内容，记录内容保存在`live_2d/事件记录.txt`
+- care_server: 记录用户情感状态的洞察和总结。当用户分享个人情感问题、心理困扰或成长挑战时会触发
 - code_executor_tool: 用于AI执行代码
 - keyboard_tool: 用于让AI操作回车和左右方向按键
 - music_control: AI自主播放音乐
-- note_server: AI写日记，保存在`live_2d/AI记录室/AI日记.txt`
+- note_server: 事件记录，相当于记事本，用于让AI记录事件内容，记录内容保存在`live_2d/事件记录.txt`
 - pc_control_server: AI控制鼠标点击屏幕上的元素
 - rag_server_module: RAG系统开关，需要同时打开终端控制室中的“RAG知识库”
 - search_server: AI联网搜索
