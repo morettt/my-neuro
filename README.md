@@ -34,7 +34,7 @@
 #### QQ群：756741478 （入群答案：自负的魔方）
 ## 官网
 
-网站地址：http://fake-neuro.natapp1.cc。
+#### 网站地址：http://fake-neuro.natapp1.cc。
 
 它包含客服功能，遇到项目部署中的任何问题，可以向肥牛客服询问。
 
@@ -301,6 +301,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
