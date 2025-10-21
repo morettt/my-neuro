@@ -51,3 +51,30 @@
 - search_server: AI联网搜索
 - sfx_player_module: AI可以播放例如钢管音效、各种搞怪音效的功能
 - typing_tool: AI输入文本，可以配合`pc_control_server`使用
+
+### UI设置
+
+![alt text](screenshots/image6.png)
+
+- 用户显示名称：用户输入字幕显示时使用的昵称
+- AI显示名称：AI回复字幕显示时使用的昵称
+- 启用字幕显示：用户和AI的聊天内容会以字幕的形式展示在Live2D皮套边上
+- 关闭UI时自动关闭所有服务：关闭此窗口后自动关闭后端服务
+
+### 主动对话
+
+![alt text](screenshots/image7.png)
+
+“空闲时间”内用户未与AI对话时AI会开始自言自语
+
+### 动画
+
+![alt text](screenshots/image8.png)
+
+用于匹配AI情绪和Live2D模型的动作，AI会根据情绪自动切换动作
+
+### 直播
+
+![alt text](screenshots/image9.png)
+
+填写B站直播间ID后，AI会读取该直播间的弹幕数据并生成回复，期间用户仍可以与AI交互，AI能分清用户输入和直播间弹幕
