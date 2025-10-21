@@ -78,3 +78,33 @@
 ![alt text](screenshots/image9.png)
 
 填写B站直播间ID后，AI会读取该直播间的弹幕数据并生成回复，期间用户仍可以与AI交互，AI能分清用户输入和直播间弹幕
+
+### 声音克隆
+
+![alt text](screenshots/image10.png)
+
+本地训练TTS音色，选择模型文件和参考音频，输入角色名称，选择参考音频语言（支持中日英韩），填写参考音频文本后点击“生成TTS的bat文件”。训练好后可以在`my-neuro`根目录找到带有角色名称的 TTS bat 文件
+
+### 终端控制室
+
+![alt text](screenshots/image11.png)
+
+使用本地算力时需要依次点击启动按钮
+
+使用云端API请阅读后文
+
+### 游戏
+
+![alt text](screenshots/image12.png)
+
+TK
+
+### 云端配置
+
+使用云端 TTS 和 ASR 需要勾选“启用云端TTS”和“启用云端ASR”，其中的配置已经填好，无需修改
+
+![alt text](screenshots/image13.png)
+
+![alt text](screenshots/image14.png)
+
+特殊的，还需要在“终端控制室”中点击“启动ASR”，这会启动 VAD 用于检测用户是否说话
