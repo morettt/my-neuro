@@ -29,9 +29,9 @@
 ## [开发者必看](./live-2d-develop)
 
 
-### PS:当前项目只支持N卡，也就是英伟达的显卡。A卡虽然也能使用。但是TTS会报错，也就是没有AI的声音。不过可以使用云端TTS配置
+#### PS:当前项目只支持N卡，也就是英伟达的显卡。A卡虽然也能使用。但是TTS会报错，也就是没有AI的声音。不过可以使用云端TTS配置
 
-## QQ群：756741478 （入群答案：自负的魔方）
+#### QQ群：756741478 （入群答案：自负的魔方）
 ## 官网
 
 网站地址：http://fake-neuro.natapp1.cc。
@@ -301,6 +301,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
