@@ -212,14 +212,14 @@ python diagnostic_tool.py
 
 硬件要求：显存至少6G的显卡
 
-1.把你的音频文件放在fine_tuning/input文件夹下，改名为"audio.mp3"，如图
+### 1.把你的音频文件放在fine_tuning/input文件夹下，改名为"audio.mp3"，如图
 
 <img width="1708" height="954" alt="image" src="https://github.com/user-attachments/assets/bc420b00-d3cc-45c1-894a-b8e802d3ba83" />
 
 
 第一次用的时候这个位置会有一个占位符.txt，建议删掉，不删也没关系，但是会有些不影响进程的报错
 
-2.这一步需要科学上网运行
+### 2.这一步需要科学上网运行
 
 双击运行 一键克隆音色.bat ，在弹出的窗口中输入你的音频使用的语言以及你的tts模型的名称（自己起一个，示例使用"1"），如图
 
@@ -230,9 +230,9 @@ python diagnostic_tool.py
 
 在脚本运行期间不要关闭窗口！！！
 
-3.脚本运行完成后，修改配置以使用你训练好的模型
+### 3.脚本运行完成后，修改配置以使用你训练好的模型
 
-### <1>前往live-2d文件夹内打开肥牛.exe 
+#### 前往live-2d文件夹内打开肥牛.exe 
 
 按照图中的顺序配置好你的音频模型
 
@@ -293,6 +293,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
