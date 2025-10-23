@@ -232,23 +232,16 @@ python diagnostic_tool.py
 
 3.脚本运行完成后，修改配置以使用你训练好的模型
 
-打开run_server.py进行编辑（有IDE的可以用，没有的直接右键记事本打开）
+### <1>前往live-2d文件夹内打开肥牛.exe 
 
-需要修改的地方一共有如图所示的四处：
+按照图中的顺序配置好你的音频模型
 
-<img width="2460" height="903" alt="image" src="https://github.com/user-attachments/assets/1662ed3d-e2a9-4753-b1ed-7513ae6d93ee" />
+![QQ20251023-160807](https://github.com/user-attachments/assets/6a5d8994-b1c2-45f8-ae34-c05910feef5a)
 
+最后点击“生成TTS的bat文件。会在live-2d文件夹中的Voice_Model_Factory文件夹下生成你的bat格式的文件。只需要双击运行。你训练好的tts的服务即可启动
 
-红色框的地方全部改成你在步骤2中输入的模型名称，黄色框的地方改成你输入的音频的语言，如下图
+接下来就可以启动皮套。模型就会以训练后的声音和你对话了。
 
-<img width="2277" height="942" alt="image" src="https://github.com/user-attachments/assets/7e28f1fe-e3af-4c24-acae-3ea11f8aed04" />
-
-
-修改完成后一定不要忘记保存！！！
-
-关掉文件，双击Game-starts.bat运行服务端，这时候tts使用的就是你训练好的模型了
-
-想改回默认的模型只需要把你修改过的内容再改回原来的样子就行
 
 ## 定制AI
 
@@ -300,6 +293,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
