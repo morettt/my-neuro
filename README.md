@@ -186,14 +186,6 @@ RAG.bat
 ---
 
 
-
-如果有任何问题，在终端运行以下命令以启动诊断工具
-```bash
-conda activate my-neuro
-python diagnostic_tool.py
-```
-运行后将会弹出一个窗口，里面包含了后端诊断信息和一键修复按钮，若不能自行解决问题，向客服提供输出信息
-
 ## 更新前端
 
 当前端需要更新时，运行 更新前端.bat
@@ -293,6 +285,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
