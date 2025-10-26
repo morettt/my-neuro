@@ -26,3 +26,5 @@ debug相关
 可通过config.json和layout.json的相关设置调整字体大小，颜色，和字幕多长时间自动消失。
 
 使用Gemini2.5pro+shot-gun的方式进行AI编程
+效果：https://www.bilibili.com/video/BV1yaszzcEx6/
+
