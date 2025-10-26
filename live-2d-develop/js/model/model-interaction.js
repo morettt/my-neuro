@@ -172,9 +172,26 @@ setupInteractivity() {
         document.dispatchEvent(event);
     });
 
-    // --- 文件拖放逻辑 ---
     document.addEventListener('dragover', (event) => {
-        event.preventDefault();
+        const pixiPoint = new PIXI.Point();
+        this.app.renderer.plugins.interaction.mapPositionToPoint(pixiPoint, event.clientX, event.clientY);
+
+        if (this.model.containsPoint(pixiPoint)) {
+            // 当在模型上时，阻止默认行为，允许放置
+            event.preventDefault();
+            // 确保事件穿透是关闭的，以便可以接收 drop 事件
+            if (!this.isOverInteractiveArea) {
+                this.isOverInteractiveArea = true;
+                ipcRenderer.send('set-ignore-mouse-events', { ignore: false });
+            }
+        } else {
+            // --- 核心修复：当鼠标离开模型时，重新开启事件穿透 ---
+            // 这样拖拽事件就可以传递给下方的窗口（如文件夹）
+            if (this.isOverInteractiveArea) {
+                this.isOverInteractiveArea = false;
+                ipcRenderer.send('set-ignore-mouse-events', { ignore: true, options: { forward: true } });
+            }
+        }
     });
 
     document.addEventListener('drop', (event) => {
@@ -443,5 +460,6 @@ saveModelPosition() {
         }
     }
 }
+
 
 module.exports = { ModelInteractionController };
