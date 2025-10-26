@@ -1,0 +1,28 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "Hu Tao.moc3",
+		"Textures": [
+			"Hu Tao.8192/texture_00.png",
+			"Hu Tao.8192/texture_01.png",
+			"Hu Tao.8192/texture_02.png"
+		],
+		"Physics": "Hu Tao.physics3.json",
+		"DisplayInfo": "Hu Tao.cdi3.json"
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": []
+		},
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": [
+				"ParamEyeLOpen",
+				"ParamEyeROpen"
+			]
+		}
+	]
+}

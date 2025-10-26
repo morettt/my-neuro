@@ -1,12 +1,22 @@
+// main.js
 const { app, BrowserWindow, ipcMain, screen, globalShortcut, desktopCapturer, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
-const { HttpServer } = require('./js/services/http-server')
-const { ModelPathUpdater } = require('./js/model/model-path-updater')
-const { ShortcutManager } = require('./js/shortcut-manager')
+const { HttpServer } = require('./js/services/http-server.js')
+const { ModelPathUpdater } = require('./js/model/model-path-updater.js')
+const { ShortcutManager } = require('./js/shortcut-manager.js')
 
 // 添加配置文件路径
 const configPath = path.join(app.getAppPath(), 'config.json');
+// 新增：布局配置文件路径
+const layoutConfigPath = path.join(app.getAppPath(), 'layout.json');
+
+// 核心修复：禁用背景窗口渲染节流，防止其他应用的视频等内容在桌宠获得焦点时黑屏
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows', 'true');
+// 核心修复：进一步禁用渲染器后台管理，强制后台窗口（如浏览器）保持渲染活动
+app.commandLine.appendSwitch('disable-renderer-backgrounding', 'true');
+// 核心修复：防止后台计时器被节流，确保动画等持续运行
+app.commandLine.appendSwitch('disable-background-timer-throttling', 'true');
 
 // Live2D模型优先级配置（Python程序会修改这个列表来切换模型）
 const priorityFolders = ['肥牛', 'Hiyouri', 'Default', 'Main'];
@@ -30,7 +40,7 @@ function createWindow () {
         backgroundColor: '#00000000',
         hasShadow: false,
         focusable: true,
-        type: 'desktop',
+        type: 'toolbar', // 核心修复：将窗口类型设置为工具栏，使其不会抢占其他应用的焦点
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
@@ -44,7 +54,8 @@ function createWindow () {
         maximizable: false,
     })
     win.setAlwaysOnTop(true, 'screen-saver')
-    win.setIgnoreMouseEvents(true, { forward: true });
+    // 核心修复：将窗口的初始状态设置为可穿透
+    win.setIgnoreMouseEvents(true, { forward: true }); 
     win.setMenu(null)
     win.setPosition(0, 0)
     win.loadFile('index.html')
@@ -60,9 +71,14 @@ function createWindow () {
             event.preventDefault()
         }
     })
+
+    // 核心修复：监听窗口失去焦点事件
     win.on('blur', () => {
-        ensureTopMost(win)
+        ensureTopMost(win);
+        // 向渲染进程发送消息，通知其隐藏对话框
+        win.webContents.send('window-blurred');
     })
+
     setInterval(() => {
         ensureTopMost(win)
     }, 1000)
@@ -167,6 +183,23 @@ ipcMain.handle('get-config', async (event) => {
     }
 });
 
+// 新增：获取布局配置的IPC处理器
+ipcMain.handle('get-layout-config', async (event) => {
+    try {
+        if (fs.existsSync(layoutConfigPath)) {
+            const layoutData = fs.readFileSync(layoutConfigPath, 'utf8');
+            return { success: true, config: JSON.parse(layoutData) };
+        }
+        // 如果文件不存在，返回一个默认结构
+        return { success: true, config: { chatbox_position: { left: null, top: null }, subtitle_position: null, subtitle_size: null } };
+    } catch (error) {
+        console.error('获取布局配置失败:', error);
+        // 出错时也返回默认结构，防止程序崩溃
+        return { success: false, error: error.message, config: { chatbox_position: { left: null, top: null }, subtitle_position: null, subtitle_size: null } };
+    }
+});
+
+
 // 修改后的截图功能：不再隐藏窗口
 ipcMain.handle('take-screenshot', async (event) => {
     try {
@@ -241,3 +274,82 @@ ipcMain.on('save-model-position', (event, position) => {
         console.error('保存模型位置失败:', error);
     }
 })
+
+// 新增：添加保存聊天框位置的IPC处理器 (写入到 layout.json)
+ipcMain.on('save-chatbox-position', (event, position) => {
+    try {
+        let layoutConfig = {};
+        // 读取现有的布局文件，如果存在的话
+        if (fs.existsSync(layoutConfigPath)) {
+            layoutConfig = JSON.parse(fs.readFileSync(layoutConfigPath, 'utf8'));
+        }
+
+        // 更新聊天框位置
+        layoutConfig.chatbox_position = {
+            left: position.left,
+            top: position.top
+        };
+
+        // 保存到 layout.json 文件
+        fs.writeFileSync(layoutConfigPath, JSON.stringify(layoutConfig, null, 2), 'utf8');
+        console.log('聊天框位置已保存到 layout.json:', position);
+    } catch (error) {
+        console.error('保存聊天框位置到 layout.json 失败:', error);
+    }
+});
+
+// 修改：保存字幕的绝对位置
+ipcMain.on('save-subtitle-position', (event, position) => {
+    try {
+        let layoutConfig = {};
+        if (fs.existsSync(layoutConfigPath)) {
+            try {
+                const content = fs.readFileSync(layoutConfigPath, 'utf8');
+                if (content) {
+                    layoutConfig = JSON.parse(content);
+                }
+            } catch (e) {
+                console.error('解析 layout.json 失败，将创建新文件:', e);
+                layoutConfig = {};
+            }
+        }
+        layoutConfig.subtitle_position = position;
+        if (layoutConfig.subtitle_offset) {
+            delete layoutConfig.subtitle_offset;
+        }
+        fs.writeFileSync(layoutConfigPath, JSON.stringify(layoutConfig, null, 2), 'utf8');
+        console.log('字幕位置已保存到 layout.json:', position);
+    } catch (error) {
+        console.error('保存字幕位置到 layout.json 失败:', error);
+    }
+});
+
+// 新增：保存字幕尺寸的IPC处理器
+ipcMain.on('save-subtitle-size', (event, size) => {
+    try {
+        let layoutConfig = {};
+        if (fs.existsSync(layoutConfigPath)) {
+            try {
+                const content = fs.readFileSync(layoutConfigPath, 'utf8');
+                if (content) {
+                    layoutConfig = JSON.parse(content);
+                }
+            } catch (e) {
+                console.error('解析 layout.json 失败，将创建新文件:', e);
+                layoutConfig = {};
+            }
+        }
+        layoutConfig.subtitle_size = size;
+        fs.writeFileSync(layoutConfigPath, JSON.stringify(layoutConfig, null, 2), 'utf8');
+        console.log('字幕尺寸已保存到 layout.json:', size);
+    } catch (error) {
+        console.error('保存字幕尺寸到 layout.json 失败:', error);
+    }
+});
+
+
+// 新增：从渲染进程接收指令，恢复鼠标穿透
+ipcMain.on('set-mouse-forwarding', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    win.setIgnoreMouseEvents(true, { forward: true });
+});

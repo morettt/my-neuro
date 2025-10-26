@@ -18,6 +18,7 @@ import re
 import socket
 from threading import Thread
 import glob
+import socket
 
 
 # 在这里添加新函数
@@ -374,6 +375,15 @@ class CustomTitleBar(QWidget):
         if event.button() == Qt.LeftButton:
             self.toggle_maximize()
 
+def is_server_running(host='localhost', port=3002):
+    """检查指定端口的服务是否正在运行"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.1)  # 设置一个0.1秒的超短超时
+        try:
+            s.connect((host, port))
+            return True
+        except (socket.timeout, ConnectionRefusedError):
+            return False
 
 class set_pyqt(QWidget):
     # 添加信号用于线程安全的日志更新
@@ -2325,7 +2335,6 @@ class set_pyqt(QWidget):
         self.ui.checkBox_mcp.setChecked(self.config.get('tools', {}).get('enabled', True))
         self.ui.checkBox_mcp_enable.setChecked(self.config.get('mcp', {}).get('enabled', True))
         self.ui.checkBox_5.setChecked(self.config['vision']['auto_screenshot'])
-        self.ui.checkBox_3.setChecked(self.config['ui']['show_chat_box'])
         self.ui.checkBox_4.setChecked(self.config['context']['enable_limit'])
         self.ui.checkBox.setChecked(self.config['auto_chat']['enabled'])
         self.ui.checkBox_2.setChecked(self.config['bilibili']['enabled'])
@@ -2614,7 +2623,6 @@ class set_pyqt(QWidget):
             current_config['mcp'] = {}
         current_config['mcp']['enabled'] = self.ui.checkBox_mcp_enable.isChecked()
         current_config['vision']['auto_screenshot'] = self.ui.checkBox_5.isChecked()
-        current_config['ui']['show_chat_box'] = self.ui.checkBox_3.isChecked()
         current_config['context']['enable_limit'] = self.ui.checkBox_4.isChecked()
         current_config['context']['persistent_history'] = self.ui.checkBox_persistent_history.isChecked()
         current_config['auto_chat']['enabled'] = self.ui.checkBox.isChecked()
@@ -2739,16 +2747,19 @@ class set_pyqt(QWidget):
         with open(self.config_path, 'w', encoding='utf-8') as f:
             json.dump(current_config, f, ensure_ascii=False, indent=2)
 
-        # 尝试通知前端重新加载配置
-        try:
-            import requests
-            response = requests.post('http://localhost:3002/reload-config', timeout=2)
-            if response.status_code == 200:
-                print("已通知前端重新加载配置")
-            else:
-                print("通知前端重新加载配置失败")
-        except Exception as e:
-            print(f"无法通知前端重新加载配置: {e}")
+       # 尝试通知前端重新加载配置 (先检查服务是否运行)
+        if is_server_running():
+            try:
+                import requests
+                response = requests.post('http://localhost:3002/reload-config', timeout=2)
+                if response.status_code == 200:
+                    print("已通知前端重新加载配置")
+                else:
+                    print("通知前端重新加载配置失败")
+            except Exception as e:
+                print(f"无法通知前端重新加载配置: {e}")
+        else:
+            print("桌宠应用未运行，跳过实时重载通知。")
 
         # 重新加载配置到内存，确保立即生效
         self.config = current_config

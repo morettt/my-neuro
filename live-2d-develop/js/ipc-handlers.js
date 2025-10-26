@@ -11,6 +11,7 @@ class IPCHandlers {
         this.emotionMapper = null;
         this.barrageManager = null;
         this.config = null;
+        this.uiController = null; // 新增属性
     }
 
     // 设置依赖
@@ -20,6 +21,7 @@ class IPCHandlers {
         this.emotionMapper = deps.emotionMapper;
         this.barrageManager = deps.barrageManager;
         this.config = deps.config;
+        this.uiController = deps.uiController; // 接收uiController
     }
 
     // 注册所有IPC监听器
@@ -27,6 +29,8 @@ class IPCHandlers {
         this.registerInterruptHandler();
         this.registerMotionHandlers();
         this.registerMusicHandlers();
+        this.registerChatFocusHandler();
+        this.registerSubtitleToggleHandler(); // 注册新处理器
     }
 
     // 中断信号处理
@@ -39,14 +43,11 @@ class IPCHandlers {
                 this.ttsProcessor.interrupt();
             }
 
-            // 状态管理已通过事件系统自动处理，无需手动设置全局变量
-
-            // 重置弹幕状态机
             if (this.barrageManager) {
                 this.barrageManager.reset();
             }
 
-            if (this.voiceChat && this.voiceChat.asrProcessor && this.config.asr.enabled) {
+            if (this.voiceChat && this.voiceChat.asrController && this.config.asr.enabled) {
                 setTimeout(() => {
                     this.voiceChat.resumeRecording();
                     console.log('ASR录音已恢复');
@@ -93,6 +94,28 @@ class IPCHandlers {
                 console.log('音乐已停止');
                 this.emotionMapper.playMotion(7);
                 console.log('触发赌气动作，音乐播放结束');
+            }
+        });
+    }
+
+    // 聊天框焦点处理
+    registerChatFocusHandler() {
+        ipcRenderer.on('toggle-chat-focus', () => {
+            try {
+                if (global.chatController) {
+                    global.chatController.toggleVisibility();
+                }
+            } catch (error) {
+                logToTerminal('error', `设置聊天框焦点失败: ${error.message}`);
+            }
+        });
+    }
+    
+    // 新增：字幕显示切换处理器
+    registerSubtitleToggleHandler() {
+        ipcRenderer.on('toggle-subtitle-visibility', () => {
+            if (this.uiController) {
+                this.uiController.forceShow();
             }
         });
     }

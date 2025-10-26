@@ -129,6 +129,12 @@ function enhanceSystemPrompt() {
         ttsProcessor = modules.ttsProcessor;
         barrageManager = modules.barrageManager;
 
+        // --- 核心修复：移除对 setModel 的调用 ---
+        // 此调用已不再需要，因为UIController不再直接与模型交互位置
+        // if (modules.uiController && modules.model) {
+        //     modules.uiController.setModel(modules.model);
+        // }
+
     } catch (error) {
         console.error("加载模型错误:", error);
         console.error("错误详情:", error.message);

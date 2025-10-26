@@ -8,14 +8,17 @@
 <body>
     <canvas id="canvas"></canvas>
     <div id="subtitle-container">
-        <p id="subtitle-text"></p>
+        <div id="subtitle-drag-handle">⠿</div>
+        <!-- 内容包裹层，现在是字幕行的直接父容器 -->
+        <div id="subtitle-content-wrapper">
+            <!-- 字幕行将通过JS动态添加到这里 -->
+        </div>
+        <div id="subtitle-resize-handle"></div>
     </div>
 
     <div id="text-chat-container">
-        <div id="chat-messages"></div>
         <div id="chat-input-container">
             <input type="text" id="chat-input" placeholder="输入消息...">
-            <!-- <button id="chat-send-btn">发送</button> -->
         </div>
     </div>
     

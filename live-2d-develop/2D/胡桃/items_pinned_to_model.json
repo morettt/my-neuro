@@ -1,0 +1,173 @@
+{
+    "FileMetadata": {
+        "LastSavedVTubeStudioVersion": "1.27.8",
+        "LastSavedPlatform": "Steam",
+        "LastSavedDateUTC": "Saturday, 21 October 2023, 12:26:38",
+        "LastSavedDateLocalTime": "Saturday, 21 October 2023, 15:26:38",
+        "LastSavedDateUnixMillisecondTimestamp": "1697891198385"
+    },
+    "SceneName": "",
+    "SceneGroupName": "",
+    "SceneModel": "",
+    "SceneID": "",
+    "Items": [
+        {
+            "ItemName": "Hu Tao Ghost 2",
+            "ItemObjectInScene": {
+                "m_FileID": 0,
+                "m_PathID": 0
+            },
+            "ItemFileName": "Hu Tao Ghost 2",
+            "ItemInstanceUUID": "e212e2d03f20461fbb6206e9045b30a6",
+            "Selected": true,
+            "TrackingModel": true,
+            "IsAnimated": false,
+            "IsVideo": false,
+            "IsModel": true,
+            "IsCensored": false,
+            "IsFlipped": false,
+            "IsLocked": false,
+            "Smoothing": 0.0,
+            "Order": -2,
+            "FPS": 0.0,
+            "IsPinned": true,
+            "PinnedTo": "ArtMesh72",
+            "PinnedModel_Live2D": "Hu Tao",
+            "PinnedModel_VTS": "Hu Tao",
+            "PinnedModel_InternalID": "6ad586a2dcd949888e136335f82bec1a",
+            "PinnedVertexIDs": "25 26 24 27 57 56",
+            "PinnedVertexPositions": [
+                {
+                    "x": -0.04923378676176071,
+                    "y": 0.32485347986221316,
+                    "z": 0.0
+                },
+                {
+                    "x": -0.046472012996673587,
+                    "y": 0.33145835995674136,
+                    "z": 0.0
+                },
+                {
+                    "x": -0.04862698167562485,
+                    "y": 0.31776437163352969,
+                    "z": 0.0
+                },
+                {
+                    "x": -0.04005530849099159,
+                    "y": 0.3372403681278229,
+                    "z": 0.0
+                },
+                {
+                    "x": -0.043588489294052127,
+                    "y": 0.3259873390197754,
+                    "z": 0.0
+                },
+                {
+                    "x": -0.04414578154683113,
+                    "y": 0.321739137172699,
+                    "z": 0.0
+                }
+            ],
+            "PinnedVertexCenterOffset": {
+                "x": -0.1764262467622757,
+                "y": 0.07314750552177429,
+                "z": 0.0
+            },
+            "Size": 0.10344827175140381,
+            "ModelScaleMultiplier": 0.01368707325309515,
+            "Rotation": 0.8861099481582642,
+            "Position": {
+                "x": -0.25244033336639407,
+                "y": 0.4127163290977478,
+                "z": 0.0
+            },
+            "Group": "",
+            "Scene": "",
+            "AssetType": 6,
+            "FromWorkshop": false,
+            "FromHotkey": false,
+            "FromAPI": false,
+            "FadeTime": 0.5,
+            "Plugin": ""
+        },
+        {
+            "ItemName": "Hu Tao Ghost",
+            "ItemObjectInScene": {
+                "m_FileID": 0,
+                "m_PathID": 0
+            },
+            "ItemFileName": "Hu Tao Ghost",
+            "ItemInstanceUUID": "534b10f040ad4df2b195f76179cf60f3",
+            "Selected": true,
+            "TrackingModel": true,
+            "IsAnimated": false,
+            "IsVideo": false,
+            "IsModel": true,
+            "IsCensored": false,
+            "IsFlipped": true,
+            "IsLocked": false,
+            "Smoothing": 0.0,
+            "Order": -1,
+            "FPS": 0.0,
+            "IsPinned": true,
+            "PinnedTo": "ArtMesh72",
+            "PinnedModel_Live2D": "Hu Tao",
+            "PinnedModel_VTS": "Hu Tao",
+            "PinnedModel_InternalID": "6ad586a2dcd949888e136335f82bec1a",
+            "PinnedVertexIDs": "10 11 12 9 40 39",
+            "PinnedVertexPositions": [
+                {
+                    "x": -0.0035593435168266298,
+                    "y": 0.3213173747062683,
+                    "z": 0.0
+                },
+                {
+                    "x": -0.002066677436232567,
+                    "y": 0.3143380284309387,
+                    "z": 0.0
+                },
+                {
+                    "x": -0.004006825853139162,
+                    "y": 0.3072153627872467,
+                    "z": 0.0
+                },
+                {
+                    "x": -0.01021505519747734,
+                    "y": 0.32775434851646426,
+                    "z": 0.0
+                },
+                {
+                    "x": -0.007893519476056099,
+                    "y": 0.3164990544319153,
+                    "z": 0.0
+                },
+                {
+                    "x": -0.010481983423233033,
+                    "y": 0.3210267722606659,
+                    "z": 0.0
+                }
+            ],
+            "PinnedVertexCenterOffset": {
+                "x": 0.2117474228143692,
+                "y": 0.05775603652000427,
+                "z": 0.0
+            },
+            "Size": 0.10344827175140381,
+            "ModelScaleMultiplier": 0.01149425283074379,
+            "Rotation": 358.61761474609377,
+            "Position": {
+                "x": 0.21007473766803742,
+                "y": 0.3942205309867859,
+                "z": 0.0
+            },
+            "Group": "",
+            "Scene": "",
+            "AssetType": 6,
+            "FromWorkshop": false,
+            "FromHotkey": false,
+            "FromAPI": false,
+            "FadeTime": 0.5,
+            "Plugin": ""
+        }
+    ]
+}

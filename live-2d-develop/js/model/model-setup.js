@@ -1,10 +1,11 @@
+// js/model/model-setup.js
 // model-setup.js - 模型和PIXI设置模块
 const { EmotionMotionMapper } = require('../ui/emotion-motion-mapper.js');
 const { MusicPlayer } = require('../services/music-player.js');
 
 class ModelSetup {
     // 初始化PIXI应用和Live2D模型
-    static async initialize(modelController, config, ttsEnabled, asrEnabled, ttsProcessor, voiceChat) {
+    static async initialize(modelController, config, ttsEnabled, asrEnabled, ttsProcessor, voiceChat, uiController) {
         // 创建PIXI应用
         const app = new PIXI.Application({
             view: document.getElementById("canvas"),
@@ -36,10 +37,8 @@ class ModelSetup {
         } else if (!ttsEnabled) {
             // TTS禁用时，设置回调以确保ASR正常工作
             ttsProcessor.onEndCallback = () => {
-                // 状态管理已通过事件系统自动处理
                 if (voiceChat && asrEnabled) {
                     voiceChat.resumeRecording();
-                    console.log('TTS模拟结束，ASR已解锁');
                 }
             };
             ttsProcessor.setEmotionMapper(emotionMapper);
@@ -54,6 +53,11 @@ class ModelSetup {
         voiceChat.setModel(model);
         voiceChat.setEmotionMapper = emotionMapper;
 
+        // --- 核心修复：移除对 setModel 的调用 ---
+        // if (uiController) {
+        //     uiController.setModel(model);
+        // }
+
         // 设置模型碰撞检测
         ModelSetup.setupHitTest(model, modelController);
 
@@ -62,9 +66,6 @@ class ModelSetup {
 
     // 设置模型碰撞检测
     static setupHitTest(model, modelController) {
-        // 从modelController获取交互区域（如果有的话）
-        // 注意：这里假设modelController有interactionX等属性
-        // 如果没有，可能需要从其他地方获取或使用默认值
         const getInteractionBounds = () => {
             if (modelController.interactionX !== undefined) {
                 return {
@@ -74,7 +75,6 @@ class ModelSetup {
                     height: modelController.interactionHeight
                 };
             }
-            // 默认值（如果modelController没有定义这些属性）
             return { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight };
         };
 

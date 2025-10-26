@@ -50,8 +50,8 @@ class LLMClient {
 
             const responseData = await response.json();
 
-            // 验证响应格式
-            this._validateResponse(responseData);
+            // --- 修改：在这里统一处理和验证响应格式 ---
+            this._normalizeResponse(responseData);
 
             logToTerminal('info', `收到LLM API响应`);
 
@@ -64,18 +64,49 @@ class LLMClient {
     }
 
     /**
-     * 验证API响应格式
+     * --- 核心修改：验证并“归一化”API响应格式 ---
+     * 无论是Gemini原生格式还是OpenAI格式，都统一转换为OpenAI格式
      * @private
      */
-    _validateResponse(responseData) {
-        // 检查API错误响应
+    _normalizeResponse(responseData) {
+        // 检查Gemini原生API格式 ("candidates")
+        if (responseData.candidates && responseData.candidates.length > 0) {
+            const candidate = responseData.candidates[0];
+            const content = candidate.content;
+
+            if (content && content.parts && content.parts.length > 0) {
+                const part = content.parts[0];
+                const message = { role: 'assistant', content: null, tool_calls: null };
+
+                if (part.text) {
+                    message.content = part.text;
+                }
+
+                if (part.functionCall) {
+                    // 将Gemini的functionCall格式转换为OpenAI的tool_calls格式
+                    message.tool_calls = [{
+                        id: part.functionCall.name, // Gemini不提供唯一ID，暂时用名称代替
+                        type: 'function',
+                        function: {
+                            name: part.functionCall.name,
+                            arguments: JSON.stringify(part.functionCall.args || {})
+                        }
+                    }];
+                }
+                
+                // 将响应数据结构重写为OpenAI格式
+                responseData.choices = [{ message: message }];
+                return; // 归一化完成
+            }
+        }
+
+        // 如果不是Gemini格式，则按原有的OpenAI格式进行验证
         if (responseData.error) {
             const errorMsg = responseData.error.message || responseData.error || '未知API错误';
             logToTerminal('error', `LLM API错误: ${errorMsg}`);
             throw new Error(`API错误: ${errorMsg}`);
         }
 
-        // 检查响应格式,适应不同的API响应结构
         let choices;
         if (responseData.choices) {
             choices = responseData.choices;
@@ -91,7 +122,6 @@ class LLMClient {
             throw new Error('LLM响应格式异常：choices为空');
         }
 
-        // 将标准化的choices写回
         responseData.choices = choices;
     }
 

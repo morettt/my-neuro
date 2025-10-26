@@ -1368,25 +1368,6 @@ QTabWidget#tabWidget_tools QTabBar {
              <property name="verticalSpacing">
               <number>10</number>
              </property>
-             <item row="0" column="0">
-              <widget class="QCheckBox" name="checkBox_3">
-               <property name="sizePolicy">
-                <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
-                 <horstretch>0</horstretch>
-                 <verstretch>0</verstretch>
-                </sizepolicy>
-               </property>
-               <property name="font">
-                <font>
-                 <family>微软雅黑</family>
-                 <pointsize>10</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>文字输入框（可打字交互）</string>
-               </property>
-              </widget>
-             </item>
              <item row="0" column="1">
               <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="1,2,10">
                <property name="spacing">

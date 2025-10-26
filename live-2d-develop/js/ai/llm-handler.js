@@ -22,23 +22,44 @@ class LLMHandler {
                     console.log('检测到TTS正在播放，执行打断操作');
                     logToTerminal('info', '检测到TTS正在播放，执行打断操作');
 
-                    // 发送中断信号
                     if (ttsProcessor) {
                         ttsProcessor.interrupt();
                     }
-
-                    // 隐藏字幕
                     if (global.hideSubtitle) {
                         global.hideSubtitle();
                     }
-
-                    // 等待短暂时间确保中断完成
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
 
-                // global.isProcessingUserInput 已通过事件自动管理，无需手动设置
+                // --- 核心修改：处理多个暂存文件 ---
+                const pendingFiles = this.getStagedFiles();
+                if (pendingFiles.length > 0) {
+                    const contentParts = [{ 'type': 'text', 'text': `说明：${prompt}` }];
+                    let combinedLog = `🖼️ 已合并 ${pendingFiles.length} 个暂存文件和文字说明:`;
 
-                this.messages.push({ 'role': 'user', 'content': prompt });
+                    pendingFiles.forEach(file => {
+                        if (file.type === 'image') {
+                            contentParts.push({ 'type': 'image_url', 'image_url': { 'url': file.content } });
+                        } else if (file.type === 'text') {
+                            // 将文本文件内容也作为一个独立的 text part
+                            contentParts.push({ 'type': 'text', 'text': `文件 [${file.fileName}]:\n${file.content}` });
+                        }
+                        combinedLog += ` [${file.fileName}]`;
+                    });
+
+                    this.messages.push({
+                        'role': 'user',
+                        'content': contentParts
+                    });
+                    logToTerminal('info', combinedLog);
+                    
+                    // 清空缓存
+                    this.clearStagedFiles();
+                } else {
+                    // --- 原有逻辑：处理普通文本 ---
+                    this.messages.push({ 'role': 'user', 'content': prompt });
+                }
+
 
                 if (this.enableContextLimit) {
                     this.trimMessages();
@@ -47,15 +68,13 @@ class LLMHandler {
                 let messagesForAPI = JSON.parse(JSON.stringify(this.messages));
                 const needScreenshot = await this.shouldTakeScreenshot(prompt);
 
-                if (needScreenshot) {
+                // --- 核心修改：仅在没有处理拖放文件时才截图 ---
+                if (needScreenshot && pendingFiles.length === 0) {
                     try {
                         console.log("需要截图");
                         logToTerminal('info', "需要截图");
                         const base64Image = await voiceChat.takeScreenshotBase64();
 
-                        // 🔧 修复：直接找最后一条用户消息，而不是用findIndex
-                        // findIndex会找到第一个匹配的，导致重复prompt时找错消息
-                        // 因为我们刚刚push了这条消息，所以直接从后往前找第一条用户消息
                         let lastUserMsgIndex = -1;
                         for (let i = messagesForAPI.length - 1; i >= 0; i--) {
                             if (messagesForAPI[i].role === 'user') {
@@ -106,9 +125,7 @@ class LLMHandler {
                         console.log("工具调用结果:", toolResult);
                         logToTerminal('info', `工具调用结果: ${JSON.stringify(toolResult)}`);
 
-                        // 处理多工具调用结果
                         if (Array.isArray(toolResult)) {
-                            // 多个工具调用结果
                             toolResult.forEach(singleResult => {
                                 this.messages.push({
                                     'role': 'tool',
@@ -117,7 +134,6 @@ class LLMHandler {
                                 });
                             });
                         } else {
-                            // 单个工具调用结果（向后兼容）
                             this.messages.push({
                                 'role': 'tool',
                                 'content': toolResult,
@@ -127,17 +143,13 @@ class LLMHandler {
 
                         logToTerminal('info', `发送工具结果到LLM获取最终回复`);
 
-                        // 使用统一的LLM客户端
                         const finalResult = await llmClient.chatCompletion(this.messages);
 
                         logToTerminal('info', `获得最终LLM回复，开始语音输出`);
 
                         if (finalResult.content) {
                             this.messages.push({ 'role': 'assistant', 'content': finalResult.content });
-
-                            // ===== 保存对话历史 =====
                             this.saveConversationHistory();
-
                             logToTerminal('info', `获得最终LLM回复，开始语音输出`);
                             this.ttsProcessor.reset();
                             this.ttsProcessor.processTextToSpeech(finalResult.content);
@@ -149,10 +161,7 @@ class LLMHandler {
                     }
                 } else if (result.content) {
                     this.messages.push({ 'role': 'assistant', 'content': result.content });
-
-                    // ===== 保存对话历史 =====
                     this.saveConversationHistory();
-
                     logToTerminal('info', `LLM直接返回回复，开始语音输出`);
                     this.ttsProcessor.reset();
                     this.ttsProcessor.processTextToSpeech(result.content);
@@ -201,9 +210,6 @@ class LLMHandler {
                 }
                 setTimeout(() => this.hideSubtitle(), 3000);
             } finally {
-                // global.isProcessingUserInput 已通过事件自动管理，无需手动设置
-
-                // 发送用户输入结束事件
                 eventBus.emit(Events.USER_INPUT_END);
             }
         };

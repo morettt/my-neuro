@@ -7,10 +7,19 @@ import numpy as np
 import os
 import sys
 import re
+import ssl
+import urllib3
 
 from datetime import datetime
 from queue import Queue
 from modelscope.hub.snapshot_download import snapshot_download
+
+
+# 禁用 SSL 验证（解决证书问题）
+os.environ['CURL_CA_BUNDLE'] = ''
+ssl._create_default_https_context = ssl._create_unverified_context
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 
 # 保存原始的stdout和stderr
 original_stdout = sys.stdout
@@ -161,7 +170,7 @@ async def startup_event():
     # 加载ASR模型
     print("正在加载ASR模型...")
     model_state["asr_model"] = AutoModel(
-        model="iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        model="model/asr/models/iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
         device=device,
         model_type="pytorch",
         dtype="float32"
@@ -171,7 +180,7 @@ async def startup_event():
     # 加载标点符号模型
     print("正在加载标点符号模型...")
     model_state["punc_model"] = AutoModel(
-        model="ct-punc",
+        model="model/asr/models/iic/punc_ct-transformer_cn-en-common-vocab471067-large",
         model_revision="v2.0.4",
         device=device,
         model_type="pytorch",

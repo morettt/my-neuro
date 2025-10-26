@@ -1,10 +1,21 @@
 // ScreenshotManager.js - 截图管理模块
 const { ipcRenderer } = require('electron');
 
+/**
+ * ScreenshotManager 类 - 负责管理截图相关的功能
+ * 该类提供了判断是否需要截图、调用BERT分类API以及实际执行截图的功能
+ */
 class ScreenshotManager {
+    /**
+     * 构造函数
+     * @param {Object} voiceChatInterface - 语音聊天接口对象，包含截图相关配置
+     */
     constructor(voiceChatInterface) {
+        // 初始化语音聊天接口
         this.voiceChat = voiceChatInterface;
+        // 从语音聊天接口获取截图是否启用的状态
         this.screenshotEnabled = voiceChatInterface.screenshotEnabled;
+        // 从语音聊天接口获取自动截图的设置
         this.autoScreenshot = voiceChatInterface.autoScreenshot;
     }
 
