@@ -1,3 +1,5 @@
+基于my-neuro 5.5.7版本进行修改
+
 debug相关
 
 1 修改了asr-api.py中的模型加载路径，使得路径与按照Readme下载后的默认路径一致
@@ -27,4 +29,5 @@ debug相关
 
 使用Gemini2.5pro+shot-gun的方式进行AI编程
 效果：https://www.bilibili.com/video/BV1yaszzcEx6/
+
 
