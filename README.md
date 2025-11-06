@@ -32,7 +32,7 @@
  
 
 #### QQ群：756741478 （入群答案：自负的魔方）
-## [点我进网站](http://mynewbot.com)
+## [点我进项目网站](http://mynewbot.com)
 
 网站当前正式加入了全云端功能，也就是说，只需要你准备一个大模型的API 其余的所有都不用。5分钟都不需要直接上手体验
 
@@ -280,6 +280,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
