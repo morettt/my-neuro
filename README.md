@@ -78,78 +78,6 @@
 
 已经有了conda环境后，就可以开始动手了！
 
-## 🚀 正式开始
-
-### 只需要3个步骤：1.环境模型安装 2.启动服务 3.开始使用
-
-## 1. 按顺序依次执行以下指令（打开终端在项目路径下运行,如果有梯子建议开一下。下载会更快更稳）
-```bash
-conda create -n my-neuro python=3.11 -y
-
-conda activate my-neuro
-
-#独立安装jieba_fast依赖
-pip install jieba_fast-0.53-cp311-cp311-win_amd64.whl
-
-#独立安装pyopenjtalk依赖
-pip install pyopenjtalk-0.4.1-cp311-cp311-win_amd64.whl
-
-pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
-
-#安装ffmpedg
-conda install ffmpeg -y
-
-#安装cuda 默认是12.8 可以自行修改
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-
-#自动下载需要的各种模型
-python Batch_Download.py
-```
-
-## 2.鼠标双击这3个东西
-
-### (开启后不要关掉！这几个bat文件是后端服务，需要保持开启状态)
-
-```bash
-bert.bat
-
-ASR.bat
-
-TTS.bat
-
-
-```
-可选（双击这个会提升模型的长期记忆功能，但是显存相对来说要增加1.5G）
-```bash
-RAG.bat
-```
-
-
-### 3.等待上面服务都输出IP后，再打开项目里面的live-2d文件夹：
-
-<img width="1018" height="1023" alt="image" src="https://github.com/user-attachments/assets/8b71473c-1d0e-4c42-8a27-8e8d5e5baaaa" />
-
-
-
-进去后，双击打开这个 肥牛.exe 文件
-
-![image](https://github.com/user-attachments/assets/634240ac-da9a-4ada-9a1e-b92762e385f0)
-
-
-
-按照箭头指示点击LLM标签，在框选的这三个地方填写你的API信息，修改好了记得点击下面的保存。（支持任何openai格式的api）
-
-<img width="1311" height="857" alt="image" src="https://github.com/user-attachments/assets/84a35e09-37ba-45d0-b516-74b28085d0ce" />
-
-
-
-最后返回点击"启动桌宠" 等待皮套出现，就可以开始和模型聊天了
-
-<img width="1152" height="803" alt="image" src="https://github.com/user-attachments/assets/de87207f-00df-4acf-a03a-6944ba6acb1a" />
-
-<img width="1541" height="1078" alt="image" src="https://github.com/user-attachments/assets/24b473ba-439c-4f57-a9da-8edd1b3bb4c5" />
-
-
 ### 这个UI里面的功能使用可查看这个文档来理解：
 ## [功能使用教程](live-2d-README.md)  
 
@@ -256,6 +184,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
