@@ -35,7 +35,7 @@
 
 已经有了conda环境后，就可以开始动手了！
 
-## 项目部署流程、功能讲解，各种内容只需看官网：[点我进项目官网](http://mynewbot.com/tutorials)
+## 项目部署流程请看官网：[点我进项目官网](http://mynewbot.com/tutorials)
 
 ## 计划清单（打✔的是已经实现的功能）
 
@@ -120,6 +120,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
