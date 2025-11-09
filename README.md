@@ -27,6 +27,14 @@
 如果你想用全部都用本地推理，使用本地的大语言模型（LLM）推理或者微调。不基于第三方的API的话，那可以进入LLM-studio文件夹，里面有本地模型的推理、微调指导。同时，因为本地的大语言模型需要一定的显存，要想有一个还算不错的体验，建议显卡至少保证有12G显存大小。
 
 #### QQ群：756741478 （入群答案：自负的魔方）
+## 前期准备
+
+确保你电脑里安装了conda 如果还没有安装，请直接点击这个下载：[conda安装包](https://github.com/morettt/my-neuro/releases/download/v4.12.0/Miniconda3-py39_4.12.0-Windows-x86_64.exe)
+
+安装流程可以参考这个视频，讲的很详细：https://www.bilibili.com/video/BV1ns4y1T7AP  （从1分40秒开始观看）
+
+已经有了conda环境后，就可以开始动手了！
+
 ## 项目部署流程、功能讲解，各种内容只需看官网：[点我进项目官网](http://mynewbot.com/tutorials)
 
 ## 计划清单（打✔的是已经实现的功能）
@@ -67,78 +75,6 @@
 ### 模型自己想要的功能（待定考虑）
 - [ ] 变色功能：按照模型心情让屏幕变色妨碍用户
 - [ ] 自由走动：模型自由在屏幕中移动
-
-
-
-## 前期准备
-
-确保你电脑里安装了conda 如果还没有安装，请直接点击这个下载：[conda安装包](https://github.com/morettt/my-neuro/releases/download/v4.12.0/Miniconda3-py39_4.12.0-Windows-x86_64.exe)
-
-安装流程可以参考这个视频，讲的很详细：https://www.bilibili.com/video/BV1ns4y1T7AP  （从1分40秒开始观看）
-
-已经有了conda环境后，就可以开始动手了！
-
-### 这个UI里面的功能使用可查看这个文档来理解：
-## [功能使用教程](live-2d-README.md)  
-
-
----
-
-
-## 更新前端
-
-当前端需要更新时，运行 更新前端.bat
-<img width="1016" height="1024" alt="image" src="https://github.com/user-attachments/assets/85cff8c9-ee08-45b2-a935-4dd2cd629508" />
-
-
-## 定制tts模型（克隆音色）
-
-该模块由[@jdnoeg](https://github.com/jdnoeg)基于GPT-SoVITS项目制作
-
-注：本模块需要在完成虚拟环境配置后进行
-
-该模块可以使用一段音频一键克隆你想要的角色的音色
-
-音频要求：长度在10min~30min之间，mp3格式，可以有背景音乐，但是只能有一个说话人
-
-硬件要求：显存至少6G的显卡
-
-### 1.把你的音频文件放在fine_tuning/input文件夹下，改名为"audio.mp3"，如图
-
-<img width="1708" height="954" alt="image" src="https://github.com/user-attachments/assets/bc420b00-d3cc-45c1-894a-b8e802d3ba83" />
-
-
-第一次用的时候这个位置会有一个占位符.txt，建议删掉，不删也没关系，但是会有些不影响进程的报错
-
-### 2.这一步需要科学上网运行
-
-双击运行 一键克隆音色.bat ，在弹出的窗口中输入你的音频使用的语言以及你的tts模型的名称（自己起一个，示例使用"1"），如图
-
-<img width="1734" height="926" alt="image" src="https://github.com/user-attachments/assets/bef6b726-1980-444c-b8ed-e70497122f5b" />
-
-
-键盘上随便按一个键就可以继续
-
-在脚本运行期间不要关闭窗口！！！
-
-### 3.脚本运行完成后，修改配置以使用你训练好的模型
-
-#### 前往live-2d文件夹内打开肥牛.exe 
-
-按照图中的顺序配置好你的音频模型
-
-![QQ20251023-160807](https://github.com/user-attachments/assets/6a5d8994-b1c2-45f8-ae34-c05910feef5a)
-
-最后点击“生成TTS的bat文件。会在live-2d文件夹中的Voice_Model_Factory文件夹下生成你的bat格式的文件。只需要双击运行。你训练好的tts的服务即可启动
-
-接下来就可以启动皮套。模型就会以训练后的声音和你对话了。
-
-
-## 定制AI
-
-有定制属于自己的AI的需求，请打开LLM-studio 文件夹，在此文件夹中内有关于LLM的微调操作步骤。
-
-目前定制化模块将逐渐增加...
 
 
 ### 结尾画饼
@@ -184,6 +120,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
