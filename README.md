@@ -15,6 +15,7 @@
 
 #### [English-Version](./README_English.md)
 
+# 本项目部署流程请看官网：[点我进官网](http://mynewbot.com/tutorials)
 
 ## 项目简介
 
@@ -23,8 +24,6 @@
 此项目受neuro sama启发，所以取名为my-neuro（社区提供的名称） 项目可训练声音、性格、替换形象 您的想象力有多丰富，模型就能多贴近您的期望。本项目更像是一个工作台。利用打包好的工具，一步步亲手描绘并实现心中理想的 AI 形象。
 
 如果你想用全部都用本地推理，使用本地的大语言模型（LLM）推理或者微调。不基于第三方的API的话，那可以进入LLM-studio文件夹，里面有本地模型的推理、微调指导。
-
-# 本项目部署流程请看官网：[点我进官网](http://mynewbot.com/tutorials)
 
 ### 计划清单（打✔的是已经实现的功能）
 
@@ -109,6 +108,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
