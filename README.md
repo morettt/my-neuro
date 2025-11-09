@@ -1,4 +1,4 @@
-# My-neuro 
+<h1 align="center">My-neuro</h1>
 
 <div align="center">
 
@@ -108,6 +108,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
