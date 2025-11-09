@@ -1,4 +1,4 @@
-# My-neuro
+# My-neuro 
 
 <div align="center">
 
@@ -24,11 +24,9 @@
 
 如果你想用全部都用本地推理，使用本地的大语言模型（LLM）推理或者微调。不基于第三方的API的话，那可以进入LLM-studio文件夹，里面有本地模型的推理、微调指导。
 
-#### QQ群：756741478 （入群答案：自负的魔方）
-
 ## 项目部署流程请看官网：[点我进官网](http://mynewbot.com/tutorials)
 
-## 计划清单（打✔的是已经实现的功能）
+### 计划清单（打✔的是已经实现的功能）
 
 ### 双模型支持
 - [x] 开源模型：支持开源模型微调，本地部署
@@ -111,6 +109,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
