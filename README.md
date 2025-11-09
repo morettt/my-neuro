@@ -13,7 +13,9 @@
 
 </div>
 
-#### [English](./README_English.md) ｜ [中文](./README.md)
+<p align="center">
+  <a href="./README_English.md">English</a> | <a href="./README.md">中文</a>
+</p>
 
 ## 本项目部署流程请看官网：[点我进官网](http://mynewbot.com/tutorials)
 
@@ -108,6 +110,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
