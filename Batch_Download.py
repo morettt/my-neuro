@@ -137,7 +137,7 @@ def extract_archive(archive_file, target_folder):
                     return False
 
             print('正在解压live-2d文件，请耐心等待.......')
-            print('你问要等多久？呃...我也不是很清楚，我电脑差不多2、3分钟左右？反正不会很慢的啦，耐心')
+            print('你问要等多久？我也不是很清楚，我电脑差不多2、3分钟左右,反正不会很慢的，耐心')
 
             # 使用7z解压
             cmd = f'"{local_7z}" x "{archive_file}" -o"{target_folder}" -y'
@@ -508,6 +508,7 @@ else:
     print("nltk_data下载成功！")
 
 print("\n所有下载操作全部完成！")
+
 
 
 
