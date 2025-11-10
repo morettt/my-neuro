@@ -1,0 +1,10 @@
+# 忽略 live-2d-develop 里的特定文件夹
+live-2d-develop/2D/
+live-2d-develop/AI记录室/
+live-2d-develop/GAME/
+
+# 忽略日志文件
+*.log
+
+# 忽略压缩包
+*.7z
