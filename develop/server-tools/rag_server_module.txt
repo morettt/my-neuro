@@ -1,0 +1,85 @@
+// ragMemoryServer.js - LLM记忆系统模块
+const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+
+// 读取配置文件
+let config = {};
+try {
+    const configPath = path.join(__dirname, '../config.json');
+    config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+} catch (error) {
+    console.warn('无法读取config.json，使用默认配置');
+}
+
+// 定义记忆检索工具
+const MEMORY_TOOL = {
+    name: "search_memory",
+    description: "从LLM的记忆系统中搜索相关的历史对话和信息",
+    parameters: {
+        type: "object",
+        properties: {
+            question: {
+                type: "string",
+                description: "要搜索的问题或关键词"
+            },
+            top_k: {
+                type: "integer",
+                description: "返回最相关的记忆数量，默认1",
+                default: 1
+            }
+        },
+        required: ["question"]
+    }
+};
+
+// 搜索记忆
+async function searchMemory(parameters) {
+    const { question, top_k = 1 } = parameters;
+
+    // 根据配置选择 URL
+    const gatewayConfig = config.api_gateway || {};
+    const ragConfig = config.rag || {};
+    let url, headers = {};
+
+    if (gatewayConfig.use_gateway) {
+        // 使用网关模式
+        url = `${gatewayConfig.base_url}/rag/ask`;
+        if (gatewayConfig.api_key) {
+            headers['X-API-Key'] = gatewayConfig.api_key;
+        }
+    } else {
+        // 使用本地模式
+        url = ragConfig.url || "http://127.0.0.1:8002/ask";
+    }
+    
+    try {
+        const response = await axios.post(url, {
+            question: question,
+            top_k: top_k
+        }, { headers });
+        
+        const jsContent = response.data;
+        let memoryContent = "";
+        
+        for (const passage of jsContent.relevant_passages) {
+            memoryContent += passage.content + "\n";
+        }
+        
+        return memoryContent.trim();
+        
+    } catch (error) {
+        throw new Error(`记忆搜索失败: ${error.message}`);
+    }
+}
+
+// 导出
+module.exports = {
+    getToolDefinitions: () => [MEMORY_TOOL],
+    executeFunction: async (name, parameters) => {
+        if (name !== "search_memory") {
+            throw new Error(`不支持: ${name}`);
+        }
+        return await searchMemory(parameters);
+    }
+};

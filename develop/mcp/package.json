@@ -1,0 +1,27 @@
+{
+  "name": "fastmcp-js-server",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "FastMCP JavaScript version with voice and image tools",
+  "main": "server.js",
+  "scripts": {
+    "update-config": "node update-config.js",
+    "start": "node server.js",
+    "dev": "npx fastmcp dev server.js",
+    "client": "node client.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.7",
+    "fastmcp": "^1.5.4",
+    "zod": "^3.22.4"
+  },
+  "keywords": [
+    "mcp",
+    "fastmcp",
+    "tts",
+    "voice",
+    "acg"
+  ],
+  "author": "",
+  "license": "MIT"
+}
