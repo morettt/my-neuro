@@ -176,7 +176,7 @@ def download_live2d_model():
         print(f"检测到 {target_folder} 文件夹已存在且包含文件，跳过下载。")
         return True
 
-    url = "https://github.com/morettt/my-neuro/releases/download/v5.7.9/live-2d.zip"
+    url = "https://github.com/morettt/my-neuro/releases/download/v5.8/live-2d.zip"
     file_name = url.split('/')[-1]
 
     # 下载文件
@@ -511,5 +511,6 @@ else:
     print("nltk_data下载成功！")
 
 print("\n所有下载操作全部完成！")
+
 
 
