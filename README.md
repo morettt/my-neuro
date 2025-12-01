@@ -27,7 +27,7 @@
 
 #### 如果你想用全部都用本地推理，使用本地的大语言模型（LLM）推理或者微调。不基于第三方的API的话，那可以进入LLM-studio文件夹，里面有本地模型的推理、微调指导。
 
-### 闭源AI模型推荐，推荐使用 [DMXAPI](https://www.dmxapi.cn)
+### 如果想用闭源AI模型，推荐使用 [DMXAPI](https://www.dmxapi.cn)
 ### 支持市面上大部分主流AI模型的统一调用。
 
 <img src="./image/dmx1.png" width="300" />
@@ -116,6 +116,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
+
 
 
 
