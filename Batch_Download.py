@@ -28,14 +28,14 @@ def display_progress_bar(percent, message="", mb_downloaded=None, mb_total=None,
     bar_length = 40
     filled_length = int(bar_length * percent / 100)
     bar = '█' * filled_length + '-' * (bar_length - filled_length)
-    
+
     # 添加下载信息（如果提供）
     extra_info = ""
     if mb_downloaded is not None and mb_total is not None:
         extra_info = f" ({mb_downloaded:.2f}MB/{mb_total:.2f}MB)"
     elif current is not None and total is not None:
         extra_info = f" ({current}/{total}个文件)"
-    
+
     sys.stdout.write(f"\r{message}: |{bar}| {percent}% 完成{extra_info}")
     sys.stdout.flush()
 
@@ -164,6 +164,59 @@ def extract_zip(zip_file, target_folder):
         return False
 
 
+def extract_7z(archive_file, target_folder):
+    """解压7z文件（自动下载7z工具）"""
+    import subprocess
+
+    print(f"正在解压 {archive_file} 到 {target_folder}...")
+
+    if not os.path.exists(target_folder):
+        os.makedirs(target_folder)
+        print(f"已创建目标文件夹: {target_folder}")
+
+    try:
+        # 检查本地是否有7z.exe
+        local_7z = os.path.join(current_dir, "7z", "7z.exe")
+
+        # 如果本地没有7z，自动下载
+        if not os.path.exists(local_7z):
+            print("正在自动下载7z工具...")
+            sevenz_dir = os.path.join(current_dir, "7z")
+            if not os.path.exists(sevenz_dir):
+                os.makedirs(sevenz_dir)
+
+            # 下载7z便携版（官方链接）
+            seven_zip_url = "https://www.7-zip.org/a/7zr.exe"
+
+            try:
+                response = requests.get(seven_zip_url, timeout=30)
+                with open(local_7z, 'wb') as f:
+                    f.write(response.content)
+                print("7z工具下载完成!")
+            except Exception as e:
+                print(f"下载7z失败: {e}")
+                print("\n请手动下载7-Zip并安装，或手动解压 GPT-SoVITS-Bundle.7z 文件")
+                return False
+
+        print('正在解压TTS模型包，这可能需要几分钟时间，请耐心等待.......')
+
+        # 使用7z解压到根目录
+        cmd = f'"{local_7z}" x "{archive_file}" -o"{target_folder}" -y'
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+        if result.returncode == 0:
+            print("\n解压完成!")
+            print(f"所有文件已解压到 '{target_folder}' 文件夹")
+            return True
+        else:
+            print(f"\n解压失败: {result.stderr}")
+            return False
+
+    except Exception as e:
+        print(f"解压过程中出错: {e}")
+        return False
+
+
 # 添加Live2D下载函数（在现有代码的最开始部分添加）
 def download_live2d_model():
     """下载并解压Live 2D模型到live-2d文件夹"""
@@ -203,15 +256,15 @@ def download_with_retry(command, max_retry=MAX_RETRY, wait_time=RETRY_WAIT):
     print(f"执行命令: {command}")
     for attempt in range(max_retry):
         if attempt > 0:
-            print(f"第 {attempt+1} 次尝试下载...")
-        
+            print(f"第 {attempt + 1} 次尝试下载...")
+
         result = subprocess.Popen(
             command,
             shell=True,
             stdout=None,
             stderr=None
         ).wait()
-        
+
         if result == 0:
             print("下载成功!")
             return True
@@ -220,10 +273,9 @@ def download_with_retry(command, max_retry=MAX_RETRY, wait_time=RETRY_WAIT):
             if attempt < max_retry - 1:
                 print(f"等待 {wait_time} 秒后重试...")
                 time.sleep(wait_time)
-    
+
     print(f"经过 {max_retry} 次尝试后，下载仍然失败")
     return False
-
 
 
 # 1. 下载Omni_fn_bert模型到omni_bert文件夹
@@ -249,182 +301,46 @@ if missing_files:
     exit(1)
 print("Omni_fn_bert模型检查通过，关键文件已找到")
 
-# 2. 下载第二个模型 - G2PWModel到tts-studio/text文件夹
+# 2. 下载TTS模型包 (gsv-fn-v1) 到tts-hub文件夹
 # 返回到原始目录
 os.chdir(current_dir)
 
-# 创建tts-studio/text路径
-tts_studio_dir = os.path.join(current_dir, "tts-studio")
-text_dir = os.path.join(tts_studio_dir, "text")
-if not os.path.exists(text_dir):
-    os.makedirs(text_dir)
+# 创建tts-hub目录
+tts_hub_dir = os.path.join(current_dir, "tts-hub")
+if not os.path.exists(tts_hub_dir):
+    os.makedirs(tts_hub_dir)
+    print(f"创建目录: {tts_hub_dir}")
 
-# 创建专门的G2PWModel文件夹
-g2pw_model_dir = os.path.join(text_dir, "G2PWModel")
-if not os.path.exists(g2pw_model_dir):
-    os.makedirs(g2pw_model_dir)
+print("\n========== 下载TTS模型包 ==========")
+print(f"下载gsv-fn-v1模型包到tts-hub文件夹: {tts_hub_dir}")
 
-# 切换到G2PWModel目录
-os.chdir(g2pw_model_dir)
-print(f"下载G2PWModel到: {os.getcwd()}")
-
-# 使用ModelScope下载G2PWModel，带重试机制
-if not download_with_retry("modelscope download --model zxm2493188292/G2PWModel --local_dir ./"):
-    print("G2PWModel下载失败，终止程序")
+# 使用ModelScope下载gsv-fn-v1模型包到tts-hub文件夹，带重试机制
+if not download_with_retry(f"modelscope download --model morelle/gsv-fn-v1 --local_dir ./tts-hub"):
+    print("gsv-fn-v1模型包下载失败，终止程序")
     exit(1)
 
-# 检查下载的G2PWModel是否存在
-if not os.listdir(g2pw_model_dir):
-    print(f"错误：下载后G2PWModel目录为空 {g2pw_model_dir}")
-    exit(1)
-print("G2PWModel模型下载检查通过，文件已找到")
+print("gsv-fn-v1模型包下载成功！")
 
-# 3. 复制G2PWModel到tts-studio/GPT_SoVITS/text文件夹
-# 返回到原始目录
-os.chdir(current_dir)
+# 检查是否存在 GPT-SoVITS-Bundle.7z 文件（在tts-hub文件夹中）
+bundle_7z_file = os.path.join(tts_hub_dir, "GPT-SoVITS-Bundle.7z")
+if os.path.exists(bundle_7z_file):
+    print(f"\n检测到 GPT-SoVITS-Bundle.7z 文件，开始解压...")
 
-# 源文件夹路径 - 现在是专门的G2PWModel文件夹
-source_g2pw_dir = g2pw_model_dir
+    # 解压到tts-hub目录
+    if extract_7z(bundle_7z_file, tts_hub_dir):
+        print("TTS模型包解压成功！")
 
-# 目标文件夹路径
-gpt_sovits_dir = os.path.join(tts_studio_dir, "GPT_SoVITS")
-gpt_text_dir = os.path.join(gpt_sovits_dir, "text")
-target_g2pw_dir = os.path.join(gpt_text_dir, "G2PWModel")
-
-# 创建目标目录结构
-if not os.path.exists(gpt_sovits_dir):
-    os.makedirs(gpt_sovits_dir)
-if not os.path.exists(gpt_text_dir):
-    os.makedirs(gpt_text_dir)
-
-# 复制文件夹
-print(f"复制G2PWModel从 {source_g2pw_dir} 到 {target_g2pw_dir}")
-# 如果目标文件夹已存在，先删除
-if os.path.exists(target_g2pw_dir):
-    shutil.rmtree(target_g2pw_dir)
-# 复制整个文件夹
-try:
-    shutil.copytree(source_g2pw_dir, target_g2pw_dir)
-    print("复制完成！")
-except Exception as e:
-    print(f"复制过程中出错: {str(e)}")
-    exit(1)
-
-# 3.1 新增：复制G2PWModel到fine_tuning/text文件夹
-print("\n开始复制G2PWModel到fine_tuning/text目录...")
-
-# 创建fine_tuning/text目录结构
-fine_tuning_dir = os.path.join(current_dir, "fine_tuning")
-fine_tuning_text_dir = os.path.join(fine_tuning_dir, "text")
-fine_tuning_g2pw_dir = os.path.join(fine_tuning_text_dir, "G2PWModel")
-
-# 创建目标目录结构
-if not os.path.exists(fine_tuning_dir):
-    os.makedirs(fine_tuning_dir)
-    print(f"创建目录: {fine_tuning_dir}")
-if not os.path.exists(fine_tuning_text_dir):
-    os.makedirs(fine_tuning_text_dir)
-    print(f"创建目录: {fine_tuning_text_dir}")
-
-# 复制文件夹到fine_tuning/text目录
-print(f"复制G2PWModel从 {source_g2pw_dir} 到 {fine_tuning_g2pw_dir}")
-# 如果目标文件夹已存在，先删除
-if os.path.exists(fine_tuning_g2pw_dir):
-    shutil.rmtree(fine_tuning_g2pw_dir)
-# 复制整个文件夹
-try:
-    shutil.copytree(source_g2pw_dir, fine_tuning_g2pw_dir)
-    print("G2PWModel复制到fine_tuning/text目录完成！")
-except Exception as e:
-    print(f"复制G2PWModel到fine_tuning/text目录时出错: {str(e)}")
-    # 这里不终止程序，因为这是额外的复制操作
-
-# 4. 下载并解压pretrained_models.zip到tts-studio/GPT_SoVITS/pretrained_models文件夹
-# 创建目标目录
-pretrained_models_dir = os.path.join(gpt_sovits_dir, "pretrained_models")
-if not os.path.exists(pretrained_models_dir):
-    os.makedirs(pretrained_models_dir)
-
-# 返回到原始目录
-os.chdir(current_dir)
-
-# 切换到GPT_SoVITS目录
-print(f"下载GPT-SoVITS预训练模型到: {gpt_sovits_dir}")
-
-# 使用ModelScope下载GPT-SoVITS预训练模型，带重试机制
-if not download_with_retry("modelscope download --model AI-ModelScope/GPT-SoVITS --local_dir ./tts-studio/GPT_SoVITS/pretrained_models"):
-    print("GPT-SoVITS预训练模型下载失败，终止程序")
-    exit(1)
-
-# 确认模型已下载
-if not os.path.exists(pretrained_models_dir) or not os.listdir(pretrained_models_dir):
-    print(f"错误：下载后无法找到预训练模型目录或目录为空: {pretrained_models_dir}")
-    exit(1)
-
-print(f"预训练模型已成功下载到: {pretrained_models_dir}")
-
-# 5. 复制预训练模型到tts-studio/pretrained_models文件夹
-# 确保我们在当前工作目录
-os.chdir(current_dir)
-
-# 创建目标目录
-tts_pretrained_dir = os.path.join(tts_studio_dir, "pretrained_models")
-if not os.path.exists(tts_pretrained_dir):
-    os.makedirs(tts_pretrained_dir)
-    print(f"创建目录: {tts_pretrained_dir}")
-
-# 源文件夹中的所有文件
-source_pretrained_dir = pretrained_models_dir
-print(f"正在将预训练模型从 {source_pretrained_dir} 复制到 {tts_pretrained_dir}")
-
-# 检查源文件夹中是否有文件
-if os.path.exists(source_pretrained_dir) and os.listdir(source_pretrained_dir):
-    # 复制文件夹中的所有内容
-    print(f"复制预训练模型文件...")
-    try:
-        # 遍历源目录中的所有文件和文件夹
-        for item in os.listdir(source_pretrained_dir):
-            source_item = os.path.join(source_pretrained_dir, item)
-            target_item = os.path.join(tts_pretrained_dir, item)
-            
-            # 如果是文件夹，递归复制整个文件夹
-            if os.path.isdir(source_item):
-                if os.path.exists(target_item):
-                    shutil.rmtree(target_item)  # 如果目标已存在，先删除
-                shutil.copytree(source_item, target_item)
-                print(f"已复制文件夹: {item}")
-            # 如果是文件，直接复制
-            else:
-                shutil.copy2(source_item, target_item)
-                print(f"已复制文件: {item}")
-        
-        print("预训练模型复制完成")
-    except Exception as e:
-        print(f"复制预训练模型时出错: {str(e)}")
+        # 删除压缩包
+        try:
+            os.remove(bundle_7z_file)
+            print(f"已删除原压缩文件: {bundle_7z_file}")
+        except Exception as e:
+            print(f"删除压缩文件时出错: {e}")
+    else:
+        print("TTS模型包解压失败，请手动解压 GPT-SoVITS-Bundle.7z 文件")
         exit(1)
 else:
-    print(f"错误：源预训练模型文件夹 {source_pretrained_dir} 不存在或为空")
-    exit(1)
-
-# 6. 下载fake_neuro_V2模型
-print("\n开始下载fake_neuro_V2模型...")
-
-# 创建tts-model目录
-tts_model_dir = os.path.join(tts_studio_dir, "tts-model")
-if not os.path.exists(tts_model_dir):
-    os.makedirs(tts_model_dir)
-    print(f"创建目录: {tts_model_dir}")
-
-# 切换到tts-model目录
-os.chdir(tts_model_dir)
-print(f"下载fake_neuro_V2模型到: {os.getcwd()}")
-
-# 使用ModelScope下载fake_neuro_V2模型，带重试机制
-if not download_with_retry("modelscope download --model morelle/Fake-Neuro-TTS-V2 --local_dir ./"):
-    print("fake_neuro_V2模型下载失败")
-    # 不终止程序，因为这是额外的模型
-else:
-    print("fake_neuro_V2模型下载成功！")
+    print(f"警告: 未找到 GPT-SoVITS-Bundle.7z 文件，跳过解压步骤")
 
 # 7. 下载BAAI/bge-m3模型到RAG-model文件夹
 print("\n开始下载BAAI/bge-m3模型...")
@@ -462,7 +378,8 @@ if not os.path.exists(uvr5_weights_dir):
 print(f"下载UVR5权重文件到: {uvr5_weights_dir}")
 
 # 使用ModelScope下载UVR5权重文件，带重试机制
-if not download_with_retry(f"modelscope download --model AI-ModelScope/uvr5_weights HP2_all_vocals.pth --local_dir {uvr5_weights_dir}"):
+if not download_with_retry(
+        f"modelscope download --model AI-ModelScope/uvr5_weights HP2_all_vocals.pth --local_dir {uvr5_weights_dir}"):
     print("UVR5权重文件下载失败")
     # 不终止程序，因为这是额外的模型
 else:
@@ -484,34 +401,11 @@ if not os.path.exists(asr_models_dir):
 print(f"下载faster-whisper-medium模型到: {faster_whisper_dir}")
 
 # 使用ModelScope下载faster-whisper-medium模型，带重试机制
-if not download_with_retry(f"modelscope download --model pengzhendong/faster-whisper-medium --local_dir {faster_whisper_dir}"):
+if not download_with_retry(
+        f"modelscope download --model pengzhendong/faster-whisper-medium --local_dir {faster_whisper_dir}"):
     print("faster-whisper-medium模型下载失败")
     # 不终止程序，因为这是额外的模型
 else:
     print("faster-whisper-medium模型下载成功！")
 
-# 10. 下载nltk_data到tts-studio目录
-print("\n开始下载nltk_data...")
-
-# 返回到原始目录
-os.chdir(current_dir)
-
-# 确保tts-studio目录存在
-if not os.path.exists(tts_studio_dir):
-    os.makedirs(tts_studio_dir)
-    print(f"创建目录: {tts_studio_dir}")
-
-print(f"下载nltk_data到: {tts_studio_dir}")
-
-# 使用ModelScope下载nltk_data，带重试机制
-if not download_with_retry("modelscope download --model morelle/nltk_data --local_dir ./tts-studio"):
-    print("nltk_data下载失败")
-    # 不终止程序，因为这是额外的数据
-else:
-    print("nltk_data下载成功！")
-
 print("\n所有下载操作全部完成！")
-
-
-
-
