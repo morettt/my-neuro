@@ -136,7 +136,7 @@ async def startup_event():
     # 启动文件监控
     event_handler = KnowledgeBaseHandler()
     observer = Observer()
-    observer.schedule(event_handler, "./live-2d", recursive=False)
+    observer.schedule(event_handler, "./live-2d/AI记录室", recursive=False)
     observer.start()
     print("文件监控启动完成")
 
