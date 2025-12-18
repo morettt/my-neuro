@@ -38,13 +38,15 @@ class HttpServer {
             let jsCode = '';
             switch (action) {
                 case 'play_random':
-                    jsCode = 'global.musicPlayer && global.musicPlayer.playRandomMusic(); "播放随机音乐"';
+                    // 直接返回 playRandomMusic 的结果 (Promise)
+                    jsCode = 'global.musicPlayer ? global.musicPlayer.playRandomMusic() : { message: "播放器未初始化", metadata: null }';
                     break;
                 case 'stop':
-                    jsCode = 'global.musicPlayer && global.musicPlayer.stop(); "音乐已停止"';
+                    jsCode = 'global.musicPlayer ? global.musicPlayer.stop() : null; "音乐已停止"';
                     break;
                 case 'play_specific':
-                    jsCode = `global.musicPlayer && global.musicPlayer.playSpecificSong('${filename}'); "播放${filename}"`;
+                    // 直接返回 playSpecificSong 的结果 (Promise)
+                    jsCode = `global.musicPlayer ? global.musicPlayer.playSpecificSong('${filename}') : { message: "播放器未初始化", metadata: null }`;
                     break;
                 default:
                     return res.json({ success: false, message: '不支持的操作' });

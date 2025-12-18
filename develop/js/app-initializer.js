@@ -150,6 +150,16 @@ class AppInitializer {
         // 为EnhancedTextProcessor提供全局字幕函数
         global.showSubtitle = (text, duration) => this.uiController.showSubtitle(text, duration);
         global.hideSubtitle = () => this.uiController.hideSubtitle();
+
+        // 为气泡框提供全局函数
+        global.showBubble = () => this.uiController.showBubble();
+        global.hideBubble = () => this.uiController.hideBubble();
+        global.toggleBubble = () => this.uiController.toggleBubble();
+        global.showToolBubble = (toolName, parameters) => this.uiController.showToolBubble(toolName, parameters);
+
+        // 为歌词气泡提供全局函数
+        global.showLyricsBubble = (text) => this.uiController.showLyricsBubble(text);
+        global.hideLyricsBubble = () => this.uiController.hideLyricsBubble();
     }
 
     // 第三阶段: 创建语音聊天接口
@@ -254,6 +264,11 @@ class AppInitializer {
             showSubtitle: (text, duration) => this.uiController.showSubtitle(text, duration),
             hideSubtitle: () => this.uiController.hideSubtitle()
         });
+
+        // 🔥 将BarrageManager注入到InputRouter，用于打断机制
+        if (this.voiceChat.inputRouter) {
+            this.voiceChat.inputRouter.setBarrageManager(this.barrageManager);
+        }
 
         // 直播模块初始化
         if (this.config.bilibili && this.config.bilibili.enabled) {

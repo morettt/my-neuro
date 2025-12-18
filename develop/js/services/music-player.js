@@ -1,6 +1,7 @@
 // music-player.js - 支持分离音频的音乐播放模块（增强版 - 自动麦克风动作）
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 
 class MusicPlayer {
     constructor(modelController) {
@@ -50,10 +51,15 @@ class MusicPlayer {
     }
 
     // 播放分离音频（伴奏+人声）- 增强版
-    async playDualTrackSong(songFile) {
+    async playDualTrackSong(songFile, metadata = null) {
         if (this.isPlaying) {
             this.stop();
             await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        // 如果没有传入元数据，尝试解析
+        if (!metadata) {
+            metadata = await this.parseMetadata(songFile);
         }
 
         // 提取基础文件名
@@ -101,9 +107,16 @@ class MusicPlayer {
             // 开始嘴型动画
             this.startMouthAnimation();
 
+            // 🎵 开始歌词同步
+            if (metadata && metadata.lyrics && metadata.lyrics !== '暂无歌词') {
+                // 使用伴奏音频作为时间基准
+                this.startLyricsSync(this.accAudio, metadata.lyrics);
+            }
+
             // 设置播放结束事件（以伴奏为准）
             this.accAudio.onended = () => {
                 this.stopMouthAnimation();
+                this.stopLyricsSync(); // 停止歌词同步并隐藏气泡
                 this.isPlaying = false;
                 if (this.vocalAudio) {
                     this.vocalAudio.pause();
@@ -155,10 +168,15 @@ class MusicPlayer {
     }
 
     // 播放单音频（原来的方法）- 增强版
-    async playSingleTrackSong(songFile) {
+    async playSingleTrackSong(songFile, metadata = null) {
         if (this.isPlaying) {
             this.stop();
             await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        // 如果没有传入元数据，尝试解析
+        if (!metadata) {
+            metadata = await this.parseMetadata(songFile);
         }
 
         const songPath = path.join(this.musicFolder, songFile);
@@ -181,9 +199,15 @@ class MusicPlayer {
             // 开始嘴型动画
             this.startMouthAnimation();
 
+            // 🎵 开始歌词同步
+            if (metadata && metadata.lyrics && metadata.lyrics !== '暂无歌词') {
+                this.startLyricsSync(this.currentAudio, metadata.lyrics);
+            }
+
             // 设置播放结束事件
             this.currentAudio.onended = () => {
                 this.stopMouthAnimation();
+                this.stopLyricsSync(); // 停止歌词同步并隐藏气泡
                 this.isPlaying = false;
                 console.log('单音频播放完毕:', songFile);
 
@@ -217,6 +241,172 @@ class MusicPlayer {
         }
     }
 
+    // 从网易云音乐获取歌词 (备选源) - 使用原生https模块绕过CORS
+    async fetchNeteaseLyrics(artist, title) {
+        console.log(`尝试从网易云音乐获取歌词: ${artist} - ${title}`);
+        const https = require('https');
+
+        const makeRequest = (url, headers = {}) => {
+            return new Promise((resolve, reject) => {
+                const options = {
+                    headers: {
+                        'Cookie': 'appver=1.5.0.75771;',
+                        'Referer': 'https://music.163.com/',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        ...headers
+                    }
+                };
+
+                https.get(url, options, (res) => {
+                    let data = '';
+                    res.on('data', (chunk) => data += chunk);
+                    res.on('end', () => {
+                        try {
+                            resolve(JSON.parse(data));
+                        } catch (e) {
+                            reject(e);
+                        }
+                    });
+                }).on('error', (err) => {
+                    reject(err);
+                });
+            });
+        };
+
+        try {
+            // 1. 搜索歌曲ID
+            // 注意：这里需要对查询参数进行编码
+            const query = encodeURIComponent(`${artist} ${title}`);
+            const searchUrl = `https://music.163.com/api/search/get/web?s=${query}&type=1&limit=1`;
+
+            const searchData = await makeRequest(searchUrl);
+
+            if (!searchData || !searchData.result || !searchData.result.songs || searchData.result.songs.length === 0) {
+                console.log('网易云音乐未找到该歌曲');
+                return null;
+            }
+
+            const songId = searchData.result.songs[0].id;
+            console.log(`网易云音乐找到歌曲ID: ${songId}`);
+
+            // 2. 获取歌词
+            const lyricUrl = `https://music.163.com/api/song/lyric?id=${songId}&lv=1&kv=1&tv=-1`;
+            const lyricData = await makeRequest(lyricUrl);
+
+            if (lyricData && lyricData.lrc && lyricData.lrc.lyric) {
+                console.log('成功从网易云音乐获取歌词');
+                return lyricData.lrc.lyric;
+            }
+
+        } catch (error) {
+            console.log('网易云音乐获取歌词失败:', error.message);
+        }
+        return null;
+    }
+
+    // 在线获取歌词
+    async fetchOnlineLyrics(artist, title, baseName) {
+        if (artist === '未知歌手' || !title) return null;
+
+        console.log(`正在尝试在线获取歌词: ${artist} - ${title}`);
+
+        let lyrics = null;
+
+        // 1. 尝试 lrclib.net (首选)
+        try {
+            const response = await axios.get('https://lrclib.net/api/get', {
+                params: {
+                    artist_name: artist,
+                    track_name: title
+                },
+                timeout: 5000 // 5秒超时
+            });
+
+            if (response.data && (response.data.syncedLyrics || response.data.plainLyrics)) {
+                lyrics = response.data.syncedLyrics || response.data.plainLyrics;
+                console.log('成功从 lrclib.net 获取歌词');
+            }
+        } catch (error) {
+            console.log('lrclib.net 获取歌词失败:', error.message);
+        }
+
+        // 2. 如果失败，尝试网易云音乐 (备选)
+        if (!lyrics) {
+            lyrics = await this.fetchNeteaseLyrics(artist, title);
+        }
+
+        // 3. 保存歌词
+        if (lyrics) {
+            try {
+                // 保存为本地文件
+                const lrcPath = path.join(this.musicFolder, `${baseName}.lrc`);
+                fs.writeFileSync(lrcPath, lyrics, 'utf8');
+                console.log(`歌词已保存到: ${lrcPath}`);
+                return lyrics;
+            } catch (saveError) {
+                console.error('保存歌词文件失败:', saveError);
+            }
+        }
+
+        return null;
+    }
+
+    // 解析元数据（歌手、标题、歌词）
+    async parseMetadata(filename) {
+        // 移除扩展名和后缀
+        const baseName = filename.replace(/-(Acc|Vocal)\..*$/, '').replace(/\.(mp3|wav|m4a|ogg)$/i, '');
+
+        let artist = '未知歌手';
+        let title = baseName;
+
+        // 尝试解析 "歌手 - 标题" 格式
+        if (baseName.includes(' - ')) {
+            const parts = baseName.split(' - ');
+            if (parts.length >= 2) {
+                artist = parts[0].trim();
+                title = parts.slice(1).join(' - ').trim(); // 处理标题中可能包含 " - " 的情况
+            }
+        }
+
+        // 尝试读取歌词文件
+        let lyrics = '暂无歌词';
+        let lyricsFound = false;
+
+        try {
+            // 尝试 .lrc 和 .txt
+            const lrcPath = path.join(this.musicFolder, `${baseName}.lrc`);
+            const txtPath = path.join(this.musicFolder, `${baseName}.txt`);
+
+            if (fs.existsSync(lrcPath)) {
+                lyrics = fs.readFileSync(lrcPath, 'utf8');
+                console.log(`已加载LRC歌词: ${baseName}`);
+                lyricsFound = true;
+            } else if (fs.existsSync(txtPath)) {
+                lyrics = fs.readFileSync(txtPath, 'utf8');
+                console.log(`已加载TXT歌词: ${baseName}`);
+                lyricsFound = true;
+            }
+        } catch (error) {
+            console.error('读取歌词失败:', error);
+        }
+
+        // 如果本地没有歌词，尝试在线获取
+        if (!lyricsFound) {
+            const onlineLyrics = await this.fetchOnlineLyrics(artist, title, baseName);
+            if (onlineLyrics) {
+                lyrics = onlineLyrics;
+            }
+        }
+
+        return {
+            filename,
+            baseName,
+            title,
+            artist,
+            lyrics
+        };
+    }
+
     // 智能播放指定歌曲（自动检测是否为分离音频）
     async playSpecificSong(songFile) {
         // 提取基础文件名，去掉-Acc或-Vocal后缀
@@ -224,14 +414,24 @@ class MusicPlayer {
         const accFile = this.getMusicFiles().find(f => f.includes(baseName) && f.includes('-Acc'));
         const vocalFile = this.getMusicFiles().find(f => f.includes(baseName) && f.includes('-Vocal'));
 
+        // 获取元数据
+        const metadata = await this.parseMetadata(songFile);
+        const resultMessage = `正在播放: ${metadata.title} - ${metadata.artist}`;
+
         // 如果找到分离音频，优先使用分离播放
         if (accFile && vocalFile) {
             console.log(`检测到分离音频: ${baseName}`);
-            return this.playDualTrackSong(songFile);
+            await this.playDualTrackSong(songFile, metadata);
         } else {
             // 否则使用单音频播放
-            return this.playSingleTrackSong(songFile);
+            await this.playSingleTrackSong(songFile, metadata);
         }
+
+        // 返回包含元数据的对象（将被 http-server 序列化）
+        return {
+            message: resultMessage,
+            metadata: metadata
+        };
     }
 
     // 获取音乐文件列表
@@ -286,13 +486,13 @@ class MusicPlayer {
     async playRandomMusic() {
         if (this.isPlaying) {
             console.log('已经在播放音乐了');
-            return;
+            return { message: '已经在播放音乐了', metadata: null };
         }
 
         const songFile = this.getRandomSong();
-        if (!songFile) return;
+        if (!songFile) return { message: '没有找到歌曲', metadata: null };
 
-        await this.playSpecificSong(songFile);
+        return await this.playSpecificSong(songFile);
     }
 
     // 开始嘴型动画
@@ -373,6 +573,7 @@ class MusicPlayer {
         }
 
         this.stopMouthAnimation();
+        this.stopLyricsSync(); // 停止歌词同步
         this.isPlaying = false;
         console.log('音乐播放已停止');
 
@@ -380,6 +581,81 @@ class MusicPlayer {
         if (this.emotionMapper) {
             this.emotionMapper.playDefaultMotion();
             console.log('已恢复默认动作');
+        }
+    }
+
+    // 解析LRC歌词
+    parseLrc(lrcContent) {
+        if (!lrcContent) return [];
+        const lines = lrcContent.split('\n');
+        const result = [];
+        const timeExp = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
+
+        for (const line of lines) {
+            const match = timeExp.exec(line);
+            if (match) {
+                const minutes = parseInt(match[1]);
+                const seconds = parseInt(match[2]);
+                const milliseconds = parseInt(match[3].length === 3 ? match[3] : match[3] + '0');
+                const time = minutes * 60 + seconds + milliseconds / 1000;
+                const text = line.replace(timeExp, '').trim();
+                if (text) {
+                    result.push({ time, text });
+                }
+            }
+        }
+        return result;
+    }
+
+    // 开始歌词同步
+    startLyricsSync(audioElement, lyricsContent) {
+        this.stopLyricsSync(); // 先停止之前的
+
+        const lyrics = this.parseLrc(lyricsContent);
+        if (lyrics.length === 0) return;
+
+        console.log(`开始歌词同步，共 ${lyrics.length} 行`);
+        let currentIndex = -1;
+
+        const updateLyrics = () => {
+            if (!this.isPlaying || !audioElement) return;
+
+            const currentTime = audioElement.currentTime;
+
+            // 找到当前时间对应的歌词行
+            // 我们寻找最后一行时间小于等于当前时间的歌词
+            let newIndex = -1;
+            for (let i = 0; i < lyrics.length; i++) {
+                if (currentTime >= lyrics[i].time) {
+                    newIndex = i;
+                } else {
+                    break; // 后面的时间都比当前大，不用找了
+                }
+            }
+
+            // 如果索引变化了，更新显示
+            if (newIndex !== currentIndex && newIndex !== -1) {
+                currentIndex = newIndex;
+                const text = lyrics[currentIndex].text;
+                if (global.showLyricsBubble) {
+                    global.showLyricsBubble(text);
+                }
+            }
+
+            this.lyricsInterval = requestAnimationFrame(updateLyrics);
+        };
+
+        this.lyricsInterval = requestAnimationFrame(updateLyrics);
+    }
+
+    // 停止歌词同步
+    stopLyricsSync() {
+        if (this.lyricsInterval) {
+            cancelAnimationFrame(this.lyricsInterval);
+            this.lyricsInterval = null;
+        }
+        if (global.hideLyricsBubble) {
+            global.hideLyricsBubble();
         }
     }
 
