@@ -9,8 +9,10 @@ const { toolExecutor } = require('../ai/tool-executor.js');
 class BarrageManager {
     constructor(config) {
         this.config = config;
-        this.queue = [];
+        this.normalQueue = [];      // 普通弹幕队列
+        this.priorityQueue = [];    // 优先队列（保留，暂未使用）
         this.isProcessing = false;
+        this.interruptFlag = false; // 打断标志
         this.llmClient = new LLMClient(config);
 
         // 依赖的外部服务
@@ -18,6 +20,9 @@ class BarrageManager {
         this.ttsProcessor = null;
         this.showSubtitle = null;
         this.hideSubtitle = null;
+
+        // 启动队列处理循环
+        this.startQueueProcessor();
     }
 
     // 设置依赖服务
@@ -30,75 +35,89 @@ class BarrageManager {
 
     // 添加弹幕到队列
     addToQueue(nickname, text) {
-        this.queue.push({ nickname, text });
-        console.log(`弹幕入队: ${nickname}: ${text} (队列长度: ${this.queue.length})`);
+        this.normalQueue.push({ nickname, text });
+        console.log(`弹幕入队: ${nickname}: ${text} (队列长度: ${this.normalQueue.length})`);
         logToTerminal('info', `弹幕入队: ${nickname}: ${text}`);
-
-        // 尝试处理队列
-        this.processNext();
+        // 不再手动调用processNext，由队列处理循环自动处理
     }
 
-    // 处理下一条弹幕
-    async processNext() {
-        // 如果正在处理，直接返回
-        if (this.isProcessing) {
-            return;
+    // 清空弹幕队列（用于用户输入打断）
+    clearNormalQueue() {
+        const cleared = this.normalQueue.length;
+        this.normalQueue = [];
+        if (cleared > 0) {
+            console.log(`清空了${cleared}条未处理的弹幕`);
+            logToTerminal('info', `清空了${cleared}条未处理的弹幕`);
         }
+    }
 
-        // 队列为空，直接返回
-        if (this.queue.length === 0) {
-            return;
-        }
+    // 设置打断标志
+    setInterrupt() {
+        this.interruptFlag = true;
+        console.log('设置弹幕处理打断标志');
+    }
 
-        // 用户语音输入或TTS播放优先，延迟处理
-        if (appState.isProcessingUserInput() || appState.isPlayingTTS()) {
-            console.log('用户正在交互，延迟1秒处理弹幕');
-            setTimeout(() => this.processNext(), 1000);
-            return;
-        }
+    // 队列处理循环（类似Python的process_queue_thread）
+    startQueueProcessor() {
+        const processLoop = async () => {
+            while (true) {
+                // 等待100ms
+                await new Promise(resolve => setTimeout(resolve, 100));
 
-        this.isProcessing = true;
-        const barrage = this.queue.shift();
+                // 如果正在处理，跳过本次循环
+                if (this.isProcessing) {
+                    continue;
+                }
 
-        // 发送弹幕处理开始事件
-        eventBus.emit(Events.BARRAGE_START);
+                // 队列为空，跳过本次循环
+                if (this.normalQueue.length === 0) {
+                    continue;
+                }
 
-        try {
-            console.log(`处理弹幕: ${barrage.nickname}: ${barrage.text}`);
-            logToTerminal('info', `处理弹幕: ${barrage.nickname}: ${barrage.text}`);
+                // 检查是否被打断
+                if (this.interruptFlag) {
+                    console.log('弹幕处理被打断');
+                    this.interruptFlag = false;
+                    this.isProcessing = false;
+                    eventBus.emit(Events.BARRAGE_END);
+                    continue;
+                }
 
-            // 执行弹幕消息处理
-            await this.executeBarrage(barrage.nickname, barrage.text);
+                // 取出队列头部的弹幕
+                const barrage = this.normalQueue.shift();
+                this.isProcessing = true;
 
-            // 发送交互更新事件
-            eventBus.emit(Events.INTERACTION_UPDATED);
+                // 发送弹幕处理开始事件
+                eventBus.emit(Events.BARRAGE_START);
 
-            // 注意：TTS播放是异步的，会在播放完成后调用 onBarrageTTSComplete()
-            // 所以这里不需要立即处理下一条，等TTS播放完成后会自动处理
+                try {
+                    console.log(`处理弹幕: ${barrage.nickname}: ${barrage.text}`);
+                    logToTerminal('info', `处理弹幕: ${barrage.nickname}: ${barrage.text}`);
 
-        } catch (error) {
-            console.error('弹幕处理失败:', error.message);
-            logToTerminal('error', `弹幕处理失败: ${error.message}`);
+                    // 执行弹幕消息处理
+                    await this.executeBarrage(barrage.nickname, barrage.text);
 
-            // 恢复ASR录音
-            const asrEnabled = this.config.asr?.enabled !== false;
-            if (this.voiceChat?.asrProcessor && asrEnabled) {
-                this.voiceChat.asrProcessor.resumeRecording();
+                    // 发送交互更新事件
+                    eventBus.emit(Events.INTERACTION_UPDATED);
+
+                } catch (error) {
+                    console.error('弹幕处理失败:', error.message);
+                    logToTerminal('error', `弹幕处理失败: ${error.message}`);
+
+                    // 恢复ASR录音
+                    const asrEnabled = this.config.asr?.enabled !== false;
+                    if (this.voiceChat?.asrProcessor && asrEnabled) {
+                        this.voiceChat.asrProcessor.resumeRecording();
+                    }
+                }
+
+                this.isProcessing = false;
+                eventBus.emit(Events.BARRAGE_END);
             }
+        };
 
-            // 出错时立即处理下一条
-            this.isProcessing = false;
-            eventBus.emit(Events.BARRAGE_END);
-            setTimeout(() => this.processNext(), 500);
-            return;
-        }
-
-        this.isProcessing = false;
-
-        // 发送弹幕处理结束事件
-        eventBus.emit(Events.BARRAGE_END);
-
-        // TTS播放完成后会调用 onBarrageTTSComplete() 来处理下一条
+        // 启动处理循环
+        processLoop();
     }
 
     // 执行弹幕处理
@@ -129,8 +148,22 @@ class BarrageManager {
         // 获取所有工具（本地 + MCP）
         const allTools = getMergedToolsList();
 
+        // 🔥 调用 LLM 前检查打断标志
+        if (this.interruptFlag) {
+            console.log('弹幕LLM调用被打断');
+            this.interruptFlag = false;
+            throw new Error('弹幕处理被打断');
+        }
+
         // 调用 LLM
         const result = await this.llmClient.chatCompletion(this.voiceChat.messages, allTools);
+
+        // 🔥 LLM调用后再次检查打断标志
+        if (this.interruptFlag) {
+            console.log('弹幕LLM响应被打断');
+            this.interruptFlag = false;
+            throw new Error('弹幕处理被打断');
+        }
 
         // 处理工具调用
         if (result.tool_calls && result.tool_calls.length > 0) {
@@ -168,8 +201,22 @@ class BarrageManager {
                     });
                 }
 
+                // 🔥 工具调用后检查打断标志
+                if (this.interruptFlag) {
+                    console.log('弹幕工具调用后被打断');
+                    this.interruptFlag = false;
+                    throw new Error('弹幕处理被打断');
+                }
+
                 // 获取最终回复
                 const finalResult = await this.llmClient.chatCompletion(this.voiceChat.messages);
+
+                // 🔥 最终回复后检查打断标志
+                if (this.interruptFlag) {
+                    console.log('弹幕最终回复被打断');
+                    this.interruptFlag = false;
+                    throw new Error('弹幕处理被打断');
+                }
 
                 if (finalResult.content) {
                     this.voiceChat.messages.push({
@@ -177,9 +224,9 @@ class BarrageManager {
                         content: finalResult.content
                     });
 
-                    // 播放 TTS
+                    // 🔥 播放 TTS 并等待播放完成
                     this.ttsProcessor.reset();
-                    this.ttsProcessor.processTextToSpeech(finalResult.content);
+                    await this.ttsProcessor.processTextToSpeech(finalResult.content);
                 }
             } else {
                 console.error("工具调用失败");
@@ -193,9 +240,9 @@ class BarrageManager {
                 content: result.content
             });
 
-            // 播放 TTS
+            // 🔥 播放 TTS 并等待播放完成
             this.ttsProcessor.reset();
-            this.ttsProcessor.processTextToSpeech(result.content);
+            await this.ttsProcessor.processTextToSpeech(result.content);
         }
 
         // 限制上下文
@@ -232,13 +279,10 @@ class BarrageManager {
         }
     }
 
-    // TTS播放完成回调
+    // TTS播放完成回调（保留接口兼容性，但不再需要手动触发processNext）
     onBarrageTTSComplete() {
-        // TTS播放完成后，尝试处理下一条弹幕
-        if (this.queue.length > 0) {
-            console.log('TTS播放完成，继续处理弹幕队列');
-            setTimeout(() => this.processNext(), 500);
-        }
+        console.log('TTS播放完成');
+        // 队列处理循环会自动继续处理
     }
 
     // 重置（用于中断）

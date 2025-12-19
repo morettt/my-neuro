@@ -8,6 +8,7 @@ class DiaryManager {
         this.aiDiaryEnabled = voiceChatInterface.aiDiaryEnabled;
         this.aiDiaryIdleTime = voiceChatInterface.aiDiaryIdleTime;
         this.aiDiaryFile = voiceChatInterface.aiDiaryFile;
+        this.aiDiaryPrompt = voiceChatInterface.aiDiaryPrompt;
         this.lastInteractionTime = Date.now();
         this.diaryTimer = null;
     }
@@ -92,12 +93,7 @@ class DiaryManager {
             console.log('正在生成AI日记...');
 
             // 构建日记生成的prompt
-            const diaryPrompt = `请以fake neuro（肥牛）的身份，基于今天的对话记录写一篇简短的日记。要求：
-1. 用第一人称"我"来写，体现肥牛的邪恶俏皮性格
-2. 总结今天和用户的互动感受
-3. 不要太长，3-5句话即可
-4. 保持肥牛的风格
-5. 不要使用情绪标签<>
+            const diaryPrompt = `${this.aiDiaryPrompt}
 
 今天的对话记录：
 ${todayInteractions}

@@ -84,14 +84,151 @@ class LocalToolManager {
             return [];
         }
 
-        return this.tools.map(tool => ({
-            type: "function",
-            function: {
-                name: tool.name,
-                description: tool.description,
-                parameters: tool.parameters
+        const validatedTools = [];
+
+        for (const tool of this.tools) {
+            try {
+                // 验证工具基本结构
+                if (!tool.name || typeof tool.name !== 'string') {
+                    console.warn(`⚠️ 跳过无效工具: 缺少有效的name字段`);
+                    continue;
+                }
+
+                if (!tool.description || typeof tool.description !== 'string') {
+                    console.warn(`⚠️ 跳过无效工具 ${tool.name}: 缺少有效的description字段`);
+                    continue;
+                }
+
+                // 验证和修复 parameters 字段（Gemini 严格要求）
+                let parameters = tool.parameters;
+
+                // 如果 parameters 不存在或为空，创建默认结构
+                if (!parameters || typeof parameters !== 'object') {
+                    parameters = {
+                        type: "object",
+                        properties: {},
+                        required: []
+                    };
+                    console.log(`🔧 工具 ${tool.name}: 补充默认parameters`);
+                }
+
+                // 确保 parameters 有必需的字段
+                if (!parameters.type) {
+                    parameters.type = "object";
+                }
+
+                if (!parameters.properties || typeof parameters.properties !== 'object') {
+                    parameters.properties = {};
+                }
+
+                if (!Array.isArray(parameters.required)) {
+                    parameters.required = [];
+                }
+
+                // 验证和清理 properties 中的每个属性（Gemini严格模式）
+                if (parameters.properties && typeof parameters.properties === 'object') {
+                    for (const [propName, propDef] of Object.entries(parameters.properties)) {
+                        // 确保每个属性都有type
+                        if (!propDef.type) {
+                            console.warn(`⚠️ 工具 ${tool.name} 的属性 ${propName} 缺少type字段，设为string`);
+                            propDef.type = "string";
+                        }
+                        
+                        // 🔥 关键修复：如果是array类型，必须有items字段
+                        if (propDef.type === "array") {
+                            if (!propDef.items || typeof propDef.items !== 'object') {
+                                console.log(`🔧 工具 ${tool.name}.${propName}: array类型缺少items，自动添加`);
+                                propDef.items = {
+                                    type: "string",
+                                    description: "数组元素"
+                                };
+                            } else {
+                                // 确保items也有type
+                                if (!propDef.items.type) {
+                                    propDef.items.type = "string";
+                                }
+                                // 确保items也有description
+                                if (!propDef.items.description) {
+                                    propDef.items.description = "数组元素";
+                                }
+                            }
+                        }
+                        
+                        // 确保每个属性都有description
+                        if (!propDef.description) {
+                            console.warn(`⚠️ 工具 ${tool.name} 的属性 ${propName} 缺少description字段，自动添加`);
+                            propDef.description = `${propName}参数`;
+                        }
+                        
+                        // 移除Gemini不支持的字段
+                        const unsupportedFields = ['enum', 'default', 'minimum', 'maximum', 'minLength', 'maxLength', 'pattern', 'format'];
+                        unsupportedFields.forEach(field => {
+                            if (propDef[field] !== undefined) {
+                                console.log(`🔧 工具 ${tool.name}.${propName}: 移除可能不兼容的字段 ${field}`);
+                                // 如果有enum，把它添加到description中
+                                if (field === 'enum' && Array.isArray(propDef[field])) {
+                                    propDef.description += `，可选值：${propDef[field].join('、')}`;
+                                }
+                                // 如果有default，把它添加到description中
+                                if (field === 'default') {
+                                    propDef.description += `，默认值：${propDef[field]}`;
+                                }
+                                delete propDef[field];
+                            }
+                        });
+                        
+                        // 只保留Gemini支持的字段
+                        const allowedFields = propDef.type === 'array' 
+                            ? ['type', 'description', 'items']  // array类型允许items
+                            : ['type', 'description'];
+                        
+                        Object.keys(propDef).forEach(key => {
+                            if (!allowedFields.includes(key)) {
+                                console.log(`🔧 工具 ${tool.name}.${propName}: 移除未知字段 ${key}`);
+                                delete propDef[key];
+                            }
+                        });
+                    }
+                }
+
+                // 构建符合标准的工具定义
+                const validatedTool = {
+                    type: "function",
+                    function: {
+                        name: tool.name,
+                        description: tool.description,
+                        parameters: parameters
+                    }
+                };
+
+                validatedTools.push(validatedTool);
+
+            } catch (error) {
+                console.error(`❌ 验证工具 ${tool.name || '未知'} 时出错:`, error.message);
             }
-        }));
+        }
+
+        console.log(`🔧 工具验证完成: ${validatedTools.length}/${this.tools.length} 个工具有效`);
+        
+        // 🔥 去重：移除重复的工具名称（Gemini不允许重复）
+        const uniqueTools = [];
+        const seenNames = new Set();
+        
+        for (const tool of validatedTools) {
+            const toolName = tool.function.name;
+            if (seenNames.has(toolName)) {
+                console.warn(`⚠️ 跳过重复工具: ${toolName}`);
+            } else {
+                seenNames.add(toolName);
+                uniqueTools.push(tool);
+            }
+        }
+        
+        if (uniqueTools.length < validatedTools.length) {
+            console.log(`🔧 去重完成: ${uniqueTools.length}/${validatedTools.length} 个工具（移除了 ${validatedTools.length - uniqueTools.length} 个重复）`);
+        }
+        
+        return uniqueTools;
     }
 
     // 查找工具对应的模块

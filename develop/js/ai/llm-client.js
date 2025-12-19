@@ -20,41 +20,47 @@ class LLMClient {
      * @returns {Promise<Object>} API响应的消息对象
      */
     async chatCompletion(messages, tools = null, stream = false) {
+        // 🔥 清理消息格式,确保API兼容性
+        const cleanedMessages = this._cleanMessagesForAPI(messages);
+
         const requestBody = {
             model: this.model,
-            messages: messages,
+            messages: cleanedMessages,
             stream: stream
         };
 
         // 添加工具列表(如果提供)
         if (tools && tools.length > 0) {
             requestBody.tools = tools;
-            // 工具列表日志已注释，UI启动时已显示工具信息
-            // logToTerminal('info', `🔧 发送工具列表到LLM: ${tools.length}个工具`);
+            logToTerminal('info', `🔧 发送工具列表到LLM: ${tools.length}个工具`);
+        } else {
+            logToTerminal('warn', `⚠️ 未发送工具列表到LLM (tools=${tools ? 'empty array' : 'null'})`);
         }
 
-        // 🔥 调试：检查消息格式和打印请求体
-        const messageCount = messages.length;
-        const lastMessage = messages[messageCount - 1];
-        console.log(`📤 发送请求: ${messageCount}条消息, 最后一条消息角色: ${lastMessage.role}`);
-
-        // 🔥 打印最后5条消息的详细信息（排除图片内容）
-        console.log('📋 最后5条消息:');
-        messages.slice(-5).forEach((msg, index) => {
-            const msgCopy = { ...msg };
-            // 如果有图片内容，只显示类型不显示base64
-            if (Array.isArray(msgCopy.content)) {
-                msgCopy.content = msgCopy.content.map(item => {
-                    if (item.type === 'image_url') {
-                        return { type: 'image_url', image_url: '[BASE64_IMAGE]' };
-                    }
-                    return item;
-                });
-            }
-            console.log(`  ${index + 1}. ${msgCopy.role}:`, JSON.stringify(msgCopy).substring(0, 200));
-        });
-
         logToTerminal('info', `已将内容发送给AI..`);
+
+        // 🔥 调试：在发送前验证JSON格式
+        try {
+            const testJson = JSON.stringify(requestBody);
+            JSON.parse(testJson); // 验证可以正确解析
+
+            // 打印请求统计信息
+            const stats = {
+                messagesCount: requestBody.messages.length,
+                toolsCount: requestBody.tools?.length || 0,
+                requestSize: testJson.length
+            };
+            console.log('📤 API请求统计:', stats);
+
+            // 如果请求过大,警告
+            if (stats.requestSize > 50000) {
+                logToTerminal('warn', `⚠️ 请求体过大 (${Math.round(stats.requestSize/1024)}KB)，可能导致API错误`);
+            }
+        } catch (jsonError) {
+            logToTerminal('error', `❌ 请求体JSON格式错误: ${jsonError.message}`);
+            console.error('请求体内容:', requestBody);
+            throw new Error(`请求格式错误: ${jsonError.message}`);
+        }
 
         try {
             const response = await fetch(`${this.apiUrl}/chat/completions`, {
@@ -77,12 +83,93 @@ class LLMClient {
 
             logToTerminal('info', `AI回复中`);
 
-            return responseData.choices[0].message;
+            const message = responseData.choices[0].message;
+
+            // 🔥 处理 Qwen3 等模型的 reasoning_content 字段
+            // 如果 content 为空但有 reasoning_content，则使用 reasoning_content
+            if ((!message.content || message.content.trim() === '') && message.reasoning_content) {
+                message.content = message.reasoning_content;
+            }
+
+            // 🔥 解析 Qwen 模型的文本格式工具调用（Hermes/XML style）
+            // Qwen 模型返回的是文本格式的 <tool_call>，而不是标准的 tool_calls 对象
+            if (message.content && !message.tool_calls) {
+                const parsedToolCalls = this._parseQwenToolCalls(message.content);
+                if (parsedToolCalls && parsedToolCalls.length > 0) {
+                    logToTerminal('info', `🔧 AI调用了 ${parsedToolCalls.length} 个工具`);
+                    message.tool_calls = parsedToolCalls;
+                    // 从 content 中移除工具调用部分，只保留文本回复
+                    message.content = this._removeToolCallsFromContent(message.content);
+                }
+            }
+
+            return message;
 
         } catch (error) {
             logToTerminal('error', `LLM API调用失败: ${error.message}`);
             throw error;
         }
+    }
+
+    /**
+     * 清理消息格式,确保API兼容性
+     * @private
+     * @param {Array} messages - 原始消息数组
+     * @returns {Array} 清理后的消息数组
+     */
+    _cleanMessagesForAPI(messages) {
+        return messages.map(msg => {
+            // 🔥 处理 assistant 消息的 content 为 null 的情况
+            if (msg.role === 'assistant') {
+                // 如果有 tool_calls 但 content 为 null,设为空字符串
+                if (msg.content === null && msg.tool_calls) {
+                    return {
+                        ...msg,
+                        content: '' // 某些API要求content不能为null
+                    };
+                }
+            }
+
+            // 🔥 处理 tool 消息,确保格式正确
+            if (msg.role === 'tool') {
+                let content = msg.content;
+
+                // 如果content是对象或数组,转为JSON字符串
+                if (typeof content === 'object' && content !== null) {
+                    try {
+                        content = JSON.stringify(content);
+                    } catch (e) {
+                        content = String(content);
+                    }
+                }
+
+                // 确保content是字符串
+                if (typeof content !== 'string') {
+                    content = String(content || '');
+                }
+
+                // 🔥 确保字符串不包含控制字符(可能导致JSON解析失败)
+                // 移除所有不可见的控制字符,但保留换行符(\n)和制表符(\t)
+                content = content.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
+
+                // 🔥 确保字符串长度不超过限制(避免超大响应)
+                const MAX_CONTENT_LENGTH = 8000;
+                if (content.length > MAX_CONTENT_LENGTH) {
+                    content = content.substring(0, MAX_CONTENT_LENGTH) + '...(内容过长已截断)';
+                }
+
+                // 返回清理后的tool消息
+                return {
+                    role: 'tool',
+                    name: msg.name || 'unknown_tool',
+                    content: content,
+                    tool_call_id: msg.tool_call_id
+                };
+            }
+
+            // 其他消息保持原样
+            return msg;
+        });
     }
 
     /**
@@ -137,6 +224,85 @@ class LLMClient {
 
         // 将标准化的choices写回
         responseData.choices = choices;
+    }
+
+    /**
+     * 解析 Qwen 模型的文本格式工具调用
+     * @private
+     * @param {string} content - 包含工具调用的文本内容
+     * @returns {Array|null} 标准格式的 tool_calls 数组
+     */
+    _parseQwenToolCalls(content) {
+        const toolCalls = [];
+        let index = 0;
+
+        // 格式1: <tool_call> ... </tool_call> (JSON 格式)
+        const toolCallRegex1 = /<tool_call>\s*(\{[\s\S]*?\})\s*<\/tool_call>/g;
+        let match;
+
+        while ((match = toolCallRegex1.exec(content)) !== null) {
+            try {
+                const toolCallJson = JSON.parse(match[1]);
+                toolCalls.push({
+                    id: `call_qwen_${Date.now()}_${index}`,
+                    type: 'function',
+                    function: {
+                        name: toolCallJson.name,
+                        arguments: JSON.stringify(toolCallJson.arguments || {})
+                    }
+                });
+                index++;
+            } catch (error) {
+                logToTerminal('warn', `⚠️ 解析 Qwen 工具调用(格式1)失败: ${error.message}`);
+            }
+        }
+
+        // 格式2: <function_name attr1="value1" attr2="value2"/> (XML 属性格式)
+        // 匹配所有自闭合的 XML 标签，例如: <open_webpage url="..."/>
+        const toolCallRegex2 = /<(\w+)\s+([^>]+?)\/>/g;
+
+        while ((match = toolCallRegex2.exec(content)) !== null) {
+            const functionName = match[1];
+            const attributesStr = match[2];
+
+            // 解析属性
+            const attributes = {};
+            const attrRegex = /(\w+)="([^"]*)"/g;
+            let attrMatch;
+
+            while ((attrMatch = attrRegex.exec(attributesStr)) !== null) {
+                attributes[attrMatch[1]] = attrMatch[2];
+            }
+
+            // 转换为 OpenAI 标准格式
+            toolCalls.push({
+                id: `call_qwen_${Date.now()}_${index}`,
+                type: 'function',
+                function: {
+                    name: functionName,
+                    arguments: JSON.stringify(attributes)
+                }
+            });
+            index++;
+        }
+
+        return toolCalls.length > 0 ? toolCalls : null;
+    }
+
+    /**
+     * 从内容中移除工具调用部分
+     * @private
+     * @param {string} content - 原始内容
+     * @returns {string} 移除工具调用后的内容
+     */
+    _removeToolCallsFromContent(content) {
+        // 移除格式1: <tool_call> ... </tool_call>
+        let cleaned = content.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '');
+
+        // 移除格式2: <function_name attr="value"/>
+        cleaned = cleaned.replace(/<\w+\s+[^>]+?\/>/g, '');
+
+        return cleaned.trim();
     }
 
     /**

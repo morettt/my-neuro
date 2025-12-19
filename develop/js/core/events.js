@@ -17,6 +17,7 @@ const Events = {
     USER_INPUT_START: 'user:input:start',   // 用户开始输入
     USER_INPUT_END: 'user:input:end',       // 用户输入结束
     USER_TEXT_INPUT: 'user:text:input',     // 文字输入
+    USER_MESSAGE_RECEIVED: 'user:message:received', // 用户消息已接收（用于心情系统）
 
     // 弹幕相关
     BARRAGE_RECEIVED: 'barrage:received',   // 收到弹幕

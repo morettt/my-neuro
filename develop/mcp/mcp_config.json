@@ -1,4 +1,10 @@
 {
+  "playwright_disabled": {
+    "command": "npx",
+    "args": [
+      "@playwright/mcp@latest"
+    ]
+  },
   "random-acg-pic": {
     "command": "C:\\Users\\救赎\\Desktop\\肥牛牛新\\my-neuro\\live-2d\\node\\node.exe",
     "args": [

@@ -43,6 +43,7 @@ class VoiceChatFacade {
         this.aiDiaryEnabled = config.ai_diary?.enabled || false;
         this.aiDiaryIdleTime = config.ai_diary?.idle_time || 600000;
         this.aiDiaryFile = config.ai_diary?.diary_file || "AI日记.txt";
+        this.aiDiaryPrompt = config.ai_diary?.prompt || "请以fake neuro（肥牛）的身份，基于今天的对话记录写一篇简短的日记。";
         this.lastInteractionTime = Date.now();
         this.diaryTimer = null;
 

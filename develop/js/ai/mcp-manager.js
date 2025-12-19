@@ -174,7 +174,16 @@ class MCPManager {
                 this.autoSyncToolsFolder(configPath);
 
                 const configContent = fs.readFileSync(configPath, 'utf8');
-                this.mcpServers = JSON.parse(configContent);
+                const allServers = JSON.parse(configContent);
+
+                // 过滤掉禁用的服务器(以 _disabled 结尾的)
+                this.mcpServers = {};
+                Object.keys(allServers).forEach(serverName => {
+                    if (!serverName.endsWith('_disabled')) {
+                        this.mcpServers[serverName] = allServers[serverName];
+                    }
+                });
+
                 console.log(`📋 从外部配置文件加载MCP配置成功，共 ${Object.keys(this.mcpServers).length} 个服务器`);
                 console.log('MCP服务器列表:', Object.keys(this.mcpServers));
                 return;

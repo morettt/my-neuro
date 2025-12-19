@@ -144,18 +144,24 @@ class LLMHandler {
                         // 视觉模型不传工具列表，纯粹用于图像理解
                         result = await visionClient.chatCompletion(messagesForAPI, null);
                     } else {
-                        // 🔥 使用主模型前，必须清理掉所有图片！（主模型不支持图片）
-                        console.log('🧹 主模型不支持图片，清理messagesForAPI中的图片');
-                        messagesForAPI.forEach(msg => {
-                            if (msg.role === 'user' && Array.isArray(msg.content)) {
-                                const hasImage = msg.content.some(item => item.type === 'image_url');
-                                if (hasImage) {
-                                    const textItems = msg.content.filter(item => item.type === 'text');
-                                    msg.content = textItems.length > 0 ? textItems.map(item => item.text).join(' ') : '(图片内容)';
-                                    console.log('  ✂️ 清理了一条包含图片的消息');
+                        // 🔥 如果没有启用独立视觉模型，但有截图，说明主模型需要支持视觉
+                        // 只有在没有截图的情况下才清理图片
+                        if (!screenshotBase64 || iteration > 0) {
+                            // 不是第一轮或没有截图，清理历史消息中的图片（节省token）
+                            console.log('🧹 清理messagesForAPI中的历史图片');
+                            messagesForAPI.forEach(msg => {
+                                if (msg.role === 'user' && Array.isArray(msg.content)) {
+                                    const hasImage = msg.content.some(item => item.type === 'image_url');
+                                    if (hasImage) {
+                                        const textItems = msg.content.filter(item => item.type === 'text');
+                                        msg.content = textItems.length > 0 ? textItems.map(item => item.text).join(' ') : '(图片内容)';
+                                        console.log('  ✂️ 清理了一条包含图片的消息');
+                                    }
                                 }
-                            }
-                        });
+                            });
+                        } else {
+                            console.log('📸 主模型将处理截图（需要主模型支持视觉）');
+                        }
                         // 正常使用主模型
                         result = await llmClient.chatCompletion(messagesForAPI, allTools);
                     }
@@ -214,6 +220,11 @@ class LLMHandler {
                         if (appState.isInterrupted()) {
                             console.log('⏸️ 检测到打断，跳过工具执行');
                             logToolAction('warn', '⏸️ 工具调用被打断，停止执行');
+
+                            // 🔥 关键修复：不添加带有 tool_calls 的 assistant 消息到历史
+                            // 因为工具不会执行，添加了会导致下次 API 调用时缺少 tool 响应
+                            console.log('⚠️ 工具调用被打断，不添加到消息历史');
+
                             appState.clearInterrupted();
                             throw new Error('USER_INTERRUPTED');
                         }
@@ -232,6 +243,16 @@ class LLMHandler {
                         if (appState.isInterrupted()) {
                             console.log('⏸️ 工具执行完成后检测到打断，停止后续处理');
                             logToolAction('warn', '⏸️ 停止后续工具调用');
+
+                            // 🔥 关键修复：移除刚才添加的 assistant 消息，因为对话被打断了
+                            // 保持消息历史的完整性，避免下次 API 调用时出错
+                            if (voiceChat.messages.length > 0 &&
+                                voiceChat.messages[voiceChat.messages.length - 1].role === 'assistant' &&
+                                voiceChat.messages[voiceChat.messages.length - 1].tool_calls) {
+                                console.log('🧹 移除被打断的 assistant 工具调用消息');
+                                voiceChat.messages.pop();
+                            }
+
                             appState.clearInterrupted();
                             throw new Error('USER_INTERRUPTED');
                         }

@@ -41,6 +41,11 @@ class ToolExecutor {
                 parameters = {};
             }
 
+            // 🎈 显示工具调用气泡框（带参数）
+            if (typeof global.showToolBubble === 'function') {
+                global.showToolBubble(functionName, parameters);
+            }
+
             // 优先尝试MCP工具
             if (global.mcpManager && global.mcpManager.isEnabled) {
                 try {

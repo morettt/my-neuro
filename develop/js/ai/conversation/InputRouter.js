@@ -1,6 +1,8 @@
 // InputRouter.js - 输入路由
 const fs = require('fs');
 const path = require('path');
+const { eventBus } = require('../../core/event-bus.js');
+const { Events } = require('../../core/events.js');
 
 /**
  * 负责路由不同来源的输入（语音/文本/弹幕）
@@ -19,6 +21,16 @@ class InputRouter {
 
         // LLM处理器（稍后设置）
         this.llmHandler = null;
+
+        // BarrageManager引用（用于打断）
+        this.barrageManager = null;
+    }
+
+    /**
+     * 设置BarrageManager引用
+     */
+    setBarrageManager(barrageManager) {
+        this.barrageManager = barrageManager;
     }
 
     /**
@@ -40,6 +52,12 @@ class InputRouter {
      * 处理语音输入
      */
     async handleVoiceInput(text) {
+        // 🔥 用户语音输入时：打断弹幕处理 + 清空弹幕队列
+        if (this.barrageManager) {
+            this.barrageManager.setInterrupt();
+            this.barrageManager.clearNormalQueue();
+        }
+
         // 检查游戏模式
         if (this.gameIntegration.isGameModeActive()) {
             await this.gameIntegration.handleGameInput(text);
@@ -66,11 +84,20 @@ class InputRouter {
      * 处理文本输入（来自聊天框）
      */
     async handleTextInput(text) {
+        // 🔥 用户文本输入时：打断弹幕处理 + 清空弹幕队列
+        if (this.barrageManager) {
+            this.barrageManager.setInterrupt();
+            this.barrageManager.clearNormalQueue();
+        }
+
         // 显示用户消息
         this.addChatMessage('user', text);
 
         // 发送到LLM
         await this.llmHandler(text);
+
+        // 触发用户消息已接收事件（用于心情系统）
+        eventBus.emit(Events.USER_MESSAGE_RECEIVED);
 
         // 🔥 异步上下文压缩，不阻塞对话流程
         if (this.contextCompressor) {

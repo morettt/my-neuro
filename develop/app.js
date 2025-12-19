@@ -81,6 +81,7 @@ global.reloadConfig = function() {
 
 // 创建模型交互控制器
 const modelController = new ModelInteractionController();
+global.modelController = modelController; // 添加到全局作用域，供HTTP API访问
 
 // 模块实例（在全局作用域，供其他模块访问）
 let voiceChat = null;

@@ -93,38 +93,50 @@ class TTSPlaybackEngine {
             let charDisplayIndex = 0;
             let textAnimInterval = null;
 
-            // 文本动画函数
+            // 🔥 文本动画函数（使用requestAnimationFrame优化）
             const startTextAnimation = () => {
                 const audioDuration = this.currentAudio.duration * 1000;
-                let charInterval = Math.max(30, Math.min(200, audioDuration / segmentLength));
+                const charInterval = Math.max(30, Math.min(200, audioDuration / segmentLength));
+                let lastUpdateTime = performance.now();
 
-                textAnimInterval = setInterval(() => {
+                const animateText = (currentTime) => {
+                    // 检查是否应该停止
                     if (this.shouldStop || !this.currentAudio) {
-                        if (textAnimInterval) clearInterval(textAnimInterval);
                         return;
                     }
 
-                    if (charDisplayIndex < segmentLength) {
-                        charDisplayIndex++;
+                    // 检查是否到了更新字符的时间
+                    if (currentTime - lastUpdateTime >= charInterval) {
+                        if (charDisplayIndex < segmentLength) {
+                            charDisplayIndex++;
 
-                        // 触发情绪动作
-                        if (this.emotionMapper && emotionMarkers.length > 0) {
-                            this.emotionMapper.triggerEmotionByTextPosition(
-                                charDisplayIndex, segmentLength, emotionMarkers
-                            );
-                        }
+                            // 触发情绪动作
+                            if (this.emotionMapper && emotionMarkers.length > 0) {
+                                this.emotionMapper.triggerEmotionByTextPosition(
+                                    charDisplayIndex, segmentLength, emotionMarkers
+                                );
+                            }
 
-                        // 显示字幕
-                        const currentDisplay = this.displayedText + processedText.substring(0, charDisplayIndex);
-                        if (typeof showSubtitle === 'function') {
-                            showSubtitle(`${this.config.subtitle_labels?.ai || 'Fake Neuro'}: ${currentDisplay}`);
-                            const container = document.getElementById('subtitle-container');
-                            if (container) container.scrollTop = container.scrollHeight;
+                            // 显示字幕
+                            const currentDisplay = this.displayedText + processedText.substring(0, charDisplayIndex);
+                            if (typeof showSubtitle === 'function') {
+                                showSubtitle(`${this.config.subtitle_labels?.ai || 'Fake Neuro'}: ${currentDisplay}`);
+                                const container = document.getElementById('subtitle-container');
+                                if (container) container.scrollTop = container.scrollHeight;
+                            }
+
+                            lastUpdateTime = currentTime;
                         }
                     }
-                }, charInterval);
 
-                this._textAnimInterval = textAnimInterval;
+                    // 如果还没播放完，继续动画
+                    if (charDisplayIndex < segmentLength && !this.shouldStop) {
+                        this._textAnimInterval = requestAnimationFrame(animateText);
+                    }
+                };
+
+                // 启动动画
+                this._textAnimInterval = requestAnimationFrame(animateText);
             };
 
             // 嘴形动画函数
@@ -172,8 +184,8 @@ class TTSPlaybackEngine {
                     clearTimeout(this.currentAudio._fadeOutTimer);
                 }
                 if (this.onAudioDataCallback) this.onAudioDataCallback(0);
-                if (textAnimInterval) {
-                    clearInterval(textAnimInterval);
+                if (this._textAnimInterval) {
+                    cancelAnimationFrame(this._textAnimInterval);
                     this._textAnimInterval = null;
                 }
                 if (this._renderFrameId) {
@@ -227,7 +239,7 @@ class TTSPlaybackEngine {
     cleanupOnError() {
         if (this.onAudioDataCallback) this.onAudioDataCallback(0);
         if (this._textAnimInterval) {
-            clearInterval(this._textAnimInterval);
+            cancelAnimationFrame(this._textAnimInterval);
             this._textAnimInterval = null;
         }
         if (this._renderFrameId) {
@@ -243,7 +255,7 @@ class TTSPlaybackEngine {
         this.shouldStop = true;
 
         if (this._textAnimInterval) {
-            clearInterval(this._textAnimInterval);
+            cancelAnimationFrame(this._textAnimInterval);
             this._textAnimInterval = null;
         }
         if (this._renderFrameId) {

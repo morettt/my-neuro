@@ -8,6 +8,7 @@ const { ModelSetup } = require('./model/model-setup.js');
 const { BarrageManager } = require('./live/barrage-manager.js');
 const { LiveStreamModule } = require('./live/LiveStreamModule.js');
 const { AutoChatModule } = require('./live/auto-chat.js');
+const { MoodChatModule } = require('./ai/MoodChatModule.js');
 const { IPCHandlers } = require('./ipc-handlers.js');
 const { LLMHandler } = require('./ai/llm-handler.js');
 const { logToTerminal } = require('./api-utils.js');
@@ -31,6 +32,7 @@ class AppInitializer {
         this.barrageManager = null;
         this.liveStreamModule = null;
         this.autoChatModule = null;
+        this.moodChatModule = null;
         this.ipcHandlers = null;
 
         // 配置标志
@@ -86,7 +88,8 @@ class AppInitializer {
                 localToolManager: this.localToolManager,
                 barrageManager: this.barrageManager,
                 liveStreamModule: this.liveStreamModule,
-                autoChatModule: this.autoChatModule
+                autoChatModule: this.autoChatModule,
+                moodChatModule: this.moodChatModule
             };
         } catch (error) {
             console.error("应用初始化错误:", error);
@@ -150,6 +153,12 @@ class AppInitializer {
         // 为EnhancedTextProcessor提供全局字幕函数
         global.showSubtitle = (text, duration) => this.uiController.showSubtitle(text, duration);
         global.hideSubtitle = () => this.uiController.hideSubtitle();
+
+        // 为气泡框提供全局函数
+        global.showBubble = () => this.uiController.showBubble();
+        global.hideBubble = () => this.uiController.hideBubble();
+        global.toggleBubble = () => this.uiController.toggleBubble();
+        global.showToolBubble = (toolName, parameters) => this.uiController.showToolBubble(toolName, parameters);
     }
 
     // 第三阶段: 创建语音聊天接口
@@ -255,6 +264,11 @@ class AppInitializer {
             hideSubtitle: () => this.uiController.hideSubtitle()
         });
 
+        // 🔥 将BarrageManager注入到InputRouter，用于打断机制
+        if (this.voiceChat.inputRouter) {
+            this.voiceChat.inputRouter.setBarrageManager(this.barrageManager);
+        }
+
         // 直播模块初始化
         if (this.config.bilibili && this.config.bilibili.enabled) {
             this.liveStreamModule = new LiveStreamModule({
@@ -304,6 +318,13 @@ class AppInitializer {
             // console.log('自动对话模块初始化完成');  // 不显示技术日志
             // logToTerminal('info', '自动对话模块初始化完成');
         }, 8000);
+
+        // 心情对话模块初始化（延迟1秒，确保voiceChat已初始化）
+        setTimeout(() => {
+            this.moodChatModule = new MoodChatModule(this.config);
+            global.moodChatModule = this.moodChatModule;
+            this.moodChatModule.start();
+        }, 1000);
     }
 
     // 第十阶段: 初始化聊天界面和IPC
