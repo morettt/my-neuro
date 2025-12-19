@@ -25,6 +25,9 @@ class ShortcutManager {
         // 动作和音乐控制快捷键
         this._registerMotionAndMusicControls();
 
+        // 气泡框显示快捷键
+        this._registerBubbleToggle();
+
         console.log(`已注册 ${this.shortcuts.length} 个全局快捷键！！！`);
     }
 
@@ -102,6 +105,18 @@ class ShortcutManager {
                 mainWindow.webContents.send('stop-all-motions');
             }
         }, '停止所有动作');
+    }
+
+    /**
+     * 注册气泡框切换快捷键
+     */
+    _registerBubbleToggle() {
+        this._register('CommandOrControl+M', () => {
+            const mainWindow = BrowserWindow.getAllWindows()[0];
+            if (mainWindow) {
+                mainWindow.webContents.send('toggle-bubble');
+            }
+        }, '切换气泡框显示/隐藏');
     }
 
     /**

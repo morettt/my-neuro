@@ -212,6 +212,62 @@ ipcMain.handle('update-live2d-model', async (event) => {
     }
 })
 
+// 添加切换Live2D模型的IPC处理器
+ipcMain.handle('switch-live2d-model', async (event, modelName) => {
+    try {
+        console.log(`切换模型到: ${modelName}`);
+
+        // 更新priorityFolders，将选中的模型放在第一位
+        const index = priorityFolders.indexOf(modelName);
+        if (index > 0) {
+            // 如果模型已存在，移到第一位
+            priorityFolders.splice(index, 1);
+            priorityFolders.unshift(modelName);
+        } else if (index === -1) {
+            // 如果模型不在列表中，添加到第一位
+            priorityFolders.unshift(modelName);
+        }
+        // 如果已经在第一位(index === 0)，不需要操作
+
+        console.log(`更新后的优先级列表: ${priorityFolders.join(', ')}`);
+
+        // 保存priorityFolders到main.js文件
+        try {
+            const mainJsPath = path.join(app.getAppPath(), 'main.js');
+            let mainJsContent = fs.readFileSync(mainJsPath, 'utf8');
+
+            // 构建新的priorityFolders数组字符串
+            const newPriorityString = `['${priorityFolders.join("', '")}']`;
+
+            // 替换main.js中的priorityFolders定义
+            mainJsContent = mainJsContent.replace(
+                /const priorityFolders = \[.*?\];/,
+                `const priorityFolders = ${newPriorityString};`
+            );
+
+            // 写回文件
+            fs.writeFileSync(mainJsPath, mainJsContent, 'utf8');
+            console.log('已保存模型优先级到main.js');
+        } catch (saveError) {
+            console.error('保存优先级到main.js失败:', saveError);
+            // 不影响继续执行
+        }
+
+        // 调用更新模型的函数
+        const modelPathUpdater = new ModelPathUpdater(app.getAppPath(), priorityFolders);
+        modelPathUpdater.update();
+
+        // 通知渲染进程需要重新加载以应用新模型
+        const win = BrowserWindow.fromWebContents(event.sender)
+        win.reload()
+
+        return { success: true, message: `模型已切换到 ${modelName}，页面将重新加载` }
+    } catch (error) {
+        console.error('切换模型时出错:', error)
+        return { success: false, message: `切换失败: ${error.message}` }
+    }
+})
+
 // 添加保存模型位置的IPC处理器
 ipcMain.on('save-model-position', (event, position) => {
     try {

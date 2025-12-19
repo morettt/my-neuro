@@ -27,6 +27,7 @@ class IPCHandlers {
         this.registerInterruptHandler();
         this.registerMotionHandlers();
         this.registerMusicHandlers();
+        this.registerBubbleHandlers();
     }
 
     // 中断信号处理
@@ -93,6 +94,15 @@ class IPCHandlers {
                 console.log('音乐已停止');
                 this.emotionMapper.playMotion(7);
                 console.log('触发赌气动作，音乐播放结束');
+            }
+        });
+    }
+
+    // 气泡框切换处理
+    registerBubbleHandlers() {
+        ipcRenderer.on('toggle-bubble', () => {
+            if (typeof global.toggleBubble === 'function') {
+                global.toggleBubble();
             }
         });
     }

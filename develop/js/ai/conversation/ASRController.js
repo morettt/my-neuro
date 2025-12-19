@@ -52,6 +52,9 @@ class ASRController {
             try {
                 // 通过输入路由处理语音输入
                 await this.inputRouter.handleVoiceInput(text);
+
+                // 触发用户消息已接收事件（用于心情系统）
+                eventBus.emit(Events.USER_MESSAGE_RECEIVED);
             } finally {
                 // USER_INPUT_END 事件已由 llm-handler.js 的 finally 块发送，此处不再重复发送
                 // eventBus.emit(Events.USER_INPUT_END);

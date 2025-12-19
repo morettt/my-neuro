@@ -1,10 +1,18 @@
-# 忽略 live-2d-develop 里的特定文件夹
-live-2d-develop/2D/
-live-2d-develop/AI记录室/
-live-2d-develop/GAME/
+# 第一步：忽略所有
+*
 
-# 忽略日志文件
-*.log
+# 第二步：不忽略 .gitignore 本身
+!.gitignore
 
-# 忽略压缩包
-*.7z
+#不忽略develop文件夹
+!my-neuro/develop
+
+#忽略my-neuro/develop 特定文件
+
+my-neuro/develop/2D
+my-neuro/develop/AI记录室
+my-neuro/develop/build
+my-neuro/develop/fake_neuro_audio
+my-neuro/develop/node
+my-neuro/develop/node_modules
+my-neuro/develop/song-library

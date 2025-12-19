@@ -117,6 +117,41 @@ def load_tool_descriptions():
                 except Exception as e:
                     print(f"读取MCP工具文件失败 {file_path}: {e}")
 
+        # 从 mcp_config.json 读取外部MCP工具配置（如playwright）
+        mcp_config_path = os.path.join(app_path, "mcp", "mcp_config.json")
+        if os.path.exists(mcp_config_path):
+            try:
+                with open(mcp_config_path, 'r', encoding='utf-8') as f:
+                    mcp_config = json.load(f)
+
+                for tool_name, config in mcp_config.items():
+                    # 跳过禁用的工具
+                    if tool_name.endswith('_disabled'):
+                        continue
+
+                    # 检查配置的args，判断是否指向本地文件
+                    args = config.get('args', [])
+                    is_local_tool = False
+
+                    # 如果args中包含 ./mcp/tools/ 路径，说明是本地工具
+                    for arg in args:
+                        if isinstance(arg, str) and './mcp/tools/' in arg:
+                            is_local_tool = True
+                            break
+
+                    # 只添加真正的外部工具（非本地文件）
+                    if not is_local_tool and tool_name not in mcp_tools:
+                        # 为外部MCP工具添加默认描述
+                        command = config.get('command', '')
+                        description = f"外部MCP工具 (通过 {command} 启动)"
+
+                        tool_descriptions[tool_name] = description
+                        mcp_tools.add(tool_name)
+                        print(f"从配置加载外部MCP工具: {tool_name} - {description}")
+
+            except Exception as e:
+                print(f"读取MCP配置文件失败 {mcp_config_path}: {e}")
+
     except Exception as e:
         print(f"加载工具描述失败: {e}")
 
@@ -427,6 +462,16 @@ class set_pyqt(QWidget):
         self.pagination_widget = None
         self.unclassified_actions_cache = []
 
+        # Live2D模型切换相关
+        self.is_loading_model_list = False  # 标志：正在加载模型列表，忽略选择改变事件
+        self.last_model_switch_time = 0  # 上次切换模型的时间
+        self.model_switch_cooldown = 3.0  # 切换冷却时间（秒）
+
+        # 心情分定时器
+        self.mood_timer = QTimer()
+        self.mood_timer.timeout.connect(self.update_mood_score)
+        self.mood_timer.setInterval(2000)  # 每2秒更新一次
+        self.last_mood_score = None  # 上次的心情分
 
         self.init_ui()
         self.init_live2d_models()
@@ -542,6 +587,9 @@ class set_pyqt(QWidget):
         # 设置动画控制按钮
         self.setup_motion_buttons()
 
+        # 启动心情分定时器
+        self.mood_timer.start()
+
     def closeEvent(self, event):
         """处理窗口关闭事件"""
         try:
@@ -579,6 +627,10 @@ class set_pyqt(QWidget):
             if reader and reader.isRunning():
                 reader.stop()
                 reader.wait(1000)  # 等待最多1秒
+
+        # 停止心情分定时器
+        if self.mood_timer.isActive():
+            self.mood_timer.stop()
 
         # 接受关闭事件
         event.accept()
@@ -712,6 +764,10 @@ class set_pyqt(QWidget):
                 if not os.path.exists(voice_model_dir):
                     os.makedirs(voice_model_dir)
 
+                # 获取文件名并构建目标路径
+                filename = os.path.basename(file_path)
+                dest_path = os.path.join(voice_model_dir, filename)
+
                 # 复制文件到Voice_Model_Factory文件夹
                 shutil.copy2(file_path, dest_path)
 
@@ -739,6 +795,10 @@ class set_pyqt(QWidget):
                 voice_model_dir = os.path.join(app_path, "Voice_Model_Factory")
                 if not os.path.exists(voice_model_dir):
                     os.makedirs(voice_model_dir)
+
+                # 获取文件名并构建目标路径
+                filename = os.path.basename(file_path)
+                dest_path = os.path.join(voice_model_dir, filename)
 
                 # 复制文件到Voice_Model_Factory文件夹
                 shutil.copy2(file_path, dest_path)
@@ -776,20 +836,24 @@ class set_pyqt(QWidget):
             # 获取语言选择
             language = self.ui.comboBox_language.currentText().split(' - ')[0]  # 提取语言代码
 
-            # 生成命令 - 使用选择的文件和语言
-            cmd = (f"python tts_api.py -p 5000 -d cuda "
-                   f"-s {self.selected_model_path} -dr {self.selected_audio_path} -dt \"{text}\" -dl {language}")
+            # 使用绝对路径来引用模型和音频文件
+            model_path = os.path.abspath(self.selected_model_path)
+            audio_path = os.path.abspath(self.selected_audio_path)
+
+            # 生成命令 - 使用绝对路径
+            cmd = (f"python api.py -p 5000 -d cuda "
+                   f"-s \"{model_path}\" -dr \"{audio_path}\" -dt \"{text}\" -dl {language}")
 
             # 创建bat文件在Voice_Model_Factory文件夹里
             app_path = get_app_path()
             voice_model_dir = os.path.join(app_path, "Voice_Model_Factory")
             bat_path = os.path.join(voice_model_dir, f"{character_name}_TTS.bat")
 
-            # 写入bat文件内容
+            # 写入bat文件内容 - 使用新的路径结构
             with open(bat_path, "w", encoding="gbk") as bat_file:
                 bat_file.write("@echo off\n")
-                bat_file.write("call conda activate my-neuro\n")
-                bat_file.write("cd ..\\..\\tts-studio\n")  # 多退一层目录
+                bat_file.write('set "PATH=%~dp0..\\..\\tts-hub\\GPT-SoVITS-Bundle\\runtime;%PATH%"\n')
+                bat_file.write("cd %~dp0..\\..\\tts-hub\\GPT-SoVITS-Bundle\n")
                 bat_file.write(f"{cmd}\n")
                 bat_file.write("pause\n")
 
@@ -1719,6 +1783,57 @@ class set_pyqt(QWidget):
 
         self.setGeometry(geo)
 
+    def update_mood_score(self):
+        """更新心情分显示"""
+        try:
+            # 读取心情分文件
+            app_path = get_app_path()
+            mood_file = os.path.join(app_path, "AI记录室", "mood_status.json")
+
+            if not os.path.exists(mood_file):
+                self.ui.label_mood_value.setText("--")
+                self.ui.label_mood_status.setText("（未启动）")
+                return
+
+            with open(mood_file, 'r', encoding='utf-8') as f:
+                mood_data = json.load(f)
+
+            score = mood_data.get('score', 0)
+            interval = mood_data.get('interval', 0)
+            waiting = mood_data.get('waitingResponse', False)
+
+            # 更新心情分数值
+            self.ui.label_mood_value.setText(str(score))
+
+            # 根据心情分改变颜色
+            if score >= 90:
+                color_style = "color: rgb(76, 175, 80);"  # 绿色 - 兴奋
+                status_text = "（兴奋😄）"
+            elif score >= 80:
+                color_style = "color: rgb(0, 120, 212);"  # 蓝色 - 正常
+                status_text = "（正常😊）"
+            elif score >= 60:
+                color_style = "color: rgb(255, 152, 0);"  # 橙色 - 低落
+                status_text = "（低落😐）"
+            else:
+                color_style = "color: rgb(244, 67, 54);"  # 红色 - 沉默
+                status_text = "（沉默😔）"
+
+            # 如果正在等待回应，添加提示
+            if waiting:
+                status_text += " 等待回应..."
+
+            self.ui.label_mood_value.setStyleSheet(color_style)
+            self.ui.label_mood_status.setText(status_text)
+
+            # 只在心情分变化时更新，减少日志输出
+            if self.last_mood_score != score:
+                self.last_mood_score = score
+
+        except Exception as e:
+            # 静默失败，不显示错误
+            pass
+
     def set_btu(self):
         self.ui.pushButton.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(1))
         self.ui.pushButton_3.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(0))
@@ -1732,9 +1847,14 @@ class set_pyqt(QWidget):
         self.ui.pushButton_ui_settings.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(11))  # UI设置页面
         self.ui.pushButton_tools.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(10))  # 工具屋页面
         self.ui.pushButton_cloud_config.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(12))  # 云端配置页面
+        self.ui.pushButton_prompt_market.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(13))  # 提示词广场页面
+        self.ui.pushButton_chat_history.clicked.connect(self.open_chat_history)  # 对话记录页面
         self.ui.saveConfigButton.clicked.connect(self.save_config)
-        self.ui.pushButton_8.clicked.connect(self.start_live_2d)
-        self.ui.pushButton_7.clicked.connect(self.close_live_2d)
+        # 复位皮套位置按钮
+        self.ui.pushButton_reset_model_position.clicked.connect(self.reset_model_position)
+        # 桌宠切换按钮（合并启动和关闭）
+        self.ui.pushButton_toggle_live2d.clicked.connect(self.toggle_live_2d)
+        self.live2d_running = False  # 桌宠运行状态标志
         self.ui.pushButton_clearLog.clicked.connect(self.clear_logs)
         self.ui.pushButton_start_terminal.clicked.connect(self.start_terminal)
         self.ui.pushButton_stop_terminal.clicked.connect(self.stop_terminal)  # 新增
@@ -1751,20 +1871,30 @@ class set_pyqt(QWidget):
         self.ui.pushButton_select_model.clicked.connect(self.select_model_file)
         self.ui.pushButton_select_audio.clicked.connect(self.select_audio_file)
         self.ui.pushButton_tutorial.clicked.connect(self.show_tutorial)
-        
+
         # 添加Minecraft游戏终端按钮绑定
         self.ui.pushButton_start_minecraft_terminal.clicked.connect(self.start_minecraft_terminal)
 
-        self.ui.pushButton_tutorial.clicked.connect(self.show_tutorial)
         self.ui.pushButton_back_to_home.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(0))
-
-        # 工具屋相关按钮绑定
-        self.ui.listWidget_tools.itemClicked.connect(self.toggle_tool_status)
-        self.ui.listWidget_mcp_tools.itemClicked.connect(self.toggle_mcp_tool_status)
 
         # 工具广场相关按钮绑定
         self.ui.pushButton_refresh_tools.clicked.connect(self.refresh_tool_market)
         self.init_tool_market_table()
+
+        # FC广场相关按钮绑定
+        try:
+            self.ui.pushButton_refresh_fc_tools.clicked.connect(self.refresh_fc_market)
+            self.init_fc_market_table()
+        except Exception as e:
+            print(f"FC广场初始化失败: {e}")
+
+        # 提示词广场相关按钮绑定
+        self.ui.pushButton_refresh_prompts.clicked.connect(self.refresh_prompt_market)
+        self.ui.pushButton_back_from_prompt_market.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(0))
+        self.init_prompt_market_table()
+
+        # 对话记录相关按钮绑定
+        self.ui.pushButton_back_from_chat_history.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(0))
 
         # 云端配置两个标签页的通用配置实时同步
         self.ui.lineEdit_cloud_provider.textChanged.connect(
@@ -1773,6 +1903,9 @@ class set_pyqt(QWidget):
         self.ui.lineEdit_cloud_provider_2.textChanged.connect(
             lambda text: self.ui.lineEdit_cloud_provider.setText(text) if self.ui.lineEdit_cloud_provider.text() != text else None
         )
+
+        # Live2D模型选择
+        self.ui.comboBox_live2d_models.currentIndexChanged.connect(self.on_model_selection_changed)
 
         # 云端肥牛网页导航按钮
         self.ui.pushButton_gateway_website.clicked.connect(self.open_gateway_website)
@@ -1785,6 +1918,9 @@ class set_pyqt(QWidget):
 
         # 加载Minecraft配置到UI
         self.load_minecraft_config()
+
+        # 初始化桌宠切换按钮样式（默认为"启动"状态）
+        self.update_toggle_button_style(False)
 
     def scan_voice_models(self):
         """扫描当前目录下的pth模型文件"""
@@ -1968,9 +2104,26 @@ class set_pyqt(QWidget):
                 self.log_readers['asr'].wait()
                 del self.log_readers['asr']
 
-            # 同时关闭本地ASR和云端VAD进程
-            subprocess.run('wmic process where "name=\'python.exe\' and (commandline like \'%ASR%\' or commandline like \'%VAD%\')" delete',
-                           shell=True, capture_output=True)
+            # 通过端口1000查找并关闭ASR进程
+            result = subprocess.run('netstat -ano | findstr :1000',
+                                    shell=True, capture_output=True, text=True)
+
+            if result.stdout:
+                # 解析netstat输出，提取PID
+                lines = result.stdout.strip().split('\n')
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) >= 5 and 'LISTENING' in line:
+                        pid = parts[-1]
+                        # 杀掉进程
+                        subprocess.run(f'taskkill /PID {pid} /F',
+                                       shell=True, capture_output=True)
+                        print(f"已关闭ASR进程 PID: {pid}")
+                        self.update_service_log('asr', f"已关闭ASR进程 PID: {pid}")
+                        break
+            else:
+                print("未找到监听端口1000的进程")
+                self.update_service_log('asr', "未找到监听端口1000的进程")
 
             self.asr_process = None
             self.ui.label_asr_status.setText("状态：ASR服务未启动")
@@ -2062,9 +2215,26 @@ class set_pyqt(QWidget):
                 self.log_readers['bert'].wait()
                 del self.log_readers['bert']
 
-            # 强制关闭BERT相关进程
-            subprocess.run('wmic process where "name=\'python.exe\' and commandline like \'%bert%\'" delete',
-                           shell=True, capture_output=True)
+            # 通过端口6007查找并关闭BERT进程
+            result = subprocess.run('netstat -ano | findstr :6007',
+                                    shell=True, capture_output=True, text=True)
+
+            if result.stdout:
+                # 解析netstat输出，提取PID
+                lines = result.stdout.strip().split('\n')
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) >= 5 and 'LISTENING' in line:
+                        pid = parts[-1]
+                        # 杀掉进程
+                        subprocess.run(f'taskkill /PID {pid} /F',
+                                       shell=True, capture_output=True)
+                        print(f"已关闭BERT进程 PID: {pid}")
+                        self.update_service_log('bert', f"已关闭BERT进程 PID: {pid}")
+                        break
+            else:
+                print("未找到监听端口6007的进程")
+                self.update_service_log('bert', "未找到监听端口6007的进程")
 
             self.bert_process = None
             self.ui.label_bert_status.setText("状态：BERT服务未启动")
@@ -2154,9 +2324,26 @@ class set_pyqt(QWidget):
                 self.log_readers['rag'].wait()
                 del self.log_readers['rag']
 
-            # 强制关闭RAG相关进程
-            subprocess.run('wmic process where "name=\'python.exe\' and commandline like \'%RAG%\'" delete',
-                           shell=True, capture_output=True)
+            # 通过端口8002查找并关闭RAG进程
+            result = subprocess.run('netstat -ano | findstr :8002',
+                                    shell=True, capture_output=True, text=True)
+
+            if result.stdout:
+                # 解析netstat输出，提取PID
+                lines = result.stdout.strip().split('\n')
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) >= 5 and 'LISTENING' in line:
+                        pid = parts[-1]
+                        # 杀掉进程
+                        subprocess.run(f'taskkill /PID {pid} /F',
+                                       shell=True, capture_output=True)
+                        print(f"已关闭RAG进程 PID: {pid}")
+                        self.update_service_log('rag', f"已关闭RAG进程 PID: {pid}")
+                        break
+            else:
+                print("未找到监听端口8002的进程")
+                self.update_service_log('rag', "未找到监听端口8002的进程")
 
             self.rag_process = None
             self.ui.label_rag_status.setText("状态：RAG服务未启动")
@@ -2185,9 +2372,26 @@ class set_pyqt(QWidget):
                 self.log_readers['tts'].wait()
                 del self.log_readers['tts']
 
-            # 通过进程名强制关闭TTS相关进程
-            subprocess.run('wmic process where "name=\'python.exe\' and commandline like \'%TTS%\'" delete',
-                           shell=True, capture_output=True)
+            # 通过端口5000查找并关闭TTS进程
+            result = subprocess.run('netstat -ano | findstr :5000',
+                                    shell=True, capture_output=True, text=True)
+
+            if result.stdout:
+                # 解析netstat输出，提取PID
+                lines = result.stdout.strip().split('\n')
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) >= 5 and 'LISTENING' in line:
+                        pid = parts[-1]
+                        # 杀掉进程
+                        subprocess.run(f'taskkill /PID {pid} /F',
+                                       shell=True, capture_output=True)
+                        print(f"已关闭TTS进程 PID: {pid}")
+                        self.update_service_log('tts', f"已关闭TTS进程 PID: {pid}")
+                        break
+            else:
+                print("未找到监听端口5000的进程")
+                self.update_service_log('tts', "未找到监听端口5000的进程")
 
             # 清空进程引用
             self.terminal_process = None
@@ -2307,6 +2511,9 @@ class set_pyqt(QWidget):
         self.ui.checkBox_4.setChecked(self.config['context']['enable_limit'])
         self.ui.checkBox.setChecked(self.config['auto_chat']['enabled'])
         self.ui.checkBox_2.setChecked(self.config['bilibili']['enabled'])
+        # 新增：动态主动对话配置
+        self.ui.checkBox_mood_chat_enabled.setChecked(self.config.get('mood_chat', {}).get('enabled', True))
+        self.ui.textEdit_mood_chat_prompt.setPlainText(self.config.get('mood_chat', {}).get('prompt', ''))
         # 新增ASR和TTS配置
         self.ui.checkBox_asr.setChecked(self.config['asr']['enabled'])
         self.ui.checkBox_tts.setChecked(self.config['tts']['enabled'])
@@ -2371,6 +2578,55 @@ class set_pyqt(QWidget):
         self.ui.checkBox_gateway_enabled.setChecked(api_gateway.get('use_gateway', False))
         self.ui.lineEdit_gateway_base_url.setText(api_gateway.get('base_url', ''))
         self.ui.lineEdit_gateway_api_key.setText(api_gateway.get('api_key', ''))
+
+        # 新增：设置总结压缩配置
+        compression_config = self.config.get('context', {}).get('compression', {})
+        self.ui.checkBox_compression_enabled.setChecked(compression_config.get('enabled', False))
+        self.ui.lineEdit_compression_trigger.setText(str(compression_config.get('trigger_threshold', 15)))
+        self.ui.lineEdit_compression_keep.setText(str(compression_config.get('keep_recent', 2)))
+        self.ui.textEdit_compression_prompt.setPlainText(compression_config.get('prompt', '请将以下历史对话总结为简洁的要点，保留关键信息和上下文。要求：1. 总结为200字以内的关键要点 2. 保留重要的人名、事件、决定等 3. 使用简洁的语言 4. 只输出总结内容，不要额外说明'))
+
+        # 新增：设置辅助视觉模型配置
+        vision_config = self.config.get('vision', {})
+        self.ui.checkBox_use_vision_model.setChecked(vision_config.get('use_vision_model', True))
+        vision_model_config = vision_config.get('vision_model', {})
+        self.ui.lineEdit_vision_api_key.setText(vision_model_config.get('api_key', ''))
+        self.ui.lineEdit_vision_api_url.setText(vision_model_config.get('api_url', ''))
+        self.ui.lineEdit_vision_model.setText(vision_model_config.get('model', ''))
+
+        # 新增：设置AI日记配置
+        ai_diary_config = self.config.get('ai_diary', {})
+        self.ui.checkBox_diary_enabled.setChecked(ai_diary_config.get('enabled', False))
+        self.ui.lineEdit_diary_idle_time.setText(str(ai_diary_config.get('idle_time', 20000)))
+        self.ui.lineEdit_diary_file.setText(ai_diary_config.get('diary_file', 'AI记录室/AI日记.txt'))
+        self.ui.textEdit_diary_prompt.setPlainText(ai_diary_config.get('prompt', '请以fake neuro（肥牛）的身份，基于今天的对话记录写一篇简短的日记。'))
+
+    def toggle_live_2d(self):
+        """切换桌宠启动/关闭状态"""
+        if self.live2d_running:
+            # 当前正在运行，执行关闭操作
+            self.close_live_2d()
+            self.live2d_running = False
+            self.update_toggle_button_style(False)
+        else:
+            # 当前未运行，执行启动操作
+            self.start_live_2d()
+            self.live2d_running = True
+            self.update_toggle_button_style(True)
+
+    def update_toggle_button_style(self, is_running):
+        """更新切换按钮的文本和样式"""
+        button = self.ui.pushButton_toggle_live2d
+        if is_running:
+            button.setText("关闭桌宠")
+            button.setProperty("state", "stop")
+        else:
+            button.setText("启动桌宠")
+            button.setProperty("state", "start")
+        # 强制刷新样式
+        button.style().unpolish(button)
+        button.style().polish(button)
+        button.update()
 
     def start_live_2d(self):
         # 检查是否已经有桌宠在运行
@@ -2489,6 +2745,50 @@ class set_pyqt(QWidget):
             self.mcp_log_signal.emit(f"❌ 关闭进程失败: {e}")
             self.live2d_process = None
 
+    def reset_model_position(self):
+        """复位皮套位置到默认位置"""
+        try:
+            # 读取配置文件
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+
+            # 设置默认位置（与 model-interaction.js 中的默认值一致）
+            default_x = 1.35  # 屏幕宽度的 135%（右边）
+            default_y = 0.8   # 屏幕高度的 80%（下方）
+
+            if 'ui' not in config:
+                config['ui'] = {}
+            if 'model_position' not in config['ui']:
+                config['ui']['model_position'] = {}
+
+            config['ui']['model_position']['x'] = default_x
+            config['ui']['model_position']['y'] = default_y
+            config['ui']['model_position']['remember_position'] = True
+
+            # 保存配置文件
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+
+            # 调用API立即重置模型位置
+            try:
+                import requests
+                response = requests.post('http://127.0.0.1:3002/reset-model-position', timeout=2)
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('success'):
+                        self.toast.show_message("皮套位置已立即复位", 2000)
+                    else:
+                        self.toast.show_message("皮套位置已保存，请重启桌宠生效", 2000)
+                else:
+                    self.toast.show_message("皮套位置已保存，请重启桌宠生效", 2000)
+            except Exception as api_error:
+                # 如果API调用失败，只是提示需要重启
+                print(f"API调用失败: {api_error}")
+                self.toast.show_message("皮套位置已保存，请重启桌宠生效", 2000)
+
+        except Exception as e:
+            self.toast.show_message(f"复位失败: {e}", 2000)
+
     def load_config(self):
         with open(self.config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -2605,11 +2905,34 @@ class set_pyqt(QWidget):
             current_config['mcp'] = {}
         current_config['mcp']['enabled'] = self.ui.checkBox_mcp_enable.isChecked()
         current_config['vision']['auto_screenshot'] = self.ui.checkBox_5.isChecked()
+
+        # 新增：保存辅助视觉模型配置
+        current_config['vision']['use_vision_model'] = self.ui.checkBox_use_vision_model.isChecked()
+        if 'vision_model' not in current_config['vision']:
+            current_config['vision']['vision_model'] = {}
+        current_config['vision']['vision_model']['api_key'] = self.ui.lineEdit_vision_api_key.text()
+        current_config['vision']['vision_model']['api_url'] = self.ui.lineEdit_vision_api_url.text()
+        current_config['vision']['vision_model']['model'] = self.ui.lineEdit_vision_model.text()
+
         current_config['ui']['show_chat_box'] = self.ui.checkBox_3.isChecked()
         current_config['context']['enable_limit'] = self.ui.checkBox_4.isChecked()
         current_config['context']['persistent_history'] = self.ui.checkBox_persistent_history.isChecked()
+
+        # 新增：保存总结压缩配置
+        if 'compression' not in current_config['context']:
+            current_config['context']['compression'] = {}
+        current_config['context']['compression']['enabled'] = self.ui.checkBox_compression_enabled.isChecked()
+        current_config['context']['compression']['trigger_threshold'] = int(self.ui.lineEdit_compression_trigger.text()) if self.ui.lineEdit_compression_trigger.text() else 15
+        current_config['context']['compression']['keep_recent'] = int(self.ui.lineEdit_compression_keep.text()) if self.ui.lineEdit_compression_keep.text() else 2
+        current_config['context']['compression']['prompt'] = self.ui.textEdit_compression_prompt.toPlainText()
+
         current_config['auto_chat']['enabled'] = self.ui.checkBox.isChecked()
         current_config['bilibili']['enabled'] = self.ui.checkBox_2.isChecked()
+        # 新增：保存动态主动对话配置
+        if 'mood_chat' not in current_config:
+            current_config['mood_chat'] = {}
+        current_config['mood_chat']['enabled'] = self.ui.checkBox_mood_chat_enabled.isChecked()
+        current_config['mood_chat']['prompt'] = self.ui.textEdit_mood_chat_prompt.toPlainText()
         # 保存本地ASR和TTS配置（保持现有配置结构，只更新enabled状态）
         current_config['asr']['enabled'] = self.ui.checkBox_asr.isChecked()
         current_config['asr']['voice_barge_in'] = self.ui.checkBox_voice_barge_in.isChecked()
@@ -2626,6 +2949,14 @@ class set_pyqt(QWidget):
             "api_url": self.ui.lineEdit_translation_api_url.text(),
             "model": self.ui.lineEdit_translation_model.text(),
             "system_prompt": self.ui.textEdit_translation_prompt.toPlainText()
+        }
+
+        # 新增：保存AI日记配置
+        current_config['ai_diary'] = {
+            "enabled": self.ui.checkBox_diary_enabled.isChecked(),
+            "idle_time": int(self.ui.lineEdit_diary_idle_time.text()) if self.ui.lineEdit_diary_idle_time.text() else 20000,
+            "diary_file": self.ui.lineEdit_diary_file.text(),
+            "prompt": self.ui.textEdit_diary_prompt.toPlainText()
         }
 
         # 新增：保存云端配置
@@ -2780,11 +3111,14 @@ class set_pyqt(QWidget):
 
     def refresh_model_list(self):
         """刷新模型列表"""
+        self.is_loading_model_list = True  # 开始加载，忽略选择改变事件
+
         models = self.scan_live2d_models()
         self.ui.comboBox_live2d_models.clear()
 
         if not models:
             self.ui.comboBox_live2d_models.addItem("未找到任何模型")
+            self.is_loading_model_list = False
             return
 
         for model in models:
@@ -2813,23 +3147,91 @@ class set_pyqt(QWidget):
             print(f"读取当前模型设置失败: {str(e)}")
 
         self.toast.show_message(f"找到 {len(models)} 个Live2D模型", 2000)
+        self.is_loading_model_list = False  # 加载完成
 
     def update_current_model_display(self):
         """更新当前模型显示"""
         pass  # 暂时留空
 
+    def on_model_selection_changed(self, index):
+        """Live2D模型选择改变事件"""
+        # 如果正在加载模型列表，忽略此事件
+        if self.is_loading_model_list:
+            return
+
+        if index < 0:
+            return
+
+        model_name = self.ui.comboBox_live2d_models.currentText()
+
+        # 忽略"未找到任何模型"
+        if model_name == "未找到任何模型":
+            return
+
+        # 检查冷却时间
+        import time
+        current_time = time.time()
+        time_since_last_switch = current_time - self.last_model_switch_time
+
+        if time_since_last_switch < self.model_switch_cooldown:
+            remaining_time = int(self.model_switch_cooldown - time_since_last_switch)
+            self.toast.show_message(f"切换太快了，请等待 {remaining_time} 秒", 1500)
+            # 恢复到上一次的选择
+            self.is_loading_model_list = True
+            self.ui.comboBox_live2d_models.setCurrentIndex(self.last_model_index if hasattr(self, 'last_model_index') else 0)
+            self.is_loading_model_list = False
+            return
+
+        try:
+            # 调用API立即切换模型
+            import requests
+            response = requests.post(
+                'http://127.0.0.1:3002/switch-model',
+                json={'model_name': model_name},
+                timeout=10  # 增加超时时间到10秒
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success'):
+                    self.toast.show_message(f"正在切换到 {model_name} 模型...", 2000)
+                    print(f"模型切换成功: {model_name}")
+                    # 更新上次切换时间和索引
+                    self.last_model_switch_time = current_time
+                    self.last_model_index = index
+                else:
+                    self.toast.show_message("模型切换失败，Live2D未运行", 2000)
+                    print(f"模型切换失败: {result.get('message')}")
+            else:
+                self.toast.show_message("模型切换失败，Live2D未运行", 2000)
+                print(f"模型切换API调用失败: HTTP {response.status_code}")
+        except Exception as e:
+            # 如果API调用失败，说明Live2D未运行
+            self.toast.show_message("Live2D未运行或正在重启，请稍候", 2000)
+            print(f"模型切换API调用异常: {e}")
+
     def check_all_service_status(self):
-        """启动时检查所有服务状态并更新UI"""
-        self.check_service_status('tts', 5000, 'label_terminal_status')
-        self.check_service_status('asr', 1000, 'label_asr_status')
-        self.check_service_status('bert', 6007, 'label_bert_status')
-        self.check_service_status('rag', 8002, 'label_rag_status')
+        """启动时检查所有服务状态并更新UI - 使用多线程并发检查"""
+        from concurrent.futures import ThreadPoolExecutor
+
+        # 定义需要检查的服务列表
+        services = [
+            ('tts', 5000, 'label_terminal_status'),
+            ('asr', 1000, 'label_asr_status'),
+            ('bert', 6007, 'label_bert_status'),
+            ('rag', 8002, 'label_rag_status')
+        ]
+
+        # 使用线程池并发检查所有服务
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            for service_name, port, status_label in services:
+                executor.submit(self.check_service_status, service_name, port, status_label)
 
     def check_service_status(self, service_name, port, status_label):
         """检查单个服务状态"""
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(1)
+            sock.settimeout(0.5)  # 优化: 从1秒减少到0.5秒
             result = sock.connect_ex(('localhost', port))
             sock.close()
 
@@ -2865,51 +3267,8 @@ class set_pyqt(QWidget):
                     indicator.setStyleSheet("color: #888888; font-size: 20px;")
 
     def show_tutorial(self):
-        """显示教程页面"""
-        self.load_readme_content()
-        self.ui.stackedWidget.setCurrentIndex(8)  # 假设教程页面是第8个
-
-    def load_readme_content(self):
-        """加载README.md内容并显示本地图片"""
-        try:
-            app_path = get_app_path()
-            readme_path = os.path.join(app_path, "README.md")
-
-            with open(readme_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-
-            # 转换Markdown图片为HTML，使用绝对路径
-            import re
-            def replace_image(match):
-                alt_text = match.group(1)
-                img_path = match.group(2)
-
-                # 如果是相对路径，转换为绝对路径
-                if img_path.startswith('./'):
-                    img_path = img_path[2:]  # 去掉 ./
-                    full_path = os.path.join(app_path, img_path).replace('\\', '/')
-                    # 转换为file://协议
-                    full_path = f"file:///{full_path}"
-                else:
-                    full_path = img_path
-
-                # 强制设置图片宽度为600px，高度自动
-                return f'<br><img src="{full_path}" alt="{alt_text}" width="1300"><br>'
-
-            # 替换图片语法
-            content = re.sub(r'!\[([^\]]*)\]\(([^)]+)\)', replace_image, content)
-
-            # 简单的Markdown转HTML
-            content = content.replace('\n### ', '\n<h3>')
-            content = content.replace('\n## ', '\n<h2>')
-            content = content.replace('\n# ', '\n<h1>')
-            content = content.replace('\n\n', '<br><br>')
-
-            # 使用HTML模式显示
-            self.ui.textEdit_tutorial.setHtml(content)
-
-        except Exception as e:
-            self.ui.textEdit_tutorial.setPlainText(f"无法加载README.md文件: {str(e)}")
+        """打开在线教程页面"""
+        webbrowser.open('http://mynewbot.com/tutorials/live-2d-README')
 
     def run_startup_scan(self):
         """启动时自动运行皮套动作扫描"""
@@ -3004,7 +3363,7 @@ class set_pyqt(QWidget):
             self.toast.show_message(error_msg, 3000)
 
     def refresh_tools_list(self):
-        """刷新工具列表"""
+        """刷新工具列表 - 卡片布局"""
         try:
             # 获取server-tools文件夹路径
             base_path = get_app_path()
@@ -3015,8 +3374,16 @@ class set_pyqt(QWidget):
                 self.toast.show_message("server-tools文件夹不存在", 3000)
                 return
 
-            # 清空现有列表
-            self.ui.listWidget_tools.clear()
+            # 获取容器布局
+            container_layout = self.ui.scrollAreaWidgetContents_function_call.layout()
+
+            # 清空现有的卡片
+            while container_layout.count() > 0:
+                item = container_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+                elif item.spacerItem():
+                    pass
 
             # 读取文件夹中的文件
             files = os.listdir(tools_path)
@@ -3045,12 +3412,160 @@ class set_pyqt(QWidget):
                         # 其他文件类型，跳过
                         continue
 
-                    # 添加到列表中，同时保存原始文件名作为数据
-                    item_text = f"{status_icon} {display_name} - {status}"
-                    item = QListWidgetItem(item_text)
-                    item.setData(Qt.UserRole, file)  # 保存原始文件名
-                    item.setData(Qt.UserRole + 1, status)  # 保存状态信息
-                    self.ui.listWidget_tools.addItem(item)
+                    # 提取工具描述
+                    description = ""
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read(500)  # 只读前500字符
+                            # 匹配 /** ... */ 注释
+                            match = re.search(r'/\*\*\s*\n?\s*\*?\s*([^\n*]+)', content)
+                            if match:
+                                description = match.group(1).strip()
+                    except:
+                        pass
+
+                    # 解析工具子功能
+                    sub_functions = []
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                            match = re.search(r'function\s+getToolDefinitions\s*\(\)\s*\{[^}]*return\s*\[(.*?)\];', content, re.DOTALL)
+                            if match:
+                                funcs_text = match.group(1)
+                                name_matches = re.findall(r'name:\s*["\']([^"\']+)["\']', funcs_text)
+                                desc_matches = re.findall(r'description:\s*["\']([^"\']+)["\']', funcs_text)
+                                for i, name in enumerate(name_matches):
+                                    if i < len(desc_matches):
+                                        sub_functions.append(f"{name}: {desc_matches[i]}")
+                    except:
+                        pass
+
+                    # 创建主容器
+                    main_container = QWidget()
+                    main_container.setStyleSheet("""
+                        QWidget {
+                            background-color: white;
+                            border-radius: 8px;
+                            border: 1px solid #e0e0e0;
+                        }
+                    """)
+
+                    container_v_layout = QVBoxLayout(main_container)
+                    container_v_layout.setContentsMargins(0, 0, 0, 0)
+                    container_v_layout.setSpacing(0)
+
+                    # 头部区域
+                    header = QWidget()
+                    header.setStyleSheet("background-color: transparent; border: none;")
+                    header_layout = QHBoxLayout(header)
+                    header_layout.setContentsMargins(15, 12, 15, 12)
+                    header_layout.setSpacing(15)
+
+                    # 工具信息标签
+                    if description:
+                        label_text = f"<b>{display_name}</b>  <span style='color: #777; font-size: 9pt;'>{description}</span>"
+                    else:
+                        label_text = f"<b>{display_name}</b>"
+
+                    info_label = QLabel(label_text)
+                    info_label.setFont(QFont("微软雅黑", 10))
+                    info_label.setWordWrap(True)
+                    header_layout.addWidget(info_label, 1)
+
+                    # 展开按钮（如果有子功能）
+                    if sub_functions:
+                        expand_btn = QPushButton("展开")
+                        expand_btn.setMinimumSize(60, 35)
+                        expand_btn.setFont(QFont("微软雅黑", 9))
+                        expand_btn.setStyleSheet("""
+                            QPushButton {
+                                background-color: #3498db;
+                                color: white;
+                                border-radius: 6px;
+                                border: none;
+                            }
+                            QPushButton:hover {
+                                background-color: #5dade2;
+                            }
+                            QPushButton:pressed {
+                                background-color: #2874a6;
+                            }
+                        """)
+                        header_layout.addWidget(expand_btn)
+
+                    # 右侧状态按钮
+                    status_btn = QPushButton("使用中" if status == "已启动" else "未使用")
+                    status_btn.setMinimumSize(80, 35)
+                    status_btn.setFont(QFont("微软雅黑", 9, QFont.Bold))
+                    if status == "已启动":
+                        # 使用中 - 绿色
+                        status_btn.setStyleSheet("""
+                            QPushButton {
+                                background-color: #27ae60;
+                                color: white;
+                                border-radius: 6px;
+                                border: none;
+                            }
+                            QPushButton:hover {
+                                background-color: #2ecc71;
+                            }
+                            QPushButton:pressed {
+                                background-color: #1e8449;
+                            }
+                        """)
+                    else:
+                        # 未使用 - 白色(带边框)
+                        status_btn.setStyleSheet("""
+                            QPushButton {
+                                background-color: white;
+                                color: #666;
+                                border-radius: 6px;
+                                border: 2px solid #ddd;
+                            }
+                            QPushButton:hover {
+                                background-color: #f5f5f5;
+                                border-color: #ccc;
+                            }
+                            QPushButton:pressed {
+                                background-color: #e8e8e8;
+                            }
+                        """)
+                    status_btn.setProperty("tool_file", file)
+                    status_btn.setProperty("tool_status", status)
+                    status_btn.setProperty("tools_path", tools_path)
+                    status_btn.clicked.connect(lambda checked, btn=status_btn: self.toggle_tool_from_button(btn))
+                    header_layout.addWidget(status_btn)
+
+                    container_v_layout.addWidget(header)
+
+                    # 详情区域（子功能列表，默认隐藏）
+                    if sub_functions:
+                        detail_widget = QWidget()
+                        detail_widget.setStyleSheet("background-color: #f8f9fa; border: none; border-top: 1px solid #e0e0e0;")
+                        detail_widget.setVisible(False)
+                        detail_layout = QVBoxLayout(detail_widget)
+                        detail_layout.setContentsMargins(15, 15, 15, 15)
+                        detail_layout.setSpacing(10)
+
+                        # 子功能列表
+                        for func in sub_functions:
+                            func_label = QLabel(f"• {func}")
+                            func_label.setFont(QFont("微软雅黑", 9))
+                            func_label.setStyleSheet("color: #555; padding: 5px; background-color: white; border-radius: 4px;")
+                            func_label.setWordWrap(True)
+                            detail_layout.addWidget(func_label)
+
+                        container_v_layout.addWidget(detail_widget)
+
+                        # 点击展开按钮切换展开/折叠
+                        expand_btn.clicked.connect(lambda checked, dw=detail_widget, btn=expand_btn: self.toggle_tool_detail(dw, btn))
+
+                    # 添加到容器
+                    container_layout.addWidget(main_container)
+
+            # 添加底部spacer
+            spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+            container_layout.addItem(spacer)
 
             self.toast.show_message("工具列表已刷新", 2000)
 
@@ -3059,8 +3574,46 @@ class set_pyqt(QWidget):
             print(f"错误：{error_msg}")
             self.toast.show_message(error_msg, 3000)
 
+    def toggle_tool_detail(self, detail_widget, button):
+        """切换工具详情的展开/折叠"""
+        if detail_widget.isVisible():
+            detail_widget.setVisible(False)
+            button.setText("展开")
+        else:
+            detail_widget.setVisible(True)
+            button.setText("收起")
+
+    def toggle_tool_from_button(self, button):
+        """从按钮切换工具状态"""
+        try:
+            file = button.property("tool_file")
+            status = button.property("tool_status")
+            tools_path = button.property("tools_path")
+
+            current_file_path = os.path.join(tools_path, file)
+
+            if status == "已启动" and file.endswith('.js'):
+                new_file = file[:-3] + '.txt'
+                new_file_path = os.path.join(tools_path, new_file)
+                os.rename(current_file_path, new_file_path)
+                self.toast.show_message(f"{file[:-3]} 已禁用", 2000)
+            elif status == "未启动" and file.endswith('.txt'):
+                new_file = file[:-4] + '.js'
+                new_file_path = os.path.join(tools_path, new_file)
+                os.rename(current_file_path, new_file_path)
+                self.toast.show_message(f"{file[:-4]} 已启用", 2000)
+            else:
+                self.toast.show_message("文件状态异常", 3000)
+                return
+
+            # 刷新工具列表
+            self.refresh_tools_list()
+
+        except Exception as e:
+            self.toast.show_message(f"切换失败: {str(e)}", 3000)
+
     def refresh_mcp_tools_list(self):
-        """刷新MCP工具列表"""
+        """刷新MCP工具列表 - 卡片布局"""
         try:
             # 获取mcp/tools文件夹路径
             base_path = get_app_path()
@@ -3071,8 +3624,16 @@ class set_pyqt(QWidget):
                 self.toast.show_message("mcp/tools文件夹不存在", 3000)
                 return
 
-            # 清空现有列表
-            self.ui.listWidget_mcp_tools.clear()
+            # 获取容器布局
+            container_layout = self.ui.scrollAreaWidgetContents_mcp.layout()
+
+            # 清空现有的卡片
+            while container_layout.count() > 0:
+                item = container_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+                elif item.spacerItem():
+                    pass
 
             # 读取文件夹中的文件
             files = os.listdir(mcp_tools_path)
@@ -3101,12 +3662,199 @@ class set_pyqt(QWidget):
                         # 其他文件类型，跳过
                         continue
 
-                    # 添加到列表中，同时保存原始文件名作为数据
-                    item_text = f"{status_icon} {display_name} - {status}"
-                    item = QListWidgetItem(item_text)
-                    item.setData(Qt.UserRole, file)  # 保存原始文件名
-                    item.setData(Qt.UserRole + 1, status)  # 保存状态信息
-                    self.ui.listWidget_mcp_tools.addItem(item)
+                    # 提取工具描述
+                    description = ""
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read(500)  # 只读前500字符
+                            # 匹配注释
+                            match = re.search(r'/\*\*\s*\n?\s*\*?\s*([^\n*]+)', content)
+                            if match:
+                                description = match.group(1).strip()
+                    except:
+                        pass
+
+                    # 创建卡片widget
+                    card = QWidget()
+                    card.setStyleSheet("""
+                        QWidget {
+                            background-color: white;
+                            border-radius: 8px;
+                            border: 1px solid #e0e0e0;
+                        }
+                    """)
+
+                    card_layout = QHBoxLayout(card)
+                    card_layout.setContentsMargins(15, 12, 15, 12)
+                    card_layout.setSpacing(15)
+
+                    # 工具信息标签
+                    if description:
+                        label_text = f"<b>{display_name}</b>  <span style='color: #777; font-size: 9pt;'>{description}</span>"
+                    else:
+                        label_text = f"<b>{display_name}</b>"
+
+                    info_label = QLabel(label_text)
+                    info_label.setFont(QFont("微软雅黑", 10))
+                    info_label.setWordWrap(True)
+                    card_layout.addWidget(info_label, 1)
+
+                    # 右侧状态按钮
+                    status_btn = QPushButton("使用中" if status == "已启动" else "未使用")
+                    status_btn.setMinimumSize(80, 35)
+                    status_btn.setFont(QFont("微软雅黑", 9, QFont.Bold))
+                    if status == "已启动":
+                        # 使用中 - 绿色
+                        status_btn.setStyleSheet("""
+                            QPushButton {
+                                background-color: #27ae60;
+                                color: white;
+                                border-radius: 6px;
+                                border: none;
+                            }
+                            QPushButton:hover {
+                                background-color: #2ecc71;
+                            }
+                            QPushButton:pressed {
+                                background-color: #1e8449;
+                            }
+                        """)
+                    else:
+                        # 未使用 - 白色(带边框)
+                        status_btn.setStyleSheet("""
+                            QPushButton {
+                                background-color: white;
+                                color: #666;
+                                border-radius: 6px;
+                                border: 2px solid #ddd;
+                            }
+                            QPushButton:hover {
+                                background-color: #f5f5f5;
+                                border-color: #ccc;
+                            }
+                            QPushButton:pressed {
+                                background-color: #e8e8e8;
+                            }
+                        """)
+                    status_btn.setProperty("tool_file", file)
+                    status_btn.setProperty("tool_status", status)
+                    status_btn.setProperty("tool_type", "local")
+                    status_btn.clicked.connect(lambda checked, btn=status_btn: self.toggle_mcp_tool_from_button(btn))
+                    card_layout.addWidget(status_btn)
+
+                    # 添加卡片到容器
+                    container_layout.addWidget(card)
+
+            # 从 mcp_config.json 读取外部MCP工具配置
+            mcp_config_path = os.path.join(base_path, "mcp", "mcp_config.json")
+            if os.path.exists(mcp_config_path):
+                try:
+                    with open(mcp_config_path, 'r', encoding='utf-8') as f:
+                        mcp_config = json.load(f)
+
+                    # 获取已经添加的本地工具名称
+                    local_tools = set()
+                    for file in files:
+                        if file.endswith('.js') or file.endswith('.txt'):
+                            tool_name = file.rsplit('.', 1)[0]
+                            local_tools.add(tool_name)
+
+                    # 添加外部MCP工具
+                    for tool_name, config in mcp_config.items():
+                        args = config.get('args', [])
+                        is_local_tool = False
+
+                        for arg in args:
+                            if isinstance(arg, str) and './mcp/tools/' in arg:
+                                is_local_tool = True
+                                break
+
+                        if not is_local_tool and tool_name not in local_tools:
+                            command = config.get('command', '')
+
+                            if tool_name.endswith('_disabled'):
+                                display_name = tool_name[:-9]
+                                status_icon = "◇"
+                                status = "外部工具-未启动"
+                                actual_status = "未启动"
+                            else:
+                                display_name = tool_name
+                                status_icon = "◆"
+                                status = "外部工具-已启动"
+                                actual_status = "已启动"
+
+                            # 创建外部工具卡片
+                            card = QWidget()
+                            card.setStyleSheet("""
+                                QWidget {
+                                    background-color: white;
+                                    border-radius: 8px;
+                                    border: 1px solid #e0e0e0;
+                                }
+                            """)
+
+                            card_layout = QHBoxLayout(card)
+                            card_layout.setContentsMargins(15, 12, 15, 12)
+                            card_layout.setSpacing(15)
+
+                            # 工具信息标签
+                            label_text = f"<b>{display_name}</b>  <span style='color: #999; font-size: 8pt;'>(外部工具 - {command})</span>"
+                            info_label = QLabel(label_text)
+                            info_label.setFont(QFont("微软雅黑", 10))
+                            info_label.setWordWrap(True)
+                            card_layout.addWidget(info_label, 1)
+
+                            # 右侧状态按钮
+                            status_btn = QPushButton("使用中" if actual_status == "已启动" else "未使用")
+                            status_btn.setMinimumSize(80, 35)
+                            status_btn.setFont(QFont("微软雅黑", 9, QFont.Bold))
+                            if actual_status == "已启动":
+                                # 使用中 - 绿色
+                                status_btn.setStyleSheet("""
+                                    QPushButton {
+                                        background-color: #27ae60;
+                                        color: white;
+                                        border-radius: 6px;
+                                        border: none;
+                                    }
+                                    QPushButton:hover {
+                                        background-color: #2ecc71;
+                                    }
+                                    QPushButton:pressed {
+                                        background-color: #1e8449;
+                                    }
+                                """)
+                            else:
+                                # 未使用 - 白色(带边框)
+                                status_btn.setStyleSheet("""
+                                    QPushButton {
+                                        background-color: white;
+                                        color: #666;
+                                        border-radius: 6px;
+                                        border: 2px solid #ddd;
+                                    }
+                                    QPushButton:hover {
+                                        background-color: #f5f5f5;
+                                        border-color: #ccc;
+                                    }
+                                    QPushButton:pressed {
+                                        background-color: #e8e8e8;
+                                    }
+                                """)
+                            status_btn.setProperty("tool_name", tool_name)
+                            status_btn.setProperty("tool_status", actual_status)
+                            status_btn.setProperty("tool_type", "external")
+                            status_btn.clicked.connect(lambda checked, btn=status_btn: self.toggle_mcp_tool_from_button(btn))
+                            card_layout.addWidget(status_btn)
+
+                            container_layout.addWidget(card)
+
+                except Exception as e:
+                    print(f"读取MCP配置文件失败：{str(e)}")
+
+            # 添加底部spacer
+            spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+            container_layout.addItem(spacer)
 
             self.toast.show_message("MCP工具列表已刷新", 2000)
 
@@ -3190,78 +3938,199 @@ class set_pyqt(QWidget):
             self.toast.show_message(error_msg, 3000)
 
     def toggle_mcp_tool_status(self, item):
-        """切换MCP工具的启动状态（js <-> txt）"""
+        """切换MCP工具的启动状态（js <-> txt 或 外部工具的 name <-> name_disabled）"""
         try:
-            # 获取显示的文本和原始文件名
+            # 获取显示的文本和原始文件名/工具名
             item_text = item.text()
-            original_filename = item.data(Qt.UserRole)  # 获取保存的原始文件名
+            original_name = item.data(Qt.UserRole)  # 获取保存的原始文件名/工具名
             current_status = item.data(Qt.UserRole + 1)  # 获取保存的状态信息
+            tool_type = item.data(Qt.UserRole + 2)  # 获取工具类型（local/external）
 
-            # 格式：● display_name - 状态 或 ○ display_name - 状态
-            if item_text.startswith("● "):
-                # 移除"● "，然后分割" - "
+            # 提取显示名称
+            # 格式可能是：● name - status 或 ○ name - status 或 ◆ name - status 或 ◇ name - status
+            if item_text.startswith("● ") or item_text.startswith("○ ") or item_text.startswith("◆ ") or item_text.startswith("◇ "):
                 remaining_text = item_text[2:]
                 parts = remaining_text.split(" - ")
-                if len(parts) != 2:
+                if len(parts) >= 1:
+                    display_name = parts[0]
+                else:
                     return
-                display_name = parts[0]
-            elif item_text.startswith("○ "):
-                # 移除"○ "，然后分割" - "
-                remaining_text = item_text[2:]
-                parts = remaining_text.split(" - ")
-                if len(parts) != 2:
-                    return
-                display_name = parts[0]
             else:
                 return
 
-            # 获取mcp/tools文件夹路径
-            base_path = get_app_path()
-            mcp_tools_path = os.path.join(base_path, "mcp", "tools")
-            current_file_path = os.path.join(mcp_tools_path, original_filename)
+            # 处理外部MCP工具
+            if tool_type == "external":
+                base_path = get_app_path()
+                mcp_config_path = os.path.join(base_path, "mcp", "mcp_config.json")
 
-            # 检查文件是否存在
-            if not os.path.exists(current_file_path):
-                self.toast.show_message(f"文件不存在：{original_filename}", 3000)
-                return
+                # 读取配置文件
+                with open(mcp_config_path, 'r', encoding='utf-8') as f:
+                    mcp_config = json.load(f)
 
-            # 跳过index.js文件
-            if original_filename.lower() == 'index.js':
-                self.toast.show_message("index.js文件不能切换状态", 3000)
-                return
+                # 根据当前状态决定切换方向
+                if current_status == "已启动":
+                    # 启动 -> 禁用：添加 _disabled 后缀
+                    new_tool_name = original_name + "_disabled"
+                    new_status = "未启动"
+                    new_status_icon = "◇"
+                    status_action = "禁用"
+                elif current_status == "未启动":
+                    # 禁用 -> 启动：移除 _disabled 后缀
+                    if original_name.endswith('_disabled'):
+                        new_tool_name = original_name[:-9]  # 移除 _disabled
+                    else:
+                        self.toast.show_message("外部工具状态异常", 3000)
+                        return
+                    new_status = "已启动"
+                    new_status_icon = "◆"
+                    status_action = "启用"
+                else:
+                    self.toast.show_message("外部工具状态异常", 3000)
+                    return
 
-            # 根据当前状态决定切换方向
-            if current_status == "已启动" and original_filename.endswith('.js'):
-                # js -> txt (启动 -> 关闭)
-                new_filename = original_filename[:-3] + '.txt'  # 移除.js，添加.txt
-                new_status = "未启动"
-                new_status_icon = "○"  # 空白圆圈
-            elif current_status == "未启动" and original_filename.endswith('.txt'):
-                # txt -> js (关闭 -> 启动)
-                new_filename = original_filename[:-4] + '.js'  # 移除.txt，添加.js
-                new_status = "已启动"
-                new_status_icon = "●"  # 绿色实心圆圈
+                # 在配置中重命名键
+                if original_name in mcp_config:
+                    tool_config = mcp_config.pop(original_name)
+                    mcp_config[new_tool_name] = tool_config
+
+                    # 写回配置文件
+                    with open(mcp_config_path, 'w', encoding='utf-8') as f:
+                        json.dump(mcp_config, f, indent=2, ensure_ascii=False)
+
+                    # 更新UI列表项
+                    command = tool_config.get('command', '')
+                    new_status_text = f"外部工具-{new_status} ({command})" if new_status == "未启动" else f"外部工具-{new_status} ({command})"
+                    new_item_text = f"{new_status_icon} {display_name} - {new_status_text}"
+                    item.setText(new_item_text)
+                    item.setData(Qt.UserRole, new_tool_name)  # 更新保存的工具名
+                    item.setData(Qt.UserRole + 1, new_status)  # 更新状态
+
+                    self.toast.show_message(f"外部工具 {display_name} 已{status_action}", 2000)
+                else:
+                    self.toast.show_message(f"配置中未找到工具：{original_name}", 3000)
+
+            # 处理本地MCP工具
             else:
-                self.toast.show_message("文件状态异常，无法切换", 3000)
-                return
+                # 获取mcp/tools文件夹路径
+                base_path = get_app_path()
+                mcp_tools_path = os.path.join(base_path, "mcp", "tools")
+                current_file_path = os.path.join(mcp_tools_path, original_name)
 
-            new_file_path = os.path.join(mcp_tools_path, new_filename)
+                # 检查文件是否存在
+                if not os.path.exists(current_file_path):
+                    self.toast.show_message(f"文件不存在：{original_name}", 3000)
+                    return
 
-            # 重命名文件
-            os.rename(current_file_path, new_file_path)
+                # 跳过index.js文件
+                if original_name.lower() == 'index.js':
+                    self.toast.show_message("index.js文件不能切换状态", 3000)
+                    return
 
-            # 更新列表中的项目文本和数据
-            new_item_text = f"{new_status_icon} {display_name} - {new_status}"
-            item.setText(new_item_text)
-            item.setData(Qt.UserRole, new_filename)  # 更新保存的原始文件名
-            item.setData(Qt.UserRole + 1, new_status)  # 更新保存的状态信息
+                # 根据当前状态决定切换方向
+                if current_status == "已启动" and original_name.endswith('.js'):
+                    # js -> txt (启动 -> 关闭)
+                    new_filename = original_name[:-3] + '.txt'  # 移除.js，添加.txt
+                    new_status = "未启动"
+                    new_status_icon = "○"  # 空白圆圈
+                elif current_status == "未启动" and original_name.endswith('.txt'):
+                    # txt -> js (关闭 -> 启动)
+                    new_filename = original_name[:-4] + '.js'  # 移除.txt，添加.js
+                    new_status = "已启动"
+                    new_status_icon = "●"  # 绿色实心圆圈
+                else:
+                    self.toast.show_message("文件状态异常，无法切换", 3000)
+                    return
 
-            self.toast.show_message(f"MCP {display_name} 已{new_status}", 2000)
+                new_file_path = os.path.join(mcp_tools_path, new_filename)
+
+                # 重命名文件
+                os.rename(current_file_path, new_file_path)
+
+                # 更新列表中的项目文本和数据
+                new_item_text = f"{new_status_icon} {display_name} - {new_status}"
+                item.setText(new_item_text)
+                item.setData(Qt.UserRole, new_filename)  # 更新保存的原始文件名
+                item.setData(Qt.UserRole + 1, new_status)  # 更新保存的状态信息
+
+                self.toast.show_message(f"MCP {display_name} 已{new_status}", 2000)
 
         except Exception as e:
             error_msg = f"切换MCP工具状态失败：{str(e)}"
             print(f"错误：{error_msg}")
             self.toast.show_message(error_msg, 3000)
+
+    def toggle_mcp_tool_from_button(self, button):
+        """从卡片按钮切换MCP工具状态"""
+        try:
+            tool_type = button.property("tool_type")
+
+            if tool_type == "local":
+                # 本地工具
+                file = button.property("tool_file")
+                status = button.property("tool_status")
+
+                base_path = get_app_path()
+                mcp_tools_path = os.path.join(base_path, "mcp", "tools")
+                current_file_path = os.path.join(mcp_tools_path, file)
+
+                if status == "已启动" and file.endswith('.js'):
+                    new_file = file[:-3] + '.txt'
+                    new_file_path = os.path.join(mcp_tools_path, new_file)
+                    os.rename(current_file_path, new_file_path)
+                    self.toast.show_message(f"已停用 {file[:-3]}", 2000)
+                elif status == "未启动" and file.endswith('.txt'):
+                    new_file = file[:-4] + '.js'
+                    new_file_path = os.path.join(mcp_tools_path, new_file)
+                    os.rename(current_file_path, new_file_path)
+                    self.toast.show_message(f"已启用 {file[:-4]}", 2000)
+                else:
+                    self.toast.show_message("文件状态异常", 3000)
+                    return
+
+            elif tool_type == "external":
+                # 外部工具
+                tool_name = button.property("tool_name")
+                status = button.property("tool_status")
+
+                base_path = get_app_path()
+                mcp_config_path = os.path.join(base_path, "mcp", "mcp_config.json")
+
+                with open(mcp_config_path, 'r', encoding='utf-8') as f:
+                    mcp_config = json.load(f)
+
+                if status == "已启动":
+                    new_tool_name = tool_name + "_disabled"
+                    status_action = "禁用"
+                elif status == "未启动":
+                    if tool_name.endswith('_disabled'):
+                        new_tool_name = tool_name[:-9]
+                    else:
+                        self.toast.show_message("外部工具状态异常", 3000)
+                        return
+                    status_action = "启用"
+                else:
+                    self.toast.show_message("外部工具状态异常", 3000)
+                    return
+
+                if tool_name in mcp_config:
+                    tool_config = mcp_config.pop(tool_name)
+                    mcp_config[new_tool_name] = tool_config
+
+                    with open(mcp_config_path, 'w', encoding='utf-8') as f:
+                        json.dump(mcp_config, f, indent=2, ensure_ascii=False)
+
+                    display_name = tool_name[:-9] if tool_name.endswith('_disabled') else tool_name
+                    self.toast.show_message(f"外部工具 {display_name} 已{status_action}", 2000)
+                else:
+                    self.toast.show_message(f"配置中未找到工具：{tool_name}", 3000)
+                    return
+
+            # 刷新MCP工具列表
+            self.refresh_mcp_tools_list()
+
+        except Exception as e:
+            self.toast.show_message(f"切换失败: {str(e)}", 3000)
+            print(f"切换MCP工具失败: {e}")
 
     def setup_api_key_visibility_toggles(self):
         """为API KEY输入框添加小眼睛图标"""
@@ -3480,6 +4349,384 @@ class set_pyqt(QWidget):
             self.toast.show_message(f"✗ 下载失败: {str(e)}", 3000)
             print(f"下载工具失败: {e}")
 
+    # ==================== FC广场相关功能 ====================
+    def init_fc_market_table(self):
+        """初始化FC广场卡片容器"""
+        try:
+            # 清空现有的卡片
+            layout = self.ui.scrollAreaWidgetContents_fc_market.layout()
+            while layout.count():
+                child = layout.takeAt(0)
+                if child.widget():
+                    child.widget().deleteLater()
+
+            # 添加一个占位spacer
+            spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+            layout.addItem(spacer)
+
+            print("FC广场卡片容器初始化成功")
+        except Exception as e:
+            print(f"初始化FC广场失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def refresh_fc_market(self):
+        """刷新FC广场列表"""
+        print("开始刷新FC广场...")
+        try:
+            print("正在请求FC工具API...")
+            response = requests.get("http://mynewbot.com/api/get-fc-tools", timeout=10)
+            print(f"FC工具API响应状态码: {response.status_code}")
+            data = response.json()
+            print(f"FC工具API返回数据: {data}")
+
+            if data.get('success'):
+                fc_tools = data.get('fc_tools', [])
+                print(f"获取到 {len(fc_tools)} 个FC工具")
+                self.display_fc_tools(fc_tools)
+                self.toast.show_message(f"成功获取 {len(fc_tools)} 个FC工具", 2000)
+            else:
+                print("FC工具API返回success=False")
+                self.toast.show_message("获取FC工具列表失败", 3000)
+        except Exception as e:
+            self.toast.show_message(f"刷新FC广场失败: {str(e)}", 3000)
+            print(f"刷新FC广场失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def display_fc_tools(self, fc_tools):
+        """显示FC工具列表 - 卡片式布局"""
+        print(f"开始显示 {len(fc_tools)} 个FC工具")
+        try:
+            # 获取容器布局
+            container_layout = self.ui.scrollAreaWidgetContents_fc_market.layout()
+
+            # 清空现有的卡片(保留最后的spacer)
+            while container_layout.count() > 0:
+                item = container_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+                elif item.spacerItem():
+                    pass
+
+            # 为每个FC工具创建卡片
+            for i, tool in enumerate(fc_tools):
+                print(f"创建第 {i+1} 个FC工具卡片: {tool.get('tool_name', '')}")
+
+                # 创建卡片widget
+                card = QWidget()
+                card.setStyleSheet("""
+                    QWidget {
+                        background-color: white;
+                        border-radius: 12px;
+                        border: 2px solid #e0e0e0;
+                    }
+                    QWidget:hover {
+                        border: 2px solid #FF9800;
+                    }
+                """)
+                card.setMinimumHeight(120)
+
+                # 卡片布局
+                card_layout = QVBoxLayout(card)
+                card_layout.setContentsMargins(20, 15, 20, 15)
+                card_layout.setSpacing(10)
+
+                # 标题行
+                title_layout = QHBoxLayout()
+
+                # FC工具名称（使用不同的图标）
+                name_label = QLabel(f"🔧 {tool.get('tool_name', '')}")
+                name_label.setFont(QFont("微软雅黑", 12, QFont.Bold))
+                name_label.setStyleSheet("color: #2c3e50; border: none;")
+                title_layout.addWidget(name_label)
+
+                title_layout.addStretch()
+
+                # 下载按钮
+                download_btn = QPushButton("⬇ 下载")
+                download_btn.setMinimumSize(100, 35)
+                download_btn.setFont(QFont("微软雅黑", 10, QFont.Bold))
+                download_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #FF9800;
+                        color: white;
+                        border-radius: 6px;
+                        padding: 6px 15px;
+                        border: none;
+                    }
+                    QPushButton:hover {
+                        background-color: #F57C00;
+                    }
+                    QPushButton:pressed {
+                        background-color: #E65100;
+                    }
+                """)
+                download_btn.clicked.connect(lambda checked, t=tool: self.download_fc_tool(t))
+                title_layout.addWidget(download_btn)
+
+                card_layout.addLayout(title_layout)
+
+                # 描述
+                desc_label = QLabel(tool.get('description', ''))
+                desc_label.setFont(QFont("微软雅黑", 10))
+                desc_label.setStyleSheet("color: #555; border: none;")
+                desc_label.setWordWrap(True)
+                card_layout.addWidget(desc_label)
+
+                # 底部信息行
+                info_layout = QHBoxLayout()
+
+                # 作者信息
+                author_label = QLabel(f"👤 作者: {tool.get('uploader_email', '')}")
+                author_label.setFont(QFont("微软雅黑", 9))
+                author_label.setStyleSheet("color: #888; border: none;")
+                info_layout.addWidget(author_label)
+
+                info_layout.addStretch()
+
+                card_layout.addLayout(info_layout)
+
+                # 添加卡片到容器
+                container_layout.addWidget(card)
+
+            # 添加底部spacer
+            spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+            container_layout.addItem(spacer)
+
+            print(f"FC工具卡片显示完成,共 {len(fc_tools)} 个")
+
+        except Exception as e:
+            print(f"显示FC工具列表失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def download_fc_tool(self, tool):
+        """下载FC工具到server-tools目录"""
+        try:
+            tool_id = tool.get('id')
+            filename = tool.get('file_name')
+
+            self.toast.show_message(f"正在下载 {tool.get('tool_name')}...", 2000)
+
+            url = f"http://mynewbot.com/api/download-fc-tool/{tool_id}"
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+
+            # 保存到server-tools目录
+            save_dir = Path("server-tools")
+            save_dir.mkdir(parents=True, exist_ok=True)
+            file_path = save_dir / filename
+
+            with open(file_path, 'wb') as f:
+                f.write(response.content)
+
+            self.toast.show_message(f"✓ 下载成功: {filename}", 3000)
+            print(f"FC工具已保存到: {file_path}")
+
+        except Exception as e:
+            self.toast.show_message(f"✗ 下载FC工具失败: {str(e)}", 3000)
+            print(f"下载FC工具失败: {e}")
+
+    # ==================== 提示词广场相关功能 ====================
+    def init_prompt_market_table(self):
+        """初始化提示词广场卡片容器"""
+        try:
+            # 清空现有的卡片
+            layout = self.ui.scrollAreaWidgetContents_prompt_market.layout()
+            while layout.count():
+                child = layout.takeAt(0)
+                if child.widget():
+                    child.widget().deleteLater()
+
+            # 添加一个占位spacer
+            spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+            layout.addItem(spacer)
+
+            print("提示词广场卡片容器初始化成功")
+        except Exception as e:
+            print(f"初始化提示词广场失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def refresh_prompt_market(self):
+        """刷新提示词广场列表"""
+        print("开始刷新提示词广场...")
+        try:
+            print("正在请求API...")
+            response = requests.get("http://mynewbot.com/api/get-prompts", timeout=10)
+            print(f"API响应状态码: {response.status_code}")
+            data = response.json()
+            print(f"API返回数据: {data}")
+
+            if data.get('success'):
+                prompts = data.get('prompts', [])
+                print(f"获取到 {len(prompts)} 个提示词")
+                self.display_prompts(prompts)
+                self.toast.show_message(f"成功获取 {len(prompts)} 个提示词", 2000)
+            else:
+                print("API返回success=False")
+                self.toast.show_message("获取提示词列表失败", 3000)
+        except Exception as e:
+            self.toast.show_message(f"刷新失败: {str(e)}", 3000)
+            print(f"刷新提示词广场失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def display_prompts(self, prompts):
+        """显示提示词列表 - 可折叠布局"""
+        print(f"开始显示 {len(prompts)} 个提示词")
+        try:
+            # 获取容器布局
+            container_layout = self.ui.scrollAreaWidgetContents_prompt_market.layout()
+
+            # 清空现有的卡片(保留最后的spacer)
+            while container_layout.count() > 0:
+                item = container_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+                elif item.spacerItem():
+                    pass
+
+            # 为每个提示词创建可折叠的卡片
+            for i, prompt in enumerate(prompts):
+                print(f"创建第 {i+1} 个提示词卡片: {prompt.get('title', '')}")
+
+                # 创建主容器
+                main_container = QWidget()
+                main_container.setStyleSheet("""
+                    QWidget {
+                        background-color: white;
+                        border-radius: 8px;
+                        border: 1px solid #e0e0e0;
+                    }
+                """)
+
+                container_v_layout = QVBoxLayout(main_container)
+                container_v_layout.setContentsMargins(0, 0, 0, 0)
+                container_v_layout.setSpacing(0)
+
+                # 头部区域（标题+简介+复制按钮）
+                header = QWidget()
+                header.setStyleSheet("""
+                    QWidget {
+                        background-color: transparent;
+                        border: none;
+                    }
+                    QWidget:hover {
+                        background-color: #f9f9f9;
+                    }
+                """)
+                header.setCursor(Qt.PointingHandCursor)
+                header_layout = QHBoxLayout(header)
+                header_layout.setContentsMargins(15, 12, 15, 12)
+                header_layout.setSpacing(15)
+
+                # 左侧：标题、简介、警示标签（横向排列）
+                title_and_info = QLabel()
+                title_text = f"💡 <b>{prompt.get('title', '')}</b>"
+                summary_text = prompt.get('summary', '')
+
+                # 检查是否有使用要求
+                prerequisites = prompt.get('prerequisites', '')
+                warning_tag = ""
+                if prerequisites:
+                    warning_tag = ' <span style="background-color: #fef5e7; color: #e67e22; padding: 2px 8px; border-radius: 4px; font-size: 8pt;">⚠️ 有使用条件</span>'
+
+                # 组合显示：标题 简介 警示标签
+                combined_text = f'{title_text}  <span style="color: #777; font-size: 9pt;">{summary_text}</span>{warning_tag}'
+                title_and_info.setText(combined_text)
+                title_and_info.setFont(QFont("微软雅黑", 10))
+                title_and_info.setStyleSheet("color: #2c3e50; border: none;")
+                title_and_info.setWordWrap(True)
+                header_layout.addWidget(title_and_info, 1)
+
+                # 右侧：应用按钮
+                apply_btn = QPushButton("应用")
+                apply_btn.setMinimumSize(80, 35)
+                apply_btn.setFont(QFont("微软雅黑", 9))
+                apply_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #8e44ad;
+                        color: white;
+                        border-radius: 6px;
+                        border: none;
+                    }
+                    QPushButton:hover {
+                        background-color: #9b59b6;
+                    }
+                    QPushButton:pressed {
+                        background-color: #6c3483;
+                    }
+                """)
+                apply_btn.clicked.connect(lambda checked, p=prompt: self.apply_prompt(p))
+                header_layout.addWidget(apply_btn)
+
+                container_v_layout.addWidget(header)
+
+                # 详情区域（默认隐藏）
+                detail_widget = QWidget()
+                detail_widget.setStyleSheet("background-color: #f8f9fa; border: none; border-top: 1px solid #e0e0e0;")
+                detail_widget.setVisible(False)
+                detail_layout = QVBoxLayout(detail_widget)
+                detail_layout.setContentsMargins(15, 15, 15, 15)
+                detail_layout.setSpacing(10)
+
+                # 使用要求
+                prerequisites = prompt.get('prerequisites', '')
+                if prerequisites:
+                    prereq_label = QLabel(f"⚠️ 使用要求:\n{prerequisites}")
+                    prereq_label.setFont(QFont("微软雅黑", 9))
+                    prereq_label.setStyleSheet("color: #e67e22; padding: 10px; background-color: #fef5e7; border-radius: 6px; border: 1px solid #f39c12;")
+                    prereq_label.setWordWrap(True)
+                    detail_layout.addWidget(prereq_label)
+
+                # 内容
+                content_label = QLabel(prompt.get('content', ''))
+                content_label.setFont(QFont("微软雅黑", 9))
+                content_label.setStyleSheet("color: #555; padding: 10px; background-color: white; border-radius: 6px;")
+                content_label.setWordWrap(True)
+                detail_layout.addWidget(content_label)
+
+                container_v_layout.addWidget(detail_widget)
+
+                # 点击头部切换展开/折叠
+                header.mousePressEvent = lambda event, dw=detail_widget: self.toggle_detail(dw)
+
+                # 添加到容器
+                container_layout.addWidget(main_container)
+
+            # 添加底部spacer
+            spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+            container_layout.addItem(spacer)
+
+            print(f"提示词卡片显示完成,共 {len(prompts)} 个")
+
+        except Exception as e:
+            print(f"显示提示词列表失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def toggle_detail(self, detail_widget):
+        """切换详情显示/隐藏"""
+        detail_widget.setVisible(not detail_widget.isVisible())
+
+    def apply_prompt(self, prompt):
+        """应用提示词到系统提示词输入框"""
+        try:
+            content = prompt.get('content', '')
+            title = prompt.get('title', '')
+
+            # 将提示词内容填入系统提示词输入框（textEdit_3）
+            self.ui.textEdit_3.setPlainText(content)
+
+            self.toast.show_message("✓ 已更新提示词！", 5000)
+            print(f"已应用提示词: {title}")
+
+        except Exception as e:
+            self.toast.show_message(f"✗ 应用失败: {str(e)}", 3000)
+            print(f"应用提示词失败: {e}")
+
     def create_eye_icon(self, emoji):
         """创建眼睛图标"""
         try:
@@ -3497,10 +4744,412 @@ class set_pyqt(QWidget):
             # 如果创建图标失败，返回空图标
             return QIcon()
 
+    # ==================== 对话记录相关功能 ====================
+    def open_chat_history(self):
+        """打开对话记录页面并自动加载"""
+        try:
+            # 先切换到对话记录页面
+            self.ui.stackedWidget.setCurrentIndex(14)
+
+            # 检查是否已经创建了WebView
+            # 打包后禁用 WebEngineView，直接使用 QTextEdit 避免崩溃
+            if not hasattr(self, 'chat_history_webview'):
+                # 检测是否是打包后的程序
+                is_frozen = getattr(sys, 'frozen', False)
+
+                if not is_frozen:  # 只在开发环境使用 WebEngineView
+                    try:
+                        from PyQt5.QtWebEngineWidgets import QWebEngineView
+                        print("成功导入QWebEngineView")
+                        # 创建WebView替换TextEdit
+                        self.chat_history_webview = QWebEngineView()
+                        self.chat_history_webview.setStyleSheet("""
+                            QWebEngineView {
+                                background-color: #fafaf8;
+                                border: 1px solid rgba(0, 0, 0, 0.1);
+                            }
+                        """)
+                        # 获取当前布局
+                        layout = self.ui.textEdit_chat_history.parent().layout()
+                        print(f"获取到布局: {layout}")
+                        # 找到textEdit_chat_history的索引
+                        for i in range(layout.count()):
+                            widget = layout.itemAt(i).widget()
+                            print(f"索引 {i} 的控件: {widget}")
+                            if widget == self.ui.textEdit_chat_history:
+                                print(f"找到textEdit_chat_history在索引 {i}")
+                                # 移除旧的textEdit
+                                layout.removeWidget(self.ui.textEdit_chat_history)
+                                self.ui.textEdit_chat_history.hide()
+                                # 添加新的webview
+                                layout.insertWidget(i, self.chat_history_webview)
+                                print("已插入WebView")
+                                break
+                        print("WebEngineView创建完成")
+                    except ImportError as e:
+                        print(f"PyQtWebEngine导入失败: {e}")
+                        self.chat_history_webview = None
+                    except Exception as e:
+                        print(f"创建WebView时出错: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        self.chat_history_webview = None
+                else:
+                    # 打包后直接禁用 WebEngineView
+                    print("打包模式：禁用WebEngineView，使用QTextEdit")
+                    self.chat_history_webview = None
+
+            # 然后加载对话记录
+            self.load_chat_history()
+        except Exception as e:
+            # 捕获所有异常，防止程序崩溃
+            print(f"打开对话记录时发生错误: {e}")
+            import traceback
+            traceback.print_exc()
+            # 显示错误信息给用户
+            try:
+                error_msg = f"打开对话记录失败: {str(e)}"
+                self.ui.textEdit_chat_history.setPlainText(error_msg)
+            except:
+                pass
+
+    def load_chat_history(self):
+        """加载对话记录"""
+        print("开始加载对话记录...")
+        try:
+            # 对话历史文件路径
+            history_file = os.path.join("AI记录室", "对话历史.jsonl")
+
+            if not os.path.exists(history_file):
+                empty_html = "<p style='text-align:center; color:#666; padding:50px;'>对话历史文件不存在</p>"
+                if hasattr(self, 'chat_history_webview') and self.chat_history_webview:
+                    self.chat_history_webview.setHtml(empty_html)
+                else:
+                    self.ui.textEdit_chat_history.setHtml(empty_html)
+                print(f"对话历史文件不存在: {history_file}")
+                return
+
+            # 读取对话历史
+            chat_history = []
+            with open(history_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            chat_history.append(json.loads(line))
+                        except json.JSONDecodeError as e:
+                            print(f"解析JSON失败: {e}")
+                            continue
+
+            # 打包模式下，限制加载最近的50条对话，避免内存溢出
+            is_frozen = getattr(sys, 'frozen', False)
+            if is_frozen and len(chat_history) > 50:
+                print(f"打包模式：限制只显示最近50条对话（共{len(chat_history)}条）")
+                chat_history = chat_history[-50:]
+
+            # 格式化显示
+            if not chat_history:
+                empty_html = "<p style='text-align:center; color:#666; padding:50px;'>暂无对话记录</p>"
+                if hasattr(self, 'chat_history_webview') and self.chat_history_webview:
+                    self.chat_history_webview.setHtml(empty_html)
+                else:
+                    self.ui.textEdit_chat_history.setHtml(empty_html)
+                return
+
+            # 构建HTML - 完全按照HTML查看器的样式
+            html_parts = []
+            html_parts.append("""
+            <style>
+                body {
+                    margin: 0;
+                    padding: 0;
+                }
+                .dialogue-entry {
+                    margin-bottom: 25px;
+                    padding-left: 10px;
+                }
+                .character-name {
+                    font-weight: bold;
+                    margin-bottom: 8px;
+                    letter-spacing: 1px;
+                }
+                .character-name.user {
+                    color: #4a90d9;
+                }
+                .character-name.assistant {
+                    color: #d4850d;
+                }
+                .dialogue-text {
+                    line-height: 1.8;
+                    color: #333;
+                    padding-left: 15px;
+                    border-left: 2px solid rgba(0, 0, 0, 0.15);
+                }
+                .dialogue-text img {
+                    display: block;
+                    max-width: 100%;
+                    height: auto;
+                    border-radius: 8px;
+                    margin: 15px 0;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                    cursor: pointer;
+                    transition: transform 0.2s;
+                }
+                .dialogue-text img:hover {
+                    transform: scale(1.02);
+                    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+                }
+                .emotion-tag {
+                    color: #e91e63;
+                }
+                .tool-call-box {
+                    margin-top: 10px;
+                    padding: 12px 15px;
+                    background: rgba(100, 150, 200, 0.08);
+                    border-left: 3px solid #6496c8;
+                    border-radius: 4px;
+                    color: #555;
+                }
+                .divider {
+                    height: 1px;
+                    background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.1), transparent);
+                    margin: 20px 0;
+                }
+                /* 全屏图片预览遮罩层 */
+                #image-preview-fullscreen {
+                    display: none;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0, 0, 0, 0.98);
+                    z-index: 999999;
+                    cursor: pointer;
+                    justify-content: center;
+                    align-items: center;
+                }
+                #image-preview-fullscreen.active {
+                    display: flex !important;
+                }
+                #image-preview-fullscreen img {
+                    max-width: 98%;
+                    max-height: 98%;
+                    object-fit: contain;
+                    box-shadow: 0 0 50px rgba(255, 255, 255, 0.3);
+                }
+            </style>
+
+            <script>
+                // 图片点击放大功能
+                function setupImagePreview() {
+                    console.log('开始设置图片预览功能');
+
+                    // 创建全屏遮罩层
+                    var overlay = document.createElement('div');
+                    overlay.id = 'image-preview-fullscreen';
+                    var overlayImg = document.createElement('img');
+                    overlay.appendChild(overlayImg);
+                    document.body.appendChild(overlay);
+
+                    console.log('遮罩层已创建');
+
+                    // 点击遮罩关闭
+                    overlay.onclick = function() {
+                        console.log('关闭预览');
+                        this.classList.remove('active');
+                    };
+
+                    // 为所有图片添加点击事件
+                    var images = document.querySelectorAll('.dialogue-text img');
+                    console.log('找到图片数量:', images.length);
+
+                    images.forEach(function(img) {
+                        img.onclick = function(e) {
+                            console.log('图片被点击');
+                            e.stopPropagation();
+                            overlayImg.src = this.src;
+                            overlay.classList.add('active');
+                        };
+                    });
+                }
+
+                // 页面加载完成后初始化
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', setupImagePreview);
+                } else {
+                    setupImagePreview();
+                }
+            </script>
+            """)
+
+            # 处理情绪标签的函数（Python版本）
+            def process_emotion_tags(content):
+                """将 <情绪> 标签转换为带样式的HTML"""
+                import re
+                # 只匹配包含中文字符的标签，排除HTML标签
+                return re.sub(r'<([\u4e00-\u9fa5]+)>', r'<span class="emotion-tag">&lt;\1&gt;</span>', content)
+
+            # 提取内容并生成HTML的函数
+            def extract_content_html(content):
+                """从content中提取内容并生成HTML，处理字符串或列表格式"""
+                if isinstance(content, str):
+                    # 如果是字符串，直接返回
+                    return content
+                elif isinstance(content, list):
+                    # 如果是列表，提取所有文本和图片信息
+                    html_parts = []
+                    for item in content:
+                        if isinstance(item, dict):
+                            if item.get('type') == 'text':
+                                html_parts.append(item.get('text', ''))
+                            elif item.get('type') == 'image_url':
+                                # 提取图片数据
+                                image_url = item.get('image_url', {}).get('url', '')
+                                if image_url and image_url.startswith('data:image'):
+                                    # 检测是否是打包后的程序
+                                    is_frozen = getattr(sys, 'frozen', False)
+
+                                    if not is_frozen and hasattr(self, 'chat_history_webview') and self.chat_history_webview:
+                                        # 开发环境 + WebEngineView: 使用临时文件（更快）
+                                        try:
+                                            import base64
+                                            import tempfile
+                                            import uuid
+
+                                            header, base64_data = image_url.split(',', 1)
+                                            image_format = header.split(';')[0].split('/')[1]
+                                            image_bytes = base64.b64decode(base64_data)
+
+                                            temp_dir = tempfile.gettempdir()
+                                            temp_filename = f"chat_image_{uuid.uuid4().hex}.{image_format}"
+                                            temp_path = os.path.join(temp_dir, temp_filename)
+
+                                            with open(temp_path, 'wb') as f:
+                                                f.write(image_bytes)
+
+                                            file_url = f"file:///{temp_path.replace(chr(92), '/')}"
+                                            html_parts.append(f'<br/><img src="{file_url}" style="max-width:100%; height:auto; display:block; margin:10px 0;" /><br/>')
+                                        except Exception as e:
+                                            print(f"处理图片时出错: {e}")
+                                            html_parts.append(f'<br/>[图片加载失败]<br/>')
+                                    else:
+                                        # 打包模式 或 QTextEdit: 直接使用 base64
+                                        # QTextEdit 不支持百分比宽度，需要缩小图片
+                                        try:
+                                            import base64
+                                            from io import BytesIO
+                                            from PIL import Image
+
+                                            # 解码 base64
+                                            header, base64_data = image_url.split(',', 1)
+                                            image_bytes = base64.b64decode(base64_data)
+
+                                            # 使用 PIL 缩小图片
+                                            img = Image.open(BytesIO(image_bytes))
+
+                                            # 缩放到最大宽度 800px
+                                            max_width = 800
+                                            if img.width > max_width:
+                                                ratio = max_width / img.width
+                                                new_height = int(img.height * ratio)
+                                                img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+
+                                            # 转回 base64
+                                            buffered = BytesIO()
+                                            img_format = header.split(';')[0].split('/')[1].upper()
+                                            if img_format == 'JPG':
+                                                img_format = 'JPEG'
+                                            img.save(buffered, format=img_format)
+                                            img_str = base64.b64encode(buffered.getvalue()).decode()
+                                            resized_url = f"data:image/{img_format.lower()};base64,{img_str}"
+
+                                            html_parts.append(f'<br/><img src="{resized_url}" style="display:block; margin:10px 0;" /><br/>')
+                                        except Exception as e:
+                                            print(f"缩放图片失败: {e}")
+                                            # 如果缩放失败，直接显示原图但限制宽度
+                                            html_parts.append(f'<br/><img src="{image_url}" width="800" style="display:block; margin:10px 0;" /><br/>')
+                    return ''.join(html_parts)
+                else:
+                    return str(content)
+
+            # 构建对话内容
+            for i, msg in enumerate(chat_history):
+                role = msg.get('role', 'unknown')
+                content = msg.get('content', '')
+                tool_calls = msg.get('tool_calls', [])
+
+                # 角色显示
+                if role == 'user':
+                    role_display = "用户"
+                    role_class = "user"
+                elif role == 'assistant':
+                    role_display = "AI"
+                    role_class = "assistant"
+                else:
+                    role_display = role
+                    role_class = "unknown"
+
+                # 提取内容（包括文本和图片）
+                content_html = extract_content_html(content)
+
+                # 处理内容：先处理情绪标签
+                processed_content = process_emotion_tags(content_html)
+
+                # 处理工具调用（放在对话文本内部）
+                tool_html = ""
+                if tool_calls:
+                    tool_call = tool_calls[0]  # 只取第一个工具调用
+                    function_name = tool_call.get('function', {}).get('name', 'unknown')
+                    arguments = tool_call.get('function', {}).get('arguments', '')
+
+                    # 尝试解析参数
+                    try:
+                        arg_obj = json.loads(arguments)
+                        args_text = ', '.join(str(v) for v in arg_obj.values())
+                    except:
+                        args_text = arguments
+
+                    tool_html = f'<div class="tool-call-box">AI使用工具：{function_name} 输入了参数：{args_text}</div>'
+
+                # 开始对话条目
+                html_parts.append('<div class="dialogue-entry">')
+                html_parts.append(f'<div class="character-name {role_class}">{role_display}</div>')
+                html_parts.append(f'<div class="dialogue-text">{processed_content}{tool_html}</div>')
+                html_parts.append('</div>')
+
+                # 添加分隔线（最后一条除外）
+                if i < len(chat_history) - 1:
+                    html_parts.append('<div class="divider"></div>')
+
+            # 设置HTML到文本框或WebView
+            final_html = "".join(html_parts)
+            if hasattr(self, 'chat_history_webview') and self.chat_history_webview:
+                self.chat_history_webview.setHtml(final_html)
+            else:
+                self.ui.textEdit_chat_history.setHtml(final_html)
+            print(f"成功加载 {len(chat_history)} 条对话记录")
+
+        except Exception as e:
+            error_html = f"<p style='color:red;'>加载对话记录失败: {str(e)}</p>"
+            if hasattr(self, 'chat_history_webview') and self.chat_history_webview:
+                self.chat_history_webview.setHtml(error_html)
+            else:
+                self.ui.textEdit_chat_history.setHtml(error_html)
+            print(f"加载对话记录失败: {e}")
+            import traceback
+            traceback.print_exc()
+
 
 if __name__ == '__main__':
     # # 分辨率自适应 - 暂时禁用，可能导致UI尺寸异常
     # QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+
+    # 为了支持QWebEngineView，必须在创建QApplication之前设置（如果可用的话）
+    try:
+        QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
+    except:
+        pass  # 如果设置失败（比如打包后没有WebEngine），忽略即可
 
     app = QApplication(sys.argv)
     w = set_pyqt()

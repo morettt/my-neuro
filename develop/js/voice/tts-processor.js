@@ -21,6 +21,10 @@ class EnhancedTextProcessor {
         this.shouldStop = false;
         this.llmFullResponse = '';
 
+        // 🔥 TTS完成Promise（用于等待播放完成）
+        this.completionPromise = null;
+        this.completionResolve = null;
+
         // 启动处理线程
         this.startProcessingThread();
         this.startPlaybackThread();
@@ -98,6 +102,13 @@ class EnhancedTextProcessor {
         }
 
         eventBus.emit(Events.TTS_END);
+
+        // 🔥 解决完成Promise
+        if (this.completionResolve) {
+            this.completionResolve();
+            this.completionResolve = null;
+            this.completionPromise = null;
+        }
     }
 
     // 添加流式文本
@@ -127,6 +138,13 @@ class EnhancedTextProcessor {
         this.reset();
         this.llmFullResponse = text;
         this.requestHandler.segmentFullText(text, this.textSegmentQueue);
+
+        // 🔥 创建完成Promise，返回给调用者等待
+        this.completionPromise = new Promise(resolve => {
+            this.completionResolve = resolve;
+        });
+
+        return this.completionPromise;
     }
 
     // 重置
@@ -136,6 +154,13 @@ class EnhancedTextProcessor {
         this.audioDataQueue = [];
         this.isProcessing = false;
         this.shouldStop = false;
+
+        // 🔥 取消之前的完成Promise
+        if (this.completionResolve) {
+            this.completionResolve();
+            this.completionResolve = null;
+            this.completionPromise = null;
+        }
 
         this.playbackEngine.reset();
         this.requestHandler.reset();

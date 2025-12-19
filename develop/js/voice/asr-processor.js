@@ -58,6 +58,9 @@ class ASRProcessor {
         // 新增：TTS处理器引用，用于语音打断
         this.ttsProcessor = null;
 
+        // 新增：防止重复触发中断的标志
+        this.hasInterruptedThisSession = false;
+
         // 初始化
         this.setupAudioSystem();
     }
@@ -128,9 +131,20 @@ class ASRProcessor {
         } else {
             // 语音打断模式：优先检查语音打断逻辑
             // 只要在处理用户输入期间（包括工具调用），就允许打断
-            if ((appState.isPlayingTTS() || appState.isProcessingUserInput()) && this.ttsProcessor) {
+            // 🔥 关键修复：只在第一次检测到语音时触发中断，避免重复触发
+            if ((appState.isPlayingTTS() || appState.isProcessingUserInput()) &&
+                this.ttsProcessor &&
+                !this.hasInterruptedThisSession) {
                 console.log('🎤 检测到用户语音，执行语音打断');
                 this.ttsProcessor.interrupt();
+                this.hasInterruptedThisSession = true; // 标记已触发中断
+
+                // 🔥 关键修复：打断时重置 ASR 锁定状态，允许新的录音开始
+                // 这样用户可以在工具调用期间打断并立即开始新的输入
+                if (this.asrLocked) {
+                    console.log('🔓 打断时解锁 ASR，允许新的语音输入');
+                    this.asrLocked = false;
+                }
             }
 
             // 语音打断后，如果ASR被锁定（正在处理之前的识别），则不开始新的录音
@@ -258,6 +272,9 @@ class ASRProcessor {
         // 在开始处理录音时立即锁定ASR，防止二次接收
         this.asrLocked = true;
         console.log('ASR锁定：开始处理录音');
+
+        // 🔥 重置中断标志，允许下次语音检测时再次触发中断
+        this.hasInterruptedThisSession = false;
 
         const recordingEndIndex = this.continuousBuffer.length;
         const actualStartIndex = Math.max(0, this.recordingStartIndex - this.PRE_RECORD_SAMPLES);
