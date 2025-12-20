@@ -1,21 +1,26 @@
-# 第一步：忽略所有
+# 忽略所有
 *
 
-# 第二步：不忽略 .gitignore 本身
+# 不忽略 .gitignore 本身
 !.gitignore
 
 # 不忽略 develop 文件夹
 !develop/
 !develop/**
 
+
 # 忽略 develop 里的特定文件夹
-develop/2D/
+develop/2D/*
 develop/AI记录室/
 develop/build/
 develop/fake_neuro_audio/
 develop/node/
 develop/node_modules/
 develop/song-library/
+
+# 不忽略 2D 文件夹特定文件
+!develop/2D/占位.txt
+
 
 # 忽略所有 node_modules（无论在哪）
 **/node_modules/
@@ -24,5 +29,3 @@ develop/song-library/
 *.exe
 *.zip
 
-# 忽略 GAME 文件夹（如果不需要）
-develop/GAME/
