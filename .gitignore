@@ -4,15 +4,24 @@
 # 第二步：不忽略 .gitignore 本身
 !.gitignore
 
-#不忽略develop文件夹
-!my-neuro/develop
+# 不忽略 develop 文件夹
+!develop/
+!develop/**
 
-#忽略my-neuro/develop 特定文件
+# 忽略 develop 里的特定文件夹
+develop/2D/
+develop/AI记录室/
+develop/build/
+develop/fake_neuro_audio/
+develop/node/
+develop/node_modules/
+develop/song-library/
 
-my-neuro/develop/2D
-my-neuro/develop/AI记录室
-my-neuro/develop/build
-my-neuro/develop/fake_neuro_audio
-my-neuro/develop/node
-my-neuro/develop/node_modules
-my-neuro/develop/song-library
+# 忽略所有 node_modules（无论在哪）
+**/node_modules/
+
+# 忽略可执行文件
+*.exe
+
+# 忽略 GAME 文件夹（如果不需要）
+develop/GAME/
