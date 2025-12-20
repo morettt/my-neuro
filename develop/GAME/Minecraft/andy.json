@@ -1,0 +1,14 @@
+{
+    "name": "",
+    "model": {
+        "api": "openai",
+        "model": "",
+        "url": ""
+    },
+    "embedding": {
+        "api": "openai",
+        "model": "text-embedding-ada-002",
+        "url": "https://api.zhizengzeng.com/v1"
+    },
+    "conversing": ""
+}
