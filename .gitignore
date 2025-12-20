@@ -22,6 +22,7 @@ develop/song-library/
 
 # 忽略可执行文件
 *.exe
+*.zip
 
 # 忽略 GAME 文件夹（如果不需要）
 develop/GAME/
