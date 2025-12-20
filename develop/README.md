@@ -28,6 +28,7 @@ npm install
 conda create -n pyqt python=3.10 -y
 conda activate pyqt
 
+pip install pyqt
 
 #在当前路径下运行这个指令打包exe
 pyinstaller --onefile --windowed --icon=fake_neuro.ico test.py
