@@ -28,12 +28,14 @@ npm install
 conda create -n pyqt python=3.10 -y
 conda activate pyqt
 
+
+#在当前路径下运行这个指令打包exe
 pyinstaller --onefile --windowed --icon=fake_neuro.ico test.py
 
 ```
 
-会在生成一个 dist文件夹
-里面会有一个test.exe的文件，请把它拖到develop路径下面。顺便重命名为：肥牛.exe
+打包好以后，会生成一个 dist文件夹
+dist文件夹里会有一个 test.exe 的文件，请把它拖到develop路径下面。顺便重命名为：肥牛.exe
 
-最后双击这个:肥牛.exe 配置api配置即可对话
+最后双击:肥牛.exe 配置api配置即可对话
 
