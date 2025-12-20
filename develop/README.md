@@ -15,7 +15,7 @@ npm install
 进行依赖的安装
 
 
-#### 关于皮套的获取，请在游览器运行回车会自动下载zip文件：https://github.com/morettt/my-neuro/releases/download/fake-neuro
+#### 关于皮套的获取，点击这个链接，会自动下载zip文件：https://github.com/morettt/my-neuro/releases/download/fake-neuro/default.zip
 
 #### 这是live-2d皮套，下载好后请放到2D文件夹解压
 
