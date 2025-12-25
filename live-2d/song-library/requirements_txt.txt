@@ -1,0 +1,13 @@
+numpy<2
+audio-separator==0.28.5
+torch==2.4.1+cu118
+torchvision==0.19.1+cu118
+torchaudio==2.4.1+cu118
+onnxruntime-gpu==1.16.3
+librosa>=0.10
+pydub>=0.25
+requests>=2
+tqdm
+scipy<2.0.0,>=1.13.0
+pyyaml
+six>=1.16

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <title>Live2D桌宠与语音聊天</title>
+</head>
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <title>Live2D桌宠与语音聊天</title>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="subtitle-container">
+        <p id="subtitle-text"></p>
+    </div>
+
+    <div id="text-chat-container">
+        <div id="chat-messages"></div>
+        <div id="chat-input-container">
+            <input type="text" id="chat-input" placeholder="输入消息...">
+            <button id="chat-send-btn">发送</button>
+        </div>
+    </div>
+
+    <!-- 歌词气泡容器 -->
+    <div id="lyrics-bubble-container">
+        <div id="lyrics-bubble-text"></div>
+    </div>
+
+    <!-- 气泡框容器 -->
+    <div id="bubble-container">
+        <div id="bubble-text"></div>
+    </div>
+
+    <!-- 工具调用气泡框堆叠容器 -->
+    <div id="tool-bubbles-container"></div>
+
+    <!-- 引入 Live2D 依赖 -->
+    <script src="libs/live2d.min.js"></script>
+    <script src="libs/live2dcubismcore.min.js"></script>
+    <script src="libs/pixi.min.js"></script>
+    <script src="libs/pixi-live2d-display.min.js"></script>
+    <script src="libs/pixi-live2d-display-extra.min.js"></script>
+    <script src="app.js"></script>
+
+
+</body>
+
+</html>
