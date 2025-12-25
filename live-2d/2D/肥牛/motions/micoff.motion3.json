@@ -1,0 +1,63 @@
+{
+	"Version": 3,
+	"Meta": {
+		"Duration": 0.97,
+		"Fps": 30.0,
+		"Loop": true,
+		"AreBeziersRestricted": false,
+		"CurveCount": 3,
+		"TotalSegmentCount": 5,
+		"TotalPointCount": 12,
+		"UserDataCount": 0,
+		"TotalUserDataSize": 0
+	},
+	"Curves": [
+		{
+			"Target": "Parameter",
+			"Id": "mic",
+			"Segments": [
+				0,
+				1,
+				1,
+				0.156,
+				1,
+				0.311,
+				0,
+				0.467,
+				0,
+				1,
+				0.622,
+				0,
+				0.778,
+				0,
+				0.933,
+				0,
+				0,
+				0.967,
+				0
+			]
+		},
+		{
+			"Target": "PartOpacity",
+			"Id": "PartArmA",
+			"Segments": [
+				0,
+				1,
+				0,
+				0.97,
+				1
+			]
+		},
+		{
+			"Target": "PartOpacity",
+			"Id": "PartArmB",
+			"Segments": [
+				0,
+				0,
+				0,
+				0.97,
+				0
+			]
+		}
+	]
+}

@@ -1,25 +1,21 @@
-# 忽略所有
-*
-
 # 不忽略 .gitignore 本身
 !.gitignore
 
-# 不忽略 develop 文件夹
-!develop/
-!develop/**
 
-
-# 忽略 develop 里的特定文件夹
-develop/2D/*
-develop/AI记录室/
-develop/build/
-develop/fake_neuro_audio/
-develop/node/
-develop/node_modules/
-develop/song-library/
-
-# 不忽略 2D 文件夹特定文件
-!develop/2D/占位.txt
+# 忽略特定文件夹
+# live-2d/2D/*
+live-2d/AI记录室/*
+live-2d/build/
+live-2d/fake_neuro_audio/
+live-2d/node/
+song-library/
+full-hub/7z
+full-hub/asr-hub
+full-hub/bert-hub
+full-hub/logs
+full-hub/model
+full-hub/rag-hub
+full-hub/tts-hub
 
 
 # 忽略所有 node_modules（无论在哪）
@@ -28,4 +24,10 @@ develop/song-library/
 # 忽略可执行文件
 *.exe
 *.zip
+*.log
+
+#忽略无意义文件
+
+runtime.logfull-hub/ 
+
 
