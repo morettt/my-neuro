@@ -336,17 +336,31 @@ class UIController {
         const textChatContainer = document.getElementById('text-chat-container');
         if (!textChatContainer) return false;
 
-        // 如果开启了TTS和ASR，默认隐藏聊天框（语音交互模式）
-        // 如果禁用了TTS或ASR，默认显示聊天框（文本交互模式）
-        const shouldShow = !(ttsEnabled && asrEnabled);
+        // 根据配置设置对话框显示状态
+        const shouldShowChatBox = this.config.ui && this.config.ui.hasOwnProperty('show_chat_box')
+            ? this.config.ui.show_chat_box
+            : (!ttsEnabled || !asrEnabled);
 
-        if (shouldShow) {
+        textChatContainer.style.display = shouldShowChatBox ? 'block' : 'none';
+
+        // 如果启用了text_only_mode或者TTS/ASR任一被禁用，自动显示聊天框
+        if ((this.config.ui && this.config.ui.text_only_mode) || !ttsEnabled || !asrEnabled) {
             textChatContainer.style.display = 'block';
-        } else {
-            textChatContainer.style.display = 'none';
+            console.log('检测到纯文本模式或TTS/ASR禁用，自动显示聊天框');
         }
 
-        return shouldShow;
+        // Alt键切换聊天框
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Alt') {
+                e.preventDefault();
+                const chatContainer = document.getElementById('text-chat-container');
+                if (chatContainer) {
+                    chatContainer.style.display = chatContainer.style.display === 'none' ? 'block' : 'none';
+                }
+            }
+        });
+
+        return shouldShowChatBox;
     }
 
     // 设置聊天框消息发送
