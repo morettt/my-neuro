@@ -10,6 +10,9 @@ import urllib3
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+#live-2d版本号
+version_tag = "v5.9.6"
+
 # 禁用SSL警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -263,7 +266,8 @@ def download_live2d_model():
                 shutil.rmtree(item_path)
         print(f"{target_folder} 文件夹内容已清空")
 
-    url = "https://github.com/morettt/my-neuro/releases/download/v5.9.6/live-2d.zip"
+
+    url = f'https://hk.gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip'
     file_name = url.split('/')[-1]
 
     # 下载文件
