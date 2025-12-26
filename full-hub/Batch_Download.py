@@ -10,6 +10,9 @@ import urllib3
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+#live-2d版本号
+version_tag = "v5.9.6"
+
 # 禁用SSL警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -263,30 +266,8 @@ def download_live2d_model():
                 shutil.rmtree(item_path)
         print(f"{target_folder} 文件夹内容已清空")
 
-    version_tag = "v5.9.6"
 
-    mirror_urls = {
-        "1": {
-            "desc": "gh-proxy.org",
-            "url": f"https://gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip"
-        },
-        "2": {
-            "desc": "hk.gh-proxy.org",
-            "url": f"https://hk.gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip"
-        },
-        "3": {
-            "desc": "github.com",
-            "url": f"https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip"
-        }
-    }
-
-    print("========== 选择下载源 ==========")
-    for key, mirror in mirror_urls.items():
-        print(f"{key}. {mirror['desc']}")
-    
-    mirror_choice = input("请输入下载源编号（默认1）: ").strip()
-
-    url = mirror_urls.get(mirror_choice, mirror_urls["1"])["url"]
+    url = f'https://hk.gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip'
     file_name = url.split('/')[-1]
 
     # 下载文件
