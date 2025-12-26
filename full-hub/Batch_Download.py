@@ -266,22 +266,45 @@ def download_live2d_model():
                 shutil.rmtree(item_path)
         print(f"{target_folder} 文件夹内容已清空")
 
+    # 定义多个下载源（按优先级排序）
+    download_sources = [
+        ('香港镜像',
+         f'https://hk.gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip'),
+        ('备用镜像',
+         f'https://gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip'),
+        ('GitHub原版', f'https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip')
+    ]
 
-    url = f'https://hk.gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip'
-    file_name = url.split('/')[-1]
+    file_name = 'live-2d.zip'
+    downloaded_file = None
 
-    # 下载文件
-    downloaded_file = download_file(url, file_name)
+    # 依次尝试每个下载源
+    for source_name, url in download_sources:
+        try:
+            print(f"尝试使用 {source_name} 下载...")
+            downloaded_file = download_file(url, file_name)
+            print(f"✓ {source_name} 下载成功!")
+            break  # 下载成功就跳出循环
+        except Exception as e:
+            print(f"✗ {source_name} 下载失败: {e}")
+            if source_name != download_sources[-1][0]:  # 如果不是最后一个源
+                print("尝试下一个下载源...")
+            else:
+                print("所有下载源都已尝试失败!")
+                return False
 
     # 解压文件
-    extract_success = extract_zip(downloaded_file, target_folder)
+    if downloaded_file:
+        extract_success = extract_zip(downloaded_file, target_folder)
 
-    # 清理：删除压缩文件
-    if extract_success and os.path.exists(downloaded_file):
-        os.remove(downloaded_file)
-        print(f"原压缩文件 {downloaded_file} 已删除")
+        # 清理：删除压缩文件
+        if extract_success and os.path.exists(downloaded_file):
+            os.remove(downloaded_file)
+            print(f"原压缩文件 {downloaded_file} 已删除")
 
-    return extract_success
+        return extract_success
+
+    return False
 
 
 # 开始下载Live2D模型
