@@ -331,6 +331,38 @@ class UIController {
         }, 5000);
     }
 
+    // 设置聊天框样式
+    setChatStyle(styleNumber) {
+        const textChatContainer = document.getElementById('text-chat-container');
+        if (!textChatContainer) return;
+
+        // 样式名称映射
+        const styleNames = {
+            1: '现代毛玻璃',
+            2: '可爱卡通',
+            3: '极简科技',
+            4: '渐变霓虹',
+            5: '柔和圆润',
+            6: '萌系气泡'
+        };
+
+        // 设置data-style属性
+        textChatContainer.setAttribute('data-style', styleNumber);
+
+        // 保存到localStorage
+        try {
+            localStorage.setItem('chatInputStyle', styleNumber);
+        } catch (e) {
+            console.error('保存聊天框样式失败:', e);
+        }
+
+        // 显示提示
+        const styleName = styleNames[styleNumber] || '未知';
+        this.showSubtitle(`聊天框样式: ${styleName} (样式${styleNumber})`, 2000);
+
+        console.log(`切换到聊天框样式${styleNumber}: ${styleName}`);
+    }
+
     // 设置聊天框可见性
     setupChatBoxVisibility(ttsEnabled, asrEnabled) {
         const textChatContainer = document.getElementById('text-chat-container');
@@ -349,13 +381,39 @@ class UIController {
             console.log('检测到纯文本模式或TTS/ASR禁用，自动显示聊天框');
         }
 
-        // Alt键切换聊天框
+        // 从localStorage加载保存的样式
+        try {
+            const savedStyle = localStorage.getItem('chatInputStyle');
+            if (savedStyle && savedStyle >= 1 && savedStyle <= 6) {
+                textChatContainer.setAttribute('data-style', savedStyle);
+                console.log(`加载保存的聊天框样式: ${savedStyle}`);
+            } else {
+                // 默认样式1
+                textChatContainer.setAttribute('data-style', '1');
+            }
+        } catch (e) {
+            console.error('加载聊天框样式失败:', e);
+            textChatContainer.setAttribute('data-style', '1');
+        }
+
+        // Alt键切换聊天框显示/隐藏
+        // Alt+数字键切换样式
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Alt') {
+            // Alt键单独按下：切换聊天框显示/隐藏
+            if (e.key === 'Alt' && !e.shiftKey && !e.ctrlKey) {
                 e.preventDefault();
                 const chatContainer = document.getElementById('text-chat-container');
                 if (chatContainer) {
                     chatContainer.style.display = chatContainer.style.display === 'none' ? 'block' : 'none';
+                }
+            }
+
+            // Alt+1~6：切换聊天框样式
+            if (e.altKey && !e.shiftKey && !e.ctrlKey) {
+                const num = parseInt(e.key);
+                if (num >= 1 && num <= 6) {
+                    e.preventDefault();
+                    this.setChatStyle(num);
                 }
             }
         });

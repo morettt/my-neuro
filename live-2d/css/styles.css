@@ -51,19 +51,16 @@ body {
 #text-chat-container {
     position: fixed;
     bottom: 20px;
-    right: 20px; /* 已修改：从left改为right */
-    width: 300px;
+    right: 20px;
+    width: 350px;
     max-height: 400px;
-    background-color: rgba(0, 0, 0, 0.7);
-    border-radius: 10px;
-    padding: 10px;
     z-index: 1000;
     display: none;
-    pointer-events: auto; /* 确保鼠标事件能正常触发 */
+    pointer-events: auto;
 }
 
 #chat-messages {
-    display: none; /* 隐藏消息记录区域 */
+    display: none;
     max-height: 300px;
     overflow-y: auto;
     margin-bottom: 10px;
@@ -73,27 +70,341 @@ body {
 
 #chat-input-container {
     display: flex;
-    gap: 5px;
+    gap: 12px;
+    transition: background 0.3s ease, box-shadow 0.3s ease, border 0.3s ease;
 }
 
 #chat-input {
     flex: 1;
-    padding: 5px;
-    border-radius: 5px;
-    border: none;
+    outline: none;
+    transition: all 0.3s ease;
 }
 
 #chat-send-btn {
-    padding: 5px 10px;
-    border-radius: 5px;
     border: none;
-    background-color: #4CAF50;
-    color: white;
     cursor: pointer;
+    transition: all 0.3s ease;
 }
 
-#chat-send-btn:hover {
-    background-color: #45a049;
+/* ==================== 样式1: 现代毛玻璃风格 (默认) ==================== */
+#text-chat-container[data-style="1"] #chat-input-container,
+#text-chat-container:not([data-style]) #chat-input-container {
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 25px;
+    padding: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+#text-chat-container[data-style="1"] #chat-input,
+#text-chat-container:not([data-style]) #chat-input {
+    padding: 12px 20px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.9);
+    font-size: 15px;
+    color: #333;
+}
+
+#text-chat-container[data-style="1"] #chat-input:focus,
+#text-chat-container:not([data-style]) #chat-input:focus {
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+}
+
+#text-chat-container[data-style="1"] #chat-input::placeholder,
+#text-chat-container:not([data-style]) #chat-input::placeholder {
+    color: #999;
+}
+
+#text-chat-container[data-style="1"] #chat-send-btn,
+#text-chat-container:not([data-style]) #chat-send-btn {
+    padding: 12px 28px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+#text-chat-container[data-style="1"] #chat-send-btn:hover,
+#text-chat-container:not([data-style]) #chat-send-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+#text-chat-container[data-style="1"] #chat-send-btn:active,
+#text-chat-container:not([data-style]) #chat-send-btn:active {
+    transform: translateY(0);
+}
+
+/* ==================== 样式2: 可爱卡通风格 ==================== */
+#text-chat-container[data-style="2"] #chat-input-container {
+    background: #fff;
+    border-radius: 30px;
+    padding: 6px;
+    box-shadow: 0 5px 15px rgba(255, 105, 180, 0.3),
+                0 0 0 4px #ffe6f0;
+    border: 3px solid #ffb3d9;
+}
+
+#text-chat-container[data-style="2"] #chat-input {
+    padding: 12px 22px;
+    border-radius: 25px;
+    background: #fff;
+    font-size: 15px;
+    color: #333;
+    font-family: 'Patrick Hand', cursive;
+}
+
+#text-chat-container[data-style="2"] #chat-input:focus {
+    background: #fff5f9;
+}
+
+#text-chat-container[data-style="2"] #chat-input::placeholder {
+    color: #ffb3d9;
+}
+
+#text-chat-container[data-style="2"] #chat-send-btn {
+    padding: 12px 30px;
+    border-radius: 25px;
+    background: linear-gradient(135deg, #ff6b9d 0%, #ffc371 100%);
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(255, 107, 157, 0.4);
+    font-family: 'Patrick Hand', cursive;
+}
+
+#text-chat-container[data-style="2"] #chat-send-btn:hover {
+    transform: scale(1.05) rotate(-2deg);
+    box-shadow: 0 6px 16px rgba(255, 107, 157, 0.6);
+}
+
+#text-chat-container[data-style="2"] #chat-send-btn:active {
+    transform: scale(0.95);
+}
+
+/* ==================== 样式3: 极简科技风格 ==================== */
+#text-chat-container[data-style="3"] #chat-input-container {
+    background: #1a1a1a;
+    border-radius: 8px;
+    gap: 0;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    border: 1px solid #333;
+}
+
+#text-chat-container[data-style="3"] #chat-input {
+    padding: 16px 24px;
+    background: #1a1a1a;
+    font-size: 15px;
+    color: #e0e0e0;
+    border-right: 1px solid #333;
+}
+
+#text-chat-container[data-style="3"] #chat-input:focus {
+    background: #252525;
+    border-right-color: #00d9ff;
+}
+
+#text-chat-container[data-style="3"] #chat-input::placeholder {
+    color: #666;
+}
+
+#text-chat-container[data-style="3"] #chat-send-btn {
+    padding: 16px 32px;
+    background: linear-gradient(135deg, #00d9ff 0%, #00a8cc 100%);
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    position: relative;
+    overflow: hidden;
+}
+
+#text-chat-container[data-style="3"] #chat-send-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.2);
+    transition: left 0.5s ease;
+}
+
+#text-chat-container[data-style="3"] #chat-send-btn:hover::before {
+    left: 100%;
+}
+
+#text-chat-container[data-style="3"] #chat-send-btn:hover {
+    background: linear-gradient(135deg, #00e8ff 0%, #00bfdd 100%);
+}
+
+/* ==================== 样式4: 渐变霓虹风格 ==================== */
+#text-chat-container[data-style="4"] #chat-input-container {
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    border-radius: 50px;
+    padding: 3px;
+    box-shadow: 0 0 20px rgba(138, 43, 226, 0.5),
+                0 0 40px rgba(75, 0, 130, 0.3);
+    position: relative;
+}
+
+#text-chat-container[data-style="4"] #chat-input-container::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 50px;
+    background: linear-gradient(45deg, #ff00ff, #00ffff, #ff00ff);
+    background-size: 200% 200%;
+    animation: gradient-rotate 3s ease infinite;
+    z-index: -1;
+    pointer-events: none;
+}
+
+@keyframes gradient-rotate {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+
+#text-chat-container[data-style="4"] #chat-input {
+    padding: 12px 20px;
+    border-radius: 40px;
+    background: rgba(255, 255, 255, 0.95);
+    font-size: 15px;
+    color: #333;
+}
+
+#text-chat-container[data-style="4"] #chat-input:focus {
+    background: white;
+    box-shadow: 0 0 15px rgba(138, 43, 226, 0.3);
+}
+
+#text-chat-container[data-style="4"] #chat-input::placeholder {
+    color: #999;
+}
+
+#text-chat-container[data-style="4"] #chat-send-btn {
+    padding: 12px 28px;
+    border-radius: 40px;
+    background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+    color: white;
+    font-size: 15px;
+    font-weight: 700;
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
+}
+
+#text-chat-container[data-style="4"] #chat-send-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 30px rgba(168, 85, 247, 0.8);
+}
+
+/* ==================== 样式5: 柔和圆润风格 ==================== */
+#text-chat-container[data-style="5"] #chat-input-container {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 10px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    border: 2px solid #f0f0f0;
+}
+
+#text-chat-container[data-style="5"] #chat-input {
+    padding: 14px 20px;
+    border-radius: 15px;
+    background: #f8f9fa;
+    font-size: 15px;
+    color: #333;
+}
+
+#text-chat-container[data-style="5"] #chat-input:focus {
+    background: #e8f0fe;
+    box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.2);
+}
+
+#text-chat-container[data-style="5"] #chat-input::placeholder {
+    color: #aaa;
+}
+
+#text-chat-container[data-style="5"] #chat-send-btn {
+    padding: 14px 28px;
+    border-radius: 15px;
+    background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+}
+
+#text-chat-container[data-style="5"] #chat-send-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(66, 133, 244, 0.4);
+}
+
+#text-chat-container[data-style="5"] #chat-send-btn:active {
+    transform: translateY(0);
+}
+
+/* ==================== 样式6: 萌系气泡风格 ==================== */
+#text-chat-container[data-style="6"] #chat-input-container {
+    background: linear-gradient(135deg, #ffeef8 0%, #ffe8f5 100%);
+    border-radius: 35px;
+    padding: 5px;
+    box-shadow: 0 8px 25px rgba(255, 182, 218, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    border: 3px solid #ffd4e5;
+}
+
+#text-chat-container[data-style="6"] #chat-input {
+    padding: 12px 22px;
+    border-radius: 28px;
+    background: white;
+    font-size: 15px;
+    color: #333;
+    box-shadow: inset 0 2px 5px rgba(255, 182, 218, 0.1);
+}
+
+#text-chat-container[data-style="6"] #chat-input:focus {
+    box-shadow: inset 0 2px 5px rgba(255, 182, 218, 0.2),
+                0 0 0 3px rgba(255, 182, 218, 0.3);
+}
+
+#text-chat-container[data-style="6"] #chat-input::placeholder {
+    color: #ffb6da;
+}
+
+#text-chat-container[data-style="6"] #chat-send-btn {
+    padding: 12px 26px;
+    border-radius: 28px;
+    background: linear-gradient(135deg, #ff85c0 0%, #ffa8d5 100%);
+    color: white;
+    font-size: 18px;
+    font-weight: 700;
+    box-shadow: 0 4px 15px rgba(255, 133, 192, 0.4);
+    position: relative;
+}
+
+#text-chat-container[data-style="6"] #chat-send-btn::after {
+    content: '💬';
+    position: absolute;
+    right: -25px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 20px;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+#text-chat-container[data-style="6"] #chat-send-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(255, 133, 192, 0.6);
+}
+
+#text-chat-container[data-style="6"] #chat-send-btn:hover::after {
+    opacity: 1;
+    right: -35px;
 }
 
 /* 气泡框容器 */
