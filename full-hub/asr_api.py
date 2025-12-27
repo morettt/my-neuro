@@ -171,7 +171,7 @@ async def startup_event():
     # 加载标点符号模型
     print("正在加载标点符号模型...")
     model_state["punc_model"] = AutoModel(
-        model="ct-punc",
+        model="iic/punc_ct-transformer_cn-en-common-vocab471067-large",
         model_revision="v2.0.4",
         device=device,
         model_type="pytorch",
