@@ -20,6 +20,7 @@
 
 
 ## 本项目部署流程请看官网：[点我进官网](http://mynewbot.com/tutorials)
+## [如何提交PR](./commit_PR.md)
 
 
 
