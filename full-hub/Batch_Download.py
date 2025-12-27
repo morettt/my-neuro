@@ -9,9 +9,12 @@ import sys
 import urllib3
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import platform
+import subprocess
+system = platform.system()
 
 #live-2d版本号
-version_tag = "v5.9.7"
+version_tag = "v5.9.8"
 
 # 禁用SSL警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -376,36 +379,76 @@ tts_already_extracted = all(os.path.exists(f) for f in tts_key_files)
 if tts_already_extracted:
     print("检测到TTS模型包已经解压完成，跳过下载和解压步骤")
 else:
-    print(f"TTS模型包未完整解压，开始下载...")
-    print(f"下载gsv-fn-v1模型包到tts-hub文件夹: {tts_hub_dir}")
+    result = subprocess.run(['wmic', 'path', 'win32_VideoController', 'get', 'name'],
+                            capture_output=True, text=True)
 
-    # 使用ModelScope下载gsv-fn-v1模型包到tts-hub文件夹，带重试机制
-    if not download_with_retry(f"modelscope download --model morelle/gsv-fn-v1 --local_dir ./tts-hub"):
-        print("gsv-fn-v1模型包下载失败，终止程序")
-        exit(1)
+    gpu_names = result.stdout.strip().split('\n')[1:]  # 去掉第一行标题
 
-    print("gsv-fn-v1模型包下载成功！")
+    for gpu in gpu_names:
+        gpu = gpu.strip()
+        if gpu and 'RTX 50' in gpu:  # 检测是否包含 RTX 50
+            print(f"检测到是50系列显卡: {gpu}")
+            print(f'下载50系专属TTS包')
 
-    # 检查是否存在 GPT-SoVITS-Bundle.7z 文件（在tts-hub文件夹中）
-    bundle_7z_file = os.path.join(tts_hub_dir, "GPT-SoVITS-Bundle.7z")
-    if os.path.exists(bundle_7z_file):
-        print(f"\n检测到 GPT-SoVITS-Bundle.7z 文件，开始解压...")
+            if not download_with_retry(f"modelscope download --model morelle/GPT-SoVITS-50-Official --local_dir ./tts-hub"):
+                print("GPT-SoVITS-50-Official模型包下载失败，终止程序")
+                exit(1)
 
-        # 解压到tts-hub目录
-        if extract_7z(bundle_7z_file, tts_hub_dir):
-            print("TTS模型包解压成功！")
+            print("GPT-SoVITS-50-Official模型包下载成功！")
 
-            # 删除压缩包
-            try:
-                os.remove(bundle_7z_file)
-                print(f"已删除原压缩文件: {bundle_7z_file}")
-            except Exception as e:
-                print(f"删除压缩文件时出错: {e}")
-        else:
-            print("TTS模型包解压失败，请手动解压 GPT-SoVITS-Bundle.7z 文件")
-            exit(1)
-    else:
-        print(f"警告: 未找到 GPT-SoVITS-Bundle.7z 文件，跳过解压步骤")
+            # 检查是否存在 GPT-SoVITS-v2pro-20250604-nvidia50.7z 文件（在tts-hub文件夹中）
+            bundle_7z_file = os.path.join(tts_hub_dir, "GPT-SoVITS-v2pro-20250604-nvidia50.7z")
+            if os.path.exists(bundle_7z_file):
+                print(f"\n检测到 GPT-SoVITS-v2pro-20250604-nvidia50.7z 文件，开始解压...")
+
+                # 解压到tts-hub目录
+                if extract_7z(bundle_7z_file, tts_hub_dir):
+                    print("TTS模型包解压成功！")
+
+                    # 删除压缩包
+                    try:
+                        os.remove(bundle_7z_file)
+                        print(f"已删除原压缩文件: {bundle_7z_file}")
+                    except Exception as e:
+                        print(f"删除压缩文件时出错: {e}")
+                else:
+                    print("TTS模型包解压失败，请手动解压 GPT-SoVITS-v2pro-20250604-nvidia50.7z 文件")
+                    exit(1)
+            else:
+                print(f"警告: 未找到 GPT-SoVITS-v2pro-20250604-nvidia50.7z 文件，跳过解压步骤")
+
+        elif gpu and 'NVIDIA' in gpu:
+            print(f"TTS模型包未完整解压，开始下载...")
+            print(f"下载GPT-SoVITS-new-Official模型包到tts-hub文件夹: {tts_hub_dir}")
+
+            # 使用ModelScope下载GPT-SoVITS-new-Official模型包到tts-hub文件夹，带重试机制
+            if not download_with_retry(f"modelscope download --model morelle/GPT-SoVITS-new-Official --local_dir ./tts-hub"):
+                print("GPT-SoVITS-new-Official模型包下载失败，终止程序")
+                exit(1)
+
+            print("GPT-SoVITS-new-Official模型包下载成功！")
+
+            # 检查是否存在 GPT-SoVITS-v2pro-20250604.7z 文件（在tts-hub文件夹中）
+            bundle_7z_file = os.path.join(tts_hub_dir, "GPT-SoVITS-v2pro-20250604.7z")
+            if os.path.exists(bundle_7z_file):
+                print(f"\n检测到 GPT-SoVITS-v2pro-20250604.7z 文件，开始解压...")
+
+                # 解压到tts-hub目录
+                if extract_7z(bundle_7z_file, tts_hub_dir):
+                    print("TTS模型包解压成功！")
+
+                    # 删除压缩包
+                    try:
+                        os.remove(bundle_7z_file)
+                        print(f"已删除原压缩文件: {bundle_7z_file}")
+                    except Exception as e:
+                        print(f"删除压缩文件时出错: {e}")
+                else:
+                    print("TTS模型包解压失败，请手动解压 GPT-SoVITS-v2pro-20250604.7z 文件")
+                    exit(1)
+            else:
+                print(f"警告: 未找到 GPT-SoVITS-v2pro-20250604.7z 文件，跳过解压步骤")
+
 
 # 7. 下载BAAI/bge-m3模型到rag-hub文件夹
 print("\n========== 检查BAAI/bge-m3模型 ==========")
