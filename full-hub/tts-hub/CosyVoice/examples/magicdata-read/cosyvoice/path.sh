@@ -1,0 +1,1 @@
+../../libritts/cosyvoice/path.sh
