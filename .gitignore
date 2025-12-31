@@ -16,7 +16,6 @@ full-hub/bert-hub
 full-hub/logs
 full-hub/model
 full-hub/rag-hub
-full-hub/tts-hub
 
 
 # 忽略所有 node_modules（无论在哪）
