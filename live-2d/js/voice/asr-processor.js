@@ -2,6 +2,7 @@
 const { eventBus } = require('../core/event-bus.js');
 const { Events } = require('../core/events.js');
 const { appState } = require('../core/app-state.js');
+const { logToTerminal } = require('../api-utils.js');
 
 class ASRProcessor {
     constructor(vadUrl, asrUrl, config = null) {
@@ -382,6 +383,13 @@ class ASRProcessor {
                 body: formData
             });
 
+            // 检查响应状态
+            if (!response.ok) {
+                await this.handleASRError(response, mode);
+                this.asrLocked = false;
+                return null;
+            }
+
             const result = await response.json();
 
             // 兼容云端和本地API响应格式
@@ -404,13 +412,16 @@ class ASRProcessor {
 
                 return recognizedText;
             } else {
-                console.error('ASR失败:', result.message || result.error || '未知错误');
+                const errorMsg = result.message || result.error || '未知错误';
+                logToTerminal('error', `【${mode}ASR】识别失败: ${errorMsg}`);
+                console.error('ASR失败:', errorMsg);
                 // 如果ASR失败，也要解锁ASR以便用户重试
                 this.asrLocked = false;
                 // 状态管理已通过事件系统自动处理
                 return null;
             }
         } catch (error) {
+            logToTerminal('error', `【${mode}ASR】处理录音失败: ${error.message}`);
             console.error('处理录音失败:', error);
             // 如果处理失败，也要解锁ASR以便用户重试
             this.asrLocked = false;
@@ -480,6 +491,47 @@ class ASRProcessor {
             // 如果启用语音打断，恢复VAD监听
             this.resumeRecording();
         }
+    }
+
+    // 统一的ASR错误处理
+    async handleASRError(response, serviceName) {
+        let errorDetail = "";
+        try {
+            const errorBody = await response.text();
+            try {
+                const errorJson = JSON.parse(errorBody);
+                errorDetail = JSON.stringify(errorJson, null, 2);
+            } catch (e) {
+                errorDetail = errorBody;
+            }
+        } catch (e) {
+            errorDetail = "无法读取错误详情";
+        }
+
+        let errorMessage = "";
+        switch (response.status) {
+            case 401:
+                errorMessage = `【${serviceName}ASR】API密钥验证失败，请检查你的API密钥是否正确`;
+                break;
+            case 403:
+                errorMessage = `【${serviceName}ASR】API访问被禁止，你的账号可能被限制或额度已用完`;
+                break;
+            case 429:
+                errorMessage = `【${serviceName}ASR】请求过于频繁，超出API限制或额度已用完`;
+                break;
+            case 500:
+            case 502:
+            case 503:
+            case 504:
+                errorMessage = `【${serviceName}ASR】服务器错误，AI服务当前不可用`;
+                break;
+            default:
+                errorMessage = `【${serviceName}ASR】API错误: ${response.status} ${response.statusText}`;
+        }
+
+        const fullError = `${errorMessage}\n详细信息: ${errorDetail}`;
+        logToTerminal('error', fullError);
+        console.error(errorMessage);
     }
 }
 
