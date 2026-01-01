@@ -417,6 +417,9 @@ else:
             else:
                 print(f"警告: 未找到 GPT-SoVITS-v2pro-20250604-nvidia50.7z 文件，跳过解压步骤")
 
+            # 下载完成后跳出循环，避免多显卡重复下载
+            break
+
         elif gpu and 'NVIDIA' in gpu:
             print(f"TTS模型包未完整解压，开始下载...")
             print(f"下载GPT-SoVITS-new-Official模型包到tts-hub文件夹: {tts_hub_dir}")
@@ -448,6 +451,9 @@ else:
                     exit(1)
             else:
                 print(f"警告: 未找到 GPT-SoVITS-v2pro-20250604.7z 文件，跳过解压步骤")
+
+            # 下载完成后跳出循环，避免多显卡重复下载
+            break
 
 
 # 7. 下载BAAI/bge-m3模型到rag-hub文件夹
