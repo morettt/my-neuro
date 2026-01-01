@@ -1,0 +1,34 @@
+# 不忽略 .gitignore 本身
+!.gitignore
+
+
+# 忽略特定文件夹
+# live-2d/2D/*
+live-2d/AI记录室/*
+live-2d/build/
+live-2d/fake_neuro_audio/
+live-2d/node/
+live-2d/.claude/
+song-library/
+full-hub/7z
+full-hub/asr-hub
+full-hub/bert-hub
+full-hub/logs
+full-hub/model
+full-hub/rag-hub
+full-hub/tts-hub
+
+
+# 忽略所有 node_modules（无论在哪）
+**/node_modules/
+
+# 忽略可执行文件
+*.exe
+*.zip
+*.log
+
+#忽略无意义文件
+
+runtime.logfull-hub/ 
+
+

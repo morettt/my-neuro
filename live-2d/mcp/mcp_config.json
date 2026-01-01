@@ -1,0 +1,14 @@
+{
+  "playwright_disabled": {
+    "command": "npx",
+    "args": [
+      "@playwright/mcp@latest"
+    ]
+  },
+  "random-acg-pic": {
+    "command": "node",
+    "args": [
+      "./mcp/tools/random-acg-pic.js"
+    ]
+  }
+}

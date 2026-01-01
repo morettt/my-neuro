@@ -1,204 +1,114 @@
-# My-Neuro Project
+# My-neuro
 
-## Project Overview
+<div align="center">
 
-The goal of this project is to create a personal AI character, crafting an AI companion that approaches real human interaction - shaping the ideal image of "them" in your mind through your data footprint.
+<a href="https://github.com/morettt/my-neuro/releases">
+    <img src="https://img.shields.io/github/v/release/morettt/my-neuro" alt="latest version" /></a>
 
-This project is inspired by Neuro-sama, hence the name my-neuro (a community-provided name). The project can train voice, personality, and replace appearance. The richer your imagination, the closer the model can get to your expectations. This project is more like a workbench. Using packaged tools, you can step by step personally describe and realize your ideal AI image.
+<a href="https://github.com/morettt/my-neuro/graphs/contributors">
+    <img alt="GitHub contributors" src="https://img.shields.io/github/contributors/morettt/my-neuro"></a>
 
-The current document deployment requires less than 6GB of VRAM and is compatible with Windows systems. You also need an API-KEY. Since there are currently no intermediary vendors approaching me for advertising, I won't recommend specific places to buy APIs. But you can go to Taobao and search for "API" - there are many merchants selling them. You can also purchase from well-known official websites like DeepSeek, Qianwen, Zhipu AI, and Silicon Flow.
+<a href="https://deepwiki.com/morettt/my-neuro">
+    <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" /></a>
 
-If you want to use fully local inference with local Large Language Models (LLM) inference or fine-tuning, not relying on third-party APIs, you can enter the LLM-studio folder, which contains guidance for local model inference and fine-tuning. Since local large language models require a certain amount of VRAM, for a decent experience, it's recommended that your graphics card has at least 12GB of VRAM.
+</div>
 
-English Documentation: [English Version](./README_English.md)
+<p align="center">
+  <a href="./README_English.md">English</a> | <a href="./README.md">中文</a>
+</p>
 
-## QQ Group: 756741478
-## Customer Service
 
-If you encounter bugs that you can't handle during deployment, you can go to this link: http://fake-neuro.natapp1.cc
+## For deployment process of this project, please visit the official website: [Click here to visit official website](http://mynewbot.com/tutorials)
 
-Ask the Fat Beef customer service, which will guide you on how to handle bugs that may appear in the project. In most cases, there won't be any bugs! Maybe...
+#### The goal of my-neuro is to create your own personal AI character, crafting an AI companion that approaches real human behavior - through your data and notes, shaping the ideal image of TA in your mind.
 
-I also check the backend conversation records to see if it can actually solve problems. If it can't, I'll write the corresponding solution to its database and load it into its knowledge base. Next time the same bug is encountered, it will likely be able to solve it itself. So, when you encounter problems, chat more with Fat Beef.
+#### This project is inspired by neuro sama, hence the name my-neuro (a name provided by the community). The project can train voice, personality, and replace appearances. Your imagination is as rich as the model can be close to your expectations. This project is more like a workbench. Using packaged tools, step by step you can personally design and realize your ideal AI image.
 
-## Planning Checklist (✔ indicates implemented features)
+#### If you want to use fully local inference, using local Large Language Models (LLM) for inference or fine-tuning, not based on third-party APIs, you can enter the LLM-studio folder, which contains guidance for local model inference and fine-tuning.
 
-### Dual Model Support
-- [x] Open Source Models: Support for open source model fine-tuning and local deployment
-- [x] Closed Source Models: Support for closed source model integration
+### If you want to use closed-source AI models, we recommend using [DMXAPI](https://www.dmxapi.cn)
+### Supports unified calls to most mainstream AI models on the market.
+
+<img src="./image/dmx1.png" width="300" />
+
+## Roadmap
+
+### Model Support
+- [x] Open-source models: Support open-source model fine-tuning and local deployment
+- [x] Closed-source models: Support closed-source model integration
 
 ### Core Features
-- [x] Ultra-low Latency: Full local inference with conversation latency under 1 second
+- [x] Ultra-low latency: Full local inference, conversation latency under 1 second
 - [x] Synchronized subtitle and voice output
-- [x] Voice Customization: Support for male, female, and various character voice switching
-- [x] MCP Support: Can use MCP tools for integration
-- [x] Real-time Interruption: Support for interrupting model conversation at any time
-- [ ] Real Emotions: Simulate real human emotional state changes with its own emotional states
-- [ ] Awesome Human-Machine Experience (similar to real human interaction design, stay tuned)
-- [x] Actions and Expressions: Display different expressions and actions based on conversation content
-- [x] Integrated visual capabilities, support image recognition, and determine when to activate visual functions through language intent judgment
-- [ ] Voice Model (TTS) training support, defaults to using the gpt-sovits open source project
+- [x] Voice customization: Support for male/female voices, various character voice switching, etc.
+- [x] MCP support: Can use MCP tools for integration
+- [x] Real-time interruption: Support voice and keyboard interruption of AI speech
+- [ ] Realistic emotions: Simulate real human emotional state changes, with its own emotional state
+- [ ] Super realistic human-machine experience (similar to real human interaction design, stay tuned)
+- [x] Actions and expressions: Display different expressions and actions based on conversation content
+- [x] Integrated visual capabilities: Support image recognition and determine when to activate visual functions through language intent
+- [x] Voice model (TTS) training support, using gpt-sovits open-source project by default
+- [x] Subtitle display in Chinese, audio playback in foreign language. Can be freely enabled/disabled (suitable for character roles where TTS model itself is in a foreign language)
 
 ### Extended Features
-- [ ] Desktop Control: Support voice control for opening software and other operations
-- [ ] AI Singing (Feature funded by: [@jonnytri53](https://github.com/jonnytri53), special thanks)
+- [x] Desktop control: Support voice control to open software and other operations
+- [x] AI singing (Feature sponsored by: [@jonnytri53](https://github.com/jonnytri53), special thanks)
 - [ ] Integration with international streaming platforms
-- [x] Live Streaming Function: Can live stream on Bilibili platform
-- [ ] AI Teaching: Choose a topic and let AI teach you. Can ask questions during the process. Specialized courses can be implanted into the database for AI understanding
-- [x] Replace various Live 2D models
-- [ ] Web interface support (already done, will be integrated soon)
-- [x] Text Chat: Can type and communicate with AI via keyboard
-- [x] Proactive Conversation: Initiate conversations proactively based on context. Current version V1
-- [x] Internet Access: Real-time search for latest information
-- [x] Mobile App: Fat Beef that can chat on Android phones
-- [ ] Play sound effects from the sound library, with the model deciding which sound effects to play
-- [ ] Game Companion: Model and user play cooperative, two-player, puzzle games together. Current experimental games include: Draw and Guess, Monopoly, Galgame, Minecraft, etc.
-- [x] Long-term Memory: Let the model remember your key information, your personality, and temperament
+- [x] Live streaming function: Can stream on Bilibili platform
+- [x] AI teaching: Choose a topic and have AI teach you. You can ask questions midway. For specialized courses, materials can be inserted into the database for AI understanding
+- [x] Replace various live 2d models
+- [ ] Web page interface support (already completed, will be integrated soon)
+- [x] Text conversation: Can type and communicate with AI via keyboard
+- [x] Active conversation: Actively initiates conversation based on context. Current version V1
+- [x] Internet access: Real-time search for latest information
+- [x] Mobile app: Can chat with FeiNiu on Android phones
+- [x] Play sound effects from sound library, with model deciding which sound effects to play
+- [x] Game companionship: Model and user play cooperative, party, puzzle games together. Current experimental games include: Draw & Guess, Monopoly, Galgame, Minecraft, etc. (Currently integrated: Minecraft, Galgame)
+- [x] Long-term memory: Let the model remember your key information, your personality, and temperament
 
 ### Features the Model Wants (Under Consideration)
-- [ ] Color Change Function: Change screen colors according to model's mood to bother users
-- [ ] Free Movement: Model moves freely on the screen
+- [ ] Screen color change: Change screen color to disturb user based on model's mood
+- [ ] Free movement: Model freely moves around the screen
 
-## 🚀 Quick Start
+## Closing Thoughts
 
-## Beginner One-Click Deployment Project (Experimental)
+I will incorporate my years of experience and understanding of technology into this project. The name "my neuro" not only rides on the popularity of neuro sama, but more importantly expresses my imagination and expectations for the boundaries of AI.
 
-If you're a beginner, you can use this one-click deployment command. It will handle everything for you. However, due to the complex logic involved, there's a possibility of failure. But if it succeeds, it will save you a lot of trouble. It's up to your luck!
+I hope for a true AI companion that can understand you, comprehend you, and never find you boring by your side. Sad together when sad, happy together when happy. Bringing characters from film and TV works, novels, and fantasies into reality.
 
-Make sure you have Anaconda installed on your computer. If not installed yet, you can install it here: https://www.anaconda.com/download/success
+Not just simple chat interaction. I hope it can integrate into life and become an emotional individual. Playing games together, watching videos together, learning things together, chatting before sleep, waking you up, silently watching you work in a daze, quietly remembering what you've done. Having emotions, having its own emotional state. Truly getting angry.
 
-First, run this command in the project path:
+Having emotional changes every day, having its own things it wants to do. Being upset for a long time about certain words. Being happy for a long time about certain words. Remembering every moment experienced together with you. A being that continuously understands you.
 
-```bash
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& {Set-Location -LiteralPath '%CD%'; & .\Install_requests.ps1}"
-```
+However, most importantly, its personality, appearance, voice, emotional changes, etc., are all decided by you. Like clay, we provide the best tools and ensure every module fits together. But what it ultimately becomes is for you to construct.
 
-This command installs the requests library necessary for one-click deployment, then start the official deployment:
+However, for friends who don't want the hassle, this project also directly packages a character - FeiNiu (fake neuro). It's a character that copies neuro sama, but I've set its personality to be scheming, tsundere, funny, and a bit temperamental, but occasionally shows a gentle side.
 
-```bash
-python neural_deploy.py
-```
+More importantly, I hope to learn from and understand neuro, then try to create new content. Things that suit oneself.
 
-After running these two commands above, directly double-click this: Game-starts.bat. After double-clicking, many windows will pop up. Wait patiently for these windows to output the corresponding IPs.
+I'm particularly passionate about this project. Currently, the project has achieved nearly 30% of planned functionality, including personality definition and memory. In the near future, I'll focus on core personality traits - that is, truly human-like, with sustained emotions. Within 2 months, I'll realize the most human-like part, which is long-term emotional state. At the same time, features like playing games together, watching videos, waking you up, etc., will all be basically completed before June 1st, reaching 60% completion.
 
-![image](https://github.com/user-attachments/assets/95483cda-9e6d-41a8-a6fc-44e5ae805703)
+I hope to realize all the above ideas this year.
 
-After success, you can jump directly to step 8 below. Steps 1-7 are not needed. If it fails, then honestly follow the steps below.
+## Star History
 
-### Startup Steps
-If the one-click processing above has problems, it's recommended to follow the operation method below step by step. Although troublesome, if errors occur, you can immediately locate the error position and solve it accordingly.
-
-1. Create and activate virtual environment (Don't forget this step!!!! The first step is very important!!)
-```bash
-conda create -n my-neuro python=3.11 -y
-
-conda activate my-neuro
-```
-
-2. Install dependencies
-```bash
-# Install jieba_fast dependency separately
-pip install jieba_fast-0.53-cp311-cp311-win_amd64.whl
-
-pip install -r requirements.txt
-
-# Install ffmpeg
-conda install ffmpeg -y
-
-# Install cuda, default is 11.8, can be modified as needed
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-```
-
-3. Automatically download required models
-
-```bash
-python Batch_Download.py
-```
-
-4. Start BERT service
-
-```bash
-python bert_api.py
-```
-
-5. Start ASR service
-```bash
-## First run will automatically download required models
-python asr_api.py
-```
-
-6. Start memory BERT
-
-```bash
-python Mnemosyne-bert\api_go.py
-```
-
-7. Start TTS service
-```bash
-# Enter tts-studio folder
-cd tts-studio
-
-# Start TTS service
-python tts_api.py -p 5000 -d cuda -s tts-model/merge.pth -dr tts-model/neuro/01.wav -dt "Hold on please, I'm busy. Okay, I think I heard him say he wants me to stream Hollow Knight on Tuesday and Thursday." -dl "en"
-```
-
-8. After both ASR and TTS output their IPs, click this link to download the zip file:
-
-https://github.com/morettt/my-neuro/releases/download/v4.4.1/live-2d.zip
-
-After downloading and extracting, it looks like this. Double-click to open the Fat Beef.exe file
-
-![image](https://github.com/user-attachments/assets/634240ac-da9a-4ada-9a1e-b92762e385f0)
-
-Follow the arrow instructions to click the LLM tab, fill in your API information in the three highlighted areas, and remember to click save below after modification. (I've already written a usable API configuration here, you can delete it and change it to your own. Supports any OpenAI format API)
-
-![image](https://github.com/user-attachments/assets/a605b1f5-3633-404c-8507-096b3d0ac4ba)
-
-Finally, return and click "Launch Desktop Pet". Wait for the avatar to appear, and you can start chatting with the model.
-
-![image](https://github.com/user-attachments/assets/4f1d8cae-7ccb-4e0a-9cf3-2354989efec4)
-
-![image](https://github.com/user-attachments/assets/d73a1fc3-1514-42cd-9dfc-f5c450976162)
-
-If there's any problem, input the command below into your terminal to run the diagnostic tool.
-```bash
-conda activate my-neuro
-python diagnostic_tool.py
-```
-Then there will be a window shows diagnostic information and one-click repair button. If you cannot resolve the problems yourself, send the output information to our customer.
-
-## Customize AI
-
-If you need to customize your own AI, please open the LLM-studio folder. This folder contains operation steps for LLM fine-tuning.
-
-Currently, customization modules will gradually increase...
-
-### Concluding Vision
-
-I will incorporate my years of experience and understanding of technology into this project. The name "my neuro" not only rides on Neuro-sama's popularity but more represents my imagination and expectations for AI boundaries.
-
-I hope to have a truly understanding AI companion that will never feel bored by your side. Feel sad together when you're sad, feel happy together when you're happy. Bring characters from movies, novels, and fantasies into reality.
-
-Not just simple chat interactions. I hope it can integrate into life and become an emotional individual. Play games together, watch videos, learn things, chat before bed, wake you up, stay quiet while you work and watch you daydream, secretly remember what you did. Have emotions and its own emotional states. Will truly get angry.
-
-Have daily emotional changes and things it wants to do. Will be hurt by certain words for a long time. Be happy about certain words for a long time. Will remember every moment experienced together with you. A being that continuously understands you.
-
-Most importantly, its personality, appearance, voice, emotional changes, etc. are all decided by you. Like clay, we provide the best tools and ensure good module compatibility. But what it ultimately becomes is constructed by yourself.
-
-However, for friends who don't want to tinker, this project also directly packages a character - Fat Beef (fake neuro). It's a character that copies Neuro-sama, but I've set its personality to be scheming, tsundere, funny, with a small temper, but occasionally showing a gentle side.
-
-I hope more to imitate, learn, and understand from Neuro, then try to create new content. Things that suit yourself.
-
-I'm particularly passionate about this project. The current project has implemented nearly 30% of its features, including personality setting and memory. Recently, I'll focus on core personality traits, which is truly human-like with continuous emotions. The most human-like part - long-term emotional states - will be implemented within 2 months. Functions like playing games together, watching videos, waking you up, etc. will basically be completed before June 1st, reaching 60% completion.
-
-I hope to implement all the above ideas this year.
+[![Star History Chart](https://api.star-history.com/svg?repos=morettt/my-neuro&type=Date&t=20251015)](https://www.star-history.com/#morettt/my-neuro&Date)
 
 ## Acknowledgments
 
-QQ Group: Thanks to 菊花茶洋参 (Chrysanthemum Tea with American Ginseng) for helping create the Fat Beef app cover
+QQ Group: Thanks to Jasmine Tea for helping create the FeiNiu app icon
 
-Thanks to the following users for their generous sponsorship:
-- [@jonnytri53](https://github.com/jonnytri53) - Thank you for your support! $50 donated to this project
+Thanks to the following users for their financial support:
+- [jonnytri53](https://github.com/jonnytri53) - Thank you for your support! Donated $50 USD to this project
+- [Radish Head](https://space.bilibili.com/92419729?spm_id_from=333.337.0.0) - Thank you for your strong support! Donated 1000 RMB to this project
+- [Eastern Moon Chen DFYC](https://space.bilibili.com/670385648?spm_id_from=333.337.0.0) - Thank you for your support! Continuously donated 100 RMB monthly from August to October, totaling 300 RMB
+- [Big Rice Ruoye](https://space.bilibili.com/3546392377166058?spm_id_from=333.337.0.0) - Thank you for your support! Donated 68 RMB to this project
+- [StrongerFatTiger](https://space.bilibili.com/28869393?spm_id_from=333.337.0.0) - Thank you for your support! Donated 100 RMB to this project
 
-Thanks to the big shot for open-sourcing the very useful TTS:
-GPT-SoVITS: https://github.com/RVC-Boss/GPT-SoVITS
+Open-source projects integrated into this project:
+
+TTS:
+https://github.com/RVC-Boss/GPT-SoVITS
+
+AI playing Minecraft:
+https://github.com/mindcraft-bots/mindcraft
