@@ -11,10 +11,11 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import platform
 import subprocess
+
 system = platform.system()
 
-#live-2d版本号
-version_tag = "v5.9.9"
+# live-2d版本号
+version_tag = "v5.9.8"
 
 # 禁用SSL警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -314,7 +315,6 @@ def download_live2d_model():
 print("开始下载Live2D模型...")
 download_live2d_model()
 
-
 # 1. 下载Omni_fn_bert模型到bert-hub文件夹
 print("\n========== 检查Omni_fn_bert模型 ==========")
 
@@ -384,13 +384,23 @@ else:
 
     gpu_names = result.stdout.strip().split('\n')[1:]  # 去掉第一行标题
 
+    # 添加标志变量，防止重复下载
+    tts_downloaded = False
+
     for gpu in gpu_names:
         gpu = gpu.strip()
+
+        # 如果已经下载完成，跳出循环
+        if tts_downloaded:
+            print(f"TTS模型包已下载，跳过GPU: {gpu}")
+            break
+
         if gpu and 'RTX 50' in gpu:  # 检测是否包含 RTX 50
             print(f"检测到是50系列显卡: {gpu}")
             print(f'下载50系专属TTS包')
 
-            if not download_with_retry(f"modelscope download --model morelle/GPT-SoVITS-50-Official --local_dir ./tts-hub"):
+            if not download_with_retry(
+                    f"modelscope download --model morelle/GPT-SoVITS-50-Official --local_dir ./tts-hub"):
                 print("GPT-SoVITS-50-Official模型包下载失败，终止程序")
                 exit(1)
 
@@ -411,6 +421,9 @@ else:
                         print(f"已删除原压缩文件: {bundle_7z_file}")
                     except Exception as e:
                         print(f"删除压缩文件时出错: {e}")
+
+                    # 设置标志，表示已完成下载
+                    tts_downloaded = True
                 else:
                     print("TTS模型包解压失败，请手动解压 GPT-SoVITS-v2pro-20250604-nvidia50.7z 文件")
                     exit(1)
@@ -418,20 +431,21 @@ else:
                 print(f"警告: 未找到 GPT-SoVITS-v2pro-20250604-nvidia50.7z 文件，跳过解压步骤")
 
         elif gpu and 'NVIDIA' in gpu:
+            print(f"检测到NVIDIA显卡: {gpu}")
             print(f"TTS模型包未完整解压，开始下载...")
-            print(f"下载GPT-SoVITS-new-Official模型包到tts-hub文件夹: {tts_hub_dir}")
+            print(f"下载fake-neuro-gsv模型包到tts-hub文件夹: {tts_hub_dir}")
 
-            # 使用ModelScope下载GPT-SoVITS-new-Official模型包到tts-hub文件夹，带重试机制
-            if not download_with_retry(f"modelscope download --model morelle/GPT-SoVITS-new-Official --local_dir ./tts-hub"):
-                print("GPT-SoVITS-new-Official模型包下载失败，终止程序")
+            # 使用ModelScope下载fake-neuro-gsv模型包到tts-hub文件夹，带重试机制
+            if not download_with_retry(f"modelscope download --model morelle/fake-neuro-gsv --local_dir ./tts-hub"):
+                print("fake-neuro-gsv模型包下载失败，终止程序")
                 exit(1)
 
-            print("GPT-SoVITS-new-Official模型包下载成功！")
+            print("GPT-SoVITS-Bundle.7z下载成功！")
 
-            # 检查是否存在 GPT-SoVITS-v2pro-20250604.7z 文件（在tts-hub文件夹中）
-            bundle_7z_file = os.path.join(tts_hub_dir, "GPT-SoVITS-v2pro-20250604.7z")
+            # 检查是否存在 GPT-SoVITS-Bundle.7z 文件（在tts-hub文件夹中）
+            bundle_7z_file = os.path.join(tts_hub_dir, "GPT-SoVITS-Bundle.7z")
             if os.path.exists(bundle_7z_file):
-                print(f"\n检测到 GPT-SoVITS-v2pro-20250604.7z 文件，开始解压...")
+                print(f"\n检测到 GPT-SoVITS-Bundle.7z 文件，开始解压...")
 
                 # 解压到tts-hub目录
                 if extract_7z(bundle_7z_file, tts_hub_dir):
@@ -443,12 +457,14 @@ else:
                         print(f"已删除原压缩文件: {bundle_7z_file}")
                     except Exception as e:
                         print(f"删除压缩文件时出错: {e}")
+
+                    # 设置标志，表示已完成下载
+                    tts_downloaded = True
                 else:
-                    print("TTS模型包解压失败，请手动解压 GPT-SoVITS-v2pro-20250604.7z 文件")
+                    print("TTS模型包解压失败，请手动解压 GPT-SoVITS-Bundle.7z 文件")
                     exit(1)
             else:
                 print(f"警告: 未找到 GPT-SoVITS-v2pro-20250604.7z 文件，跳过解压步骤")
-
 
 # 7. 下载BAAI/bge-m3模型到rag-hub文件夹
 print("\n========== 检查BAAI/bge-m3模型 ==========")
@@ -516,7 +532,8 @@ else:
 
 # 9.2 下载ASR主模型
 print("\n检查ASR主模型...")
-asr_model_dir = os.path.join(asr_hub_dir, 'model', 'asr', 'models', 'iic', 'speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch')
+asr_model_dir = os.path.join(asr_hub_dir, 'model', 'asr', 'models', 'iic',
+                             'speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch')
 if not os.path.exists(asr_model_dir):
     os.makedirs(asr_model_dir)
     print(f"创建目录: {asr_model_dir}")
@@ -541,7 +558,8 @@ else:
 # 9.3 下载标点符号模型
 print("\n检查标点符号模型...")
 # 注意：这里使用 iic/punc_ct-transformer_cn-en-common-vocab471067-large 以匹配 asr_api.py 中的 ct-punc 别名
-punc_model_dir = os.path.join(asr_hub_dir, 'model', 'asr', 'models', 'iic', 'punc_ct-transformer_cn-en-common-vocab471067-large')
+punc_model_dir = os.path.join(asr_hub_dir, 'model', 'asr', 'models', 'iic',
+                              'punc_ct-transformer_cn-en-common-vocab471067-large')
 if not os.path.exists(punc_model_dir):
     os.makedirs(punc_model_dir)
     print(f"创建目录: {punc_model_dir}")
@@ -557,7 +575,8 @@ if punc_already_downloaded:
     print("检测到标点符号模型已经下载完成，跳过下载步骤")
 else:
     print("标点符号模型未完整下载，开始下载...")
-    if not download_with_retry(f"modelscope download --model iic/punc_ct-transformer_cn-en-common-vocab471067-large --local_dir {punc_model_dir}"):
+    if not download_with_retry(
+            f"modelscope download --model iic/punc_ct-transformer_cn-en-common-vocab471067-large --local_dir {punc_model_dir}"):
         print("标点符号模型下载失败")
     else:
         print("标点符号模型下载成功！")

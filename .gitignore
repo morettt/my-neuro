@@ -9,6 +9,7 @@ live-2d/build/
 live-2d/fake_neuro_audio/
 live-2d/node/
 live-2d/.claude/
+live-2d/Voice_Model_Factory
 song-library/
 full-hub/7z
 full-hub/asr-hub
