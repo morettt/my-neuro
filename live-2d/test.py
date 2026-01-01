@@ -852,8 +852,8 @@ class set_pyqt(QWidget):
             # 写入bat文件内容 - 使用新的路径结构
             with open(bat_path, "w", encoding="gbk") as bat_file:
                 bat_file.write("@echo off\n")
-                bat_file.write('set "PATH=%~dp0..\\..\\tts-hub\\GPT-SoVITS-Bundle\\runtime;%PATH%"\n')
-                bat_file.write("cd %~dp0..\\..\\tts-hub\\GPT-SoVITS-Bundle\n")
+                bat_file.write('set "PATH=%~dp0..\\..\\full-hub\\tts-hub\\GPT-SoVITS-Bundle\\runtime;%PATH%"\n')
+                bat_file.write("cd %~dp0..\\..\\full-hub\\tts-hub\\GPT-SoVITS-Bundle\n")
                 bat_file.write(f"{cmd}\n")
                 bat_file.write("pause\n")
 
