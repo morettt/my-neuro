@@ -17,6 +17,7 @@
     "pixi-live2d-display": "^0.3.1",
     "pixi.js": "^6.5.2",
     "play-sound": "^1.1.6",
+    "screenshot-desktop": "^1.15.3",
     "socket.io-client": "^4.8.1"
   },
   "keywords": [],
