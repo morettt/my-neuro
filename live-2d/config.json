@@ -52,12 +52,12 @@
   },
   "cloud": {
     "provider": "siliconflow",
-    "api_key": "sk-ygfgglbawrcgwriteqrqtvymyavuvllfvadaziovizhigruo",
+    "api_key": "",
     "tts": {
       "enabled": false,
       "url": "https://api.siliconflow.cn/v1/audio/speech",
       "model": "FunAudioLLM/CosyVoice2-0.5B",
-      "voice": "speech:fake-neuro:j3qz9ij4k2:kquiiycgizgaoxeujypx",
+      "voice": "",
       "response_format": "wav",
       "speed": 1.0
     },
@@ -154,7 +154,15 @@
     "enabled": true,
     "idle_time": 20000,
     "diary_file": "AI记录室/AI日记.txt",
-    "prompt": "请以fake neuro（肥牛）的身份，基于今天的对话记录写一篇简短的日记。要求：1. 用第一人称\"我\"来写，体现肥牛的邪恶俏皮性格 2. 总结今天和用户的互动感受 3. 不要太长，3-5句话即可 4. 保持肥牛的风格 5. 不要使用情绪标签<>"
+    "prompt": "请以fake neuro（肥牛）的身份，基于今天的对话记录写一篇简短的日记。要求：1. 用第一人称\"我\"来写，体现肥牛的邪恶俏皮性格 2. 总结今天和用户的互动感受 3. 不要太长，3-5句话即可 4. 保持肥牛的风格 5. 不要使用情细标签<>"
+  },
+  "memos": {
+    "enabled": true,
+    "api_url": "http://127.0.0.1:8003",
+    "auto_inject": true,
+    "inject_top_k": 3,
+    "similarity_threshold": 0.6,
+    "save_interval": 10
   },
   "version": "v5.9.8"
 }

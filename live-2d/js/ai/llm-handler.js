@@ -27,7 +27,7 @@ class LLMHandler {
             logToTerminal('info', `✅ 视觉模型已启用: ${config.vision.vision_model.model}`);
         }
 
-        return async function(prompt) {
+        return async function (prompt) {
             try {
                 // 发送用户输入开始事件
                 eventBus.emit(Events.USER_INPUT_START);
@@ -83,7 +83,6 @@ class LLMHandler {
                 const maxIterations = 30; // 最大工具调用轮数,防止无限循环
                 let iteration = 0;
                 let finalResponseContent = null;
-                let isStreamingToTTS = false; // 标记是否正在流式播放TTS
 
                 // 🔥 清除之前的中断标志，开始新的对话流程
                 appState.clearInterrupted();
@@ -163,11 +162,8 @@ class LLMHandler {
                         } else {
                             console.log('📸 主模型将处理截图（需要主模型支持视觉）');
                         }
-
-                        // 🔥 正常使用主模型 - 使用流式响应（提升响应速度）
-                        result = await llmClient.chatCompletion(messagesForAPI, allTools, true, (text) => {
-                            // 流式接收文本，暂不播放TTS（等确认是否有工具调用后再决定）
-                        });
+                        // 正常使用主模型
+                        result = await llmClient.chatCompletion(messagesForAPI, allTools);
                     }
 
                     // 检查是否有工具调用
@@ -197,11 +193,8 @@ class LLMHandler {
                             console.log(`💬 AI中间过程: ${result.content}`);
                             logToTerminal('info', `💬 AI中间过程: ${result.content}`);
 
-                            // 🔥 中间过程播放TTS（工具调用的中间内容）
-                            if (iteration === 0) {
-                                // 第一轮才reset
-                                ttsProcessor.reset();
-                            }
+                            // 播放TTS并等待真正的播放完成(监听TTS_END事件)
+                            ttsProcessor.reset();
                             ttsProcessor.processTextToSpeech(result.content);
 
                             // 等待TTS_END或TTS_INTERRUPTED事件触发
@@ -227,11 +220,6 @@ class LLMHandler {
                         if (appState.isInterrupted()) {
                             console.log('⏸️ 检测到打断，跳过工具执行');
                             logToolAction('warn', '⏸️ 工具调用被打断，停止执行');
-
-                            // 🔥 关键修复：不添加带有 tool_calls 的 assistant 消息到历史
-                            // 因为工具不会执行，添加了会导致下次 API 调用时缺少 tool 响应
-                            console.log('⚠️ 工具调用被打断，不添加到消息历史');
-
                             appState.clearInterrupted();
                             throw new Error('USER_INTERRUPTED');
                         }
@@ -240,7 +228,8 @@ class LLMHandler {
                         voiceChat.messages.push({
                             'role': 'assistant',
                             'content': result.content || null,
-                            'tool_calls': result.tool_calls
+                            'tool_calls': result.tool_calls,
+                            'reasoning_details': result.reasoning_details  // 🔥 保存推理详情以支持连续推理
                         });
 
                         // 使用统一的工具执行器
@@ -250,16 +239,6 @@ class LLMHandler {
                         if (appState.isInterrupted()) {
                             console.log('⏸️ 工具执行完成后检测到打断，停止后续处理');
                             logToolAction('warn', '⏸️ 停止后续工具调用');
-
-                            // 🔥 关键修复：移除刚才添加的 assistant 消息，因为对话被打断了
-                            // 保持消息历史的完整性，避免下次 API 调用时出错
-                            if (voiceChat.messages.length > 0 &&
-                                voiceChat.messages[voiceChat.messages.length - 1].role === 'assistant' &&
-                                voiceChat.messages[voiceChat.messages.length - 1].tool_calls) {
-                                console.log('🧹 移除被打断的 assistant 工具调用消息');
-                                voiceChat.messages.pop();
-                            }
-
                             appState.clearInterrupted();
                             throw new Error('USER_INTERRUPTED');
                         }
@@ -411,7 +390,8 @@ class LLMHandler {
                                     voiceChat.messages.push({
                                         'role': 'assistant',
                                         'content': visionResult.content,
-                                        'tool_calls': visionResult.tool_calls
+                                        'tool_calls': visionResult.tool_calls,
+                                        'reasoning_details': visionResult.reasoning_details  // 🔥 保存推理详情以支持连续推理
                                     });
 
                                     // 🔥 执行新的工具调用 - 注意：这里可能又是截图工具！
@@ -504,6 +484,12 @@ class LLMHandler {
                                 } else {
                                     // AI分析完图片后直接给出最终回复，跳出循环
                                     finalResponseContent = visionResult.content;
+                                    // 🔥 保存图片分析后的最终回复（包括 reasoning_details）
+                                    voiceChat.messages.push({
+                                        'role': 'assistant',
+                                        'content': visionResult.content,
+                                        'reasoning_details': visionResult.reasoning_details
+                                    });
                                     break;
                                 }
                             }
@@ -548,10 +534,12 @@ class LLMHandler {
                     // 没有工具调用,说明AI已经完成任务
                     if (result.content) {
                         finalResponseContent = result.content;
-
-                        // 🔥 不在这里播放TTS，统一在最后播放（参考旧版本的设计）
-                        console.log('✅ 最终回复已获取');
-
+                        // 🔥 保存最终回复的消息（包括 reasoning_details）
+                        voiceChat.messages.push({
+                            'role': 'assistant',
+                            'content': result.content,
+                            'reasoning_details': result.reasoning_details
+                        });
                         // 只有真正执行了工具调用才输出统计信息
                         if (iteration > 0) {
                         }
@@ -559,33 +547,125 @@ class LLMHandler {
                     }
 
                     // 既没有工具调用也没有内容,异常情况
-                    logToTerminal('warn', '⚠️ LLM返回了空响应');
+                    console.error('❌ 检测到空响应:');
+                    console.error('  - iteration:', iteration);
+                    console.error('  - result.content:', result.content);
+                    console.error('  - result.tool_calls:', result.tool_calls);
+                    console.error('  - result.reasoning_details:', result.reasoning_details);
+                    console.error('  - messages数量:', voiceChat.messages.length);
+                    console.error('  - 最后3条消息:', JSON.stringify(voiceChat.messages.slice(-3), null, 2));
+
+                    logToTerminal('warn', `⚠️ 第${iteration}轮LLM返回了空响应（无content也无tool_calls）`);
+
+                    // 🔥 降级策略：尝试强制获取一个简短回复
+                    try {
+                        console.log('🔄 尝试降级策略：要求AI给出简短总结...');
+                        voiceChat.messages.push({
+                            'role': 'system',
+                            'content': '[系统提示] 请简短总结一下你刚才的操作结果。这是系统自动发出的请求，用于处理空响应情况。'
+                        });
+
+                        const fallbackResult = await llmClient.chatCompletion(voiceChat.messages, []);
+                        if (fallbackResult.content && fallbackResult.content.trim()) {
+                            console.log('✅ 降级策略成功，获得回复:', fallbackResult.content);
+                            finalResponseContent = fallbackResult.content;
+                            voiceChat.messages.push({
+                                'role': 'assistant',
+                                'content': fallbackResult.content,
+                                'reasoning_details': fallbackResult.reasoning_details
+                            });
+                            break;
+                        } else {
+                            console.error('❌ 降级策略失败，仍然是空响应');
+                        }
+                    } catch (fallbackError) {
+                        console.error('❌ 降级策略异常:', fallbackError.message);
+                    }
+
+                    // 如果降级策略也失败，使用可爱的随机回复
+                    if (!finalResponseContent) {
+                        // 🐱 随机选择一个萌混过关的回复
+                        const cuteResponses = [
+                            "应该...应该完成了吧喵~",
+                            "嗯嗯！都处理好啦~（大概）",
+                            "呼~搞定收工喵~✨",
+                            "任务完成...了吧喵？",
+                            "嘿嘿，应该没问题了呢~",
+                            "呜喵~这次肯定成功了！",
+                            "完成啦完成啦~（小声bb）",
+                            "大功告成喵！...应该吧？"
+                        ];
+                        const randomIndex = Math.floor(Math.random() * cuteResponses.length);
+                        finalResponseContent = cuteResponses[randomIndex];
+
+                        console.log(`🎲 使用随机可爱回复: ${finalResponseContent}`);
+                        voiceChat.messages.push({
+                            'role': 'assistant',
+                            'content': finalResponseContent
+                        });
+                    }
                     break;
                 }
 
                 // 检查是否达到最大轮数限制
                 if (iteration >= maxIterations) {
                     logToTerminal('warn', `⚠️ 已达到最大工具调用次数限制 (${maxIterations} 轮)`);
-                    // 🔥 尝试获取最终回复 - 使用非流式
-                    const lastResult = await llmClient.chatCompletion(voiceChat.messages, [], false);
-
+                    // 尝试获取最终回复
+                    const lastResult = await llmClient.chatCompletion(voiceChat.messages, []);
                     if (lastResult.content) {
                         finalResponseContent = lastResult.content;
+                        // 🔥 保存这个特殊情况下的 API 调用结果（包括 reasoning_details）
+                        voiceChat.messages.push({
+                            'role': 'assistant',
+                            'content': lastResult.content,
+                            'reasoning_details': lastResult.reasoning_details
+                        });
                     } else {
                         finalResponseContent = "抱歉,任务太复杂了,我已经尽力了~";
+                        voiceChat.messages.push({
+                            'role': 'assistant',
+                            'content': finalResponseContent
+                        });
                     }
-                    // 🔥 不在这里播放TTS，统一在最后播放
                 }
 
                 // 输出最终回复
                 if (finalResponseContent) {
-                    voiceChat.messages.push({ 'role': 'assistant', 'content': finalResponseContent });
+                    // 🔥 注意：finalResponseContent 对应的完整消息（包括 reasoning_details）已经在各个分支中保存过了：
+                    // - 正常退出循环：在第529-537行保存了 result
+                    // - 图片分析后：在第484-490行保存了 visionResult  
+                    // - 达到最大轮数：在第547-561行保存了 lastResult
+                    // 所以这里不需要再次保存，只需执行 TTS 等后续操作
+
+                    // 🔥 新增：移除临时注入的记忆消息
+                    if (voiceChat.removeInjectedMemory) {
+                        voiceChat.removeInjectedMemory();
+                    }
+
+                    // 🔥 将对话累积到 MemOS（每N轮自动保存，跳过包含图片的对话）
+                    if (voiceChat.memosClient && voiceChat.memosClient.enabled) {
+                        const lastUserMsg = voiceChat.messages.filter(m => m.role === 'user' && !m._isMemoryInjection).pop();
+                        const lastAIMsg = voiceChat.messages.filter(m => m.role === 'assistant').pop();
+                        
+                        // 检查用户消息是否为纯文本（不包含图片）
+                        const isTextOnly = lastUserMsg && typeof lastUserMsg.content === 'string';
+                        
+                        if (isTextOnly && lastAIMsg) {
+                            // 使用累积保存（每15轮触发一次记忆加工）
+                            voiceChat.memosClient.addWithBuffer([
+                                { role: 'user', content: lastUserMsg.content },
+                                { role: 'assistant', content: lastAIMsg.content }
+                            ]).catch(err => console.error('MemOS 记忆累积失败:', err.message));
+                        } else if (lastUserMsg && !isTextOnly) {
+                            console.log('📷 跳过包含图片的对话，不添加到记忆');
+                        }
+                    }
 
                     // ===== 保存对话历史 =====
                     voiceChat.saveConversationHistory();
 
-                    // 🎙️ 播放最终回复的TTS（统一在这里播放，参考旧版本的设计）
-                    console.log('✅ 最终回复已处理完成，开始播放TTS');
+                    // 🎙️ 播放最终回复的TTS(不用reset,让它接续播放)
+                    // logToTerminal('info', `🎙️ 开始语音输出最终回复`);  // 已删除：无实际价值
                     if (iteration === 0) {
                         // 如果没有中间过程,才reset
                         ttsProcessor.reset();
