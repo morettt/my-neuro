@@ -33,6 +33,14 @@
   "memory": {
     "file_path": "AI记录室/核心用户记忆.txt"
   },
+  "memos": {
+    "enabled": true,
+    "api_url": "http://127.0.0.1:8003",
+    "auto_inject": true,
+    "inject_top_k": 3,
+    "similarity_threshold": 0.6,
+    "save_interval": 10
+  },
   "vision": {
     "enabled": true,
     "auto_screenshot": false,

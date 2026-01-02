@@ -1,0 +1,17 @@
+{
+  "llm": {
+    "config": {
+      "model": "zai-org/GLM-4.6",
+      "api_key": "【请填写你的API Key，用于记忆加工】",
+      "base_url": "https://api.siliconflow.cn/v1"
+    }
+  },
+  "llm_fallback": {
+    "enabled": true,
+    "config": {
+      "model": "Qwen/Qwen2.5-7B-Instruct",
+      "api_key": "【请填写你的备用API Key】",
+      "base_url": "https://api.siliconflow.cn/v1"
+    }
+  }
+}

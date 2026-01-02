@@ -9,6 +9,7 @@ const { ScreenshotManager } = require('../ScreenshotManager.js');
 const { GameIntegration } = require('../GameIntegration.js');
 const { ContextManager } = require('../ContextManager.js');
 const { ContextCompressor } = require('../ContextCompressor.js');
+const { MemosClient } = require('../memos-client.js');  // 🔥 新增：MemOS 客户端
 
 /**
  * VoiceChatFacade - 统一对外接口
@@ -76,6 +77,7 @@ class VoiceChatFacade {
         this.diaryManager = new DiaryManager(this);
         this.screenshotManager = new ScreenshotManager(this);
         this.contextCompressor = new ContextCompressor(this, this.config);
+        this.memosClient = new MemosClient(this.config);  // 🔥 新增：MemOS 客户端
 
         // 创建输入路由
         this.inputRouter = new InputRouter(
@@ -83,9 +85,11 @@ class VoiceChatFacade {
             this.gameIntegration,
             this.memoryManager,
             this.contextCompressor,
+            this.memosClient,  // 🔥 新增：传入 MemOS 客户端
             this.config
         );
         this.inputRouter.setUICallbacks(this.showSubtitle, this.hideSubtitle);
+        this.inputRouter.setVoiceChatFacade(this);  // 🔥 新增：设置 Facade 引用
 
         // 创建ASR控制器
         this.asrController = new ASRController(
@@ -242,6 +246,57 @@ class VoiceChatFacade {
 
     addChatMessage(role, content) {
         return this.inputRouter.addChatMessage(role, content);
+    }
+
+    // ========== 🔥 MemOS 记忆注入方法 ==========
+    /**
+     * 检索相关记忆并注入到对话上下文
+     * @param {string} userInput - 用户输入
+     */
+    async injectRelevantMemories(userInput) {
+        if (!this.memosClient || !this.memosClient.enabled || !this.memosClient.autoInject) {
+            return;
+        }
+
+        try {
+            // 1. 调用 MemOS 搜索相关记忆
+            const relevantMemories = await this.memosClient.search(userInput);
+            
+            if (relevantMemories && relevantMemories.length > 0) {
+                console.log(`🧠 MemOS 检索到 ${relevantMemories.length} 条相关记忆`);
+                
+                // 2. 格式化记忆为 prompt 文本
+                const memoryContext = this.memosClient.formatMemoriesForPrompt(relevantMemories);
+                
+                // 3. 创建临时系统消息注入记忆
+                const memoryMessage = {
+                    role: 'system',
+                    content: `【关于这个用户的相关记忆】\n${memoryContext}\n\n请在回复中自然运用这些记忆，如果用户说的话与记忆矛盾，可以适当吐槽。`,
+                    _isMemoryInjection: true  // 标记为临时注入的记忆
+                };
+                
+                // 4. 注入到消息历史（在 system prompt 之后）
+                this.messages.splice(1, 0, memoryMessage);
+                
+                console.log('✅ 记忆已注入到对话上下文');
+            } else {
+                console.log('ℹ️ 未找到相关记忆');
+            }
+        } catch (error) {
+            console.error('MemOS 记忆注入失败:', error.message);
+            // 失败不影响正常对话
+        }
+    }
+
+    /**
+     * 移除临时注入的记忆消息
+     */
+    removeInjectedMemory() {
+        const messages = this.conversationCore.getMessages();
+        const filtered = messages.filter(msg => !msg._isMemoryInjection);
+        // 直接更新内部数组
+        messages.length = 0;
+        messages.push(...filtered);
     }
 
     // ========== 设置方法 ==========

@@ -558,8 +558,9 @@ class LLMHandler {
                         break;
                     }
 
-                    // 既没有工具调用也没有内容,异常情况
-                    logToTerminal('warn', '⚠️ LLM返回了空响应');
+                    // 既没有工具调用也没有内容,异常情况（通常是内容过滤导致）
+                    logToTerminal('warn', '⚠️ LLM返回了空响应，可能触发了内容过滤');
+                    finalResponseContent = "Filter";
                     break;
                 }
 
@@ -579,7 +580,31 @@ class LLMHandler {
 
                 // 输出最终回复
                 if (finalResponseContent) {
+                    // 🔥 新增：移除临时注入的记忆消息
+                    if (voiceChat.removeInjectedMemory) {
+                        voiceChat.removeInjectedMemory();
+                    }
+
                     voiceChat.messages.push({ 'role': 'assistant', 'content': finalResponseContent });
+
+                    // 🔥 将对话累积到 MemOS（每N轮自动保存，跳过包含图片的对话）
+                    if (voiceChat.memosClient && voiceChat.memosClient.enabled) {
+                        const lastUserMsg = voiceChat.messages.filter(m => m.role === 'user' && !m._isMemoryInjection).pop();
+                        const lastAIMsg = voiceChat.messages.filter(m => m.role === 'assistant').pop();
+                        
+                        // 检查用户消息是否为纯文本（不包含图片）
+                        const isTextOnly = lastUserMsg && typeof lastUserMsg.content === 'string';
+                        
+                        if (isTextOnly && lastAIMsg) {
+                            // 使用累积保存（每15轮触发一次记忆加工）
+                            voiceChat.memosClient.addWithBuffer([
+                                { role: 'user', content: lastUserMsg.content },
+                                { role: 'assistant', content: lastAIMsg.content }
+                            ]).catch(err => console.error('MemOS 记忆累积失败:', err.message));
+                        } else if (lastUserMsg && !isTextOnly) {
+                            console.log('📷 跳过包含图片的对话，不添加到记忆');
+                        }
+                    }
 
                     // ===== 保存对话历史 =====
                     voiceChat.saveConversationHistory();
