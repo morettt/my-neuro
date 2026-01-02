@@ -4,6 +4,7 @@ const fs = require('fs')
 const { HttpServer } = require('./js/services/http-server')
 const { ModelPathUpdater } = require('./js/model/model-path-updater')
 const { ShortcutManager } = require('./js/shortcut-manager')
+const screenshot = require('screenshot-desktop');
 
 // 添加配置文件路径
 const configPath = path.join(app.getAppPath(), 'config.json');
@@ -173,26 +174,46 @@ ipcMain.handle('take-screenshot', async (event) => {
         // 添加短暂延迟确保获取最新屏幕内容
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        const sources = await desktopCapturer.getSources({
-            types: ['screen'],
-            thumbnailSize: screen.getPrimaryDisplay().workAreaSize,
-            fetchWindowIcons: false  // 禁用缓存，强制获取新截图
-        })
+        // 1. 获取系统识别到的所有物理显示器
+        const displays = await screenshot.listDisplays();
 
-        const primaryScreen = sources[0]
+        // 2. 计算当前鼠标所在的逻辑屏幕索引
+        const cursorPoint = screen.getCursorScreenPoint();
+        const currentDisplay = screen.getDisplayNearestPoint(cursorPoint);
 
-        // 直接转换为base64，不保存文件
-        const jpegBuffer = primaryScreen.thumbnail.toJPEG(75);
-        const base64Image = jpegBuffer.toString('base64');
+        // 3. 对 Electron 识别的屏幕按 X 轴坐标排序 (bounds.x)
+        const electronDisplays = screen.getAllDisplays().sort((a, b) => a.bounds.x - b.bounds.x);
+        const targetIndex = electronDisplays.findIndex(d => d.id === currentDisplay.id);
 
+        console.log(`[Native] 鼠标在第 ${targetIndex} 个屏幕 (ID: ${currentDisplay.id})`);
+
+        // 对screenshot-desktop原生库识别的屏幕按 X 轴坐标排序 (left)，以确保索引一致
+        const nativeDisplays = displays.sort((a, b) => (a.left || 0) - (b.left || 0));
+
+        // 越界防御检查
+        if (targetIndex >= nativeDisplays.length) {
+            throw new Error(`屏幕索引越界：鼠标在 Index ${targetIndex}，但原生只检测到 ${nativeDisplays.length} 个屏幕`);
+        }
+
+        const targetNativeDisplay = nativeDisplays[targetIndex];
+        console.log(`[Native] 选中目标屏幕: ${targetNativeDisplay.name} (ID: ${targetNativeDisplay.id})`);
+
+        // 4. 执行截图
+        const imgBuffer = await screenshot({
+            screen: targetNativeDisplay.id,
+            format: 'jpg'
+        });
+
+        // 5. 返回结果 (Base64)
+        const base64Image = imgBuffer.toString('base64');
         console.log('截图已完成，时间戳:', new Date().toISOString());
+        return base64Image;
 
-        return base64Image
     } catch (error) {
         console.error('截图错误:', error)
-        throw error
+        throw error;
     }
-})
+});
 
 // 添加IPC处理器，允许从渲染进程手动更新模型
 ipcMain.handle('update-live2d-model', async (event) => {
