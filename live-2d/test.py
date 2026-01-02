@@ -612,12 +612,12 @@ class set_pyqt(QWidget):
                 self.stop_terminal()
                 self.stop_minecraft_terminal()
 
-                # 关闭桌宠进程
-                self.close_live_2d()
-
                 print("所有服务已关闭")
             else:
                 print("未启用自动关闭服务，只关闭UI界面")
+
+            # 无论是否启用自动关闭服务，都关闭桌宠进程
+            self.close_live_2d()
 
         except Exception as e:
             print(f"关闭服务时出错: {e}")

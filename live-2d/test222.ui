@@ -1560,7 +1560,7 @@ QTabWidget#tabWidget_tools QTabBar {
                        </font>
                       </property>
                       <property name="text">
-                       <string>启用对话历史记忆（重启后保留之前的对话）</string>
+                       <string>启用对话历史记忆（警告：这个目前有bug 会导致AI复读混乱，请暂时别选择）</string>
                       </property>
                   </widget>
                  </item>
