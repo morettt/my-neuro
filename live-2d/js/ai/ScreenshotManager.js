@@ -1,5 +1,6 @@
 // ScreenshotManager.js - 截图管理模块
 const { ipcRenderer } = require('electron');
+const { logToTerminal } = require('../api-utils.js');
 
 class ScreenshotManager {
     constructor(voiceChatInterface) {
@@ -76,13 +77,15 @@ class ScreenshotManager {
             });
 
             if (!response.ok) {
-                throw new Error('BERT分类API请求失败');
+                await this.handleBertError(response);
+                return null;
             }
 
             const data = await response.json();
             console.log('BERT分类结果:', data);
             return data;
         } catch (error) {
+            logToTerminal('error', `BERT分类错误: ${error.message}`);
             console.error('BERT分类错误:', error);
             return null;
         }
@@ -98,6 +101,48 @@ class ScreenshotManager {
             console.error('截图错误:', error);
             throw error;
         }
+    }
+
+    // 统一的BERT错误处理
+    async handleBertError(response) {
+        let errorDetail = "";
+        try {
+            const errorBody = await response.text();
+            try {
+                const errorJson = JSON.parse(errorBody);
+                errorDetail = JSON.stringify(errorJson, null, 2);
+            } catch (e) {
+                errorDetail = errorBody;
+            }
+        } catch (e) {
+            errorDetail = "无法读取错误详情";
+        }
+
+        const serviceName = this.bertApiKey ? '云端肥牛网关BERT' : '本地BERT';
+        let errorMessage = "";
+        switch (response.status) {
+            case 401:
+                errorMessage = `【${serviceName}】API密钥验证失败，请检查你的API密钥是否正确`;
+                break;
+            case 403:
+                errorMessage = `【${serviceName}】API访问被禁止，你的账号可能被限制或额度已用完`;
+                break;
+            case 429:
+                errorMessage = `【${serviceName}】请求过于频繁，超出API限制或额度已用完`;
+                break;
+            case 500:
+            case 502:
+            case 503:
+            case 504:
+                errorMessage = `【${serviceName}】服务器错误，AI服务当前不可用`;
+                break;
+            default:
+                errorMessage = `【${serviceName}】API错误: ${response.status} ${response.statusText}`;
+        }
+
+        const fullError = `${errorMessage}\n详细信息: ${errorDetail}`;
+        logToTerminal('error', fullError);
+        console.error(errorMessage);
     }
 }
 
