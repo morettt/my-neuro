@@ -10,3 +10,4 @@ if exist ".\node\node.exe" (
     echo 未找到项目自带的 Node.js，使用系统环境的 Node.js
     node .\node_modules\electron\cli.js .
 )
+pause

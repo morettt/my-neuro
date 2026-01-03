@@ -4,6 +4,7 @@
       "开心": [
         "motions/Hiyori_m02.motion3.json",
         "motions/Hiyori_m05.motion3.json",
+        "motions/Hiyori_m06.motion3.json",
         "motions/Hiyori_m08.motion3.json"
       ],
       "生气": [
@@ -19,8 +20,7 @@
         "motions/Hiyori_m04.motion3.json"
       ],
       "俏皮": [
-        "motions/Hiyori_m03.motion3.json",
-        "motions/Hiyori_m06.motion3.json"
+        "motions/Hiyori_m03.motion3.json"
       ],
       "动作1": [
         "motions/Hiyori_m01.motion3.json"

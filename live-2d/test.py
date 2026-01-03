@@ -2541,6 +2541,11 @@ class set_pyqt(QWidget):
         self.ui.lineEdit_user_name.setText(subtitle_labels.get('user', '用户'))
         self.ui.lineEdit_ai_name.setText(subtitle_labels.get('ai', 'Fake Neuro'))
 
+        # 新增：设置隐藏皮套配置
+        ui_config = self.config.get('ui', {})
+        show_model = ui_config.get('show_model', True)
+        self.ui.checkBox_hide_model.setChecked(not show_model)  # 注意：勾选表示隐藏，所以需要取反
+
         # 新增：设置自动关闭服务配置
         auto_close_services = self.config.get('auto_close_services', {})
         self.ui.checkBox_auto_close_services.setChecked(auto_close_services.get('enabled', True))
@@ -3005,6 +3010,11 @@ class set_pyqt(QWidget):
         current_config['subtitle_labels']['enabled'] = self.ui.checkBox_subtitle_enabled.isChecked()
         current_config['subtitle_labels']['user'] = self.ui.lineEdit_user_name.text() or "用户"
         current_config['subtitle_labels']['ai'] = self.ui.lineEdit_ai_name.text() or "Fake Neuro"
+
+        # 新增：保存隐藏皮套设置
+        if 'ui' not in current_config:
+            current_config['ui'] = {}
+        current_config['ui']['show_model'] = not self.ui.checkBox_hide_model.isChecked()  # 注意：勾选表示隐藏，所以需要取反
 
         # 新增：保存自动关闭服务设置
         if 'auto_close_services' not in current_config:
