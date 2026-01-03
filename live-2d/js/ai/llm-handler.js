@@ -560,6 +560,8 @@ class LLMHandler {
 
                     // 既没有工具调用也没有内容,异常情况
                     logToTerminal('warn', '⚠️ LLM返回了空响应');
+                    // 🔥 空响应时设置固定回复
+                    finalResponseContent = "Filter";
                     break;
                 }
 
@@ -581,8 +583,22 @@ class LLMHandler {
                 if (finalResponseContent) {
                     voiceChat.messages.push({ 'role': 'assistant', 'content': finalResponseContent });
 
+                    // ===== 清除注入的记忆 =====
+                    if (voiceChat.removeInjectedMemory) {
+                        voiceChat.removeInjectedMemory();
+                    }
+
                     // ===== 保存对话历史 =====
                     voiceChat.saveConversationHistory();
+                    
+                    // ===== MemOS: 异步保存对话到记忆系统 =====
+                    if (voiceChat.memosClient && voiceChat.config?.memos?.enabled) {
+                        const userMessage = prompt;
+                        const aiMessage = finalResponseContent;
+                        voiceChat.memosClient.addWithBuffer(userMessage, aiMessage).catch(err => {
+                            console.error('MemOS保存对话失败:', err);
+                        });
+                    }
 
                     // 🎙️ 播放最终回复的TTS（统一在这里播放，参考旧版本的设计）
                     console.log('✅ 最终回复已处理完成，开始播放TTS');

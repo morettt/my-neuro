@@ -9,6 +9,7 @@ const { ScreenshotManager } = require('../ScreenshotManager.js');
 const { GameIntegration } = require('../GameIntegration.js');
 const { ContextManager } = require('../ContextManager.js');
 const { ContextCompressor } = require('../ContextCompressor.js');
+const { MemosClient } = require('../memos-client.js');
 
 /**
  * VoiceChatFacade - 统一对外接口
@@ -76,6 +77,9 @@ class VoiceChatFacade {
         this.diaryManager = new DiaryManager(this);
         this.screenshotManager = new ScreenshotManager(this);
         this.contextCompressor = new ContextCompressor(this, this.config);
+        
+        // 创建MemOS客户端
+        this.memosClient = new MemosClient(this.config);
 
         // 创建输入路由
         this.inputRouter = new InputRouter(
@@ -83,9 +87,11 @@ class VoiceChatFacade {
             this.gameIntegration,
             this.memoryManager,
             this.contextCompressor,
-            this.config
+            this.config,
+            this.memosClient
         );
         this.inputRouter.setUICallbacks(this.showSubtitle, this.hideSubtitle);
+        this.inputRouter.setVoiceChatFacade(this);
 
         // 创建ASR控制器
         this.asrController = new ASRController(
@@ -267,6 +273,60 @@ class VoiceChatFacade {
         // 这个方法由BarrageManager调用
         // 暂时保留原实现（简化版）
         console.log(`收到弹幕: ${nickname}: ${text}`);
+    }
+
+    // ========== MemOS 记忆系统方法 ==========
+    /**
+     * 注入相关记忆到系统提示词
+     * @param {string} userInput - 用户输入
+     * @returns {Promise<boolean>} - 是否成功注入
+     */
+    async injectRelevantMemories(userInput) {
+        if (!this.memosClient || !this.config.memos?.enabled) {
+            return false;
+        }
+
+        try {
+            // 搜索相关记忆
+            const memories = await this.memosClient.searchMemories(userInput, this.config.memos?.inject_top_k || 3);
+            
+            if (memories && memories.length > 0) {
+                // 构建记忆注入文本
+                const memoryTexts = memories.map((m, i) => `[记忆${i + 1}] ${m.content || m}`).join('\n');
+                const injectionText = `\n\n【相关长期记忆】:\n${memoryTexts}\n`;
+                
+                // 获取当前系统提示词
+                const messages = this.conversationCore.getMessages();
+                if (messages.length > 0 && messages[0].role === 'system') {
+                    // 保存原始系统提示词（如果还没保存过）
+                    if (!this._originalSystemPrompt) {
+                        this._originalSystemPrompt = messages[0].content;
+                    }
+                    // 注入记忆到系统提示词
+                    messages[0].content = this._originalSystemPrompt + injectionText;
+                    this._memoryInjected = true;
+                    console.log(`📚 已注入 ${memories.length} 条相关记忆`);
+                    return true;
+                }
+            }
+        } catch (error) {
+            console.error('注入记忆失败:', error);
+        }
+        return false;
+    }
+
+    /**
+     * 移除注入的记忆，恢复原始系统提示词
+     */
+    removeInjectedMemory() {
+        if (this._memoryInjected && this._originalSystemPrompt) {
+            const messages = this.conversationCore.getMessages();
+            if (messages.length > 0 && messages[0].role === 'system') {
+                messages[0].content = this._originalSystemPrompt;
+                this._memoryInjected = false;
+                console.log('🧹 已清除注入的记忆');
+            }
+        }
     }
 }
 
