@@ -21,6 +21,11 @@ class ModelSetup {
         const model = await PIXI.live2d.Live2DModel.from("2D/肥牛/hiyori_pro_mic.model3.json");
         app.stage.addChild(model);
 
+        // 根据配置控制模型显示/隐藏
+        const showModel = config.ui?.show_model !== false; // 默认显示
+        model.visible = showModel;
+        console.log(`模型显示状态: ${showModel ? '显示' : '隐藏'}`);
+
         // 初始化模型交互控制器
         modelController.init(model, app, config);
         modelController.setupInitialModelProperties(config.ui.model_scale || 2.3);

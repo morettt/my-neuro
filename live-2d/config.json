@@ -31,6 +31,7 @@
     "url": "http://127.0.0.1:8002/ask"
   },
   "memory": {
+    "enabled": false,
     "file_path": "AI记录室/核心用户记忆.txt"
   },
   "vision": {
@@ -78,6 +79,7 @@
     "intro_text": "你好啊",
     "model_scale": 2.3,
     "show_chat_box": false,
+    "show_model": true,
     "text_only_mode": false,
     "auto_show_chat_on_text_mode": true,
     "model_position": {
@@ -156,5 +158,5 @@
     "diary_file": "AI记录室/AI日记.txt",
     "prompt": "请以fake neuro（肥牛）的身份，基于今天的对话记录写一篇简短的日记。要求：1. 用第一人称\"我\"来写，体现肥牛的邪恶俏皮性格 2. 总结今天和用户的互动感受 3. 不要太长，3-5句话即可 4. 保持肥牛的风格 5. 不要使用情绪标签<>"
   },
-  "version": "v6.0.1"
+  "version": "v6.0.3"
 }

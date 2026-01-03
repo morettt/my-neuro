@@ -63,7 +63,9 @@ class InputRouter {
             await this.gameIntegration.handleGameInput(text);
         } else {
             // 异步记忆检查，不阻塞对话流程
-            this.memoryManager.checkAndSaveMemoryAsync(text);
+            if (this.config.memory?.enabled !== false) {
+                this.memoryManager.checkAndSaveMemoryAsync(text);
+            }
 
             // 发送到LLM
             await this.llmHandler(text);
