@@ -15,7 +15,7 @@ import subprocess
 system = platform.system()
 
 # live-2d版本号
-version_tag = "v5.9.9"
+version_tag = "v6.0.2"
 
 # 禁用SSL警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -400,16 +400,16 @@ else:
             print(f'下载50系专属TTS包')
 
             if not download_with_retry(
-                    f"modelscope download --model morelle/GPT-SoVITS-50-Official --local_dir ./tts-hub"):
-                print("GPT-SoVITS-50-Official模型包下载失败，终止程序")
+                    f"modelscope download --model morelle/fake-neuro-gsv-50 --local_dir ./tts-hub"):
+                print("fake-neuro-gsv-50模型包下载失败，终止程序")
                 exit(1)
 
-            print("GPT-SoVITS-50-Official模型包下载成功！")
+            print("fake-neuro-gsv-50模型包下载成功！")
 
-            # 检查是否存在 GPT-SoVITS-v2pro-20250604-nvidia50.7z 文件（在tts-hub文件夹中）
-            bundle_7z_file = os.path.join(tts_hub_dir, "GPT-SoVITS-v2pro-20250604-nvidia50.7z")
+            # 检查是否存在 GPT-SoVITS-Bundle.7z 文件（在tts-hub文件夹中）
+            bundle_7z_file = os.path.join(tts_hub_dir, "GPT-SoVITS-Bundle.7z")
             if os.path.exists(bundle_7z_file):
-                print(f"\n检测到 GPT-SoVITS-v2pro-20250604-nvidia50.7z 文件，开始解压...")
+                print(f"\n检测到 GPT-SoVITS-Bundle.7z 文件，开始解压...")
 
                 # 解压到tts-hub目录
                 if extract_7z(bundle_7z_file, tts_hub_dir):
@@ -425,10 +425,10 @@ else:
                     # 设置标志，表示已完成下载
                     tts_downloaded = True
                 else:
-                    print("TTS模型包解压失败，请手动解压 GPT-SoVITS-v2pro-20250604-nvidia50.7z 文件")
+                    print("TTS模型包解压失败，请手动解压 GPT-SoVITS-Bundle.7z 文件")
                     exit(1)
             else:
-                print(f"警告: 未找到 GPT-SoVITS-v2pro-20250604-nvidia50.7z 文件，跳过解压步骤")
+                print(f"警告: 未找到 GPT-SoVITS-Bundle.7z 文件，跳过解压步骤")
 
         elif gpu and 'NVIDIA' in gpu:
             print(f"检测到NVIDIA显卡: {gpu}")
