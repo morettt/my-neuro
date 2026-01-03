@@ -14,7 +14,7 @@ import subprocess
 
 system = platform.system()
 
-# live-2d版本号
+# live-2d版本号-
 version_tag = "v6.0.3"
 
 # 禁用SSL警告
