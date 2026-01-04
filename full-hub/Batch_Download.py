@@ -379,10 +379,47 @@ tts_already_extracted = all(os.path.exists(f) for f in tts_key_files)
 if tts_already_extracted:
     print("检测到TTS模型包已经解压完成，跳过下载和解压步骤")
 else:
-    result = subprocess.run(['wmic', 'path', 'win32_VideoController', 'get', 'name'],
-                            capture_output=True, text=True)
+    # 尝试自动检测显卡
+    gpu_detected = False
+    gpu_names = []
 
-    gpu_names = result.stdout.strip().split('\n')[1:]  # 去掉第一行标题
+    try:
+        result = subprocess.run(['wmic', 'path', 'win32_VideoController', 'get', 'name'],
+                                capture_output=True, text=True, timeout=5)
+
+        if result.returncode == 0 and result.stdout.strip():
+            gpu_names = result.stdout.strip().split('\n')[1:]  # 去掉第一行标题
+            gpu_names = [gpu.strip() for gpu in gpu_names if gpu.strip()]
+
+            if gpu_names:
+                gpu_detected = True
+                print("自动检测到显卡信息:")
+                for gpu in gpu_names:
+                    print(f"  - {gpu}")
+    except Exception as e:
+        print(f"自动检测显卡失败: {e}")
+
+    # 如果自动检测失败，让用户手动选择
+    if not gpu_detected:
+        print("\n无法自动检测显卡信息，请手动选择您的显卡类型：")
+        print("=" * 60)
+        print("1. 我是非50系NVIDIA显卡 (例如: RTX 4090, RTX 3080等)")
+        print("2. 我是50系NVIDIA显卡 (例如: RTX 5090, RTX 5080等)")
+        print("=" * 60)
+
+        while True:
+            choice = input("请输入选项 (1 或 2): ").strip()
+
+            if choice == '1':
+                print("您选择了: 非50系NVIDIA显卡")
+                gpu_names = ['NVIDIA']
+                break
+            elif choice == '2':
+                print("您选择了: 50系NVIDIA显卡")
+                gpu_names = ['NVIDIA RTX 50']
+                break
+            else:
+                print("输入无效，请重新输入 1 或 2")
 
     # 添加标志变量，防止重复下载
     tts_downloaded = False
@@ -464,7 +501,7 @@ else:
                     print("TTS模型包解压失败，请手动解压 GPT-SoVITS-Bundle.7z 文件")
                     exit(1)
             else:
-                print(f"警告: 未找到 GPT-SoVITS-v2pro-20250604.7z 文件，跳过解压步骤")
+                print(f"警告: 未找到 GPT-SoVITS-Bundle.7z 文件，跳过解压步骤")
 
 # 7. 下载BAAI/bge-m3模型到rag-hub文件夹
 print("\n========== 检查BAAI/bge-m3模型 ==========")
@@ -581,4 +618,4 @@ else:
     else:
         print("标点符号模型下载成功！")
 
-print("\n所有下载操作全部完成！")
+print("\n所有下载操作全部完成！!")
