@@ -238,6 +238,85 @@ class AppInitializer {
             console.log('本地工具管理器初始化成功');
             logToTerminal('info', `本地工具管理器初始化成功: ${stats.modules}个模块, ${stats.tools}个工具`);
 
+
+            // 初始化QQ集成管理器
+            if (this.config.qq_integration?.enabled) {
+                try {
+                    const { qqManager } = require('../server-tools/qq_integration.js');
+                    qqManager.initialize(this.config.qq_integration);
+                    global.qqManager = qqManager;
+                    console.log('QQ集成管理器初始化成功');
+                    logToTerminal('info', 'QQ集成管理器初始化成功');
+                } catch (error) {
+                    console.error('QQ集成管理器初始化失败:', error);
+                    logToTerminal('error', `QQ集成管理器初始化失败: ${error.message}`);
+                }
+            }
+
+            // 初始化QQ评论管理器
+            if (this.config.qq_commentary?.enabled) {
+                try {
+                    const { qqCommentaryManager } = require('./ai/qq-commentary-manager.js');
+                    qqCommentaryManager.initialize(this.config.qq_commentary, this.voiceChat, this.ttsProcessor);
+                    global.qqCommentaryManager = qqCommentaryManager;
+
+                    const originalSendToLLM = this.voiceChat.sendToLLM;
+                    this.voiceChat.sendToLLM = async function(prompt) {
+                        if (global.qqCommentaryManager) {
+                            global.qqCommentaryManager.setUserInteractionPriority(true);
+                        }
+
+                        try {
+                            return await originalSendToLLM.call(this, prompt);
+                        } finally {
+                            if (global.qqCommentaryManager) {
+                                setTimeout(() => {
+                                    global.qqCommentaryManager.setUserInteractionPriority(false);
+                                }, 1000);
+                            }
+                        }
+                    };
+
+                    console.log('QQ评论管理器初始化成功');
+                    logToTerminal('info', 'QQ评论管理器初始化成功');
+                } catch (error) {
+                    console.error('QQ评论管理器初始化失败:', error);
+                    logToTerminal('error', `QQ评论管理器初始化失败: ${error.message}`);
+                }
+            }
+
+            // 初始化QQ记忆库管理器（在QQ自动回复之前）
+            if (this.config.qq_memory?.enabled) {
+                try {
+                    const { qqMemoryManager } = require('./ai/qq-memory-manager.js');
+                    qqMemoryManager.initialize(this.config.qq_memory, this.config.llm);
+                    global.qqMemoryManager = qqMemoryManager;
+                    console.log('QQ记忆库管理器初始化成功（集成原有RAG服务）');
+                    logToTerminal('info', 'QQ记忆库管理器初始化成功（集成原有RAG服务）');
+                } catch (error) {
+                    console.error('QQ记忆库管理器初始化失败:', error);
+                    logToTerminal('error', `QQ记忆库管理器初始化失败: ${error.message}`);
+                }
+            }
+
+            // 初始化QQ自动回复管理器
+            if (this.config.qq_auto_reply?.enabled) {
+                try {
+                    const { qqAutoReplyManager } = require('./ai/qq-auto-reply-manager.js');
+                    // 传入qqMemoryManager以支持动态提示词和RAG
+                    const qqMemoryMgr = global.qqMemoryManager || null;
+                    qqAutoReplyManager.initialize(this.config.qq_auto_reply, this.config.llm, this.ttsProcessor, qqMemoryMgr);
+                    global.qqAutoReplyManager = qqAutoReplyManager;
+                    console.log('QQ自动回复管理器初始化成功');
+                    logToTerminal('info', 'QQ自动回复管理器初始化成功');
+                } catch (error) {
+                    console.error('QQ自动回复管理器初始化失败:', error);
+                    logToTerminal('error', `QQ自动回复管理器初始化失败: ${error.message}`);
+                }
+            }
+
+
+
             // 修改VoiceChat的sendToLLM方法，支持工具调用
             const enhancedSendToLLM = LLMHandler.createEnhancedSendToLLM(
                 this.voiceChat,
@@ -365,6 +444,7 @@ class AppInitializer {
         console.log(`聊天框: ${this.shouldShowChatBox ? '显示' : '隐藏'}`);
         console.log(`直播模块: ${this.config.bilibili?.enabled ? '启用' : '禁用'}`);
         console.log(`自动对话: ${this.config.auto_chat?.enabled ? '启用' : '禁用'}`);
+        console.log(`QQ记忆库: ${this.config.qq_memory?.enabled ? '启用' : '禁用'}`);
         console.log(`Function Call工具: ${this.config.tools?.enabled ? '启用' : '禁用'}`);
         console.log(`MCP工具: ${this.config.mcp?.enabled ? '启用' : '禁用'}`);
 

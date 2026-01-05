@@ -31,43 +31,27 @@ class LocalToolManager {
             return;
         }
 
-        const files = fs.readdirSync(toolsDir);
 
-        files.forEach(file => {
-            // 跳过非JavaScript文件和server.js主文件
-            if (!file.endsWith('.js') || file === 'server.js') {
-                return;
+        // 直接使用 index.js 统一接口
+        const indexPath = path.join(toolsDir, 'index.js');
+        try {
+            // 清除缓存以支持热重载
+            delete require.cache[require.resolve(indexPath)];
+            const toolIndex = require(indexPath);
+            // 使用 index.js 作为唯一的工具模块
+            this.modules.push(toolIndex);
+            // 获取所有工具定义
+            const allTools = toolIndex.getToolDefinitions();
+            if (Array.isArray(allTools) && allTools.length > 0) {
+                this.tools.push(...allTools);
+                console.log(`✅ 已加载工具索引: ${allTools.length}个工具`);
+            } else {
+                console.warn(`⚠️ 工具索引没有返回有效的工具定义`);
             }
+        } catch (error) {
+            console.error(`❌ 加载工具索引失败:`, error.message);
+        }         
 
-            try {
-                const modulePath = path.join(toolsDir, file);
-
-                // 清除模块缓存，支持热重载
-                delete require.cache[require.resolve(modulePath)];
-
-                const module = require(modulePath);
-
-                // 检查模块是否有必要的接口
-                if (typeof module.getToolDefinitions === 'function' &&
-                    typeof module.executeFunction === 'function') {
-
-                    this.modules.push(module);
-
-                    // 获取并添加工具定义
-                    const moduleTools = module.getToolDefinitions();
-                    if (Array.isArray(moduleTools) && moduleTools.length > 0) {
-                        this.tools.push(...moduleTools);
-                        console.log(`✅ 已加载工具模块: ${file} (${moduleTools.length}个工具)`);
-                    } else {
-                        console.warn(`⚠️ 模块 ${file} 没有返回有效的工具定义`);
-                    }
-                } else {
-                    console.warn(`⚠️ 跳过文件 ${file}: 不是有效的工具模块(缺少必要的接口)`);
-                }
-            } catch (error) {
-                console.error(`❌ 加载模块 ${file} 失败:`, error.message);
-            }
-        });
 
         console.log(`🔧 工具管理器初始化完成: ${this.modules.length} 个模块, ${this.tools.length} 个工具`);
     }
