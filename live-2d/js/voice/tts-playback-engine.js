@@ -21,6 +21,7 @@ class TTSPlaybackEngine {
         this.currentAudioUrl = null;
         this.isPlaying = false;
         this.shouldStop = false;
+        this.currentAudioResolve = null;
 
         // 动画和渲染
         this._textAnimInterval = null;
@@ -63,6 +64,7 @@ class TTSPlaybackEngine {
             }
 
             this.isPlaying = true;
+            this.currentAudioResolve = resolve;
 
             // 触发开始回调
             if (this.onStartCallback) this.onStartCallback();
@@ -206,14 +208,20 @@ class TTSPlaybackEngine {
 
                 this.cleanup();
                 this.isPlaying = false;
-                resolve({ completed: true });
+                if (this.currentAudioResolve) {
+                    this.currentAudioResolve({ completed: true });
+                    this.currentAudioResolve = null;
+                }
             };
 
             this.currentAudio.onerror = (e) => {
                 console.error('音频播放错误:', e);
                 this.cleanupOnError();
                 eventBus.emit(Events.TTS_END);
-                resolve({ error: true });
+                if (this.currentAudioResolve) {
+                    this.currentAudioResolve({ error: true });
+                    this.currentAudioResolve = null;
+                }
             };
 
             // 开始播放
@@ -275,6 +283,10 @@ class TTSPlaybackEngine {
         this.cleanup();
         if (this.onAudioDataCallback) this.onAudioDataCallback(0);
         this.isPlaying = false;
+        if (this.currentAudioResolve) {
+            this.currentAudioResolve({ completed: false, stopped: true });
+            this.currentAudioResolve = null;
+        }
     }
 
     // 重置状态

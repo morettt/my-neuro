@@ -76,6 +76,14 @@ class EnhancedTextProcessor {
                     this.handleAllComplete();
                 }
             }
+            else {
+                // 当“没音频（可能是TTS全失败了，或者还在处理中）”且“还有一个未完成的Promise”时，手动触发结束
+                // this.completionPromise 不为空说明当前正处于一个“未完结”的对话任务中
+                if (this.isAllComplete() && this.completionPromise) {
+                    console.log('检测到队列为空但任务未结束（可能是TTS失败），强制结束');
+                    this.handleAllComplete();
+                }
+            }
 
             setTimeout(playNext, 50);
         };
