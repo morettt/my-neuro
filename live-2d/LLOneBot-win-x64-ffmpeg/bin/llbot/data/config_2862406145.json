@@ -1,0 +1,82 @@
+{
+  "webui": {
+    "enable": true,
+    "port": 3080
+  },
+  "onlyLocalhost": true,
+  "milky": {
+    "enable": false,
+    "reportSelfMessage": false,
+    "http": {
+      "port": 3010,
+      "prefix": "",
+      "accessToken": ""
+    },
+    "webhook": {
+      "urls": [],
+      "accessToken": ""
+    }
+  },
+  "satori": {
+    "enable": false,
+    "port": 5600,
+    "token": ""
+  },
+  "ob11": {
+    "enable": true,
+    "connect": [
+      {
+        "type": "ws",
+        "enable": true,
+        "token": "",
+        "reportSelfMessage": false,
+        "reportOfflineMessage": false,
+        "messageFormat": "array",
+        "debug": false,
+        "port": 8001,
+        "heartInterval": 60000
+      },
+      {
+        "type": "ws-reverse",
+        "enable": true,
+        "token": "",
+        "reportSelfMessage": false,
+        "reportOfflineMessage": false,
+        "messageFormat": "array",
+        "debug": false,
+        "url": "ws://127.0.0.1:8001/onebot",
+        "heartInterval": 60000
+      },
+      {
+        "type": "http",
+        "enable": false,
+        "token": "",
+        "reportSelfMessage": false,
+        "reportOfflineMessage": false,
+        "messageFormat": "array",
+        "debug": false,
+        "port": 8001
+      },
+      {
+        "type": "http-post",
+        "enable": false,
+        "token": "",
+        "reportSelfMessage": false,
+        "reportOfflineMessage": false,
+        "messageFormat": "array",
+        "debug": false,
+        "url": "",
+        "heartInterval": 60000,
+        "enableHeart": false
+      }
+    ]
+  },
+  "enableLocalFile2Url": false,
+  "log": true,
+  "autoDeleteFile": false,
+  "autoDeleteFileSecond": 60,
+  "musicSignUrl": "https://llob.linyuchen.net/sign/music",
+  "msgCacheExpire": 120,
+  "ffmpeg": "",
+  "rawMsgPB": false
+}

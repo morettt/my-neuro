@@ -1,0 +1,11 @@
+{
+    "qq_path": "",
+    "quick_login_qq": "",
+    "enable_gui": true,
+    "servers": [],
+    "default_host": "127.0.0.1",
+    "default_port": 13000,
+    "debug": false,
+    "qq_console": false,
+    "headless": false
+}

@@ -145,6 +145,21 @@ class HttpServer {
                 .catch(error => res.json({ success: false, message: error.toString() }));
         });
 
+
+
+        this.emotionApp.get('/open-devtools', (req, res) => {
+            const mainWindow = BrowserWindow.getAllWindows()[0];
+
+            if (!mainWindow) {
+                return res.json({ success: false, message: '应用窗口未找到' });
+            }
+
+            mainWindow.webContents.openDevTools();
+            res.json({ success: true, message: 'DevTools已打开' });
+        });
+
+
+
         this.emotionApp.listen(3002, () => {
             console.log('情绪控制服务启动在端口3002');
         });

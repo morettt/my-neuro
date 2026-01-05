@@ -1,0 +1,81 @@
+{
+  "webui": {
+    "enable": true,
+    "port": 3080
+  },
+  "milky": {
+    "enable": false,
+    "reportSelfMessage": false,
+    "http": {
+      "port": 3010,
+      "prefix": "",
+      "accessToken": ""
+    },
+    "webhook": {
+      "urls": [],
+      "accessToken": ""
+    }
+  },
+  "satori": {
+    "enable": false,
+    "port": 5600,
+    "token": ""
+  },
+  "ob11": {
+    "enable": true,
+    "connect": [
+      {
+        "type": "ws",
+        "enable": false,
+        "port": 3001,
+        "heartInterval": 60000,
+        "token": "",
+        "reportSelfMessage": false,
+        "reportOfflineMessage": false,
+        "messageFormat": "array",
+        "debug": false
+      },
+      {
+        "type": "ws-reverse",
+        "enable": false,
+        "url": "",
+        "heartInterval": 60000,
+        "token": "",
+        "reportSelfMessage": false,
+        "reportOfflineMessage": false,
+        "messageFormat": "array",
+        "debug": false
+      },
+      {
+        "type": "http",
+        "enable": false,
+        "port": 3000,
+        "token": "",
+        "reportSelfMessage": false,
+        "reportOfflineMessage": false,
+        "messageFormat": "array",
+        "debug": false
+      },
+      {
+        "type": "http-post",
+        "enable": false,
+        "url": "",
+        "enableHeart": false,
+        "heartInterval": 60000,
+        "token": "",
+        "reportSelfMessage": false,
+        "reportOfflineMessage": false,
+        "messageFormat": "array",
+        "debug": false
+      }
+    ]
+  },
+  "enableLocalFile2Url": false,
+  "log": true,
+  "autoDeleteFile": false,
+  "autoDeleteFileSecond": 60,
+  "musicSignUrl": "https://llob.linyuchen.net/sign/music",
+  "msgCacheExpire": 120,
+  "onlyLocalhost": true,
+  "ffmpeg": ""
+}

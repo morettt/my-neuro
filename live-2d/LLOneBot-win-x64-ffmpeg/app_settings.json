@@ -1,0 +1,23 @@
+{
+  "qq_path": "C:\\Program Files\\QQ.exe",
+  "pmhq_path": "bin/pmhq/pmhq-win-x64.exe",
+  "llbot_path": "bin/llbot/llbot.js",
+  "node_path": "C:\\Program Files\\nodejs\\node.exe",
+  "ffmpeg_path": "bin/llbot/ffmpeg.exe",
+  "ffprobe_path": "bin/llbot/ffprobe.exe",
+  "auto_start_pmhq": false,
+  "auto_start_llbot": false,
+  "auto_start_bot": false,
+  "auto_login_qq": "2862406145",
+  "headless": false,
+  "minimize_to_tray_on_start": false,
+  "startup_command_enabled": false,
+  "startup_command": "",
+  "log_level": "info",
+  "log_save_enabled": true,
+  "log_retention_seconds": 86400,
+  "theme_mode": "dark",
+  "window_width": 1200.0,
+  "window_height": 800.0,
+  "close_to_tray": null
+}

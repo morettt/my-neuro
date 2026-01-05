@@ -1,0 +1,517 @@
+V7.4.0
+更新时间 2026-01-01
+
+新年快乐！
+
+* 支持 44175
+* Windows 版本采用新版 Rust 重构的 PMHQ
+* WebUI 新增跟随系统自动主题
+* WebUI 修复移动端上弹出输入法后背景小球疯狂乱动
+* WebQQ 修复在 Firefox 上输入图片导致无法输入文字
+* WebQQ 优化输入框，不需要等待消息发送完成才能输入下一条消息
+* WebQQ 优化消息发送状态，不再闪烁一下
+* WebQQ 添加已撤回消息的提示
+* Linux CLI 启动脚本优化
+* OneBot 修复老版本 QQ 无法使用闪传相关接口
+* OneBot 修复 Docker 环境下可能无法发送合并转发图片
+* OneBot 修复获取合并转发内视频网址可能失败
+* Milky 修复 API `get_history_messages` 可能获取到空消息
+* Milky 修复 API `get_history_messages` 返回的 `next_message_seq` 不正确
+
+=================
+V7.3.0
+更新时间 2025-12-28
+
+* WebUI 新增 WebQQ
+* WebUI 新增 夜间模式
+* 优化 Linux CLI 启动脚本，避免二次启动端口占用导致 PMHQ 连不上 QQ
+* Linux CLI 新增支持 Arch 系统
+* Milky 修复 API `recall_private_message` 在临时会话场景中不可用
+* Milky 修复 API `get_message` 在好友、临时会话场景中不可用
+* Milky 修复 API `get_history_messages` 在好友、临时会话场景中不可用
+* Milky 修复 API `mark_message_as_read` 在好友、临时会话场景中不可用
+* Milky 修复 API `get_cookies` 返回数据缺失 `p_skey`
+* Milky 修复新人被邀请进群事件没有上报
+* OneBot 修复 API `get_group_msg_history` 获取消息时可能报错
+* OneBot 修复 API `get_stranger_info` 获取信息时可能报错
+* OneBot 修复 API `get_login_info` 获取的昵称可能为空
+* OneBot 修复 API `get_cookies` 返回数据缺失 `p_skey`
+* OneBot 修复新人被邀请进群事件没有上报
+
+=================
+V7.2.0
+更新时间 2025-12-21
+
+* WebUI 新增日志查看功能
+* 优化 Linux CLI，Ctrl + C 现可以正常退出
+* OneBot 新增识别二维码 API `scan_qrcode`
+* OneBot 支持 API `get_file` 获取语音直链
+* OneBot 修复 API `forward_friend_single_msg`、`forward_group_single_msg` 转发合并转发消息时报错
+* OneBot 没有快速操作返回时不再显示无用报错 #662
+* Milky 新增有关设置个人资料的 API `set_avatar`、`set_nickname`、`set_bio`
+* Milky 新增删除好友 API `delete_friend`
+* Milky 新增获取收藏表情 API `get_custom_face_url_list`
+* Milky 给接收的 `market_face` 消息段补充元信息 `emoji_package_id`、`emoji_id`、`key`、`summary`
+* Milky 给接收的 `forward` 消息段补充元信息 `title`、`preview`、`summary`
+* Milky 给 `face` 消息段增加 `is_large` 属性，用于表示是否为超级表情
+* Milky 给 `group_admin_change`、 `group_essence_message_change` 事件补充 `operator_id` 字段，表示操作者 QQ 号
+* Milky 给 WebHook 通信方式增加基于 `Authorization` 头的鉴权
+* Milky 支持接收和被动发送临时会话消息
+* Milky 修复配置热重载时 `accessToken` 没有生效
+* 破坏性改动：Release 的 LLOneBot.zip 改名为 LLBot.zip，llonebot.js 改名为 llbot.js
+
+=================
+V7.1.3
+更新时间 2025-12-15
+
+* 修复 WebUI 在登录前没有启动
+
+=================
+V7.1.2
+更新时间 2025-12-14
+
+* 修复管理员变动事件引发程序崩溃
+* 修复 Windows 上非中文区域 PMHQ 输出编码错误导致无法启动
+
+=================
+V7.1.1
+更新时间 2025-12-14
+
+* Milky 支持 HTTP SSE
+* Milky 支持 `group_name_change` 事件
+* Milky 支持 `group_essence_message_change` 事件
+* Milky 支持 `get_resource_temp_url` API 获取语音、视频
+* Milky 支持获取接收消息段的语音、视频 temp_url
+* OneBot 支持群精华消息删除事件
+* OneBot 支持获取接收消息段的语音 url
+* 支持自身非群管理员时获取群管理员变更事件
+* WebUI 首页改版
+* 修复 Milky 协议的设置了 token 后无法启动
+* 修复 Milky 的 `get_history_messages` API 调用时可能报错
+* 修复图片元数据较大时无法发送图片
+* 修复 OneBot API `get_friend_with_category`
+
+=================
+V7.0.1
+更新时间 2025-12-09
+
+* 修复 Milky 协议的 at 个人和 at 全体
+
+=================
+V7.0.0
+更新时间 2025-12-08
+
+* 支持 Milky 协议
+* Webui 中 OneBot 反向 WS 和 HTTP Post 不再强制要求 token
+* LLBot-Desktop 新增日志设置：开关和保存时长
+
+=================
+V6.6.9
+更新时间 2025-12-03
+
+* 修复默认配置文件没有正确加载
+* 修复 docker 的 webui 没有正确监听 0.0.0.0
+* 新的 logo
+* 新的客户端 UI
+* release 新增 Linux 版本
+
+=================
+V6.6.6
+更新时间 2025-11-25
+
+* 修复登录成功后没有加载配置文件
+
+=================
+V6.6.5
+更新时间 2025-11-18
+
+* 修复一些 bug
+
+=================
+V6.6.4
+更新时间 2025-11-17
+
+* 修复有概率登录成功后 webui 依然显示需要登录，或不显示登录二维码
+* 修复 UNIQUE constraint failed: message.shortId
+* 修复内存泄露
+* 修复合并转发使用 message_id 先发给了自己
+* `get_group_info` 返回新增 `avatar_url` 字段
+
+=================
+V6.6.3
+更新时间 2025-11-17
+
+* 修复 邀请进群 invitor_id 为 0
+* 修复 UNIQUE constraint failed: message.shortId
+* 修复概率启动卡死
+
+=================
+V6.6.2
+更新时间 2025-11-17
+
+* 修复表情回应 出现 Cannot read properties of null (reading 'msgContent') 导致程序崩溃
+* 修复 UNIQUE constraint failed: message.shortId
+
+=================
+V6.6.1
+更新时间 2025-11-16
+
+* 修复撤回消息接口失效
+* 修复 UNIQUE constraint failed: message.shortId
+
+=================
+V6.6.0
+更新时间 2025-11-15
+
+* 支持 42086
+* 新增上传群相册 API `upload_group_album`
+* 新增获取群相册列表 API `get_group_album_list`
+* 新增创建群相册列表 API `create_group_album`
+* 新增删除群公告 API `_delete_group_notice`
+* 合并转发中节点使用消息 id 可直接发出，不再需要发送给自己
+* 支持他人的表情回应事件
+* 支持取消表情回应事件, `group_msg_emoji_like` 中 `is_add` 为 `false` 表示取消
+* 修复 > 40990 版本的 QQ 无法发送语音消息
+* 修复离线消息重复推送
+* 提升稳定性
+=================
+V6.5.7
+更新时间 2025-11-04
+
+* 支持 41875
+* 修复无头模式扫码无法登录
+* 修复已经登录的账号依然在 webui 登录列表
+=================
+
+V6.5.6
+更新时间 2025-11-04
+
+* 支持 41679，41785
+=================
+
+V6.5.5
+更新时间 2025-10-31
+
+* 修复 `get_group_member_list` API 获取群成员列表可能不完整
+* 修复 `get_group_member_info` API 获取群成员 QQ 等级可能为 0
+* 修复 `move_group_file` API 移动群文件时报错
+* `upload_private_file` API 上传私聊文件返回 `file_id`
+=================
+V6.5.4
+更新时间 2025-10-25
+
+* 修复 `get_forward_msg` API 可能报错
+* 修复无法获取用户在私聊中嵌套2层后发到群里的聊天记录 #639
+* `get_friend_list` API 删除如下字段:
+`longNick`, `level`, `eMail`, `uid`, `categoryId`, `richTime`
+=================
+V6.5.3
+更新时间 2025-10-24
+
+* 修复 `set_group_kick` 等群成员相关接口可能报错「无法获取用户信息」
+=================
+V6.5.2
+更新时间 2025-10-24
+
+* 修复群成员被踢触发程序崩溃
+=================
+
+V6.5.1
+更新时间 2025-10-22
+
+* 修复上报后程序崩溃
+
+=================
+V6.5.0
+更新时间 2025-10-21
+
+* 新增群文件转永久 API `set_group_file_forever`
+* 修复 API `get_stranger_info` 获取不到登录天数时报错
+* 修复 OneBot11 多个上报时，上报格式 string 和 array 没有正确应用
+* 支持 40990
+
+=================
+V6.4.0
+更新时间 2025-10-18
+
+* 修复手机登录 bot 发送消息会被上报两次
+* 修复退群导致误上报解散群事件
+* 修复调用数据量较大的 API 失败
+* 修复获取群文件根目录失败 #632
+* 修复 `get_forward_msg` 报错 #633
+* 修复首次启用 Satori 时，事件不会上报
+* 修复系统代理会导致 API 无法调用
+* 修复非群管理员无法获取群成员被踢事件
+* 支持 `get_stranger_info` 获取 `login_days`
+* 支持 40768
+
+=================
+V6.3.4
+更新时间 2025-10-11
+
+* 修复发送语音找不到 ffmpeg 导致发送失败
+* 修复附带消息记录邀请入群没有上报 #629
+
+=================
+V6.3.3
+更新时间 2025-10-11
+
+* 修复非本地访问 WebUI 失败的问题
+* 修复获取群成员列表 `get_group_member_list` 报错 Data Not Existed
+
+=================
+V6.3.2
+更新时间 2025-10-10
+
+* 优化 WebUI 密码输入
+
+=================
+V6.3.1
+更新时间 2025-10-10
+
+* 修复打印 WebUI 端口不正确
+* WebUI 添加只监听本地地址开关
+
+=================
+V6.3.0
+更新时间 2025-10-08
+
+* 修复上传群文件失败
+* 重构 WebUI
+* 支持每个连接单独设置 token 等配置项
+
+=================
+V6.2.3
+更新时间 2025-10-02
+
+* 修复怀旧版 PCQQ 无法查看 LLTwoBot 发送的合并转发内图片
+
+=================
+V6.2.2
+更新时间 2025-10-01
+
+* 修复首次打开可能读取不到配置文件
+
+=================
+V6.2.1
+更新时间 2025-9-28
+
+* 支持 QQ 40326
+
+=================
+V6.2.0
+更新时间 2025-9-27
+
+* 修复触发 friend.add 事件后向该好友发送消息有概率无法发送
+* 新增获取被过滤好友请求 API `get_doubt_friends_add_request`
+* 新增处理被过滤好友请求 API `set_doubt_friends_add_request`
+
+=================
+V6.1.1
+更新时间 2025-9-23
+
+* 修复无法获取登录二维码
+
+=================
+V6.1.0
+更新时间 2025-9-23
+
+* `pmhq_config.json` 新增 `quick_login_qq`, 如果已经登录过该账号，下次启动会自动快速登录
+* 修复发送合并转发中有图片会发送失败 #623
+* `get_friend_list` API 新增个性签名字段 `long_nick`, 一些非 OneBot11 标准字段暂时恢复，一月后将删除如下字段:
+`longNick`, `level`, `eMail`, `uid`, `categoryId`, `richTime`
+
+=================
+V6.0.2
+更新时间 2025-9-21
+
+* 修复 Windows 上没有正确识别文档目录和下载目录
+* 修复 getUserSimpleInfo timeout
+* 修复没有启用 Satori 协议时并没有完全禁用 Satori
+
+=================
+
+V6.0.1
+更新时间 2025-9-20
+
+* 修复没有自动创建 data 文件夹导致启动失败
+
+=================
+
+V6.0.0
+更新时间 2025-9-20
+
+* 支持 QQ 无头模式，pmhq_config.json 配置项 `headless`，设置为 true 后启用
+* WebUI 新增快速登录和扫码登录
+* Docker 不再使用 VNC
+* 修复没有捕获异常导致程序崩溃
+* 修复 API `get_group_msg_history` `get_friend_msg_history` 返回内容不正确
+* 修复 API get_group_shut_list 在没有群成员被禁言时报错超时的问题
+
+=================
+V5.10.0
+更新时间 2025-9-14
+
+* 修复 256 级以上 QQ 等级计算不正确的问题
+* 支持群打卡 API `send_group_sign`
+* 修复好友请求重复上报的问题
+* 修复好友列表获取不全的问题
+* 好友列表 API 返回数据规范化
+
+=================
+V5.9.0
+更新时间 2025-8-30
+
+* 现在群成员信息的 `card` 字段在未设置群名片时为空字符串
+* 群成员信息增加字段 `card_or_nickname`
+* 新增群解散事件，`notice_type: group_dismiss`
+* 新增获取私聊文件资源链接 API `get_private_file_url`
+
+=================
+V5.8.1
+更新时间 2025-8-26
+
+* 修复好友列表为空，并导致所有好友会话变成了临时会话
+
+=================
+V5.8.0
+更新时间 2025-8-24
+
+* 修复`receiveOfflineMsg`不生效
+* 修复接受撤回的戳一戳消息可能导致崩溃
+* 支持加载类似 LiteLoaderQQNT 的 js 插件，详情见 <https://github.com/linyuchen/PMHQ/blob/main/doc/plugin.md>
+
+=================
+
+V5.7.2
+更新时间 2025-8-23
+
+* `get_group_file_url` API 现在不会下载文件到本地
+* `get_msg` API 返回字段增加 `group_name`
+
+=================
+V5.7.1
+更新时间 2025-8-16
+
+* 修复 `get_friend_list` API 可能获取不到好友的问题
+* 修复 `get_forward_msg` API 可能获取不到消息的问题
+
+=================
+V5.7.0
+更新时间
+
+* 新增撤回戳一戳事件，`sub_type: poke_recall`，其他内容与戳一戳一致
+* 修复日志中 message_sent 的 sub_type 没有正确显示
+* 修复 `get_friend_list` 获取不到新加的好友
+* 修复 `get_msg` 获取合并转发消息没有解析 #604
+
+=================
+V5.6.1
+更新时间 2025-8-2 21:04:08
+
+* 修复 bot 被邀请进群事件没有上报的问题
+* 新增获取群 Ai 语音可用声色列表 API `get_ai_characters`
+* 新增发送群 Ai 语音 API `send_group_ai_record`
+
+=================
+V5.6.0
+更新时间 2025-7-26 15:37:40
+
+* 新增批量踢出群成员 API `batch_delete_group_member` #478
+* 表情消息新增 `sub_type` 用于表示表情类型，1 是普通小表情 3 是超级表情 #450
+* 新增配置项 `receiveOfflineMsg`，默认 false，开启后会接收离线消息 #573
+* 修复收到私聊 戳一戳（窗口抖动）消息解析成了 face #443
+* 修复 pmhq 开启 debug 导致 gui 卡死
+* 修复某些机器上登录后获取不到账号信息 #595 #594
+* 修复任务栏无图标
+
+=================
+V5.5.2
+更新时间 2025-7-23 14:04:33
+
+* 修复 `get_stranger_info` API 无法获取部分用户等级的问题
+
+=================
+V5.5.1
+更新时间 2025-7-21 21:19:47
+
+* 修复 `get_group_member_info` API 偶现报错的问题
+
+=================
+V5.5.0
+更新时间 2025-7-20 17:39:39
+
+* 支持 37475
+* pmhq_config.json 新增配置项
+* * debug: 默认 false，开启后会打印收发的 pb，并且 ws 会推送 send 的 pb
+* * enable_gui: 默认 true，关闭后不启用 gui，仅 Windows 有效
+* 新增获取指定词汇推荐的表情 API `get_recommend_face`
+* 修复 `get_group_member_info` API 返回的 `qq_level` 为 0 的问题
+* 修复 `get_group_msg_history` API 获取撤回的消息时没有使用缓存的问题
+* 修复非好友邀请 bot 加群上报
+* 修复视频消息 url 上报失败
+* 修复在线状态上报不准确
+
+=================
+V5.4.1
+更新时间 2025-7-11 10:54:08
+
+* 修复消息过多导致 GUI 崩溃
+
+=================
+V5.4.0
+更新时间 2025-7-10 15:27:42
+
+* 支持 37051
+* 新增 GUI 和托盘
+
+=================
+V5.3.0
+更新时间：2025-7-6 21:18:03
+
+* 修复内存泄露
+* 修复自动检测环境变量的 ffmpeg
+* 支持 37012
+* 支持合并转发自定义 uin 和 name
+* 新增获取 rkey API `get_rkey`
+* 新增上传闪传文件 API `upload_flash_file`
+* 新增下载闪传文件 API `download_flash_file`
+* 新增上传和下载闪传文件进度事件，`"notice_type": "flash_file"`
+
+=================
+V5.2.2
+更新时间 2025-6-24 23:51:18
+
+支持 36580
+修复 webui 没有监听 127.0.0.1
+
+=================
+V5.2.1
+更新时间 2025-6-21 20:18:55
+
+修复可能会初始化失败的问题
+
+=================
+V5.2.0
+更新时间：2025-6-20 23:37:17
+
+修复 API 获取被禁言群员列表 get_group_shut_list
+支持 36497 36330
+新增 WebUI，默认端口 3080，如果放在公网请务必设置 token
+
+=================
+V5.1.0
+更新时间：2025-6-15 11:54:17
+
+修复加群申请 user_id 为 0
+新增语音消息转文本 API voice_msg_to_text
+
+=================
+V5.0.2
+更新时间：2025-6-11 18:28:31
+
+修复加群申请 user_id 为 0
+修复视频上报 url
+修复获取不到引用消息的 reply_id
+修复程序异常卡死
+优化私聊日志

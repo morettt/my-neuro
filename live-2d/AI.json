@@ -1,0 +1,76 @@
+{
+  "dynamic_prompt_system": {
+    "enabled": true,
+    "description": "LLM自动生成的动态提示词系统",
+    "last_updated": "2025-10-22T02:59:42.874Z",
+    "update_trigger": "每20条QQ消息自动更新",
+    "generation_method": "LLM分析群聊内容后自动生成"
+  },
+  "current_dynamic_prompt": {
+    "raw_text": "\n\n=== 动态人格特征（基于QQ群聊学习）===\n最后更新时间: 2025-10-22T02:59:42.859Z\n\n群友常讨论的话题: 健康状况、日常生活抱怨\n群聊互动风格: 非正式；口语化；包含黑色幽默和调侃；常用表情符号\n群友常用词汇/梗: 死、医院、头疼、不急、活着\n群聊情绪倾向: 戏谑与抱怨、夸张化表达、消极词语的非严肃使用\n\n根据以上特征，你应该适当调整回复风格，更贴近这个群的文化氛围。\n",
+    "generated_at": "2025-10-22T02:59:42.859Z",
+    "message_count_trigger": 20,
+    "analysis_sample_size": 200
+  },
+  "learned_characteristics": {
+    "common_topics": [
+      "健康状况",
+      "日常生活抱怨"
+    ],
+    "interaction_style": [
+      "非正式",
+      "口语化",
+      "包含黑色幽默和调侃",
+      "常用表情符号"
+    ],
+    "vocabulary": [
+      "死",
+      "医院",
+      "头疼",
+      "不急",
+      "活着"
+    ],
+    "emotional_tendencies": [
+      "戏谑与抱怨",
+      "夸张化表达",
+      "消极词语的非严肃使用"
+    ],
+    "last_analysis": "2025-10-22T02:59:42.859Z",
+    "total_updates": 1
+  },
+  "rag_integration": {
+    "server_url": "http://127.0.0.1:8002",
+    "last_sync": null,
+    "status": "integrated_with_external_rag"
+  },
+  "how_it_works": {
+    "step_1": "收集QQ群消息 → 存储到本地 + 发送到RAG服务器",
+    "step_2": "每20条消息触发动态提示词分析",
+    "step_3": "LLM分析最近200条消息的特征",
+    "step_4": "LLM生成新的动态提示词",
+    "step_5": "回复时使用: 静态提示词 + 动态提示词 + RAG记忆"
+  },
+  "example_evolution": {
+    "initial_state": "仅使用config.json中的静态提示词",
+    "after_learning": "静态提示词 + 学习到的群聊风格 + RAG历史记忆",
+    "example_learned_prompt": "\n=== 动态人格特征（基于QQ群聊学习）===\n群友常讨论的话题: 游戏、动漫、编程\n群聊互动风格: 幽默诙谐、互相调侃\n群友常用词汇/梗: awsl、芜湖、YYDS\n群聊情绪倾向: 轻松活泼\n\n根据以上特征，你应该适当调整回复风格，更贴近这个群的文化氛围。"
+  },
+  "monitoring": {
+    "view_current_prompt": "查看 AI记录室/QQ记忆库/dynamic_prompt.txt",
+    "view_personality": "查看 AI记录室/QQ记忆库/personality_evolution.json",
+    "view_messages": "查看 AI记录室/QQ记忆库/qq_messages.jsonl",
+    "rag_server_status": "需要单独启动: http://127.0.0.1:8002"
+  },
+  "notes": [
+    "此文件会在系统运行时自动更新",
+    "动态提示词完全由LLM根据真实群聊内容生成",
+    "RAG功能需要单独启动服务器（http://127.0.0.1:8002）",
+    "如果RAG服务器未启动，动态提示词功能仍可正常工作",
+    "RAG服务器使用向量数据库，提供高精度语义搜索"
+  ],
+  "statistics": {
+    "total_messages_recorded": 25,
+    "total_prompt_updates": 1,
+    "last_updated": "2025-10-22T02:59:42.874Z"
+  }
+}
