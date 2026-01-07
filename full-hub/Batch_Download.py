@@ -15,7 +15,7 @@ import subprocess
 system = platform.system()
 
 # live-2d版本号-
-version_tag = "v6.0.5"
+version_tag = "v6.0.6"
 
 # 禁用SSL警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
