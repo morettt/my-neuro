@@ -2030,7 +2030,6 @@ class set_pyqt(QWidget):
                 return
 
             print("正在启动ASR终端.....")
-            self.update_service_log('asr', "正在启动ASR服务.....")
 
             # 根据config中的云端ASR配置选择对应的bat文件
             is_cloud_asr = self.config.get('cloud', {}).get('asr', {}).get('enabled', False)
@@ -2040,46 +2039,26 @@ class set_pyqt(QWidget):
                 bat_file = os.path.join(base_path, "VAD.bat")
                 asr_type_name = "云端ASR（仅VAD）"
             else:  # 本地ASR
-                bat_file = os.path.join(base_path, "ASR.bat")
+                bat_file = os.path.join(base_path, "1.ASR.bat")
                 asr_type_name = "本地ASR"
 
             print(f"选择的ASR类型：{asr_type_name}")
-            self.update_service_log('asr', f"选择的ASR类型：{asr_type_name}")
 
             if not os.path.exists(bat_file):
                 error_msg = f"找不到文件：{bat_file}"
                 print(f"错误：{error_msg}")
-                self.update_service_log('asr', f"错误：{error_msg}")
                 self.toast.show_message(error_msg, 3000)
                 return
 
-            # 确保日志目录存在
-            log_file = self.log_file_paths['asr']
-            log_dir = os.path.dirname(log_file)
-            os.makedirs(log_dir, exist_ok=True)
-            # 不再清空日志文件，保留历史记录
-
-            # 启动日志读取线程
-            if 'asr' in self.log_readers:
-                self.log_readers['asr'].stop()
-                self.log_readers['asr'].wait()
-
-            self.log_readers['asr'] = LogReader(log_file)
-            self.log_readers['asr'].log_signal.connect(lambda text: self.update_service_log('asr', text))
-            self.log_readers['asr'].start()
-
+            # 直接打开新的cmd窗口运行bat文件
             self.asr_process = subprocess.Popen(
-                bat_file,
+                f'start cmd /k "{bat_file}"',
                 shell=True,
-                cwd=base_path,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                cwd=base_path
             )
 
             print(f"ASR进程已启动，PID: {self.asr_process.pid}")
             print("当前ASR终端已成功启动！！！")
-
-            self.update_service_log('asr', f"ASR进程已启动，PID: {self.asr_process.pid}")
-            self.update_service_log('asr', "当前ASR终端已成功启动！！！")
 
             self.ui.label_asr_status.setText(f"状态：{asr_type_name}服务正在运行")
             self.update_status_indicator('asr', True)
@@ -2088,7 +2067,6 @@ class set_pyqt(QWidget):
         except Exception as e:
             error_msg = f"启动ASR服务失败：{str(e)}"
             print(f"错误：{error_msg}")
-            self.update_service_log('asr', f"错误：{error_msg}")
             self.ui.label_asr_status.setText("状态：启动失败")
             self.toast.show_message(error_msg, 3000)
 
@@ -2152,45 +2130,25 @@ class set_pyqt(QWidget):
                 return
 
             print("正在启动BERT终端.....")
-            self.update_service_log('bert', "正在启动BERT服务.....")
 
             base_path = get_base_path()
-            bat_file = os.path.join(base_path, "bert.bat")
+            bat_file = os.path.join(base_path, "3.bert.bat")
 
             if not os.path.exists(bat_file):
                 error_msg = f"找不到文件：{bat_file}"
                 print(f"错误：{error_msg}")
-                self.update_service_log('bert', f"错误：{error_msg}")
                 self.toast.show_message(error_msg, 3000)
                 return
 
-            # 确保日志目录存在
-            log_file = self.log_file_paths['bert']
-            log_dir = os.path.dirname(log_file)
-            os.makedirs(log_dir, exist_ok=True)
-            # 不再清空日志文件，保留历史记录
-
-            # 启动日志读取线程
-            if 'bert' in self.log_readers:
-                self.log_readers['bert'].stop()
-                self.log_readers['bert'].wait()
-
-            self.log_readers['bert'] = LogReader(log_file)
-            self.log_readers['bert'].log_signal.connect(lambda text: self.update_service_log('bert', text))
-            self.log_readers['bert'].start()
-
+            # 直接打开新的cmd窗口运行bat文件
             self.bert_process = subprocess.Popen(
-                bat_file,
+                f'start cmd /k "{bat_file}"',
                 shell=True,
-                cwd=base_path,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                cwd=base_path
             )
 
             print(f"BERT进程已启动，PID: {self.bert_process.pid}")
             print("当前BERT终端已成功启动！！！")
-
-            self.update_service_log('bert', f"BERT进程已启动，PID: {self.bert_process.pid}")
-            self.update_service_log('bert', "当前BERT终端已成功启动！！！")
 
             self.ui.label_bert_status.setText("状态：BERT服务正在运行")
             self.update_status_indicator('bert', True)
@@ -2199,7 +2157,6 @@ class set_pyqt(QWidget):
         except Exception as e:
             error_msg = f"启动BERT服务失败：{str(e)}"
             print(f"错误：{error_msg}")
-            self.update_service_log('bert', f"错误：{error_msg}")
             self.ui.label_bert_status.setText("状态：启动失败")
             self.toast.show_message(error_msg, 3000)
 
@@ -2261,7 +2218,6 @@ class set_pyqt(QWidget):
                 return
 
             print("正在启动RAG终端.....")
-            self.update_service_log('rag', "正在启动RAG服务.....")
 
             base_path = get_base_path()
             bat_file = os.path.join(base_path, "RAG.bat")
@@ -2269,37 +2225,18 @@ class set_pyqt(QWidget):
             if not os.path.exists(bat_file):
                 error_msg = f"找不到文件：{bat_file}"
                 print(f"错误：{error_msg}")
-                self.update_service_log('rag', f"错误：{error_msg}")
                 self.toast.show_message(error_msg, 3000)
                 return
 
-            # 确保日志目录存在
-            log_file = self.log_file_paths['rag']
-            log_dir = os.path.dirname(log_file)
-            os.makedirs(log_dir, exist_ok=True)
-            # 不再清空日志文件，保留历史记录
-
-            # 启动日志读取线程
-            if 'rag' in self.log_readers:
-                self.log_readers['rag'].stop()
-                self.log_readers['rag'].wait()
-
-            self.log_readers['rag'] = LogReader(log_file)
-            self.log_readers['rag'].log_signal.connect(lambda text: self.update_service_log('rag', text))
-            self.log_readers['rag'].start()
-
+            # 直接打开新的cmd窗口运行bat文件
             self.rag_process = subprocess.Popen(
-                bat_file,
+                f'start cmd /k "{bat_file}"',
                 shell=True,
-                cwd=base_path,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                cwd=base_path
             )
 
             print(f"RAG进程已启动，PID: {self.rag_process.pid}")
             print("当前RAG终端已成功启动！！！")
-
-            self.update_service_log('rag', f"RAG进程已启动，PID: {self.rag_process.pid}")
-            self.update_service_log('rag', "当前RAG终端已成功启动！！！")
 
             self.ui.label_rag_status.setText("状态：RAG服务正在运行")
             self.update_status_indicator('rag', True)
@@ -2308,7 +2245,6 @@ class set_pyqt(QWidget):
         except Exception as e:
             error_msg = f"启动RAG服务失败：{str(e)}"
             print(f"错误：{error_msg}")
-            self.update_service_log('rag', f"错误：{error_msg}")
             self.ui.label_rag_status.setText("状态：启动失败")
             self.toast.show_message(error_msg, 3000)
 
@@ -2425,52 +2361,27 @@ class set_pyqt(QWidget):
                 return
 
             print("正在启动TTS终端.....")
-            self.update_service_log('tts', "正在启动TTS服务.....")
 
             base_path = get_base_path()
-            bat_file = os.path.join(base_path, "TTS.bat")
+            bat_file = os.path.join(base_path, "2.TTS.bat")
 
             if not os.path.exists(bat_file):
                 error_msg = f"找不到文件：{bat_file}"
                 print(f"错误：{error_msg}")
-                self.update_service_log('tts', f"错误：{error_msg}")
                 self.toast.show_message(error_msg, 3000)
                 return
 
-            # 确保日志目录存在
-            log_file = self.log_file_paths['tts']
-            log_dir = os.path.dirname(log_file)
-            os.makedirs(log_dir, exist_ok=True)
-            # 不再清空日志文件，保留历史记录
-
-            # 启动日志读取线程
-            if 'tts' in self.log_readers:
-                self.log_readers['tts'].stop()
-                self.log_readers['tts'].wait()
-
-            self.log_readers['tts'] = LogReader(log_file)
-            self.log_readers['tts'].log_signal.connect(lambda text: self.update_service_log('tts', text))
-            self.log_readers['tts'].start()
-
             print(f"启动TTS.bat文件: {bat_file}")
 
+            # 直接打开新的cmd窗口运行bat文件
             self.terminal_process = subprocess.Popen(
-                bat_file,
+                f'start cmd /k "{bat_file}"',
                 shell=True,
-                cwd=base_path,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
-                # stdout=subprocess.PIPE,
-                # stderr=subprocess.PIPE,
-                text=True,
-                encoding='utf-8',
-                errors='ignore'
+                cwd=base_path
             )
 
             print(f"TTS进程已启动，PID: {self.terminal_process.pid}")
             print("当前TTS终端已成功启动！！！")
-
-            self.update_service_log('tts', f"TTS进程已启动，PID: {self.terminal_process.pid}")
-            self.update_service_log('tts', "当前TTS终端已成功启动！！！")
 
             self.ui.label_terminal_status.setText("状态：TTS服务正在运行")
             self.update_status_indicator('tts', True)
@@ -2479,7 +2390,6 @@ class set_pyqt(QWidget):
         except Exception as e:
             error_msg = f"启动TTS服务失败：{str(e)}"
             print(f"错误：{error_msg}")
-            self.update_service_log('tts', f"错误：{error_msg}")
             self.ui.label_terminal_status.setText("状态：启动失败")
             self.toast.show_message(error_msg, 3000)
 
@@ -2540,6 +2450,11 @@ class set_pyqt(QWidget):
         self.ui.checkBox_subtitle_enabled.setChecked(subtitle_labels.get('enabled', True))
         self.ui.lineEdit_user_name.setText(subtitle_labels.get('user', '用户'))
         self.ui.lineEdit_ai_name.setText(subtitle_labels.get('ai', 'Fake Neuro'))
+
+        # 新增：设置隐藏皮套配置
+        ui_config = self.config.get('ui', {})
+        show_model = ui_config.get('show_model', True)
+        self.ui.checkBox_hide_model.setChecked(not show_model)  # 注意：勾选表示隐藏，所以需要取反
 
         # 新增：设置自动关闭服务配置
         auto_close_services = self.config.get('auto_close_services', {})
@@ -3005,6 +2920,11 @@ class set_pyqt(QWidget):
         current_config['subtitle_labels']['enabled'] = self.ui.checkBox_subtitle_enabled.isChecked()
         current_config['subtitle_labels']['user'] = self.ui.lineEdit_user_name.text() or "用户"
         current_config['subtitle_labels']['ai'] = self.ui.lineEdit_ai_name.text() or "Fake Neuro"
+
+        # 新增：保存隐藏皮套设置
+        if 'ui' not in current_config:
+            current_config['ui'] = {}
+        current_config['ui']['show_model'] = not self.ui.checkBox_hide_model.isChecked()  # 注意：勾选表示隐藏，所以需要取反
 
         # 新增：保存自动关闭服务设置
         if 'auto_close_services' not in current_config:

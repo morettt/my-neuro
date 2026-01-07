@@ -4487,6 +4487,19 @@ QPushButton:pressed {
             </widget>
            </item>
            <item>
+            <widget class="QCheckBox" name="checkBox_hide_model">
+             <property name="font">
+              <font>
+               <family>微软雅黑</family>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
+             <property name="text">
+              <string>隐藏皮套</string>
+             </property>
+            </widget>
+           </item>
+           <item>
             <widget class="QCheckBox" name="checkBox_auto_close_services">
              <property name="font">
               <font>

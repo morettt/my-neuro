@@ -78,10 +78,12 @@ class InputRouter {
                 this.memoryManager.checkAndSaveMemoryAsync(text);
             }
 
+
             // 🔥 新增：调用 MemOS 记忆检索并注入
             if (this.voiceChatFacade) {
                 await this.voiceChatFacade.injectRelevantMemories(text);
             }
+
 
             // 发送到LLM
             await this.llmHandler(text);
