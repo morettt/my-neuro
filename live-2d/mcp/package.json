@@ -11,6 +11,7 @@
     "client": "node client.js"
   },
   "dependencies": {
+    "@playwright/mcp": "^0.0.54",
     "axios": "^1.6.7",
     "fastmcp": "^1.5.4",
     "zod": "^3.22.4"

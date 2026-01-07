@@ -26,12 +26,18 @@ class MCPStdioTransport {
             try {
                 console.log(`🚀 启动MCP Stdio服务器: ${serverName}`);
 
-                const { command, args = [] } = this.config;
+                let { command, args = [] } = this.config;
 
                 // 特殊处理：为本地 MCP 服务器设置工作目录
                 let cwd = process.cwd();
                 if (serverName === 'local' && args.includes('server.js')) {
                     cwd = path.resolve('./mcp');
+                }
+
+                // 动态解析 command 路径：如果是相对路径，转换为绝对路径
+                if (command.startsWith('./') || command.startsWith('.\\')) {
+                    command = path.resolve(cwd, command);
+                    console.log(`🔧 转换相对路径为绝对路径: ${command}`);
                 }
 
                 // 启动子进程
