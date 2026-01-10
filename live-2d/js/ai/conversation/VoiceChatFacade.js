@@ -288,7 +288,7 @@ class VoiceChatFacade {
 
         try {
             // 搜索相关记忆
-            const memories = await this.memosClient.searchMemories(userInput, this.config.memos?.inject_top_k || 3);
+            const memories = await this.memosClient.search(userInput, this.config.memos?.inject_top_k || 3);
             
             if (memories && memories.length > 0) {
                 // 构建记忆注入文本
