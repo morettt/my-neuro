@@ -192,6 +192,7 @@ class LLMClient {
         if (responseData.error) {
             const errorMsg = responseData.error.message || responseData.error || '未知API错误';
             logToTerminal('error', `LLM API错误: ${errorMsg}`);
+            // 🔥 将完整的错误信息传递出去，方便重试机制识别
             throw new Error(`API错误: ${errorMsg}`);
         }
 
@@ -214,6 +215,17 @@ class LLMClient {
             const debugInfo = JSON.stringify(responseData).substring(0, 500);
             logToTerminal('error', `LLM响应choices为空。响应数据: ${debugInfo}`);
             console.error('完整响应数据:', responseData);
+
+            // 🔥 检查响应数据中是否包含"不支持图片"相关的错误信息
+            const responseStr = JSON.stringify(responseData).toLowerCase();
+            if (responseStr.includes('image') &&
+                (responseStr.includes('not support') ||
+                 responseStr.includes('不支持') ||
+                 responseStr.includes('invalid') ||
+                 responseStr.includes('unsupported'))) {
+                logToTerminal('error', '⚠️ 检测到模型不支持视觉功能');
+                throw new Error('模型不支持图片：该模型不支持 image_url 参数');
+            }
 
             // 🔥 检查是否是内容过滤（多种可能的字段）
             if (responseData.promptFilterResults ||

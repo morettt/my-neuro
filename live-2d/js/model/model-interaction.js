@@ -148,8 +148,7 @@ class ModelInteractionController {
             if (this.isDraggingChat) {
                 chatContainer.style.left = `${e.clientX - this.chatDragOffset.x}px`;
                 chatContainer.style.top = `${e.clientY - this.chatDragOffset.y}px`;
-                this.model.position.set(newX, newY);
-                this.updateInteractionArea();
+                // 注意: 拖动聊天框时不需要修改模型位置
             }
         });
 
@@ -250,6 +249,17 @@ class ModelInteractionController {
                 this.app.stage.pivot.set(window.innerWidth / 2, window.innerHeight / 2);
                 this.updateInteractionArea();
             }
+        });
+
+        // 禁用右键菜单，防止右键点击导致意外行为
+        window.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            return false;
+        });
+
+        // 在模型上也禁用右键菜单
+        this.model.on('rightdown', (e) => {
+            e.stopPropagation();
         });
     }
 

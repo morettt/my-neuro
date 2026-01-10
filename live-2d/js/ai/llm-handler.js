@@ -27,13 +27,42 @@ class LLMHandler {
             logToTerminal('info', `✅ 视觉模型已启用: ${config.vision.vision_model.model}`);
         }
 
-        return async function(prompt) {
-            try {
-                // 发送用户输入开始事件
-                eventBus.emit(Events.USER_INPUT_START);
+        // 辅助函数：清理消息中的所有图片内容
+        const removeImagesFromMessages = (messages) => {
+            return messages.map(msg => {
+                if (msg.role === 'user' && Array.isArray(msg.content)) {
+                    // 提取所有文本内容
+                    const textItems = msg.content.filter(item => item.type === 'text');
+                    if (textItems.length > 0) {
+                        return {
+                            ...msg,
+                            content: textItems.map(item => item.text).join(' ')
+                        };
+                    } else {
+                        return {
+                            ...msg,
+                            content: '(图片内容)'
+                        };
+                    }
+                }
+                return msg;
+            });
+        };
 
-                // 检查是否正在播放TTS，如果是则先中断
-                if (appState.isPlayingTTS()) {
+        return async function(prompt) {
+            let hasRetriedWithoutImage = false; // 标志：是否已经重试过（避免无限循环）
+            let isFirstAttempt = true; // 标志：是否是第一次尝试
+
+            // 🔥 外层重试循环：用于处理视觉不支持错误
+            while (true) {
+                try {
+                    // 发送用户输入开始事件（仅第一次）
+                    if (isFirstAttempt) {
+                        eventBus.emit(Events.USER_INPUT_START);
+                    }
+
+                // 检查是否正在播放TTS，如果是则先中断（仅第一次）
+                if (isFirstAttempt && appState.isPlayingTTS()) {
                     console.log('检测到TTS正在播放，执行打断操作');
                     logToTerminal('info', '检测到TTS正在播放，执行打断操作');
 
@@ -53,27 +82,35 @@ class LLMHandler {
 
                 // global.isProcessingUserInput 已通过事件自动管理，无需手动设置
 
-                voiceChat.messages.push({ 'role': 'user', 'content': prompt });
+                // 只在第一次尝试时添加用户消息
+                if (isFirstAttempt) {
+                    voiceChat.messages.push({ 'role': 'user', 'content': prompt });
 
-                if (voiceChat.enableContextLimit) {
-                    voiceChat.trimMessages();
-                }
-
-                // 检查是否需要截图
-                const needScreenshot = await voiceChat.shouldTakeScreenshot(prompt);
-                let screenshotBase64 = null;
-
-                if (needScreenshot) {
-                    try {
-                        console.log("需要截图");
-                        logToTerminal('info', "需要截图");
-                        screenshotBase64 = await voiceChat.takeScreenshotBase64();
-                    } catch (error) {
-                        console.error("截图处理失败:", error);
-                        logToTerminal('error', `截图处理失败: ${error.message}`);
-                        throw new Error("截图功能出错，无法处理视觉内容");
+                    if (voiceChat.enableContextLimit) {
+                        voiceChat.trimMessages();
                     }
                 }
+
+                // 检查是否需要截图（只在第一次尝试且未重试过时）
+                let screenshotBase64 = null;
+                if (isFirstAttempt && !hasRetriedWithoutImage) {
+                    const needScreenshot = await voiceChat.shouldTakeScreenshot(prompt);
+
+                    if (needScreenshot) {
+                        try {
+                            console.log("需要截图");
+                            logToTerminal('info', "需要截图");
+                            screenshotBase64 = await voiceChat.takeScreenshotBase64();
+                        } catch (error) {
+                            console.error("截图处理失败:", error);
+                            logToTerminal('error', `截图处理失败: ${error.message}`);
+                            throw new Error("截图功能出错，无法处理视觉内容");
+                        }
+                    }
+                }
+
+                // 标记不再是第一次尝试
+                isFirstAttempt = false;
 
                 // 合并本地Function Call工具和MCP工具
                 const allTools = getMergedToolsList();
@@ -561,7 +598,14 @@ class LLMHandler {
                     // 既没有工具调用也没有内容,异常情况
                     logToTerminal('warn', '⚠️ LLM返回了空响应');
                     // 🔥 空响应时设置固定回复
-                    finalResponseContent = "Filter";
+                    finalResponseContent = "Filtered";
+
+                    // 🔥 检查是否因为图片导致的空响应
+                    if (screenshotBase64 || useVisionModelForFirstRound) {
+                        logToTerminal('warn', '⚠️ 检测到有截图但返回空响应，可能是模型不支持视觉');
+                        throw new Error('模型不支持图片：LLM返回了空响应，可能是因为模型不支持 image_url 参数');
+                    }
+
                     break;
                 }
 
@@ -609,75 +653,121 @@ class LLMHandler {
                     ttsProcessor.processTextToSpeech(finalResponseContent);
                 } else {
                     logToTerminal('error', '❌ 未获取到有效的AI回复');
+
+                    // 🔥 检查是否因为图片导致的空回复
+                    if (screenshotBase64 || useVisionModelForFirstRound) {
+                        logToTerminal('warn', '⚠️ 检测到有截图但未获取到回复，可能是模型不支持视觉');
+                        throw new Error('模型不支持图片：未获取到有效的AI回复，可能是因为模型不支持 image_url 参数');
+                    }
+
                     throw new Error("未获取到有效的AI回复");
                 }
 
                 if (voiceChat.enableContextLimit) {
                     voiceChat.trimMessages();
                 }
-            } catch (error) {
-                // 🔥 特殊处理：用户打断不是错误，静默退出
-                if (error.message === 'USER_INTERRUPTED') {
-                    console.log('用户打断处理完成，静默退出');
-                    logToTerminal('info', '✅ 已响应用户打断');
+                } catch (error) {
+                    // 🔥 特殊处理：用户打断不是错误，静默退出
+                    if (error.message === 'USER_INTERRUPTED') {
+                        console.log('用户打断处理完成，静默退出');
+                        logToTerminal('info', '✅ 已响应用户打断');
 
-                    // 确保ASR恢复
+                        // 确保ASR恢复
+                        if (voiceChat.asrProcessor && asrEnabled) {
+                            voiceChat.asrProcessor.resumeRecording();
+                        }
+                        return; // 直接返回，不显示错误信息
+                    }
+
+                    // 🔥 自动重试机制：检测到视觉不支持错误时，清理图片并重试
+                    const errorMsg = error.message.toLowerCase();
+                    const isImageUnsupportedError = !hasRetriedWithoutImage && (
+                        errorMsg.includes("do not support image") ||
+                        errorMsg.includes("不支持图片") ||
+                        errorMsg.includes("模型不支持图片") ||
+                        errorMsg.includes("image param") ||
+                        errorMsg.includes("image_url") ||
+                        (errorMsg.includes("image") && errorMsg.includes("not support")) ||
+                        (errorMsg.includes("image") && errorMsg.includes("unsupported")) ||
+                        (errorMsg.includes("image") && errorMsg.includes("invalid"))
+                    );
+
+                    if (isImageUnsupportedError) {
+
+                        console.log('⚠️ 检测到模型不支持视觉，自动移除图片并重试');
+                        logToTerminal('warn', '⚠️ 模型不支持视觉功能，自动切换为纯文本模式重试');
+
+                        // 标记已经重试过，避免无限循环
+                        hasRetriedWithoutImage = true;
+
+                        // 清理 voiceChat.messages 中的所有图片
+                        voiceChat.messages = removeImagesFromMessages(voiceChat.messages);
+                        console.log('✅ 已清理消息历史中的所有图片，使用纯文本重试');
+
+                        // 🔥 重置标志，准备重试
+                        isFirstAttempt = true;
+
+                        // 继续外层循环，重新开始整个流程
+                        continue;
+                    }
+
+                    logToTerminal('error', `LLM处理错误: ${error.message}`);
+                    if (error.stack) {
+                        logToTerminal('error', `错误堆栈: ${error.stack}`);
+                    }
+
+                    let errorMessage = "抱歉，出现了一个错误";
+
+                    if (error.message.includes("API拒绝生成内容") || error.message.includes("安全过滤器") || error.message.includes("内容政策")) {
+                        errorMessage = "⚠️ API触发了安全过滤器，可能最近的对话包含敏感内容。建议重新开始对话或换个话题。";
+                    } else if (error.message.includes("API内容过滤")) {
+                        errorMessage = "⚠️ 内容被过滤，请避免敏感话题";
+                    } else if (error.message.includes("API密钥验证失败")) {
+                        errorMessage = "API密钥错误，请检查配置";
+                    } else if (error.message.includes("API访问被禁止")) {
+                        errorMessage = "API访问受限，请联系支持";
+                    } else if (error.message.includes("API接口未找到")) {
+                        errorMessage = "无效的API地址，请检查配置";
+                    } else if (error.message.includes("请求过于频繁")) {
+                        errorMessage = "请求频率超限，请稍后再试";
+                    } else if (error.message.includes("服务器错误")) {
+                        errorMessage = "AI服务不可用，请稍后再试";
+                    } else if (error.message.includes("截图功能出错")) {
+                        errorMessage = "截图失败，无法处理视觉内容";
+                    } else if (error.message.includes("工具调用失败")) {
+                        errorMessage = "功能扩展调用失败，请重试";
+                    } else if (error.message.includes("do not support image") || error.message.includes("不支持图片") || error.message.includes("image param")) {
+                        errorMessage = "⚠️ 你使用的是不支持视觉的LLM模型，刚刚触发了调用视觉功能，所以报错了！建议换成支持视觉的LLM模型或在config.json中配置独立的视觉模型！";
+                        logToTerminal('warn', '💡 提示：请在config.json中设置 vision.use_vision_model: true 并配置支持视觉的模型（如gemini-2.0-flash）');
+                    } else if (error.name === "TypeError" && error.message.includes("fetch")) {
+                        errorMessage = "网络连接失败，请检查网络和API地址";
+                    } else if (error.name === "SyntaxError") {
+                        errorMessage = "解析API响应出错，请重试";
+                    } else {
+                        const shortErrorMsg = error.message.substring(0, 100) +
+                            (error.message.length > 100 ? "..." : "");
+                        errorMessage = `未知错误: ${shortErrorMsg}`;
+                    }
+
+                    logToTerminal('error', `用户显示错误: ${errorMessage}`);
+
+                    voiceChat.showSubtitle(errorMessage, 3000);
                     if (voiceChat.asrProcessor && asrEnabled) {
                         voiceChat.asrProcessor.resumeRecording();
                     }
-                    return; // 直接返回，不显示错误信息
+                    setTimeout(() => voiceChat.hideSubtitle(), 3000);
+
+                    // 🔥 退出外层重试循环
+                    break;
+                } finally {
+                    // global.isProcessingUserInput 已通过事件自动管理，无需手动设置
+
+                    // 发送用户输入结束事件
+                    eventBus.emit(Events.USER_INPUT_END);
                 }
 
-                logToTerminal('error', `LLM处理错误: ${error.message}`);
-                if (error.stack) {
-                    logToTerminal('error', `错误堆栈: ${error.stack}`);
-                }
-
-                let errorMessage = "抱歉，出现了一个错误";
-
-                if (error.message.includes("API拒绝生成内容") || error.message.includes("安全过滤器") || error.message.includes("内容政策")) {
-                    errorMessage = "⚠️ API触发了安全过滤器，可能最近的对话包含敏感内容。建议重新开始对话或换个话题。";
-                } else if (error.message.includes("API内容过滤")) {
-                    errorMessage = "⚠️ 内容被过滤，请避免敏感话题";
-                } else if (error.message.includes("API密钥验证失败")) {
-                    errorMessage = "API密钥错误，请检查配置";
-                } else if (error.message.includes("API访问被禁止")) {
-                    errorMessage = "API访问受限，请联系支持";
-                } else if (error.message.includes("API接口未找到")) {
-                    errorMessage = "无效的API地址，请检查配置";
-                } else if (error.message.includes("请求过于频繁")) {
-                    errorMessage = "请求频率超限，请稍后再试";
-                } else if (error.message.includes("服务器错误")) {
-                    errorMessage = "AI服务不可用，请稍后再试";
-                } else if (error.message.includes("截图功能出错")) {
-                    errorMessage = "截图失败，无法处理视觉内容";
-                } else if (error.message.includes("工具调用失败")) {
-                    errorMessage = "功能扩展调用失败，请重试";
-                } else if (error.message.includes("do not support image") || error.message.includes("不支持图片") || error.message.includes("image param")) {
-                    errorMessage = "⚠️ 你使用的是不支持视觉的LLM模型，刚刚触发了调用视觉功能，所以报错了！建议换成支持视觉的LLM模型或在config.json中配置独立的视觉模型！";
-                    logToTerminal('warn', '💡 提示：请在config.json中设置 vision.use_vision_model: true 并配置支持视觉的模型（如gemini-2.0-flash）');
-                } else if (error.name === "TypeError" && error.message.includes("fetch")) {
-                    errorMessage = "网络连接失败，请检查网络和API地址";
-                } else if (error.name === "SyntaxError") {
-                    errorMessage = "解析API响应出错，请重试";
-                } else {
-                    const shortErrorMsg = error.message.substring(0, 100) +
-                        (error.message.length > 100 ? "..." : "");
-                    errorMessage = `未知错误: ${shortErrorMsg}`;
-                }
-
-                logToTerminal('error', `用户显示错误: ${errorMessage}`);
-
-                voiceChat.showSubtitle(errorMessage, 3000);
-                if (voiceChat.asrProcessor && asrEnabled) {
-                    voiceChat.asrProcessor.resumeRecording();
-                }
-                setTimeout(() => voiceChat.hideSubtitle(), 3000);
-            } finally {
-                // global.isProcessingUserInput 已通过事件自动管理，无需手动设置
-
-                // 发送用户输入结束事件
-                eventBus.emit(Events.USER_INPUT_END);
+                // 🔥 退出外层 while(true) 重试循环
+                break;
             }
         };
     }
