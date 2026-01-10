@@ -123,5 +123,8 @@ https://github.com/mindcraft-bots/mindcraft
 mpc网页操作工具：
 https://github.com/microsoft/playwright-mcp
 
+记忆系统：
+https://github.com/MemTensor/MemOS
+
 
 
