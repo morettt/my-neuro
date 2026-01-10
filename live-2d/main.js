@@ -175,7 +175,7 @@ ipcMain.handle('take-screenshot', async (event) => {
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // 1. 获取系统识别到的所有物理显示器
-        //TODO 目前截图一次大约需要250ms，此处可以加一个系统显示器信息缓存，能够省下50ms截图时间开销
+        //TO DO 目前截图一次大约需要250ms，此处可以加一个系统显示器信息缓存，能够省下50ms截图时间开销
         const displays = await screenshot.listDisplays();
 
         // 2. 计算当前鼠标所在的逻辑屏幕索引
