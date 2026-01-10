@@ -87,8 +87,8 @@ class VoiceChatFacade {
             this.gameIntegration,
             this.memoryManager,
             this.contextCompressor,
-            this.config,
-            this.memosClient
+            this.memosClient,
+            this.config
         );
         this.inputRouter.setUICallbacks(this.showSubtitle, this.hideSubtitle);
         this.inputRouter.setVoiceChatFacade(this);
