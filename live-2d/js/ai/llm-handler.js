@@ -637,9 +637,11 @@ class LLMHandler {
                     
                     // ===== MemOS: 异步保存对话到记忆系统 =====
                     if (voiceChat.memosClient && voiceChat.config?.memos?.enabled) {
-                        const userMessage = prompt;
-                        const aiMessage = finalResponseContent;
-                        voiceChat.memosClient.addWithBuffer(userMessage, aiMessage).catch(err => {
+                        const messages = [
+                            { role: 'user', content: prompt },
+                            { role: 'assistant', content: finalResponseContent }
+                        ];
+                        voiceChat.memosClient.addWithBuffer(messages).catch(err => {
                             console.error('MemOS保存对话失败:', err);
                         });
                     }
