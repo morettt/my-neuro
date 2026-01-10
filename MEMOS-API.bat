@@ -1,7 +1,6 @@
 @echo off
-chcp 65001 >nul
 echo ========================================
-echo   启动 MemOS 记忆服务 (端口: 8003)
+echo   Starting MemOS memory service (port: 8003)
 echo ========================================
 echo.
 cd /d %~dp0
