@@ -112,7 +112,7 @@ QQ群:感谢 菊花茶洋参 帮忙制作肥牛app的封面
 - [大米若叶](https://space.bilibili.com/3546392377166058?spm_id_from=333.337.0.0) 感谢您的支持！！为本项目捐赠 68人民币
 - [StrongerFatTiger](https://space.bilibili.com/28869393?spm_id_from=333.337.0.0) 感谢您的支持！！为本项目捐赠 100人民币
 
-本项目使用接入的开源项目：
+本项目使用引用的开源项目：
 
 TTS：
 https://github.com/RVC-Boss/GPT-SoVITS
