@@ -8,11 +8,12 @@ const { Events } = require('../../core/events.js');
  * 负责路由不同来源的输入（语音/文本/弹幕）
  */
 class InputRouter {
-    constructor(conversationCore, gameIntegration, memoryManager, contextCompressor, config) {
+    constructor(conversationCore, gameIntegration, memoryManager, contextCompressor, memosClient, config) {
         this.conversationCore = conversationCore;
         this.gameIntegration = gameIntegration;
         this.memoryManager = memoryManager;
         this.contextCompressor = contextCompressor;
+        this.memosClient = memosClient;  // 🔥 新增：MemOS 客户端
         this.config = config;
 
         // UI回调（稍后设置）
@@ -24,6 +25,16 @@ class InputRouter {
 
         // BarrageManager引用（用于打断）
         this.barrageManager = null;
+
+        // VoiceChatFacade 引用（用于记忆注入）
+        this.voiceChatFacade = null;
+    }
+
+    /**
+     * 设置 VoiceChatFacade 引用
+     */
+    setVoiceChatFacade(facade) {
+        this.voiceChatFacade = facade;
     }
 
     /**
@@ -67,6 +78,13 @@ class InputRouter {
                 this.memoryManager.checkAndSaveMemoryAsync(text);
             }
 
+
+            // 🔥 新增：调用 MemOS 记忆检索并注入
+            if (this.voiceChatFacade) {
+                await this.voiceChatFacade.injectRelevantMemories(text);
+            }
+
+
             // 发送到LLM
             await this.llmHandler(text);
 
@@ -94,6 +112,11 @@ class InputRouter {
 
         // 显示用户消息
         this.addChatMessage('user', text);
+
+        // 🔥 新增：调用 MemOS 记忆检索并注入
+        if (this.voiceChatFacade) {
+            await this.voiceChatFacade.injectRelevantMemories(text);
+        }
 
         // 发送到LLM
         await this.llmHandler(text);
