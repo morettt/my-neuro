@@ -120,7 +120,7 @@ https://github.com/RVC-Boss/GPT-SoVITS
 AI玩我的世界：
 https://github.com/mindcraft-bots/mindcraft
 
-mpc网页操作工具：
+mcp网页操作工具：
 https://github.com/microsoft/playwright-mcp
 
 记忆系统：
