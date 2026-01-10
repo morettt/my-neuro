@@ -27,3 +27,8 @@ watchdog
 PyQt5
 requests
 pyinstaller
+
+#MemOS记忆系统依赖
+streamlit
+aiohttp
+pydantic>=2.0.0

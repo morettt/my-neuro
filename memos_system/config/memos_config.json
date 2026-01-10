@@ -1,0 +1,17 @@
+{
+  "llm": {
+    "config": {
+      "model": "",
+      "api_key": "",
+      "base_url": ""
+    }
+  },
+  "llm_fallback": {
+    "enabled": true,
+    "config": {
+      "model": "",
+      "api_key": "",
+      "base_url": ""
+    }
+  }
+}

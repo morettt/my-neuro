@@ -34,6 +34,14 @@
     "enabled": false,
     "file_path": "AI记录室/核心用户记忆.txt"
   },
+  "memos": {
+    "enabled": false,
+    "api_url": "http://127.0.0.1:8003",
+    "auto_inject": true,
+    "inject_top_k": 3,
+    "similarity_threshold": 0.6,
+    "save_interval": 5
+  },
   "vision": {
     "enabled": true,
     "auto_screenshot": false,
@@ -53,7 +61,7 @@
   },
   "cloud": {
     "provider": "siliconflow",
-    "api_key": "sk-ygfgglbawrcgwriteqrqtvymyavuvllfvadaziovizhigruo",
+    "api_key": "",
     "tts": {
       "enabled": false,
       "url": "https://api.siliconflow.cn/v1/audio/speech",
