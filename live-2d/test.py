@@ -2220,7 +2220,7 @@ class set_pyqt(QWidget):
             print("正在启动RAG终端.....")
 
             base_path = get_base_path()
-            bat_file = os.path.join(base_path, "RAG.bat")
+            bat_file = os.path.join(base_path, "MEMOS-API.bat")
 
             if not os.path.exists(bat_file):
                 error_msg = f"找不到文件：{bat_file}"
@@ -2517,6 +2517,9 @@ class set_pyqt(QWidget):
         self.ui.lineEdit_diary_file.setText(ai_diary_config.get('diary_file', 'AI记录室/AI日记.txt'))
         self.ui.textEdit_diary_prompt.setPlainText(ai_diary_config.get('prompt', '请以fake neuro（肥牛）的身份，基于今天的对话记录写一篇简短的日记。'))
 
+        # 新增：设置Memos记忆配置（从独立的memos_config.json读取）
+        self.load_memos_config()
+
     def toggle_live_2d(self):
         """切换桌宠启动/关闭状态"""
         if self.live2d_running:
@@ -2790,6 +2793,68 @@ class set_pyqt(QWidget):
         except Exception as e:
             print(f"保存Minecraft配置失败: {e}")
 
+    def load_memos_config(self):
+        """加载Memos记忆系统配置文件"""
+        try:
+            app_path = get_app_path()
+            # memos_system在父目录，不是当前目录
+            memos_config_path = os.path.join(os.path.dirname(app_path), 'memos_system', 'config', 'memos_config.json')
+            print(f"[DEBUG] Memos配置路径: {memos_config_path}")
+            print(f"[DEBUG] 文件是否存在: {os.path.exists(memos_config_path)}")
+
+            if os.path.exists(memos_config_path):
+                with open(memos_config_path, 'r', encoding='utf-8') as f:
+                    memos_config = json.load(f)
+
+                print(f"[DEBUG] Memos配置内容: {memos_config}")
+                llm_config = memos_config.get('llm', {}).get('config', {})
+                print(f"[DEBUG] LLM配置: {llm_config}")
+                self.ui.lineEdit_memos_model.setText(llm_config.get('model', ''))
+                self.ui.lineEdit_memos_api_key.setText(llm_config.get('api_key', ''))
+                self.ui.lineEdit_memos_base_url.setText(llm_config.get('base_url', ''))
+                print(f"[DEBUG] Memos配置已加载到UI")
+            else:
+                print(f"[DEBUG] Memos配置文件不存在，设置为空")
+                # 如果文件不存在，设置为空
+                self.ui.lineEdit_memos_model.setText('')
+                self.ui.lineEdit_memos_api_key.setText('')
+                self.ui.lineEdit_memos_base_url.setText('')
+        except Exception as e:
+            print(f"加载Memos配置失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def save_memos_config(self):
+        """保存Memos记忆系统配置文件"""
+        try:
+            app_path = get_app_path()
+            # memos_system在父目录，不是当前目录
+            memos_config_path = os.path.join(os.path.dirname(app_path), 'memos_system', 'config', 'memos_config.json')
+
+            # 创建目录（如果不存在）
+            os.makedirs(os.path.dirname(memos_config_path), exist_ok=True)
+
+            # 读取原文件内容
+            with open(memos_config_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # 加载JSON配置
+            config = json.loads(content)
+
+            # 只修改llm.config的三个字段值，按照标准顺序：api_key, base_url, model
+            if 'llm' in config and 'config' in config['llm']:
+                config['llm']['config']['api_key'] = self.ui.lineEdit_memos_api_key.text()
+                config['llm']['config']['base_url'] = self.ui.lineEdit_memos_base_url.text()
+                config['llm']['config']['model'] = self.ui.lineEdit_memos_model.text()
+
+            # 保存时保持原格式（2空格缩进，确保字段顺序）
+            with open(memos_config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+
+            print("Memos配置已保存")
+        except Exception as e:
+            print(f"保存Memos配置失败: {e}")
+
     def save_config(self):
         current_config = self.load_config()
 
@@ -2875,6 +2940,9 @@ class set_pyqt(QWidget):
             "diary_file": self.ui.lineEdit_diary_file.text(),
             "prompt": self.ui.textEdit_diary_prompt.toPlainText()
         }
+
+        # 新增：保存Memos记忆配置（保存到独立的memos_config.json）
+        self.save_memos_config()
 
         # 新增：保存云端配置
         if 'cloud' not in current_config:
