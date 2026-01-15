@@ -1,8 +1,8 @@
 {
   "playwright_disabled": {
-    "command": "npx",
+    "command": "./node/node.exe",
     "args": [
-      "@playwright/mcp@latest"
+      "./mcp/node_modules/@playwright/mcp/cli.js"
     ]
   },
   "random-acg-pic": {
