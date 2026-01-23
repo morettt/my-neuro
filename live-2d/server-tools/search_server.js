@@ -4,7 +4,7 @@
 const axios = require('axios');
 
 // Tavily API配置
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY || "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";
+const TAVILY_API_KEY = process.env.TAVILY_API_KEY || "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";
 
 /**
  * 使用搜索网络引擎，并返回内容
