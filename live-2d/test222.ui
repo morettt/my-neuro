@@ -5218,7 +5218,7 @@ QPushButton:pressed {
              </widget>
              <widget class="QWidget" name="tab_cloud_asr">
               <attribute name="title">
-               <string>云端ASR</string>
+               <string>百度流式ASR</string>
               </attribute>
               <layout class="QVBoxLayout" name="verticalLayout_tab_cloud_asr">
                <property name="spacing">
@@ -5237,93 +5237,6 @@ QPushButton:pressed {
                 <number>20</number>
                </property>
                <item>
-                <widget class="QLabel" name="label_cloud_general_title_2">
-                 <property name="font">
-                  <font>
-                   <family>微软雅黑</family>
-                   <pointsize>14</pointsize>
-                   <weight>75</weight>
-                   <bold>true</bold>
-                  </font>
-                 </property>
-                 <property name="text">
-                  <string>🌐 云服务通用配置</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <layout class="QGridLayout" name="gridLayout_cloud_general_2">
-                 <property name="horizontalSpacing">
-                  <number>10</number>
-                 </property>
-                 <property name="verticalSpacing">
-                  <number>10</number>
-                 </property>
-                 <item row="0" column="0">
-                  <widget class="QLabel" name="label_cloud_provider_2">
-                   <property name="font">
-                    <font>
-                     <family>微软雅黑</family>
-                     <pointsize>10</pointsize>
-                    </font>
-                   </property>
-                   <property name="text">
-                    <string>云服务提供商：</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="0" column="1">
-                  <widget class="QLineEdit" name="lineEdit_cloud_provider_2">
-                   <property name="font">
-                    <font>
-                     <family>微软雅黑</family>
-                     <pointsize>10</pointsize>
-                    </font>
-                   </property>
-                   <property name="placeholderText">
-                    <string>例如: siliconflow</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="1" column="0">
-                  <widget class="QLabel" name="label_cloud_api_key_2">
-                   <property name="font">
-                    <font>
-                     <family>微软雅黑</family>
-                     <pointsize>10</pointsize>
-                    </font>
-                   </property>
-                   <property name="text">
-                    <string>API KEY：</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="1" column="1">
-                  <widget class="QLineEdit" name="lineEdit_cloud_api_key_2">
-                   <property name="font">
-                    <font>
-                     <family>微软雅黑</family>
-                     <pointsize>10</pointsize>
-                    </font>
-                   </property>
-                   <property name="echoMode">
-                    <enum>QLineEdit::Password</enum>
-                   </property>
-                   <property name="placeholderText">
-                    <string>输入云服务API密钥</string>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
-               </item>
-               <item>
-                <widget class="Line" name="line_cloud_separator_3">
-                 <property name="orientation">
-                  <enum>Qt::Horizontal</enum>
-                 </property>
-                </widget>
-               </item>
-               <item>
                 <widget class="QLabel" name="label_cloud_asr_title">
                  <property name="font">
                   <font>
@@ -5334,7 +5247,7 @@ QPushButton:pressed {
                   </font>
                  </property>
                  <property name="text">
-                  <string>🎤 云端ASR配置</string>
+                  <string>🎤 百度流式ASR配置</string>
                  </property>
                 </widget>
                </item>
@@ -5347,7 +5260,7 @@ QPushButton:pressed {
                   </font>
                  </property>
                  <property name="text">
-                  <string>启用云端ASR</string>
+                  <string>启用百度流式ASR</string>
                  </property>
                 </widget>
                </item>
@@ -5368,7 +5281,7 @@ QPushButton:pressed {
                     </font>
                    </property>
                    <property name="text">
-                    <string>ASR API URL：</string>
+                    <string>WebSocket URL：</string>
                    </property>
                   </widget>
                  </item>
@@ -5381,12 +5294,12 @@ QPushButton:pressed {
                     </font>
                    </property>
                    <property name="placeholderText">
-                    <string>例如: https://api.siliconflow.cn/v1/audio/transcriptions</string>
+                    <string>例如: ws://vop.baidu.com/realtime_asr</string>
                    </property>
                   </widget>
                  </item>
                  <item row="1" column="0">
-                  <widget class="QLabel" name="label_cloud_asr_model">
+                  <widget class="QLabel" name="label_cloud_asr_appid">
                    <property name="font">
                     <font>
                      <family>微软雅黑</family>
@@ -5394,12 +5307,12 @@ QPushButton:pressed {
                     </font>
                    </property>
                    <property name="text">
-                    <string>ASR 模型：</string>
+                    <string>APP ID：</string>
                    </property>
                   </widget>
                  </item>
                  <item row="1" column="1">
-                  <widget class="QLineEdit" name="lineEdit_cloud_asr_model">
+                  <widget class="QLineEdit" name="lineEdit_cloud_asr_appid">
                    <property name="font">
                     <font>
                      <family>微软雅黑</family>
@@ -5407,7 +5320,59 @@ QPushButton:pressed {
                     </font>
                    </property>
                    <property name="placeholderText">
-                    <string>例如: FunAudioLLM/SenseVoiceSmall</string>
+                    <string>百度语音应用的APP ID</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="2" column="0">
+                  <widget class="QLabel" name="label_cloud_asr_appkey">
+                   <property name="font">
+                    <font>
+                     <family>微软雅黑</family>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="text">
+                    <string>APP KEY：</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="2" column="1">
+                  <widget class="QLineEdit" name="lineEdit_cloud_asr_appkey">
+                   <property name="font">
+                    <font>
+                     <family>微软雅黑</family>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="placeholderText">
+                    <string>百度语音应用的APP KEY</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="0">
+                  <widget class="QLabel" name="label_cloud_asr_dev_pid">
+                   <property name="font">
+                    <font>
+                     <family>微软雅黑</family>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="text">
+                    <string>DEV PID：</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item row="3" column="1">
+                  <widget class="QLineEdit" name="lineEdit_cloud_asr_dev_pid">
+                   <property name="font">
+                    <font>
+                     <family>微软雅黑</family>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="placeholderText">
+                    <string>语言模型ID，默认15372（普通话）</string>
                    </property>
                   </widget>
                  </item>

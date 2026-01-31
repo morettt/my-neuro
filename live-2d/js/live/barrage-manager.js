@@ -105,7 +105,9 @@ class BarrageManager {
                     logToTerminal('error', `弹幕处理失败: ${error.message}`);
 
                     // 恢复ASR录音
-                    const asrEnabled = this.config.asr?.enabled !== false;
+                    const localASREnabled = this.config.asr?.enabled !== false;
+                    const baiduASREnabled = this.config.cloud?.baidu_asr?.enabled === true;
+                    const asrEnabled = localASREnabled || baiduASREnabled;
                     if (this.voiceChat?.asrProcessor && asrEnabled) {
                         this.voiceChat.asrProcessor.resumeRecording();
                     }

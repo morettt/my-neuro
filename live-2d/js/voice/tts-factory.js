@@ -8,7 +8,10 @@ class TTSFactory {
     // 创建TTS处理器
     static create(config, modelController, voiceChat, uiController, onBarrageTTSComplete) {
         const ttsEnabled = config.tts?.enabled !== false;
-        const asrEnabled = config.asr?.enabled !== false;
+        // ASR启用：本地ASR或百度流式ASR任一启用即可
+        const localASREnabled = config.asr?.enabled !== false;
+        const baiduASREnabled = config.cloud?.baidu_asr?.enabled === true;
+        const asrEnabled = localASREnabled || baiduASREnabled;
 
         if (ttsEnabled) {
             return new EnhancedTextProcessor(
