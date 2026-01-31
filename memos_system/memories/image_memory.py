@@ -153,6 +153,9 @@ class ImageMemory:
         # 图像元数据缓存
         self.metadata_cache: Dict[str, ImageMetadata] = {}
         
+        # 元数据持久化文件路径
+        self.metadata_file = self.storage_path / "image_metadata.json"
+        
         # 初始化
         self._init_storage()
         
@@ -165,6 +168,100 @@ class ImageMemory:
         (self.storage_path / "originals").mkdir(exist_ok=True)
         (self.storage_path / "thumbnails").mkdir(exist_ok=True)
         logger.info(f"图像存储目录: {self.storage_path}")
+    
+    def _save_metadata_to_file(self):
+        """保存元数据到 JSON 文件"""
+        try:
+            import json
+            data = {
+                image_id: meta.to_dict() 
+                for image_id, meta in self.metadata_cache.items()
+            }
+            with open(self.metadata_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            logger.debug(f"元数据已保存到 {self.metadata_file}")
+        except Exception as e:
+            logger.error(f"保存元数据失败: {e}")
+    
+    def _load_metadata_from_file(self) -> bool:
+        """从 JSON 文件加载元数据"""
+        try:
+            import json
+            if not self.metadata_file.exists():
+                return False
+            
+            with open(self.metadata_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            for image_id, meta_dict in data.items():
+                # 检查原图文件是否存在
+                filename = meta_dict.get('filename', '')
+                original_path = self.storage_path / "originals" / filename
+                if not original_path.exists():
+                    continue
+                
+                # 重建 ImageMetadata 对象
+                created_at = meta_dict.get('created_at', '')
+                if isinstance(created_at, str):
+                    try:
+                        created_at = datetime.fromisoformat(created_at)
+                    except:
+                        created_at = datetime.now()
+                
+                metadata = ImageMetadata(
+                    id=meta_dict.get('id', image_id),
+                    filename=meta_dict.get('filename', ''),
+                    original_name=meta_dict.get('original_name', ''),
+                    file_path=meta_dict.get('file_path', ''),
+                    image_type=meta_dict.get('image_type', 'other'),
+                    width=meta_dict.get('width', 0),
+                    height=meta_dict.get('height', 0),
+                    size_bytes=meta_dict.get('size_bytes', 0),
+                    format=meta_dict.get('format', ''),
+                    hash=meta_dict.get('hash', ''),
+                    description=meta_dict.get('description'),  # 保留描述
+                    tags=meta_dict.get('tags', []),
+                    user_id=meta_dict.get('user_id', 'feiniu_default'),
+                    created_at=created_at
+                )
+                self.metadata_cache[image_id] = metadata
+            
+            logger.info(f"从 JSON 加载 {len(self.metadata_cache)} 个图像元数据")
+            return True
+        except Exception as e:
+            logger.error(f"从 JSON 加载元数据失败: {e}")
+            return False
+    
+    def _recover_descriptions_from_qdrant(self):
+        """从 Qdrant 向量库恢复丢失的描述"""
+        if not self.vector_storage or not self.vector_storage.is_available():
+            return 0
+        
+        recovered_count = 0
+        for image_id, metadata in self.metadata_cache.items():
+            # 如果已经有描述，跳过
+            if metadata.description and metadata.description.strip():
+                continue
+            
+            try:
+                # 从 Qdrant 获取记录
+                record = self.vector_storage.get_memory(image_id)
+                if record:
+                    # get_memory 返回 {'id': ..., 'content': ..., 'payload': ...}
+                    content = record.get('content', '')
+                    # 如果 content 不是默认值（"图像: xxx"），使用它作为描述
+                    if content and not content.startswith('图像:'):
+                        metadata.description = content
+                        recovered_count += 1
+                        logger.debug(f"恢复图片 {image_id} 描述: {content[:50]}...")
+            except Exception as e:
+                logger.debug(f"从 Qdrant 恢复图片 {image_id} 描述失败: {e}")
+        
+        if recovered_count > 0:
+            self._save_metadata_to_file()
+            logger.info(f"从 Qdrant 恢复了 {recovered_count} 个图片描述")
+        
+        return recovered_count
     
     def _init_clip(self, model_name: str):
         """初始化 CLIP 模型"""
@@ -321,6 +418,9 @@ class ImageMemory:
             
             # 存储到向量库（用于检索）
             await self._store_to_vector(metadata, image)
+            
+            # 持久化元数据到 JSON 文件
+            self._save_metadata_to_file()
             
             logger.info(f"图像已保存: {image_id}")
             return metadata
@@ -618,6 +718,9 @@ class ImageMemory:
             # 从缓存删除
             del self.metadata_cache[image_id]
             
+            # 持久化元数据到 JSON 文件
+            self._save_metadata_to_file()
+            
             logger.info(f"图像已删除: {image_id}")
             return True
             
@@ -668,17 +771,26 @@ class ImageMemory:
         }
     
     async def load_metadata(self):
-        """从存储目录加载元数据"""
-        # 扫描 originals 目录
+        """从存储目录加载元数据
+        
+        优先从 JSON 文件加载（保留描述等信息），
+        对于 JSON 中没有的图片，从文件系统扫描加载
+        """
+        # 首先尝试从 JSON 文件加载（这样可以保留描述信息）
+        loaded_from_json = self._load_metadata_from_file()
+        
+        # 扫描 originals 目录，补充 JSON 中没有的图片
         originals_dir = self.storage_path / "originals"
         
         if not originals_dir.exists():
             return
         
+        new_images_count = 0
         for file_path in originals_dir.iterdir():
             if file_path.is_file():
                 image_id = file_path.stem
                 
+                # 如果已经从 JSON 加载过，跳过
                 if image_id in self.metadata_cache:
                     continue
                 
@@ -701,15 +813,24 @@ class ImageMemory:
                             size_bytes=stat.st_size,
                             format=info['format'],
                             hash="",
-                            description=None,
+                            description=None,  # 从文件系统扫描的没有描述
                             tags=[],
                             user_id="feiniu_default",
                             created_at=datetime.fromtimestamp(stat.st_ctime)
                         )
                         
                         self.metadata_cache[image_id] = metadata
+                        new_images_count += 1
                         
                 except Exception as e:
                     logger.warning(f"加载图像元数据失败 {file_path}: {e}")
+        
+        # 如果发现了新图片，保存元数据到 JSON
+        if new_images_count > 0:
+            self._save_metadata_to_file()
+            logger.info(f"发现 {new_images_count} 个未记录的图像，已更新元数据文件")
+        
+        # 尝试从 Qdrant 恢复丢失的描述
+        self._recover_descriptions_from_qdrant()
         
         logger.info(f"加载 {len(self.metadata_cache)} 个图像元数据")

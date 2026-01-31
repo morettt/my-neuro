@@ -1465,7 +1465,8 @@ async def list_memories(user_id: Optional[str] = USER_ID, limit: int = 100):
                 "updated_at": mem.get('updated_at'),
                 "importance": mem.get('importance', 0.5),
                 "merge_count": mem.get('merge_count', 0),
-                "memory_type": mem.get('memory_type', 'general')
+                "memory_type": mem.get('memory_type', 'general'),
+                "tags": mem.get('tags', [])  # 添加标签字段
             }
             for mem in memories
         ]
@@ -3023,6 +3024,71 @@ async def list_images(
         "images": [m.to_dict() for m in images],
         "count": len(images)
     }
+
+
+@app.post("/images/regenerate-descriptions")
+async def regenerate_image_descriptions(
+    user_id: str = Query(default=USER_ID),
+    force: bool = Query(default=False, description="是否强制重新生成所有描述")
+):
+    """为没有描述的图片重新生成描述
+    
+    - force=False: 只为没有描述的图片生成
+    - force=True: 为所有图片重新生成描述
+    """
+    if not image_memory:
+        raise HTTPException(status_code=503, detail="图像记忆未启用")
+    
+    try:
+        images = await image_memory.list_images(user_id, limit=500)
+        updated_count = 0
+        failed_count = 0
+        
+        for img_meta in images:
+            # 检查是否需要生成描述
+            if not force and img_meta.description and img_meta.description.strip():
+                continue
+            
+            try:
+                # 读取图片数据
+                img_data = await image_memory.get_image_data(img_meta.id, thumbnail=False)
+                if not img_data:
+                    failed_count += 1
+                    continue
+                
+                # 生成描述
+                from PIL import Image
+                from io import BytesIO
+                image = Image.open(BytesIO(img_data))
+                
+                description = await image_memory._generate_description(image, img_meta.original_name)
+                
+                if description:
+                    # 更新元数据
+                    img_meta.description = description
+                    image_memory.metadata_cache[img_meta.id] = img_meta
+                    updated_count += 1
+                    logger.info(f"已为图片 {img_meta.id} 生成描述: {description[:50]}...")
+                else:
+                    failed_count += 1
+                    
+            except Exception as e:
+                logger.error(f"生成图片 {img_meta.id} 描述失败: {e}")
+                failed_count += 1
+        
+        # 保存更新后的元数据
+        if updated_count > 0:
+            image_memory._save_metadata_to_file()
+        
+        return {
+            "status": "success",
+            "message": f"已更新 {updated_count} 张图片的描述，{failed_count} 张失败",
+            "updated_count": updated_count,
+            "failed_count": failed_count
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ==================== 异步调度器端点 ====================

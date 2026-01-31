@@ -488,6 +488,7 @@ with tab3:
             mtype = mem.get('memory_type', 'general')
             imp = mem.get('importance', 0.5)
             created = mem.get('created_at', '')
+            tags = mem.get('tags', [])  # 获取标签
             
             time_str = ''
             if created:
@@ -504,7 +505,19 @@ with tab3:
                     st.caption(f"{get_type_emoji(mtype)} {get_type_label(mtype)}")
                 
                 st.write(content)
-                st.caption(f"重要度 {imp:.0%} | {time_str} | ID: {mem_id[:8]}...")
+                
+                # 显示标签
+                if tags and len(tags) > 0:
+                    tags_html = " ".join([f"<span style='background: rgba(0,212,255,0.2); padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-right: 4px;'>🏷️ {tag}</span>" for tag in tags])
+                    st.markdown(f"<div style='margin: 8px 0;'>{tags_html}</div>", unsafe_allow_html=True)
+                
+                # 显示基本信息和完整 ID
+                st.markdown(f"""
+                <div style="font-size: 0.85em; color: #94a3b8;">
+                    重要度 {imp:.0%} | {time_str}<br/>
+                    <span style="color: #00d4ff; font-family: monospace; background: rgba(0,212,255,0.1); padding: 2px 6px; border-radius: 4px;">ID: {mem_id}</span>
+                </div>
+                """, unsafe_allow_html=True)
                 
                 bc1, bc2, bc3 = st.columns([1, 1, 3])
                 with bc1:
@@ -591,24 +604,62 @@ with tab4:
     
     with op_tab2:
         st.subheader("新增记忆")
-        content = st.text_area("内容", height=150, key="t4_content")
+        content = st.text_area("内容", height=150, key="t4_content", 
+                               placeholder="输入要保存的记忆内容...\n例如：主人今天说他喜欢吃火锅。")
+        
+        # 添加模式选择
+        add_mode = st.radio(
+            "添加模式",
+            ["🤖 智能添加 (LLM 自动分类总结)", "📝 原始添加 (直接保存)"],
+            key="t4_add_mode",
+            horizontal=True
+        )
+        
         c1, c2 = st.columns(2)
         with c1:
             importance = st.slider("重要度", 0.0, 1.0, 0.8, 0.1, key="t4_imp")
         with c2:
-            type_opts = {"通用": "general", "事实": "fact", "偏好": "preference", "情景": "episodic"}
-            sel = st.selectbox("类型", list(type_opts.keys()), key="t4_mtype")
+            type_opts = {"通用": "general", "事实": "fact", "偏好": "preference", "情景": "episodic", "语义": "semantic", "程序性": "procedural"}
+            sel = st.selectbox("类型 (原始添加时生效)", list(type_opts.keys()), key="t4_mtype",
+                              disabled="智能添加" in add_mode)
         
-        if st.button("保存", type="primary", key="t4_save"):
+        if "智能添加" in add_mode:
+            st.caption("💡 智能添加会通过 LLM 自动：1) 提取关键信息 2) 分类记忆类型 3) 生成标签 4) 提取知识图谱实体")
+        else:
+            st.caption("📝 原始添加会直接保存内容，使用你选择的类型和重要度")
+        
+        if st.button("保存记忆", type="primary", key="t4_save"):
             if content:
-                status, result = api_post("/add_raw", {
-                    "messages": [{"content": content, "importance": importance, "memory_type": type_opts[sel]}]
-                })
-                if status == 200:
-                    st.success("已保存")
-                    st.balloons()
-                else:
-                    st.error(f"失败: {result}")
+                with st.spinner("处理中..."):
+                    if "智能添加" in add_mode:
+                        # 使用 /add 端点（LLM 加工版）
+                        status, result = api_post("/add", {
+                            "messages": [{"content": content, "role": "user"}],
+                            "user_id": "feiniu_default"
+                        }, timeout=60)
+                        if status == 200:
+                            added = result.get('added', 0)
+                            merged = result.get('merged', 0)
+                            entities = result.get('entities_extracted', 0)
+                            msg = result.get('message', '处理完成')
+                            st.success(f"✅ {msg}")
+                            if added > 0 or merged > 0 or entities > 0:
+                                st.info(f"📊 新增: {added} | 合并: {merged} | 实体: {entities}")
+                            st.balloons()
+                        else:
+                            st.error(f"失败: {result}")
+                    else:
+                        # 使用 /add_raw 端点（直接保存）
+                        status, result = api_post("/add_raw", {
+                            "messages": [{"content": content, "importance": importance, "memory_type": type_opts[sel]}]
+                        })
+                        if status == 200:
+                            st.success("✅ 已保存")
+                            st.balloons()
+                        else:
+                            st.error(f"失败: {result}")
+            else:
+                st.warning("请输入记忆内容")
     
     with op_tab3:
         st.subheader("去重合并")
@@ -650,40 +701,208 @@ with tab5:
     st.header("🖼️ 图片记忆")
     st.divider()
     
+    # 显示图片存储路径提示和工具
+    with st.expander("🔧 图片工具", expanded=False):
+        st.markdown("""
+        **本地存储路径**: `memos_system/data/images/`
+        - 原图: `originals/` 文件夹
+        - 缩略图: `thumbnails/` 文件夹
+        """)
+        
+        st.markdown("---")
+        st.markdown("**批量生成描述**")
+        st.caption("为没有描述的图片使用 AI 自动生成描述")
+        
+        force_regen = st.checkbox("强制重新生成所有描述", value=False, key="force_regen_desc")
+        
+        if st.button("🤖 生成图片描述", type="primary", key="regen_desc_btn"):
+            with st.spinner("正在生成描述，这可能需要一些时间..."):
+                try:
+                    r = requests.post(
+                        f"{MEMOS_API_URL}/images/regenerate-descriptions",
+                        params={"force": force_regen},
+                        timeout=300
+                    )
+                    if r.status_code == 200:
+                        result = r.json()
+                        st.success(f"✅ {result.get('message', '完成')}")
+                        st.rerun()
+                    else:
+                        st.error(f"失败: {r.text}")
+                except Exception as e:
+                    st.error(f"请求失败: {e}")
+    
     img_tab1, img_tab2 = st.tabs(["图片库", "上传图片"])
     
     with img_tab1:
-        images = api_get("/images", {"limit": 20})
+        # 分页控制
+        if 'img_page' not in st.session_state:
+            st.session_state.img_page = 1
+        img_per_page = st.selectbox("每页显示", [6, 12, 24], key="img_per_page")
+        
+        images = api_get("/images", {"limit": 100})
         if images:
             imgs = images.get('images', [])
             if imgs:
+                total_imgs = len(imgs)
+                total_pages = max(1, (total_imgs + img_per_page - 1) // img_per_page)
+                st.session_state.img_page = min(st.session_state.img_page, total_pages)
+                
+                st.info(f"共 {total_imgs} 张图片 | 第 {st.session_state.img_page}/{total_pages} 页")
+                
+                # 分页按钮
+                pc1, pc2, pc3, pc4 = st.columns(4)
+                with pc1:
+                    if st.button("首页", key="img_first", disabled=st.session_state.img_page <= 1):
+                        st.session_state.img_page = 1
+                        st.rerun()
+                with pc2:
+                    if st.button("上页", key="img_prev", disabled=st.session_state.img_page <= 1):
+                        st.session_state.img_page -= 1
+                        st.rerun()
+                with pc3:
+                    if st.button("下页", key="img_next", disabled=st.session_state.img_page >= total_pages):
+                        st.session_state.img_page += 1
+                        st.rerun()
+                with pc4:
+                    if st.button("末页", key="img_last", disabled=st.session_state.img_page >= total_pages):
+                        st.session_state.img_page = total_pages
+                        st.rerun()
+                
+                st.divider()
+                
+                # 显示当前页的图片
+                start_idx = (st.session_state.img_page - 1) * img_per_page
+                page_imgs = imgs[start_idx:start_idx + img_per_page]
+                
                 cols = st.columns(3)
-                for i, img in enumerate(imgs):
+                for i, img in enumerate(page_imgs):
                     with cols[i % 3]:
                         with st.container(border=True):
+                            img_id = img.get('id', '')
                             desc = img.get('description') or '无描述'
-                            st.write(f"**{desc[:30]}**")
-                            st.caption(f"类型: {img.get('image_type') or 'other'}")
+                            img_type = img.get('image_type') or 'other'
+                            created = img.get('created_at', '')
+                            
+                            # 显示图片（获取缩略图）
+                            try:
+                                img_data_resp = api_get(f"/images/{img_id}/data?thumbnail=true", timeout=10)
+                                if img_data_resp and img_data_resp.get('data'):
+                                    img_b64 = img_data_resp.get('data')
+                                    st.image(f"data:image/jpeg;base64,{img_b64}", use_container_width=True)
+                                else:
+                                    st.markdown("🖼️ *图片加载失败*")
+                            except Exception as e:
+                                st.markdown(f"🖼️ *图片加载失败*")
+                            
+                            # 显示完整描述
+                            if desc == '无描述' or not desc or desc.strip() == '':
+                                st.markdown("*⚠️ 无描述*")
+                            elif len(desc) > 50:
+                                with st.expander(f"📝 {desc[:50]}..."):
+                                    st.write(desc)
+                            else:
+                                st.write(f"**{desc}**")
+                            
+                            st.caption(f"类型: {img_type}")
+                            
+                            # 格式化时间
+                            if created:
+                                try:
+                                    time_str = datetime.fromisoformat(created).strftime("%Y-%m-%d %H:%M")
+                                    st.caption(f"时间: {time_str}")
+                                except:
+                                    pass
+                            
+                            # 操作按钮
+                            bc1, bc2 = st.columns(2)
+                            with bc1:
+                                if st.button("🔍 查看原图", key=f"view_img_{img_id}"):
+                                    st.session_state[f"show_full_{img_id}"] = True
+                            with bc2:
+                                # 使用确认机制避免误删
+                                if st.session_state.get(f"confirm_del_img_{img_id}", False):
+                                    st.warning("确定删除？")
+                                    dc1, dc2 = st.columns(2)
+                                    with dc1:
+                                        if st.button("✅ 确定", key=f"confirm_yes_{img_id}"):
+                                            if api_delete(f"/images/{img_id}"):
+                                                st.toast("✅ 已删除")
+                                                st.session_state[f"confirm_del_img_{img_id}"] = False
+                                                st.rerun()
+                                            else:
+                                                st.error("删除失败")
+                                    with dc2:
+                                        if st.button("❌ 取消", key=f"confirm_no_{img_id}"):
+                                            st.session_state[f"confirm_del_img_{img_id}"] = False
+                                            st.rerun()
+                                else:
+                                    if st.button("🗑️ 删除", key=f"del_img_{img_id}"):
+                                        st.session_state[f"confirm_del_img_{img_id}"] = True
+                                        st.rerun()
+                            
+                            # 显示原图对话框
+                            if st.session_state.get(f"show_full_{img_id}", False):
+                                try:
+                                    full_img_resp = api_get(f"/images/{img_id}/data?thumbnail=false", timeout=15)
+                                    if full_img_resp and full_img_resp.get('data'):
+                                        st.image(f"data:image/jpeg;base64,{full_img_resp.get('data')}", caption="原图")
+                                    if st.button("关闭", key=f"close_img_{img_id}"):
+                                        st.session_state[f"show_full_{img_id}"] = False
+                                        st.rerun()
+                                except Exception as e:
+                                    st.error(f"加载原图失败: {e}")
             else:
                 st.info("暂无图片")
         else:
-            st.warning("图片功能未启用")
+            st.warning("图片功能未启用或服务不可用")
     
     with img_tab2:
         uploaded = st.file_uploader("选择图片", type=['png', 'jpg', 'jpeg', 'gif', 'webp'])
         if uploaded:
             st.image(uploaded, width=300)
-            desc = st.text_input("描述", key="t5_desc")
-            if st.button("上传", type="primary", key="t5_upload"):
-                if desc:
+            
+            # 图片类型选择
+            img_type_opts = {
+                "照片": "photo", 
+                "对话截图": "conversation", 
+                "文档": "document", 
+                "截图": "screenshot",
+                "头像": "avatar",
+                "参考图": "reference",
+                "其他": "other"
+            }
+            img_type_sel = st.selectbox("图片类型", list(img_type_opts.keys()), key="t5_img_type")
+            
+            desc = st.text_input("描述 (可选，留空则自动生成)", key="t5_desc", placeholder="输入图片描述，或留空让 AI 自动生成...")
+            auto_desc = st.checkbox("自动生成描述 (使用 LLM)", value=True, key="t5_auto_desc")
+            
+            if st.button("上传图片", type="primary", key="t5_upload"):
+                with st.spinner("上传中..." + (" (正在生成描述...)" if auto_desc and not desc else "")):
+                    # 重置文件指针
+                    uploaded.seek(0)
                     img_b64 = base64.b64encode(uploaded.read()).decode()
-                    status, result = api_post("/images/upload", {
-                        "image_base64": img_b64, "description": desc, "image_type": "photo"
-                    }, timeout=30)
+                    
+                    upload_data = {
+                        "image_base64": img_b64, 
+                        "image_type": img_type_opts[img_type_sel],
+                        "auto_describe": auto_desc and not desc  # 只有留空描述且勾选自动生成时才自动生成
+                    }
+                    
+                    # 如果有手动输入的描述，使用手动描述
+                    if desc:
+                        upload_data["description"] = desc
+                    
+                    status, result = api_post("/images/upload", upload_data, timeout=60)
+                    
                     if status == 200:
-                        st.success("上传成功")
+                        gen_desc = result.get('description', '')
+                        st.success(f"✅ 上传成功!")
+                        if gen_desc:
+                            st.info(f"📝 图片描述: {gen_desc}")
+                        st.balloons()
                     else:
-                        st.error(f"失败: {result}")
+                        st.error(f"上传失败: {result}")
 
 # ═══════════════════════════════════════════════════════════════
 #                        Tab 6: 知识图谱
