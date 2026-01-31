@@ -343,7 +343,6 @@ class ASRProcessor {
         // 判断使用哪种模式
         const gatewayConfig = this.config.api_gateway || {};
         const useGateway = gatewayConfig.use_gateway === true;
-        const useCloudASR = this.config.cloud?.asr?.enabled === true;
         let asrUrl;
         let mode = '本地';
 
@@ -351,13 +350,6 @@ class ASRProcessor {
             // 统一网关模式
             asrUrl = `${gatewayConfig.base_url}/asr/upload_audio`;
             mode = '网关';
-        } else if (useCloudASR) {
-            // 云服务商模式（SiliconFlow等）
-            asrUrl = this.config.cloud.asr.url;
-            if (this.config.cloud.asr.model) {
-                formData.append('model', this.config.cloud.asr.model);
-            }
-            mode = `云端 (${this.config.cloud?.provider || '未知'})`;
         } else {
             // 本地ASR
             asrUrl = this.asrUrl;
@@ -369,10 +361,6 @@ class ASRProcessor {
             // 统一网关模式：添加 X-API-Key
             if (useGateway && gatewayConfig.api_key) {
                 headers['X-API-Key'] = gatewayConfig.api_key;
-            }
-            // 云服务商模式：添加 Authorization
-            else if (useCloudASR && this.config.cloud?.api_key) {
-                headers['Authorization'] = `Bearer ${this.config.cloud.api_key}`;
             }
 
             console.log(`使用${mode}ASR: ${asrUrl}`);

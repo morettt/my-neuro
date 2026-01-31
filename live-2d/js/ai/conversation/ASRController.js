@@ -1,5 +1,6 @@
 // ASRController.js - ASR控制器
 const { ASRProcessor } = require('../../voice/asr-processor.js');
+const { BaiduStreamingASR } = require('../../voice/baidu-streaming-asr.js');
 const { eventBus } = require('../../core/event-bus.js');
 const { Events } = require('../../core/events.js');
 
@@ -12,11 +13,16 @@ class ASRController {
         this.inputRouter = inputRouter;
         this.diaryManager = diaryManager;
 
-        // 检查ASR是否可用
-        this.asrEnabled = config.asr?.enabled !== false;
+        // 检查是否使用百度流式ASR
+        this.useBaiduStreamingASR = config.cloud?.baidu_asr?.enabled === true;
+
+        // 检查ASR是否可用（本地ASR或百度流式ASR任一启用即可）
+        const localASREnabled = config.asr?.enabled !== false;
+        this.asrEnabled = localASREnabled || this.useBaiduStreamingASR;
         this.voiceBargeInEnabled = config.asr?.voice_barge_in || false;
 
         console.log(`语音打断功能: ${this.voiceBargeInEnabled ? '已可用' : '已禁用'}`);
+        console.log(`百度流式ASR: ${this.useBaiduStreamingASR ? '已启用' : '已禁用'}`);
 
         if (!this.asrEnabled) {
             console.log('ASR已禁用，跳过ASR处理器初始化');
@@ -24,11 +30,33 @@ class ASRController {
             return;
         }
 
-        // 创建ASR处理器
-        this.asrProcessor = new ASRProcessor(vadUrl, asrUrl, config);
+        // 根据配置选择ASR处理器
+        if (this.useBaiduStreamingASR) {
+            // 使用百度流式ASR
+            console.log('使用百度流式ASR');
+            this.asrProcessor = new BaiduStreamingASR(config);
+            // 设置实时字幕回调
+            this.setupInterimResultCallback();
+        } else {
+            // 使用原有的ASR处理器
+            this.asrProcessor = new ASRProcessor(vadUrl, asrUrl, config);
+        }
 
         // 设置ASR回调
         this.setupASRCallback();
+    }
+
+    /**
+     * 设置实时字幕回调（百度流式ASR专用）
+     */
+    setupInterimResultCallback() {
+        if (this.asrProcessor.setOnInterimResult) {
+            this.asrProcessor.setOnInterimResult((interimText) => {
+                const showSubtitle = this.inputRouter.showSubtitle;
+                // 显示临时字幕，不设置自动隐藏（会被下一次更新覆盖）
+                showSubtitle(`${this.config.subtitle_labels.user}: ${interimText}`, 0);
+            });
+        }
     }
 
     /**

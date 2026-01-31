@@ -47,7 +47,10 @@ class IPCHandlers {
                 this.barrageManager.reset();
             }
 
-            if (this.voiceChat && this.voiceChat.asrProcessor && this.config.asr.enabled) {
+            const localASREnabled = this.config.asr?.enabled !== false;
+            const baiduASREnabled = this.config.cloud?.baidu_asr?.enabled === true;
+            const asrEnabled = localASREnabled || baiduASREnabled;
+            if (this.voiceChat && this.voiceChat.asrProcessor && asrEnabled) {
                 setTimeout(() => {
                     this.voiceChat.resumeRecording();
                     console.log('ASR录音已恢复');

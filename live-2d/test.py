@@ -1896,25 +1896,11 @@ class set_pyqt(QWidget):
         # 对话记录相关按钮绑定
         self.ui.pushButton_back_from_chat_history.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(0))
 
-        # 云端配置两个标签页的通用配置实时同步
-        self.ui.lineEdit_cloud_provider.textChanged.connect(
-            lambda text: self.ui.lineEdit_cloud_provider_2.setText(text)
-        )
-        self.ui.lineEdit_cloud_provider_2.textChanged.connect(
-            lambda text: self.ui.lineEdit_cloud_provider.setText(text) if self.ui.lineEdit_cloud_provider.text() != text else None
-        )
-
         # Live2D模型选择
         self.ui.comboBox_live2d_models.currentIndexChanged.connect(self.on_model_selection_changed)
 
         # 云端肥牛网页导航按钮
         self.ui.pushButton_gateway_website.clicked.connect(self.open_gateway_website)
-        self.ui.lineEdit_cloud_api_key.textChanged.connect(
-            lambda text: self.ui.lineEdit_cloud_api_key_2.setText(text)
-        )
-        self.ui.lineEdit_cloud_api_key_2.textChanged.connect(
-            lambda text: self.ui.lineEdit_cloud_api_key.setText(text) if self.ui.lineEdit_cloud_api_key.text() != text else None
-        )
 
         # 加载Minecraft配置到UI
         self.load_minecraft_config()
@@ -2031,8 +2017,8 @@ class set_pyqt(QWidget):
 
             print("正在启动ASR终端.....")
 
-            # 根据config中的云端ASR配置选择对应的bat文件
-            is_cloud_asr = self.config.get('cloud', {}).get('asr', {}).get('enabled', False)
+            # 根据config中的百度流式ASR配置选择对应的bat文件
+            is_cloud_asr = self.config.get('cloud', {}).get('baidu_asr', {}).get('enabled', False)
             base_path = get_base_path()
 
             if is_cloud_asr:  # 云端ASR
@@ -2467,8 +2453,6 @@ class set_pyqt(QWidget):
         api_key = cloud_config.get('api_key', '')
         self.ui.lineEdit_cloud_provider.setText(provider)
         self.ui.lineEdit_cloud_api_key.setText(api_key)
-        self.ui.lineEdit_cloud_provider_2.setText(provider)
-        self.ui.lineEdit_cloud_api_key_2.setText(api_key)
 
         # 云端TTS配置
         cloud_tts = cloud_config.get('tts', {})
@@ -2483,11 +2467,13 @@ class set_pyqt(QWidget):
             self.ui.comboBox_cloud_tts_format.setCurrentIndex(format_index)
         self.ui.doubleSpinBox_cloud_tts_speed.setValue(cloud_tts.get('speed', 1.0))
 
-        # 云端ASR配置
-        cloud_asr = cloud_config.get('asr', {})
-        self.ui.checkBox_cloud_asr_enabled.setChecked(cloud_asr.get('enabled', False))
-        self.ui.lineEdit_cloud_asr_url.setText(cloud_asr.get('url', 'https://api.siliconflow.cn/v1/audio/transcriptions'))
-        self.ui.lineEdit_cloud_asr_model.setText(cloud_asr.get('model', 'FunAudioLLM/SenseVoiceSmall'))
+        # 百度流式ASR配置
+        baidu_asr = cloud_config.get('baidu_asr', {})
+        self.ui.checkBox_cloud_asr_enabled.setChecked(baidu_asr.get('enabled', False))
+        self.ui.lineEdit_cloud_asr_url.setText(baidu_asr.get('url', 'ws://vop.baidu.com/realtime_asr'))
+        self.ui.lineEdit_cloud_asr_appid.setText(str(baidu_asr.get('appid', '')))
+        self.ui.lineEdit_cloud_asr_appkey.setText(baidu_asr.get('appkey', ''))
+        self.ui.lineEdit_cloud_asr_dev_pid.setText(str(baidu_asr.get('dev_pid', 15372)))
 
         # 云端肥牛配置（API Gateway）
         api_gateway = self.config.get('api_gateway', {})
@@ -2948,9 +2934,9 @@ class set_pyqt(QWidget):
         if 'cloud' not in current_config:
             current_config['cloud'] = {}
 
-        # 保存通用云端配置（从第一个标签页的控件获取，两个标签页应该同步）
-        current_config['cloud']['provider'] = self.ui.lineEdit_cloud_provider.text() or self.ui.lineEdit_cloud_provider_2.text() or 'siliconflow'
-        current_config['cloud']['api_key'] = self.ui.lineEdit_cloud_api_key.text() or self.ui.lineEdit_cloud_api_key_2.text()
+        # 保存通用云端配置
+        current_config['cloud']['provider'] = self.ui.lineEdit_cloud_provider.text() or 'siliconflow'
+        current_config['cloud']['api_key'] = self.ui.lineEdit_cloud_api_key.text()
 
         # 保存云端TTS配置
         if 'tts' not in current_config['cloud']:
@@ -2962,12 +2948,16 @@ class set_pyqt(QWidget):
         current_config['cloud']['tts']['response_format'] = self.ui.comboBox_cloud_tts_format.currentText()
         current_config['cloud']['tts']['speed'] = self.ui.doubleSpinBox_cloud_tts_speed.value()
 
-        # 保存云端ASR配置
-        if 'asr' not in current_config['cloud']:
-            current_config['cloud']['asr'] = {}
-        current_config['cloud']['asr']['enabled'] = self.ui.checkBox_cloud_asr_enabled.isChecked()
-        current_config['cloud']['asr']['url'] = self.ui.lineEdit_cloud_asr_url.text() or 'https://api.siliconflow.cn/v1/audio/transcriptions'
-        current_config['cloud']['asr']['model'] = self.ui.lineEdit_cloud_asr_model.text() or 'FunAudioLLM/SenseVoiceSmall'
+        # 保存百度流式ASR配置
+        if 'baidu_asr' not in current_config['cloud']:
+            current_config['cloud']['baidu_asr'] = {}
+        current_config['cloud']['baidu_asr']['enabled'] = self.ui.checkBox_cloud_asr_enabled.isChecked()
+        current_config['cloud']['baidu_asr']['url'] = self.ui.lineEdit_cloud_asr_url.text() or 'ws://vop.baidu.com/realtime_asr'
+        appid_text = self.ui.lineEdit_cloud_asr_appid.text()
+        current_config['cloud']['baidu_asr']['appid'] = int(appid_text) if appid_text.isdigit() else 0
+        current_config['cloud']['baidu_asr']['appkey'] = self.ui.lineEdit_cloud_asr_appkey.text()
+        dev_pid_text = self.ui.lineEdit_cloud_asr_dev_pid.text()
+        current_config['cloud']['baidu_asr']['dev_pid'] = int(dev_pid_text) if dev_pid_text.isdigit() else 15372
 
         # 保存云端肥牛配置（API Gateway）
         if 'api_gateway' not in current_config:
