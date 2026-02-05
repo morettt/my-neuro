@@ -237,6 +237,7 @@ class ModelInteractionController {
                     this.model.x -= deltaWidth / 2;
                     this.model.y -= deltaHeight / 2;
                     this.updateInteractionArea();
+                    this.saveModelPosition();
                 }
             }
         }, { passive: false });
@@ -298,9 +299,9 @@ class ModelInteractionController {
     setupInitialModelProperties(scaleMultiplier = 2.3) {
         if (!this.model || !this.app) return;
 
-        const scaleX = (window.innerWidth * scaleMultiplier) / this.model.width;
-        const scaleY = (window.innerHeight * scaleMultiplier) / this.model.height;
-        this.model.scale.set(Math.min(scaleX, scaleY));
+        // const scaleX = (window.innerWidth * scaleMultiplier) / this.model.width;
+        // const scaleY = (window.innerHeight * scaleMultiplier) / this.model.height;
+        this.model.scale.set(scaleMultiplier);
 
         // 检查是否有保存的位置
         if (this.config && this.config.ui && this.config.ui.model_position && this.config.ui.model_position.remember_position) {
@@ -344,7 +345,8 @@ class ModelInteractionController {
         // 发送IPC消息保存位置
         ipcRenderer.send('save-model-position', {
             x: relativeX,
-            y: relativeY
+            y: relativeY,
+            scale:this.model.scale.x
         });
 
         console.log('保存模型位置:', { x: relativeX, y: relativeY });
