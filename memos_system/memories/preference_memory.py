@@ -124,6 +124,40 @@ class PreferenceMemory:
         self.preferences: Dict[str, PreferenceItem] = {}
         self._loaded = False
     
+    def _infer_category_from_tags(self, tags: List[str]) -> PreferenceCategory:
+        """根据 tags 推断类别"""
+        if not tags:
+            return PreferenceCategory.OTHER
+        
+        # 将所有 tags 合并为一个字符串用于匹配
+        tags_str = ' '.join(tags).lower()
+        
+        # 定义关键词到类别的映射
+        category_keywords = {
+            PreferenceCategory.FOOD: ['食物', '美食', '口味', '吃', '饮食', '餐', '菜', '零食', '甜品', '饮料', '咖啡', '茶'],
+            PreferenceCategory.DRINK: ['饮品', '饮料', '酒', '咖啡', '茶', '奶茶', '果汁'],
+            PreferenceCategory.MUSIC: ['音乐', '歌曲', '歌', '唱歌', '乐队', '专辑', 'j-pop', 'jpop', '摇滚', '流行'],
+            PreferenceCategory.MOVIE: ['电影', '影片', '观影', '院线'],
+            PreferenceCategory.GAME: ['游戏', '玩', 'galgame', 'rpg', 'jrpg', '攻略', '通关', '二次元游戏'],
+            PreferenceCategory.HOBBY: ['爱好', '兴趣', '娱乐', '休闲'],
+            PreferenceCategory.STYLE: ['风格', '傲娇', '毒舌', '互动', '性格', '态度'],
+            PreferenceCategory.ANIME: ['动漫', '动画', '番剧', '漫画', '二次元', 'vtuber', '声优', 'neuro', 'fake neuro'],
+            PreferenceCategory.BOOK: ['书', '阅读', '小说', '文学', '读书'],
+            PreferenceCategory.WORK: ['工作', '编程', 'python', 'ai', '代码', '开发'],
+            PreferenceCategory.SCHEDULE: ['日程', '时间', '计划', '安排'],
+            PreferenceCategory.PERSON: ['人物', '角色', '主播', 'up主'],
+            PreferenceCategory.PLACE: ['地点', '地方', '旅游', '城市'],
+            PreferenceCategory.COLOR: ['颜色', '色彩'],
+        }
+        
+        # 遍历检查每个类别的关键词
+        for category, keywords in category_keywords.items():
+            for keyword in keywords:
+                if keyword in tags_str:
+                    return category
+        
+        return PreferenceCategory.OTHER
+    
     async def load(self):
         """从存储加载偏好"""
         if self._loaded:
@@ -132,25 +166,45 @@ class PreferenceMemory:
         if self.vector_storage and self.vector_storage.is_available():
             results = self.vector_storage.get_all_memories(
                 user_id=self.user_id,
-                limit=500
+                limit=1000  # 增加限制以加载更多偏好
             )
             
             for result in results:
                 payload = result.get('payload', {})
                 if payload.get('memory_type') == 'preference':
                     try:
+                        # 优先使用 item 字段，如果不存在则使用 content 字段
+                        # （LLM 提取的偏好只有 content 字段，没有 item 字段）
+                        item_value = payload.get('item') or payload.get('content', '')
+                        if not item_value:
+                            logger.warning(f"偏好缺少 item/content 字段: {result['id']}")
+                            continue
+                        
+                        # 确定类别：优先使用 payload 中的 category，否则根据 tags 推断
+                        category_value = payload.get('category')
+                        if category_value and category_value != 'other':
+                            try:
+                                category = PreferenceCategory(category_value)
+                            except ValueError:
+                                category = PreferenceCategory.OTHER
+                        else:
+                            # 根据 tags 推断类别
+                            tags = payload.get('tags', [])
+                            category = self._infer_category_from_tags(tags)
+                        
                         pref = PreferenceItem(
                             id=result['id'],
-                            item=payload.get('item', ''),
-                            category=PreferenceCategory(payload.get('category', 'other')),
+                            item=item_value,
+                            category=category,
                             preference_type=PreferenceType(payload.get('preference_type', 'like')),
-                            strength=payload.get('strength', 0.8),
+                            strength=payload.get('strength', payload.get('importance', 0.8)),
                             confidence=payload.get('confidence', 0.8),
                             source_memory_ids=payload.get('source_memory_ids', []),
                             mention_count=payload.get('mention_count', 1),
                             entity_id=payload.get('entity_id')
                         )
-                        self.preferences[pref.item.lower()] = pref
+                        # 使用 ID 作为 key，避免 item 重复导致覆盖
+                        self.preferences[pref.id] = pref
                     except Exception as e:
                         logger.warning(f"加载偏好失败: {e}")
         
@@ -182,11 +236,17 @@ class PreferenceMemory:
         """
         await self.load()
         
-        key = item.lower()
+        # 查找是否已存在相同 item 的偏好（不区分大小写）
+        item_lower = item.lower()
+        existing_pref = None
+        for pref_id, p in self.preferences.items():
+            if p.item.lower() == item_lower:
+                existing_pref = p
+                break
         
-        if key in self.preferences:
+        if existing_pref:
             # 更新现有偏好
-            pref = self.preferences[key]
+            pref = existing_pref
             pref.mention_count += 1
             pref.last_mentioned_at = datetime.now()
             
@@ -211,7 +271,7 @@ class PreferenceMemory:
                 confidence=confidence,
                 source_memory_ids=[source_memory_id] if source_memory_id else []
             )
-            self.preferences[key] = pref
+            self.preferences[pref.id] = pref
         
         # 存储到向量库
         await self._save_preference(pref)
@@ -335,16 +395,10 @@ class PreferenceMemory:
         """删除偏好"""
         await self.load()
         
-        # 查找要删除的 key
-        target_key = None
-        for key, pref in self.preferences.items():
-            if pref.id == pref_id:
-                target_key = key
-                break
-        
-        if target_key:
+        # 现在 key 就是 pref_id，直接查找
+        if pref_id in self.preferences:
             # 从内存删除
-            del self.preferences[target_key]
+            del self.preferences[pref_id]
             
             # 从向量库删除
             if self.vector_storage:
@@ -393,9 +447,10 @@ class PreferenceMemory:
         
         prefs = []
         for result in results:
-            key = result.get('payload', {}).get('item', '').lower()
-            if key in self.preferences:
-                prefs.append(self.preferences[key])
+            # 使用 ID 查找，因为 preferences 现在用 ID 作为 key
+            pref_id = result.get('id')
+            if pref_id and pref_id in self.preferences:
+                prefs.append(self.preferences[pref_id])
         
         return prefs
     
@@ -408,10 +463,14 @@ class PreferenceMemory:
         
         # 按类别统计
         by_category = {}
+        categories = {}  # 添加 categories 字段，统计每个类别的数量（供 JS 工具使用）
         for pref in self.preferences.values():
             cat = pref.category.value
             if cat not in by_category:
                 by_category[cat] = {'likes': [], 'dislikes': []}
+                categories[cat] = 0
+            
+            categories[cat] += 1
             
             if pref.preference_type == PreferenceType.LIKE:
                 by_category[cat]['likes'].append(pref.item)
@@ -422,6 +481,8 @@ class PreferenceMemory:
             'total_count': len(self.preferences),
             'likes_count': len(likes),
             'dislikes_count': len(dislikes),
+            'category_count': len(categories),  # 添加类别数量字段（供 JS 工具使用）
+            'categories': categories,  # 添加类别分布字段（供 JS 工具使用）
             'top_likes': [p.item for p in sorted(likes, key=lambda x: x.strength, reverse=True)[:10]],
             'top_dislikes': [p.item for p in sorted(dislikes, key=lambda x: x.strength, reverse=True)[:5]],
             'by_category': by_category
