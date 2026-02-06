@@ -1526,6 +1526,117 @@ async def get_statistics():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def merge_memories_v2(keeper_id: str, content_a: str, content_b: str) -> bool:
+    """使用 LLM 智能合并两条相似记忆（适配 Qdrant 存储）
+    
+    将两条记忆的内容交给 LLM 融合，保留双方的独特信息，去除重复部分。
+    合并后更新保留方的 content 和 vector。
+    
+    Args:
+        keeper_id: 要保留的记忆 ID（合并后的内容写入这条）
+        content_a: 第一条记忆的内容
+        content_b: 第二条记忆的内容
+    
+    Returns:
+        True 表示合并成功，False 表示失败（两条均应保留）
+    """
+    global llm_config
+    
+    if not llm_config:
+        print("⚠️ LLM 未配置，无法合并记忆")
+        return False
+    
+    import aiohttp
+    
+    api_key = llm_config.get('api_key', '')
+    model = llm_config.get('model', '')
+    base_url = llm_config.get('base_url', '')
+    
+    if not all([api_key, model, base_url]):
+        print("⚠️ LLM 配置不完整，无法合并记忆")
+        return False
+    
+    prompt = f"""合并以下两条相似的记忆，保留所有有价值的信息，去除重复内容：
+
+已有记忆：{content_a}
+新增信息：{content_b}
+
+合并后的记忆（保留所有细节，用分号分隔要点）："""
+    
+    # 重试机制：最多 3 次，超时逐次增加
+    max_retries = 3
+    timeouts = [60, 90, 120]
+    
+    for attempt in range(max_retries):
+        try:
+            timeout_seconds = timeouts[attempt]
+            
+            async with aiohttp.ClientSession() as session:
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                payload = {
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 2000,
+                    "temperature": 0.2
+                }
+                
+                async with session.post(
+                    f"{base_url}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=timeout_seconds)
+                ) as response:
+                    if response.status == 200:
+                        result = await response.json()
+                        merged_content = result['choices'][0]['message']['content'].strip()
+                        
+                        # 生成新的 embedding
+                        new_vector = encode_text(merged_content)
+                        
+                        # 获取保留方的当前 payload
+                        full_mem = qdrant_client.get_memory(keeper_id)
+                        if not full_mem:
+                            print(f"⚠️ 找不到记忆 {keeper_id}，合并失败")
+                            return False
+                        
+                        keeper_payload = full_mem.get('payload', {})
+                        
+                        # 更新 payload
+                        keeper_payload['content'] = merged_content
+                        keeper_payload['updated_at'] = datetime.now().isoformat()
+                        keeper_payload['merge_count'] = keeper_payload.get('merge_count', 0) + 1
+                        
+                        # 写入 Qdrant
+                        qdrant_client.update_memory(keeper_id, keeper_payload, new_vector)
+                        
+                        # 更新 BM25 索引
+                        update_bm25_index(keeper_id, merged_content)
+                        
+                        print(f"   🤖 LLM合并成功 (第 {keeper_payload['merge_count']} 次): {merged_content[:50]}...")
+                        return True
+                    else:
+                        error_text = await response.text()
+                        print(f"⚠️ LLM API 返回错误 {response.status}: {error_text[:200]}")
+                        return False  # API 错误不重试
+                        
+        except asyncio.TimeoutError:
+            print(f"⚠️ LLM 合并超时 (第 {attempt + 1}/{max_retries} 次, {timeouts[attempt]}秒)")
+            if attempt < max_retries - 1:
+                print(f"   🔄 等待 5 秒后重试...")
+                await asyncio.sleep(5)
+        except Exception as e:
+            print(f"⚠️ LLM 合并异常: {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(3)
+    
+    print(f"❌ LLM 合并失败（已重试 {max_retries} 次），两条记忆均保留")
+    return False
+
+
 @app.post("/deduplicate")
 async def deduplicate_memories(
     threshold: float = 0.90,
@@ -1595,19 +1706,23 @@ async def deduplicate_memories(
                         similarity = float(cosine_similarity([emb_i], [emb_j])[0][0])
                         
                         if similarity >= threshold:
-                            # 保留重要度更高的
-                            imp_i = mem_i.get('importance', 0.5)
-                            imp_j = mem_j.get('importance', 0.5)
+                            print(f"   🔗 [{mem_type}] 发现相似记忆 (相似度: {similarity:.2%})")
+                            print(f"      记忆1: {mem_i.get('content', '')[:50]}...")
+                            print(f"      记忆2: {mem_j.get('content', '')[:50]}...")
                             
-                            if imp_i >= imp_j:
+                            # 使用 LLM 智能合并（保留双方独特信息）
+                            merge_success = await merge_memories_v2(
+                                keeper_id=mem_i['id'],
+                                content_a=mem_i.get('content', ''),
+                                content_b=mem_j.get('content', '')
+                            )
+                            
+                            if merge_success:
                                 deleted_ids.add(mem_j['id'])
-                                print(f"   🔗 [{mem_type}] 合并: {mem_j.get('content', '')[:30]}... → {mem_i.get('content', '')[:30]}...")
+                                merged_count += 1
+                                group_deleted += 1
                             else:
-                                deleted_ids.add(mem_i['id'])
-                                print(f"   🔗 [{mem_type}] 合并: {mem_i.get('content', '')[:30]}... → {mem_j.get('content', '')[:30]}...")
-                            
-                            merged_count += 1
-                            group_deleted += 1
+                                print(f"   ⏭️ [{mem_type}] LLM合并失败，两条均保留")
                 
                 if group_deleted > 0:
                     type_stats[mem_type] = group_deleted
@@ -1639,15 +1754,22 @@ async def deduplicate_memories(
                     similarity = float(cosine_similarity([emb_i], [emb_j])[0][0])
                     
                     if similarity >= threshold:
-                        imp_i = mem_i.get('importance', 0.5)
-                        imp_j = mem_j.get('importance', 0.5)
+                        print(f"   🔗 发现相似记忆 (相似度: {similarity:.2%})")
+                        print(f"      记忆1: {mem_i.get('content', '')[:50]}...")
+                        print(f"      记忆2: {mem_j.get('content', '')[:50]}...")
                         
-                        if imp_i >= imp_j:
+                        # 使用 LLM 智能合并（保留双方独特信息）
+                        merge_success = await merge_memories_v2(
+                            keeper_id=mem_i['id'],
+                            content_a=mem_i.get('content', ''),
+                            content_b=mem_j.get('content', '')
+                        )
+                        
+                        if merge_success:
                             deleted_ids.add(mem_j['id'])
+                            merged_count += 1
                         else:
-                            deleted_ids.add(mem_i['id'])
-                        
-                        merged_count += 1
+                            print(f"   ⏭️ LLM合并失败，两条均保留")
         
         # 删除重复记忆
         if deleted_ids:
