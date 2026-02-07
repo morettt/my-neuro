@@ -305,6 +305,7 @@ ipcMain.on('save-model-position', (event, position) => {
 
         configData.ui.model_position.x = position.x;
         configData.ui.model_position.y = position.y;
+        configData.ui.model_scale = position.scale;
 
         // 保存到文件
         fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
