@@ -87,14 +87,14 @@
   },
   "ui": {
     "intro_text": "你好啊",
-    "model_scale": 2.3,
-    "show_chat_box": false,
+    "model_scale": 0.25418658283290013,
+    "show_chat_box": true,
     "show_model": true,
     "text_only_mode": false,
     "auto_show_chat_on_text_mode": true,
     "model_position": {
-      "x": 1.3773444652557374,
-      "y": 0.741806140658762,
+      "x": 0.8061303983045026,
+      "y": 0.32777452724646294,
       "remember_position": true
     }
   },
