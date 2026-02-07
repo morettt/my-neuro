@@ -43,8 +43,9 @@ class UIController {
     setupChatBoxEvents() {
         const chatInput = document.getElementById('chat-input');
         const textChatContainer = document.getElementById('text-chat-container');
+        const submitBtn = document.getElementById('chat-send-btn');
 
-        if (!chatInput || !textChatContainer) return;
+        if (!chatInput || !textChatContainer || !submitBtn) return;
 
         textChatContainer.addEventListener('mouseenter', () => {
             ipcRenderer.send('set-ignore-mouse-events', {
@@ -73,6 +74,7 @@ class UIController {
                 options: { forward: true }
             });
         });
+        
     }
 
     // 显示字幕
@@ -424,27 +426,35 @@ class UIController {
     // 设置聊天框消息发送
     setupChatInput(voiceChat) {
         const chatInput = document.getElementById('chat-input');
-        if (!chatInput) return;
+        const chatSendBtn = document.getElementById('chat-send-btn');
 
-        chatInput.addEventListener('keypress', (e) => {
+        if (!chatInput || !chatSendBtn) return;
+
+        const handleSendMessage = () => {
+            const message = chatInput.textContent.trim();
+            if (!message) return;
+
+            const chatMessages = document.getElementById('chat-messages');
+            if (chatMessages) {
+                const messageElement = document.createElement('div');
+                messageElement.innerHTML = `<strong>你:</strong> ${message}`;
+                chatMessages.appendChild(messageElement);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            voiceChat.sendToLLM(message);
+            chatInput.textContent = '';
+        };
+
+        //新的Enter事件注册，不调用preventDefault，会换行
+        chatInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                const message = chatInput.value.trim();
-                if (message) {
-                    // 显示用户消息
-                    const chatMessages = document.getElementById('chat-messages');
-                    if (chatMessages) {
-                        const messageElement = document.createElement('div');
-                        messageElement.innerHTML = `<strong>你:</strong> ${message}`;
-                        chatMessages.appendChild(messageElement);
-                        chatMessages.scrollTop = chatMessages.scrollHeight;
-                    }
-
-                    // 发送给LLM处理
-                    voiceChat.sendToLLM(message);
-                    chatInput.value = '';
-                }
+                e.preventDefault();
+                handleSendMessage();
             }
         });
+
+        chatSendBtn.addEventListener('click', handleSendMessage);
     }
 
     // 显示歌词气泡
