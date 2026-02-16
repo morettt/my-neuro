@@ -12,12 +12,21 @@ class ScreenshotManager {
         const gatewayConfig = voiceChatInterface.config?.api_gateway || {};
         const bertConfig = voiceChatInterface.config?.bert || {};
 
-        if (gatewayConfig.use_gateway) {
+        const useBaiduASR = voiceChatInterface.config?.cloud?.baidu_asr?.enabled === true;
+
+        if (useBaiduASR) {
+            // 百度ASR不走BERT
+            this.bertEnabled = false;
+            this.bertUrl = null;
+            this.bertApiKey = null;
+        } else if (gatewayConfig.use_gateway) {
             this.bertUrl = `${gatewayConfig.base_url}/bert/classify`;
             this.bertApiKey = gatewayConfig.api_key || '';
+            this.bertEnabled = true;
         } else {
             this.bertUrl = bertConfig.url || 'http://127.0.0.1:6007/classify';
             this.bertApiKey = null;
+            this.bertEnabled = true;
         }
     }
 
@@ -58,6 +67,9 @@ class ScreenshotManager {
 
     // 统一调用BERT分类API的方法
     async callBertClassifier(text) {
+        if (!this.bertEnabled) {
+            return null;
+        }
         try {
             const headers = {
                 'Content-Type': 'application/json'
