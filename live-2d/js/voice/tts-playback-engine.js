@@ -89,6 +89,9 @@ class TTSPlaybackEngine {
                 const info = this.emotionMapper.prepareTextForTTS(segmentText);
                 processedText = info.text;
                 emotionMarkers = info.emotionMarkers;
+            } else {
+                // 无情绪映射器时，也要清理情绪标签
+                processedText = segmentText.replace(/<[^>]+>/g, '');
             }
 
             const segmentLength = processedText.length;

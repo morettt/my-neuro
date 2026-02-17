@@ -59,10 +59,26 @@ class EnhancedTextProcessor {
                     return;
                 }
 
+                // 清理后无实际文字内容的片段（纯情绪标签、纯标点等），直接跳过
+                const cleanedSegment = segment
+                    .replace(/<[^>]+>/g, '')
+                    .replace(/（.*?）|\(.*?\)/g, '')
+                    .replace(/\*.*?\*/g, '')
+                    .replace(/[,，。？?!！；;：:、…—\-\s]/g, '')
+                    .trim();
+                if (!cleanedSegment) {
+                    this.isProcessing = false;
+                    setTimeout(processNext, 50);
+                    return;
+                }
+
                 try {
                     const audioData = await this.requestHandler.convertTextToSpeech(segment);
                     if (audioData) {
                         this.audioDataQueue.push({ audio: audioData, text: segment });
+                    } else if (this.shouldStop) {
+                        // 被主动打断（abort），不标记为不可用
+                        return;
                     } else {
                         // 首次TTS失败，标记不可用，后续全部跳过
                         this.ttsUnavailable = true;
@@ -71,7 +87,7 @@ class EnhancedTextProcessor {
                     }
                 } catch (error) {
                     console.error('TTS处理错误:', error);
-                    this.ttsUnavailable = true;
+                    // 单个片段失败不标记整体不可用，只回退当前片段
                     this.appendFallbackText(segment);
                 }
 
@@ -257,6 +273,7 @@ class EnhancedTextProcessor {
         eventBus.emit(Events.TTS_INTERRUPTED);
 
         this.shouldStop = true;
+        this.ttsUnavailable = false;
         this.requestHandler.abortAllRequests();
         this.playbackEngine.stop();
 
