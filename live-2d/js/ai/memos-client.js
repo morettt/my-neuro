@@ -1,4 +1,5 @@
-// memos-client.js - MemOS 客户端封装
+// memos-client.js - MemOS 客户端封装 v2.0
+// 支持记忆管理 + 知识图谱
 const axios = require('axios');
 
 class MemosClient {
@@ -9,17 +10,22 @@ class MemosClient {
         this.injectTopK = config?.memos?.inject_top_k || 3;
         this.similarityThreshold = config?.memos?.similarity_threshold || 0.6;
         
-        // 🔥 新增：对话累积配置
-        this.saveInterval = config?.memos?.save_interval || 10;  // 每10轮保存一次
-        this.conversationBuffer = [];  // 对话缓存
-        this.roundCount = 0;  // 当前轮数计数
+        // 对话累积配置
+        this.saveInterval = config?.memos?.save_interval || 10;
+        this.conversationBuffer = [];
+        this.roundCount = 0;
         
-        console.log(`MemOS 客户端初始化: ${this.enabled ? '启用' : '禁用'}`);
+        // v2.0 新增：知识图谱配置
+        this.graphEnabled = config?.memos?.graph_enabled !== false;
+        this.autoExtractEntities = config?.memos?.auto_extract_entities || false;
+        
+        console.log(`MemOS v2.0 客户端初始化: ${this.enabled ? '启用' : '禁用'}`);
         if (this.enabled) {
             console.log(`  - API 地址: ${this.apiUrl}`);
             console.log(`  - 自动注入: ${this.autoInject}`);
             console.log(`  - 检索数量: ${this.injectTopK}`);
             console.log(`  - 保存间隔: 每 ${this.saveInterval} 轮`);
+            console.log(`  - 知识图谱: ${this.graphEnabled ? '启用' : '禁用'}`);
         }
     }
 
@@ -39,9 +45,10 @@ class MemosClient {
                 query: query,
                 top_k: topK || this.injectTopK,
                 user_id: "feiniu_default",
-                similarity_threshold: this.similarityThreshold  // 🔥 传递相似度阈值
+                similarity_threshold: this.similarityThreshold,
+                use_graph: this.graphEnabled  // 🔥 启用图谱增强搜索（实体关联 + 偏好权重加成）
             }, {
-                timeout: 3000  // 3秒超时
+                timeout: 5000  // 增加超时，因为综合搜索可能更慢
             });
 
             // 🔥 添加调试日志
@@ -239,6 +246,262 @@ class MemosClient {
         } catch (error) {
             console.warn('MemOS 服务不可用:', error.message);
             return false;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //                    v2.0 知识图谱功能
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * 获取图谱统计信息
+     * @returns {Promise<Object>} 包含 entity_count, relation_count 等
+     */
+    async getGraphStats() {
+        if (!this.enabled || !this.graphEnabled) {
+            return { status: 'disabled' };
+        }
+
+        try {
+            const response = await axios.get(`${this.apiUrl}/graph/stats`, {
+                timeout: 3000
+            });
+            return response.data;
+        } catch (error) {
+            console.error('获取图谱统计失败:', error.message);
+            return { status: 'error', message: error.message };
+        }
+    }
+
+    /**
+     * 添加实体到知识图谱
+     * @param {string} name - 实体名称
+     * @param {string} entityType - 实体类型 (person, food, place, hobby, profession 等)
+     * @param {Object} properties - 附加属性
+     * @returns {Promise<Object>} 包含 entity_id
+     */
+    async addEntity(name, entityType, properties = {}) {
+        if (!this.enabled || !this.graphEnabled) {
+            return { status: 'disabled' };
+        }
+
+        try {
+            const response = await axios.post(`${this.apiUrl}/graph/entity`, {
+                name: name,
+                entity_type: entityType,
+                properties: properties,
+                user_id: "feiniu_default"
+            }, {
+                timeout: 5000
+            });
+            console.log(`🕸️ 添加实体: ${name} (${entityType})`);
+            return response.data;
+        } catch (error) {
+            console.error('添加实体失败:', error.message);
+            return { status: 'error', message: error.message };
+        }
+    }
+
+    /**
+     * 添加关系到知识图谱
+     * @param {string} sourceId - 源实体 ID
+     * @param {string} targetId - 目标实体 ID
+     * @param {string} relationType - 关系类型 (likes, knows, works_as 等)
+     * @param {Object} properties - 关系属性
+     * @returns {Promise<Object>}
+     */
+    async addRelation(sourceId, targetId, relationType, properties = {}) {
+        if (!this.enabled || !this.graphEnabled) {
+            return { status: 'disabled' };
+        }
+
+        try {
+            const response = await axios.post(`${this.apiUrl}/graph/relation`, {
+                source_id: sourceId,
+                target_id: targetId,
+                relation_type: relationType,
+                properties: properties
+            }, {
+                timeout: 5000
+            });
+            console.log(`🔗 添加关系: ${relationType}`);
+            return response.data;
+        } catch (error) {
+            console.error('添加关系失败:', error.message);
+            return { status: 'error', message: error.message };
+        }
+    }
+
+    /**
+     * 查找实体（按名称模糊匹配）
+     * @param {string} name - 实体名称
+     * @returns {Promise<Array>} 实体列表
+     */
+    async findEntity(name) {
+        if (!this.enabled || !this.graphEnabled) {
+            return [];
+        }
+
+        try {
+            const response = await axios.get(`${this.apiUrl}/graph/entities`, {
+                params: { user_id: "feiniu_default" },
+                timeout: 3000
+            });
+            
+            const entities = response.data.entities || [];
+            // 客户端过滤匹配的实体
+            const nameLower = name.toLowerCase();
+            return entities.filter(e => 
+                e.name.toLowerCase().includes(nameLower) || 
+                nameLower.includes(e.name.toLowerCase())
+            );
+        } catch (error) {
+            console.error('查找实体失败:', error.message);
+            return [];
+        }
+    }
+
+    /**
+     * 查找实体的相关实体（多跳查询）
+     * @param {string} entityId - 实体 ID
+     * @param {number} maxDepth - 最大深度
+     * @returns {Promise<Array>} 相关实体列表
+     */
+    async findRelatedEntities(entityId, maxDepth = 2) {
+        if (!this.enabled || !this.graphEnabled) {
+            return [];
+        }
+
+        try {
+            const response = await axios.post(
+                `${this.apiUrl}/graph/query/related`,
+                null,
+                {
+                    params: { entity_id: entityId, max_depth: maxDepth },
+                    timeout: 5000
+                }
+            );
+            return response.data.related || [];
+        } catch (error) {
+            console.error('查找相关实体失败:', error.message);
+            return [];
+        }
+    }
+
+    /**
+     * 获取实体的所有关系
+     * @param {string} entityId - 实体 ID
+     * @returns {Promise<Array>} 关系列表
+     */
+    async getEntityRelations(entityId) {
+        if (!this.enabled || !this.graphEnabled) {
+            return [];
+        }
+
+        try {
+            const response = await axios.get(
+                `${this.apiUrl}/graph/entity/${entityId}/relations`,
+                { timeout: 3000 }
+            );
+            return response.data.relations || [];
+        } catch (error) {
+            console.error('获取实体关系失败:', error.message);
+            return [];
+        }
+    }
+
+    /**
+     * 格式化图谱信息为 prompt 文本
+     * @param {string} query - 用户查询
+     * @returns {Promise<string>} 格式化后的图谱上下文
+     */
+    async getGraphContextForPrompt(query) {
+        if (!this.enabled || !this.graphEnabled) {
+            return '';
+        }
+
+        try {
+            // 1. 从查询中提取可能的实体名称（简单分词）
+            const keywords = query.split(/[\s,，。！？!?]+/).filter(w => w.length >= 2);
+            
+            let graphContext = [];
+            
+            for (const keyword of keywords.slice(0, 3)) {  // 最多检查3个关键词
+                const entities = await this.findEntity(keyword);
+                
+                for (const entity of entities.slice(0, 2)) {  // 每个关键词最多2个实体
+                    // 获取实体的关系
+                    const relations = await this.getEntityRelations(entity.id);
+                    
+                    if (relations.length > 0) {
+                        const relStr = relations.map(r => {
+                            const dir = r.direction === 'out' ? '→' : '←';
+                            return `${dir}[${r.relation_type}]`;
+                        }).join(', ');
+                        
+                        graphContext.push(`${entity.name}(${entity.entity_type}): ${relStr}`);
+                    }
+                }
+            }
+            
+            if (graphContext.length > 0) {
+                return `\n【知识图谱】\n${graphContext.join('\n')}`;
+            }
+            
+            return '';
+        } catch (error) {
+            console.error('获取图谱上下文失败:', error.message);
+            return '';
+        }
+    }
+
+    /**
+     * 获取完整上下文（记忆 + 图谱）
+     * @param {string} query - 用户查询
+     * @returns {Promise<string>} 完整的记忆和图谱上下文
+     */
+    async getFullContextForPrompt(query) {
+        let context = '';
+        
+        // 1. 获取相关记忆
+        const memories = await this.search(query);
+        if (memories.length > 0) {
+            context += `【相关记忆】\n${this.formatMemoriesForPrompt(memories)}`;
+        }
+        
+        // 2. 获取图谱上下文
+        if (this.graphEnabled) {
+            const graphContext = await this.getGraphContextForPrompt(query);
+            if (graphContext) {
+                context += graphContext;
+            }
+        }
+        
+        return context;
+    }
+
+    /**
+     * 获取系统完整状态
+     * @returns {Promise<Object>}
+     */
+    async getSystemStatus() {
+        try {
+            const [health, stats, graphStats] = await Promise.all([
+                axios.get(`${this.apiUrl}/health`, { timeout: 2000 }).then(r => r.data).catch(() => null),
+                axios.get(`${this.apiUrl}/stats`, { timeout: 2000 }).then(r => r.data).catch(() => null),
+                axios.get(`${this.apiUrl}/graph/stats`, { timeout: 2000 }).then(r => r.data).catch(() => null)
+            ]);
+
+            return {
+                online: health?.status === 'healthy',
+                memory_count: stats?.total_count || 0,
+                entity_count: graphStats?.entity_count || 0,
+                relation_count: graphStats?.relation_count || 0,
+                qdrant_available: health?.qdrant_available || false,
+                graph_available: health?.neo4j_available || false
+            };
+        } catch (error) {
+            return { online: false, error: error.message };
         }
     }
 }
