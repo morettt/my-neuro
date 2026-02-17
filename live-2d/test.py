@@ -2467,6 +2467,13 @@ class set_pyqt(QWidget):
             self.ui.comboBox_cloud_tts_format.setCurrentIndex(format_index)
         self.ui.doubleSpinBox_cloud_tts_speed.setValue(cloud_tts.get('speed', 1.0))
 
+        # 阿里云TTS配置
+        aliyun_tts = cloud_config.get('aliyun_tts', {})
+        self.ui.checkBox_aliyun_tts_enabled.setChecked(aliyun_tts.get('enabled', False))
+        self.ui.lineEdit_aliyun_tts_api_key.setText(aliyun_tts.get('api_key', ''))
+        self.ui.lineEdit_aliyun_tts_model.setText(aliyun_tts.get('model', 'cosyvoice-v3-flash'))
+        self.ui.lineEdit_aliyun_tts_voice.setText(aliyun_tts.get('voice', ''))
+
         # 百度流式ASR配置
         baidu_asr = cloud_config.get('baidu_asr', {})
         self.ui.checkBox_cloud_asr_enabled.setChecked(baidu_asr.get('enabled', False))
@@ -2947,6 +2954,14 @@ class set_pyqt(QWidget):
         current_config['cloud']['tts']['voice'] = self.ui.lineEdit_cloud_tts_voice.text()
         current_config['cloud']['tts']['response_format'] = self.ui.comboBox_cloud_tts_format.currentText()
         current_config['cloud']['tts']['speed'] = self.ui.doubleSpinBox_cloud_tts_speed.value()
+
+        # 保存阿里云TTS配置
+        if 'aliyun_tts' not in current_config['cloud']:
+            current_config['cloud']['aliyun_tts'] = {}
+        current_config['cloud']['aliyun_tts']['enabled'] = self.ui.checkBox_aliyun_tts_enabled.isChecked()
+        current_config['cloud']['aliyun_tts']['api_key'] = self.ui.lineEdit_aliyun_tts_api_key.text()
+        current_config['cloud']['aliyun_tts']['model'] = self.ui.lineEdit_aliyun_tts_model.text() or 'cosyvoice-v3-flash'
+        current_config['cloud']['aliyun_tts']['voice'] = self.ui.lineEdit_aliyun_tts_voice.text()
 
         # 保存百度流式ASR配置
         if 'baidu_asr' not in current_config['cloud']:

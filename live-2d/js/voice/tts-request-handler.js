@@ -2,6 +2,8 @@
 // 职责：文本翻译、TTS API调用、文本分段
 
 const { logToTerminal } = require('../api-utils.js');
+const WebSocket = require('ws');
+const { randomUUID } = require('crypto');
 
 class TTSRequestHandler {
     constructor(config, ttsUrl) {
@@ -19,6 +21,17 @@ class TTSRequestHandler {
             this.apiKey = null;
             this.useGateway = false;
         }
+
+        // 阿里云TTS配置
+        const aliyunTts = config.cloud?.aliyun_tts || {};
+        this.aliyunTtsEnabled = aliyunTts.enabled || false;
+        this.aliyunApiKey = aliyunTts.api_key || "";
+        this.aliyunModel = aliyunTts.model || "cosyvoice-v3-flash";
+        this.aliyunVoice = aliyunTts.voice || "";
+        this.aliyunSampleRate = aliyunTts.sample_rate || 48000;
+        this.aliyunVolume = aliyunTts.volume ?? 50;
+        this.aliyunRate = aliyunTts.rate ?? 1;
+        this.aliyunPitch = aliyunTts.pitch ?? 1;
 
         // 云服务商配置（SiliconFlow等，保留兼容）
         this.cloudTtsEnabled = config.cloud?.tts?.enabled || false;
@@ -90,11 +103,20 @@ class TTSRequestHandler {
                 .replace(/（.*?）|\(.*?\)/g, '')
                 .replace(/\*.*?\*/g, '');
 
+            // 清理后无实际文字内容则跳过（纯标点、空白等）
+            const hasContent = textForTTS.replace(/[,，。？?!！；;：:、…—\-\s]/g, '').trim();
+            if (!hasContent) return null;
+
             // 翻译
             const finalTextForTTS = await this.translateText(textForTTS);
 
             // 调用TTS API
-            if (this.cloudTtsEnabled) {
+            if (this.aliyunTtsEnabled) {
+                // 阿里云TTS（WebSocket模式）
+                const audioBuffer = await this.aliyunSynthesize(finalTextForTTS, controller.signal);
+                if (!audioBuffer) return null;
+                return new Blob([audioBuffer], { type: 'audio/wav' });
+            } else if (this.cloudTtsEnabled) {
                 // 云服务商模式（SiliconFlow等）
                 const response = await fetch(this.cloudTtsUrl, {
                     method: 'POST',
@@ -189,6 +211,100 @@ class TTSRequestHandler {
         if (currentSegment.trim()) {
             queue.push(currentSegment);
         }
+    }
+
+    // 阿里云TTS WebSocket合成
+    aliyunSynthesize(text, abortSignal) {
+        return new Promise((resolve, reject) => {
+            const taskId = randomUUID();
+            const audioChunks = [];
+            let settled = false;
+
+            const ws = new WebSocket('wss://dashscope.aliyuncs.com/api-ws/v1/inference/', {
+                headers: { 'Authorization': `bearer ${this.aliyunApiKey}` }
+            });
+
+            // 支持 AbortController 取消
+            const onAbort = () => {
+                if (!settled) {
+                    settled = true;
+                    ws.close();
+                    resolve(null);
+                }
+            };
+            if (abortSignal) {
+                if (abortSignal.aborted) { resolve(null); return; }
+                abortSignal.addEventListener('abort', onAbort, { once: true });
+            }
+
+            const cleanup = () => {
+                if (abortSignal) abortSignal.removeEventListener('abort', onAbort);
+            };
+
+            ws.on('open', () => {
+                ws.send(JSON.stringify({
+                    header: { action: 'run-task', task_id: taskId, streaming: 'duplex' },
+                    payload: {
+                        task_group: 'audio', task: 'tts', function: 'SpeechSynthesizer',
+                        model: this.aliyunModel,
+                        parameters: {
+                            text_type: 'PlainText',
+                            voice: this.aliyunVoice,
+                            format: 'wav',
+                            sample_rate: this.aliyunSampleRate,
+                            volume: this.aliyunVolume,
+                            rate: this.aliyunRate,
+                            pitch: this.aliyunPitch
+                        },
+                        input: {}
+                    }
+                }));
+            });
+
+            ws.on('message', (data, isBinary) => {
+                if (settled) return;
+
+                if (isBinary) {
+                    audioChunks.push(data);
+                    return;
+                }
+
+                const msg = JSON.parse(data.toString());
+                const event = msg?.header?.event;
+
+                if (event === 'task-started') {
+                    ws.send(JSON.stringify({
+                        header: { action: 'continue-task', task_id: taskId, streaming: 'duplex' },
+                        payload: { input: { text } }
+                    }));
+                    ws.send(JSON.stringify({
+                        header: { action: 'finish-task', task_id: taskId, streaming: 'duplex' },
+                        payload: { input: {} }
+                    }));
+                } else if (event === 'task-finished') {
+                    settled = true;
+                    cleanup();
+                    ws.close();
+                    resolve(Buffer.concat(audioChunks));
+                } else if (event === 'task-failed') {
+                    settled = true;
+                    cleanup();
+                    ws.close();
+                    const errMsg = `阿里云TTS失败: ${JSON.stringify(msg)}`;
+                    logToTerminal('error', errMsg);
+                    reject(new Error(errMsg));
+                }
+            });
+
+            ws.on('error', (err) => {
+                if (!settled) {
+                    settled = true;
+                    cleanup();
+                    logToTerminal('error', `阿里云TTS WebSocket错误: ${err.message}`);
+                    reject(err);
+                }
+            });
+        });
     }
 
     // 中止所有请求
