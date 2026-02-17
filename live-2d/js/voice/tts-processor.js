@@ -21,6 +21,13 @@ class EnhancedTextProcessor {
         this.shouldStop = false;
         this.llmFullResponse = '';
 
+        // TTS不可用标记：第一次失败后跳过后续所有TTS请求
+        this.ttsUnavailable = false;
+
+        // 回退字幕状态
+        this.fallbackDisplayText = '';
+        this._fallbackTimer = null;
+
         // 🔥 TTS完成Promise（用于等待播放完成）
         this.completionPromise = null;
         this.completionResolve = null;
@@ -44,13 +51,28 @@ class EnhancedTextProcessor {
                 this.isProcessing = true;
                 const segment = this.textSegmentQueue.shift();
 
+                // TTS已标记不可用，直接走回退显示，不再浪费时间请求
+                if (this.ttsUnavailable) {
+                    this.appendFallbackText(segment);
+                    this.isProcessing = false;
+                    setTimeout(processNext, 50);
+                    return;
+                }
+
                 try {
                     const audioData = await this.requestHandler.convertTextToSpeech(segment);
                     if (audioData) {
                         this.audioDataQueue.push({ audio: audioData, text: segment });
+                    } else {
+                        // 首次TTS失败，标记不可用，后续全部跳过
+                        this.ttsUnavailable = true;
+                        console.log('TTS服务不可用，切换为字幕回退模式');
+                        this.appendFallbackText(segment);
                     }
                 } catch (error) {
                     console.error('TTS处理错误:', error);
+                    this.ttsUnavailable = true;
+                    this.appendFallbackText(segment);
                 }
 
                 this.isProcessing = false;
@@ -77,11 +99,16 @@ class EnhancedTextProcessor {
                 }
             }
             else {
-                // 当“没音频（可能是TTS全失败了，或者还在处理中）”且“还有一个未完成的Promise”时，手动触发结束
-                // this.completionPromise 不为空说明当前正处于一个“未完结”的对话任务中
+                // 当"没音频（可能是TTS全失败了，或者还在处理中）"且"还有一个未完成的Promise"时，手动触发结束
+                // this.completionPromise 不为空说明当前正处于一个"未完结"的对话任务中
                 if (this.isAllComplete() && this.completionPromise) {
-                    console.log('检测到队列为空但任务未结束（可能是TTS失败），强制结束');
-                    this.handleAllComplete();
+                    // 如果有回退文本还在打字中，等打字机跑完再结束
+                    if (this._fallbackTimer) {
+                        // 还在打字，不要急着结束
+                    } else {
+                        console.log('检测到队列为空但任务未结束（可能是TTS失败），强制结束');
+                        this.handleAllComplete();
+                    }
                 }
             }
 
@@ -99,11 +126,51 @@ class EnhancedTextProcessor {
                this.requestHandler.getPendingSegment().trim() === '';
     }
 
+    // 回退模式：累积文本并启动打字机动画
+    appendFallbackText(segmentText) {
+        // 把新文本追加到待显示队列
+        if (!this._fallbackQueue) this._fallbackQueue = [];
+        this._fallbackQueue.push(...[...segmentText]);
+
+        // 如果打字机已经在跑，新字符会自动被消费
+        if (!this._fallbackTimer) {
+            this.startFallbackTypewriter();
+        }
+    }
+
+    // 打字机动画：从队列中逐字消费
+    startFallbackTypewriter() {
+        const label = this.config.subtitle_labels?.ai || 'Fake Neuro';
+        const charInterval = 180; // 180ms一个字
+
+        const typeNext = () => {
+            if (this.shouldStop) {
+                this._fallbackTimer = null;
+                return;
+            }
+
+            if (this._fallbackQueue && this._fallbackQueue.length > 0) {
+                this.fallbackDisplayText += this._fallbackQueue.shift();
+                if (typeof showSubtitle === 'function') {
+                    showSubtitle(`${label}: ${this.fallbackDisplayText}`);
+                }
+                this._fallbackTimer = setTimeout(typeNext, charInterval);
+            } else {
+                // 队列空了，停下来等新字符进来
+                this._fallbackTimer = null;
+            }
+        };
+
+        this._fallbackTimer = setTimeout(typeNext, charInterval);
+    }
+
     // 全部完成的处理
     handleAllComplete() {
+        // 如果有回退字幕，停留3秒让用户看完
+        const hideDelay = this.fallbackDisplayText ? 3000 : 1000;
         setTimeout(() => {
             if (typeof hideSubtitle === 'function') hideSubtitle();
-        }, 1000);
+        }, hideDelay);
 
         if (this.playbackEngine.onEndCallback) {
             this.playbackEngine.onEndCallback();
@@ -158,10 +225,18 @@ class EnhancedTextProcessor {
     // 重置
     reset() {
         this.llmFullResponse = '';
+        this.fallbackDisplayText = '';
+        this._fallbackQueue = [];
+        if (this._fallbackTimer) {
+            clearTimeout(this._fallbackTimer);
+            this._fallbackTimer = null;
+        }
         this.textSegmentQueue = [];
         this.audioDataQueue = [];
         this.isProcessing = false;
         this.shouldStop = false;
+
+        // 注意：不重置 ttsUnavailable，避免每次对话都重新尝试失败的TTS
 
         // 🔥 取消之前的完成Promise
         if (this.completionResolve) {
@@ -187,6 +262,11 @@ class EnhancedTextProcessor {
 
         this.textSegmentQueue = [];
         this.audioDataQueue = [];
+        this._fallbackQueue = [];
+        if (this._fallbackTimer) {
+            clearTimeout(this._fallbackTimer);
+            this._fallbackTimer = null;
+        }
         this.llmFullResponse = '';
         this.isProcessing = false;
 
