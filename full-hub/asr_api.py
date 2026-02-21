@@ -95,6 +95,30 @@ model_state = {
     "punc_model": None
 }
 
+# 热词配置
+HOTWORD_FILE = os.path.join(os.path.dirname(__file__), "hotwords.txt")
+hotword_state = {
+    "hotwords": ""
+}
+
+
+def load_hotwords():
+    """从 hotwords.txt 加载热词，格式：每行一个 '词语 权重'"""
+    if not os.path.exists(HOTWORD_FILE):
+        print(f"热词文件不存在: {HOTWORD_FILE}，将不使用热词")
+        hotword_state["hotwords"] = ""
+        return
+
+    try:
+        with open(HOTWORD_FILE, "r", encoding="utf-8") as f:
+            lines = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+        hotword_str = " ".join(lines)
+        hotword_state["hotwords"] = hotword_str
+        print(f"已加载 {len(lines)} 个热词: {hotword_str}")
+    except Exception as e:
+        print(f"加载热词文件失败: {e}")
+        hotword_state["hotwords"] = ""
+
 
 def download_vad_models():
     """下载asr的vad"""
@@ -158,12 +182,14 @@ async def startup_event():
     os.environ['MODELSCOPE_CACHE'] = asr_model_path
     os.environ['FUNASR_HOME'] = MODEL_DIR
 
-    # 加载ASR模型
-    print("正在加载ASR模型...")
+    # 加载热词
+    load_hotwords()
+
+    # 加载ASR模型（SeACo-Paraformer，支持热词）
+    print("正在加载ASR模型（paraformer-zh，支持热词）...")
     model_state["asr_model"] = AutoModel(
-        model="iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+        model="paraformer-zh",
         device=device,
-        model_type="pytorch",
         dtype="float32"
     )
     print("ASR模型加载完成")
@@ -257,11 +283,14 @@ async def upload_audio(file: UploadFile = File(...)):
 
         # 进行ASR处理 - 直接传入音频数组
         with torch.no_grad():
-            # 语音识别 - 传入 numpy 数组而不是文件路径
-            asr_result = model_state["asr_model"].generate(
-                input=audio_data,  # 直接传入音频数组！
-                dtype="float32"
-            )
+            generate_kwargs = {
+                "input": audio_data,
+                "dtype": "float32"
+            }
+            if hotword_state["hotwords"]:
+                generate_kwargs["hotword"] = hotword_state["hotwords"]
+
+            asr_result = model_state["asr_model"].generate(**generate_kwargs)
 
             # 添加标点符号
             if asr_result and len(asr_result) > 0:
@@ -289,6 +318,25 @@ async def upload_audio(file: UploadFile = File(...)):
             "status": "error",
             "message": str(e)
         }
+
+
+@app.get("/hotwords")
+def get_hotwords():
+    """查看当前热词"""
+    return {
+        "hotwords": hotword_state["hotwords"],
+        "file": HOTWORD_FILE
+    }
+
+
+@app.post("/hotwords/reload")
+def reload_hotwords():
+    """重新加载热词文件"""
+    load_hotwords()
+    return {
+        "status": "success",
+        "hotwords": hotword_state["hotwords"]
+    }
 
 
 @app.get("/vad/status")
