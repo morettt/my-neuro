@@ -72,6 +72,19 @@ class ToolExecutor {
                 }
             }
 
+            // 如果MCP和本地都没处理，尝试插件工具
+            if (!toolResult && global.pluginManager) {
+                try {
+                    const pluginResult = await global.pluginManager.executeTool(functionName, parameters);
+                    if (pluginResult !== undefined) {
+                        toolResult = pluginResult;
+                        hasToolExecuted = true;
+                    }
+                } catch (error) {
+                    logToolAction('error', `插件工具 ${functionName} 执行失败: ${error.message}`);
+                }
+            }
+
             // 如果工具执行成功，添加结果
             if (toolResult) {
                 // 🔥 特殊处理截图工具的返回值

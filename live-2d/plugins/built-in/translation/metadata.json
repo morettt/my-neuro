@@ -1,0 +1,8 @@
+{
+  "name": "translation",
+  "displayName": "同声传译",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "将送入TTS的文本翻译为目标语言，字幕保持原文不变",
+  "main": "index.js"
+}

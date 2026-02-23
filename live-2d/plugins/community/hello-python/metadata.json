@@ -1,0 +1,9 @@
+{
+  "name": "hello-python",
+  "displayName": "Python 示例插件",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "演示 Python 插件写法的示例",
+  "lang": "python",
+  "main": "index.py"
+}

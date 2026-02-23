@@ -1,0 +1,8 @@
+{
+  "name": "time-awareness",
+  "displayName": "时间感知",
+  "version": "1.0.0",
+  "author": "community",
+  "description": "肥牛会注意到时间，在特定时段主动开口",
+  "main": "index.js"
+}

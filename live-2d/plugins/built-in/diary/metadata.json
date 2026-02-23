@@ -1,0 +1,10 @@
+{
+  "name": "diary",
+  "displayName": "AI 日记",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "闲置一段时间后自动让 AI 写日记，TTS 结束时重置计时器",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

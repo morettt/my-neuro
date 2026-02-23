@@ -1,0 +1,8 @@
+{
+  "name": "context-compressor",
+  "displayName": "上下文压缩",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "对话超过阈值时自动压缩旧消息，节省token",
+  "main": "index.js"
+}
