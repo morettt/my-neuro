@@ -1,0 +1,10 @@
+{
+  "name": "auto-chat",
+  "displayName": "自动对话模块",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "空闲时自动发起对话，可配置触发间隔",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

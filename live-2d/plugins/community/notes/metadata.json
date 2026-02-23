@@ -1,0 +1,9 @@
+{
+  "name": "notes",
+  "displayName": "备忘录",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "让 AI 帮你记备忘，支持保存、查看、删除，数据持久化到本地文件",
+  "lang": "python",
+  "main": "index.py"
+}

@@ -8,7 +8,6 @@ const { DiaryManager } = require('../DiaryManager.js');
 const { ScreenshotManager } = require('../ScreenshotManager.js');
 const { GameIntegration } = require('../GameIntegration.js');
 const { ContextManager } = require('../ContextManager.js');
-const { ContextCompressor } = require('../ContextCompressor.js');
 const { MemosClient } = require('../memos-client.js');
 
 /**
@@ -79,8 +78,6 @@ class VoiceChatFacade {
         this.memoryManager = new MemoryManager(this);
         this.diaryManager = new DiaryManager(this);
         this.screenshotManager = new ScreenshotManager(this);
-        this.contextCompressor = new ContextCompressor(this, this.config);
-        
         // 创建MemOS客户端
         this.memosClient = new MemosClient(this.config);
 
@@ -89,7 +86,7 @@ class VoiceChatFacade {
             this.conversationCore,
             this.gameIntegration,
             this.memoryManager,
-            this.contextCompressor,
+            null,
             this.memosClient,
             this.config
         );
@@ -145,8 +142,8 @@ class VoiceChatFacade {
                 this.trimMessages();
             }
 
-            // 启动AI日记定时器
-            if (this.aiDiaryEnabled) {
+            // 启动AI日记定时器（diary 插件存在时由插件接管，此处不重复启动）
+            if (this.aiDiaryEnabled && !global.pluginManager?.getPlugin('diary')) {
                 this.startDiaryTimer();
             }
 

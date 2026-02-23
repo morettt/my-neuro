@@ -1,0 +1,10 @@
+{
+  "name": "memory",
+  "displayName": "记忆系统",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "用户说话时通过 BERT 判断是否包含核心记忆，是则用 LLM 总结后保存到文件",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

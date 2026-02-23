@@ -173,6 +173,11 @@ class LLMHandler {
                         }
                     }
 
+                    // 触发插件 onLLMRequest 钩子（插件可修改 messages）
+                    if (global.pluginManager) {
+                        await global.pluginManager.runLLMRequestHooks({ messages: messagesForAPI, tools: allTools }).catch(() => {});
+                    }
+
                     // 使用统一的LLM客户端
                     // 🔍 如果是第一轮且有用户截图且启用了视觉模型，使用视觉模型客户端
                     let result;
@@ -634,25 +639,28 @@ class LLMHandler {
 
                     // ===== 保存对话历史 =====
                     voiceChat.saveConversationHistory();
-                    
-                    // ===== MemOS: 异步保存对话到记忆系统 =====
-                    if (voiceChat.memosClient && voiceChat.config?.memos?.enabled) {
-                        const messages = [
-                            { role: 'user', content: prompt },
-                            { role: 'assistant', content: finalResponseContent }
-                        ];
-                        voiceChat.memosClient.addWithBuffer(messages).catch(err => {
-                            console.error('MemOS保存对话失败:', err);
-                        });
-                    }
+                    // MemOS 保存由 memos 插件的 onLLMResponse 钩子处理
 
                     // 🎙️ 播放最终回复的TTS（统一在这里播放，参考旧版本的设计）
                     console.log('✅ 最终回复已处理完成，开始播放TTS');
+
+                    // 触发插件 onLLMResponse 钩子（插件可修改 responseObj.text，影响 TTS 内容）
+                    const responseObj = { text: finalResponseContent };
+                    if (global.pluginManager) {
+                        await global.pluginManager.runLLMResponseHooks(responseObj).catch(() => {});
+                    }
+
                     if (iteration === 0) {
                         // 如果没有中间过程,才reset
                         ttsProcessor.reset();
                     }
-                    ttsProcessor.processTextToSpeech(finalResponseContent);
+
+                    // 触发插件 onTTSStart 钩子
+                    if (global.pluginManager) {
+                        await global.pluginManager.runTTSStartHooks(responseObj.text).catch(() => {});
+                    }
+
+                    ttsProcessor.processTextToSpeech(responseObj.text);
                 } else {
                     logToTerminal('error', '❌ 未获取到有效的AI回复');
 
