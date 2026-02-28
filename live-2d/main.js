@@ -6,8 +6,10 @@ const { ModelPathUpdater } = require('./js/model/model-path-updater')
 const { ShortcutManager } = require('./js/shortcut-manager')
 const screenshot = require('screenshot-desktop');
 
-// 添加配置文件路径
-const configPath = path.join(app.getAppPath(), 'config.json');
+const { SimpleYAML } = require('./js/core/config-loader');
+
+const configPath = path.join(app.getAppPath(), 'config.yaml');
+const jsonConfigPath = path.join(app.getAppPath(), 'config.json');
 
 // Live2D模型优先级配置（Python程序会修改这个列表来切换模型）
 const priorityFolders = ['肥牛', 'Hiyouri', 'Default', 'Main'];
@@ -122,6 +124,153 @@ ipcMain.on('request-top-most', (event) => {
     win.setAlwaysOnTop(true, 'screen-saver')
 })
 
+/**
+ * 读取配置文件（支持 YAML 和 JSON）
+ * @returns {Object} 配置对象
+ */
+function loadConfigFile() {
+    if (fs.existsSync(configPath)) {
+        const content = fs.readFileSync(configPath, 'utf8');
+        return SimpleYAML.parse(content);
+    } else if (fs.existsSync(jsonConfigPath)) {
+        const content = fs.readFileSync(jsonConfigPath, 'utf8');
+        const config = JSON.parse(content);
+        migrateConfigToYaml(config);
+        return config;
+    }
+    return {};
+}
+
+/**
+ * 保存配置到 YAML 文件，保留注释
+ * @param {Object} configData - 配置数据
+ */
+function saveConfigToYaml(configData) {
+    if (fs.existsSync(configPath)) {
+        const existingContent = fs.readFileSync(configPath, 'utf8');
+        const newContent = updateYamlPreserveComments(existingContent, configData);
+        fs.writeFileSync(configPath, newContent, 'utf8');
+    } else {
+        const yamlContent = SimpleYAML.stringify(configData);
+        fs.writeFileSync(configPath, yamlContent, 'utf8');
+    }
+}
+
+/**
+ * 更新 YAML 内容但保留注释
+ * @param {string} existingContent - 现有的 YAML 内容
+ * @param {Object} newConfig - 新的配置对象
+ * @returns {string} 更新后的 YAML 内容
+ */
+function updateYamlPreserveComments(existingContent, newConfig) {
+    const lines = existingContent.split('\n');
+    const resultLines = [];
+    
+    const currentPath = [];
+    const indentStack = [-1];
+    
+    for (const line of lines) {
+        const stripped = line.trimStart();
+        
+        if (!stripped || stripped.startsWith('#')) {
+            resultLines.push(line);
+            continue;
+        }
+        
+        const currentIndent = line.length - stripped.length;
+        
+        while (indentStack.length > 0 && currentIndent <= indentStack[indentStack.length - 1]) {
+            if (currentPath.length > 0) {
+                currentPath.pop();
+            }
+            indentStack.pop();
+        }
+        
+        if (stripped.includes(':')) {
+            const colonPos = stripped.indexOf(':');
+            const key = stripped.substring(0, colonPos).trim();
+            
+            const valuePart = stripped.substring(colonPos + 1).trim();
+            
+            if (valuePart && !valuePart.startsWith('#')) {
+                currentPath.push(key);
+                const targetValue = getNestedValue(newConfig, currentPath);
+                
+                if (targetValue !== undefined && targetValue !== null) {
+                    if (typeof targetValue === 'string') {
+                        if (targetValue.includes('\n')) {
+                            resultLines.push(line.substring(0, currentIndent) + key + ': |');
+                            for (const contentLine of targetValue.split('\n')) {
+                                resultLines.push(' '.repeat(currentIndent + 2) + contentLine);
+                            }
+                        } else if (targetValue === '' || targetValue.includes(':') || targetValue.includes('#') || targetValue.includes(' ')) {
+                            resultLines.push(line.substring(0, currentIndent) + key + `: "${targetValue}"`);
+                        } else {
+                            resultLines.push(line.substring(0, currentIndent) + key + `: ${targetValue}`);
+                        }
+                    } else if (typeof targetValue === 'boolean') {
+                        resultLines.push(line.substring(0, currentIndent) + key + `: ${targetValue}`);
+                    } else if (typeof targetValue === 'number') {
+                        resultLines.push(line.substring(0, currentIndent) + key + `: ${targetValue}`);
+                    } else {
+                        resultLines.push(line);
+                    }
+                } else {
+                    resultLines.push(line);
+                }
+                
+                currentPath.pop();
+            } else {
+                currentPath.push(key);
+                indentStack.push(currentIndent);
+                resultLines.push(line);
+            }
+        } else {
+            resultLines.push(line);
+        }
+    }
+    
+    return resultLines.join('\n');
+}
+
+/**
+ * 根据路径获取嵌套配置值
+ * @param {Object} config - 配置对象
+ * @param {Array} path - 路径数组
+ * @returns {*} 配置值
+ */
+function getNestedValue(config, path) {
+    let current = config;
+    for (const key of path) {
+        if (current && typeof current === 'object' && key in current) {
+            current = current[key];
+        } else {
+            return undefined;
+        }
+    }
+    return current;
+}
+
+/**
+ * 将 JSON 配置迁移到 YAML 格式
+ * @param {Object} config - 配置对象
+ */
+function migrateConfigToYaml(config) {
+    try {
+        const yamlContent = SimpleYAML.stringify(config);
+        fs.writeFileSync(configPath, yamlContent, 'utf8');
+        console.log(`配置已迁移到 YAML: ${configPath}`);
+        
+        if (fs.existsSync(jsonConfigPath)) {
+            const backupPath = jsonConfigPath + '.bak';
+            fs.renameSync(jsonConfigPath, backupPath);
+            console.log(`原 JSON 配置已备份到: ${backupPath}`);
+        }
+    } catch (error) {
+        console.error('迁移配置到 YAML 失败:', error);
+    }
+}
+
 // 添加保存配置的IPC处理器
 ipcMain.handle('save-config', async (event, configData) => {
     try {
@@ -131,8 +280,8 @@ ipcMain.handle('save-config', async (event, configData) => {
             fs.copyFileSync(configPath, backupPath);
         }
 
-        // 保存新配置
-        fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+        // 保存新配置到 YAML 文件
+        saveConfigToYaml(configData);
 
         // 通知用户需要重启应用
         const result = await dialog.showMessageBox({
@@ -157,11 +306,11 @@ ipcMain.handle('save-config', async (event, configData) => {
     }
 });
 
-// 修改获取配置的IPC处理器，假设配置文件总是存在
+// 修改获取配置的IPC处理器，支持 YAML 格式
 ipcMain.handle('get-config', async (event) => {
     try {
-        const configData = fs.readFileSync(configPath, 'utf8');
-        return { success: true, config: JSON.parse(configData) };
+        const config = loadConfigFile();
+        return { success: true, config: config };
     } catch (error) {
         console.error('获取配置失败:', error);
         return { success: false, error: error.message };
@@ -289,7 +438,7 @@ ipcMain.handle('switch-live2d-model', async (event, modelName) => {
 ipcMain.on('save-model-position', (event, position) => {
     try {
         // 读取当前配置
-        const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const configData = loadConfigFile();
 
         // 更新位置信息
         if (!configData.ui) {
@@ -306,8 +455,8 @@ ipcMain.on('save-model-position', (event, position) => {
         configData.ui.model_position.x = position.x;
         configData.ui.model_position.y = position.y;
 
-        // 保存到文件
-        fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+        // 保存到 YAML 文件
+        saveConfigToYaml(configData);
 
     } catch (error) {
         console.error('保存模型位置失败:', error);

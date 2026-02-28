@@ -107,10 +107,8 @@ class TTSRequestHandler {
             const hasContent = textForTTS.replace(/[,，。？?!！；;：:、…—\-\s]/g, '').trim();
             if (!hasContent) return null;
 
-            // 插件 onTTSText 钩子（仅影响TTS音频，字幕保持原文）
-            const finalTextForTTS = global.pluginManager
-                ? await global.pluginManager.runTTSTextHooks(textForTTS)
-                : await this.translateText(textForTTS);
+            // 翻译
+            const finalTextForTTS = await this.translateText(textForTTS);
 
             // 调用TTS API
             if (this.aliyunTtsEnabled) {

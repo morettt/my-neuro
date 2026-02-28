@@ -21,6 +21,7 @@ import glob
 import webbrowser
 import requests
 from pathlib import Path
+import yaml
 
 
 # 在这里添加新函数
@@ -431,7 +432,7 @@ class set_pyqt(QWidget):
         self.minecraft_terminal_process = None  # 新增：Minecraft终端进程
         self.selected_model_path = None  # 选择的模型文件路径
         self.selected_audio_path = None  # 选择的音频文件路径
-        self.config_path = 'config.json'
+        self.config_path = 'config.yaml'
         self.config = self.load_config()
 
         # 日志读取相关
@@ -2702,8 +2703,142 @@ class set_pyqt(QWidget):
             self.toast.show_message(f"复位失败: {e}", 2000)
 
     def load_config(self):
-        with open(self.config_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        """
+        从 YAML 配置文件加载配置
+        如果 YAML 文件不存在，尝试从旧的 JSON 文件迁移
+        """
+        if os.path.exists(self.config_path):
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                return yaml.safe_load(f)
+        else:
+            json_path = self.config_path.replace('.yaml', '.json')
+            if os.path.exists(json_path):
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                self.migrate_json_to_yaml(config, json_path)
+                return config
+            else:
+                return {}
+
+    def migrate_json_to_yaml(self, config, json_path=None):
+        """
+        将 JSON 配置迁移到 YAML 格式
+        保留注释和格式
+        """
+        if json_path is None:
+            json_path = self.config_path.replace('.yaml', '.json')
+        
+        try:
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                yaml.dump(config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+            print(f"配置已从 JSON 迁移到 YAML: {self.config_path}")
+            
+            if os.path.exists(json_path):
+                backup_path = json_path + '.bak'
+                os.rename(json_path, backup_path)
+                print(f"原 JSON 配置已备份到: {backup_path}")
+        except Exception as e:
+            print(f"迁移配置到 YAML 失败: {e}")
+
+    def save_yaml_config(self, config):
+        """
+        保存配置到 YAML 文件，保留注释
+        使用自定义的保存逻辑来保留注释
+        """
+        try:
+            if os.path.exists(self.config_path):
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    existing_content = f.read()
+                
+                new_content = self.update_yaml_preserve_comments(existing_content, config)
+            else:
+                new_content = yaml.dump(config, allow_unicode=True, default_flow_style=False, sort_keys=False)
+            
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+            
+            return True
+        except Exception as e:
+            print(f"保存 YAML 配置失败: {e}")
+            return False
+
+    def update_yaml_preserve_comments(self, existing_content, new_config):
+        """
+        更新 YAML 内容但保留注释
+        通过解析现有内容并只更新值部分
+        """
+        lines = existing_content.split('\n')
+        result_lines = []
+        
+        current_path = []
+        indent_stack = [-1]
+        
+        for line in lines:
+            stripped = line.lstrip()
+            
+            if not stripped or stripped.startswith('#'):
+                result_lines.append(line)
+                continue
+            
+            current_indent = len(line) - len(stripped)
+            
+            while indent_stack and current_indent <= indent_stack[-1]:
+                if len(current_path) > 0:
+                    current_path.pop()
+                indent_stack.pop()
+            
+            if ':' in stripped:
+                colon_pos = stripped.index(':')
+                key = stripped[:colon_pos].strip()
+                
+                value_part = stripped[colon_pos + 1:].strip()
+                
+                if value_part and not value_part.startswith('#'):
+                    current_path.append(key)
+                    target_value = self.get_nested_value(new_config, current_path)
+                    
+                    if target_value is not None:
+                        if isinstance(target_value, str):
+                            if '\n' in target_value:
+                                new_line = line[:current_indent] + key + ': |'
+                                result_lines.append(new_line)
+                                for content_line in target_value.split('\n'):
+                                    result_lines.append(' ' * (current_indent + 2) + content_line)
+                            else:
+                                if target_value == '' or ' ' in target_value or ':' in target_value:
+                                    result_lines.append(line[:current_indent] + key + f': "{target_value}"')
+                                else:
+                                    result_lines.append(line[:current_indent] + key + f': {target_value}')
+                        elif isinstance(target_value, bool):
+                            result_lines.append(line[:current_indent] + key + f': {str(target_value).lower()}')
+                        elif isinstance(target_value, (int, float)):
+                            result_lines.append(line[:current_indent] + key + f': {target_value}')
+                        else:
+                            result_lines.append(line)
+                    else:
+                        result_lines.append(line)
+                    
+                    current_path.pop()
+                else:
+                    current_path.append(key)
+                    indent_stack.append(current_indent)
+                    result_lines.append(line)
+            else:
+                result_lines.append(line)
+        
+        return '\n'.join(result_lines)
+
+    def get_nested_value(self, config, path):
+        """
+        根据路径获取嵌套配置值
+        """
+        current = config
+        for key in path:
+            if isinstance(current, dict) and key in current:
+                current = current[key]
+            else:
+                return None
+        return current
 
     def load_minecraft_config(self):
         """加载Minecraft配置文件"""
@@ -3060,13 +3195,10 @@ class set_pyqt(QWidget):
             except Exception as e:
                 print(f"应用Live2D模型失败: {str(e)}")
 
-        with open(self.config_path, 'w', encoding='utf-8') as f:
-            json.dump(current_config, f, ensure_ascii=False, indent=2)
+        self.save_yaml_config(current_config)
 
-        # 重新加载配置到内存，确保立即生效
         self.config = current_config
 
-        # 使用Toast提示替代QMessageBox
         self.toast.show_message("配置已保存，模型选择已应用", 1500)
 
     def open_gateway_website(self):

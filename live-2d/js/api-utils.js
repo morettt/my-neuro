@@ -109,14 +109,6 @@ function getMergedToolsList() {
         }
     }
 
-    // 添加插件工具
-    if (global.pluginManager) {
-        const pluginTools = global.pluginManager.getAllTools();
-        if (pluginTools && pluginTools.length > 0) {
-            allTools.push(...pluginTools);
-        }
-    }
-
     return allTools;
 }
 

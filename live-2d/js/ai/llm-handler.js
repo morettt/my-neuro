@@ -173,11 +173,6 @@ class LLMHandler {
                         }
                     }
 
-                    // 触发插件 onLLMRequest 钩子（插件可修改 messages）
-                    if (global.pluginManager) {
-                        await global.pluginManager.runLLMRequestHooks({ messages: messagesForAPI, tools: allTools }).catch(() => {});
-                    }
-
                     // 使用统一的LLM客户端
                     // 🔍 如果是第一轮且有用户截图且启用了视觉模型，使用视觉模型客户端
                     let result;
@@ -639,28 +634,25 @@ class LLMHandler {
 
                     // ===== 保存对话历史 =====
                     voiceChat.saveConversationHistory();
-                    // MemOS 保存由 memos 插件的 onLLMResponse 钩子处理
+                    
+                    // ===== MemOS: 异步保存对话到记忆系统 =====
+                    if (voiceChat.memosClient && voiceChat.config?.memos?.enabled) {
+                        const messages = [
+                            { role: 'user', content: prompt },
+                            { role: 'assistant', content: finalResponseContent }
+                        ];
+                        voiceChat.memosClient.addWithBuffer(messages).catch(err => {
+                            console.error('MemOS保存对话失败:', err);
+                        });
+                    }
 
                     // 🎙️ 播放最终回复的TTS（统一在这里播放，参考旧版本的设计）
                     console.log('✅ 最终回复已处理完成，开始播放TTS');
-
-                    // 触发插件 onLLMResponse 钩子（插件可修改 responseObj.text，影响 TTS 内容）
-                    const responseObj = { text: finalResponseContent };
-                    if (global.pluginManager) {
-                        await global.pluginManager.runLLMResponseHooks(responseObj).catch(() => {});
-                    }
-
                     if (iteration === 0) {
                         // 如果没有中间过程,才reset
                         ttsProcessor.reset();
                     }
-
-                    // 触发插件 onTTSStart 钩子
-                    if (global.pluginManager) {
-                        await global.pluginManager.runTTSStartHooks(responseObj.text).catch(() => {});
-                    }
-
-                    ttsProcessor.processTextToSpeech(responseObj.text);
+                    ttsProcessor.processTextToSpeech(finalResponseContent);
                 } else {
                     logToTerminal('error', '❌ 未获取到有效的AI回复');
 
@@ -747,8 +739,8 @@ class LLMHandler {
                     } else if (error.message.includes("工具调用失败")) {
                         errorMessage = "功能扩展调用失败，请重试";
                     } else if (error.message.includes("do not support image") || error.message.includes("不支持图片") || error.message.includes("image param")) {
-                        errorMessage = "⚠️ 你使用的是不支持视觉的LLM模型，刚刚触发了调用视觉功能，所以报错了！建议换成支持视觉的LLM模型或在config.json中配置独立的视觉模型！";
-                        logToTerminal('warn', '💡 提示：请在config.json中设置 vision.use_vision_model: true 并配置支持视觉的模型（如gemini-2.0-flash）');
+                        errorMessage = "⚠️ 你使用的是不支持视觉的LLM模型，刚刚触发了调用视觉功能，所以报错了！建议换成支持视觉的LLM模型或在config.yaml中配置独立的视觉模型！";
+                        logToTerminal('warn', '💡 提示：请在config.yaml中设置 vision.use_vision_model: true 并配置支持视觉的模型（如gemini-2.0-flash）');
                     } else if (error.name === "TypeError" && error.message.includes("fetch")) {
                         errorMessage = "网络连接失败，请检查网络和API地址";
                     } else if (error.name === "SyntaxError") {

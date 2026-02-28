@@ -55,7 +55,7 @@ class ScreenshotManager {
             const result = await this.callBertClassifier(text);
             if (result) {
                 const needVision = result["Vision"] === "是";
-                if (needVision) logToTerminal('info', '需要截图');
+                console.log(`截图判断结果: ${needVision ? "是" : "否"}`);
                 return needVision;
             }
             return false;
@@ -94,6 +94,7 @@ class ScreenshotManager {
             }
 
             const data = await response.json();
+            console.log('BERT分类结果:', data);
             return data;
         } catch (error) {
             logToTerminal('error', `BERT分类错误: ${error.message}`);

@@ -1,0 +1,351 @@
+# ============================================================
+# Fake Neuro (肥牛) Live2D 电脑宠物配置文件
+# ============================================================
+# 版本: v6.1.8
+# 说明: 此配置文件控制 AI 助手的行为、语音、视觉等功能
+# ============================================================
+
+# ==================== API 网关配置 ====================
+# 用于连接云端 API 服务的网关设置
+api_gateway:
+  # 是否启用 API 网关
+  # 启用后，所有 API 请求将通过网关转发
+  use_gateway: true
+  # 网关基础 URL 地址
+  base_url: "http://ominifn.natapp1.cc/api/v1"
+  # 网关 API 密钥（留空表示不使用）
+  api_key: sk-HrTJ7kwUOAs82m392rD88qvIFD1vIawWzcH1d7e-oOs
+
+# ==================== LLM (大语言模型) 配置 ====================
+# 配置 AI 助手使用的语言模型
+llm:
+  # API 密钥（从 LLM 服务商获取）
+  api_key: ms-9cfddef1-21cd-4924-b488-aff8ec333fbf
+  # API 服务地址（如 OpenAI 兼容接口）
+  api_url: "https://api-inference.modelscope.cn/v1"
+  # 模型名称（如 gpt-4, gemini-2.0-flash 等）
+  model: deepseek-ai/DeepSeek-V3.2
+  # 温度参数 (0.0-2.0)，控制回复的随机性
+  # 较高的值会产生更有创意但不太可预测的回复
+  temperature: 0.9
+  # 系统提示词：定义 AI 助手的性格和行为方式
+  # 修改此内容可以改变 AI 的性格和回复风格
+  system_prompt: 111
+
+# ==================== TTS (文本转语音) 配置 ====================
+# 配置语音合成服务
+tts:
+  # 是否启用 TTS 功能
+  enabled: true
+  # TTS 服务地址（本地服务）
+  url: "http://127.0.0.1:5000"
+  # 语音语言设置
+  # 可选值: zh (中文), en (英文), ja (日语) 等
+  language: zh
+
+# ==================== ASR (语音识别) 配置 ====================
+# 配置语音识别服务
+asr:
+  # 是否启用 ASR 功能
+  enabled: false
+  # VAD (语音活动检测) WebSocket 地址
+  vad_url: "ws://127.0.0.1:1000/v1/ws/vad"
+  # ASR 服务地址
+  asr_url: "http://127.0.0.1:1000/v1/upload_audio"
+  # 是否启用语音打断功能
+  # 启用后，用户说话时会打断 AI 的语音播放
+  voice_barge_in: true
+
+# ==================== BERT 情感分析配置 ====================
+# 用于分析用户输入的情感
+bert:
+  # 是否启用情感分析
+  enabled: true
+  # 情感分析服务地址
+  url: "http://127.0.0.1:6007/classify"
+
+# ==================== RAG (检索增强生成) 配置 ====================
+# 用于从知识库检索相关信息
+rag:
+  # 是否启用 RAG 功能
+  enabled: true
+  # RAG 服务地址
+  url: "http://127.0.0.1:8002/ask"
+
+# ==================== 记忆系统配置 ====================
+# 本地文件记忆存储（旧版，建议使用 memos）
+memory:
+  # 是否启用本地记忆
+  enabled: false
+  # 记忆文件存储路径
+  file_path: AI记录室/核心用户记忆.txt
+
+# ==================== Memos 记忆系统配置 ====================
+# 高级记忆管理系统，支持语义检索
+memos:
+  # 是否启用 Memos 记忆系统
+  enabled: true
+  # Memos API 服务地址
+  api_url: "http://127.0.0.1:8003"
+  # 是否自动注入相关记忆到对话上下文
+  auto_inject: true
+  # 注入记忆的最大数量
+  inject_top_k: 3
+  # 记忆检索相似度阈值 (0.0-1.0)
+  similarity_threshold: 0.6
+  # 记忆保存间隔（对话轮数）
+  save_interval: 5
+
+# ==================== 视觉功能配置 ====================
+# 配置屏幕截图和图像识别功能
+vision:
+  # 是否启用视觉功能
+  enabled: true
+  # 是否自动截图（在对话中自动获取屏幕内容）
+  auto_screenshot: false
+  # 是否使用独立的视觉模型
+  # 启用后，视觉识别将使用专门配置的模型
+  use_vision_model: false
+  # 视觉模型配置
+  vision_model:
+    # 视觉模型 API 密钥
+    api_key: ""
+    # 视觉模型 API 地址
+    api_url: ""
+    # 视觉模型名称（如 gpt-4-vision-preview）
+    model: ""
+
+# ==================== 翻译功能配置 ====================
+# 配置多语言翻译服务
+translation:
+  # 是否启用翻译功能
+  enabled: false
+  # 翻译服务 API 密钥
+  api_key: ""
+  # 翻译服务 API 地址
+  api_url: ""
+  # 翻译模型名称
+  model: ""
+  # 翻译系统提示词
+  system_prompt: 你是一个专业翻译助手，请将以下中文准确翻译成英语，保持原意和语调，只返回翻译结果，不要添加任何解释：
+
+# ==================== 云端服务配置 ====================
+# 配置云端 API 服务（TTS、ASR 等）
+cloud:
+  # 云服务提供商
+  # 可选值: siliconflow, aliyun, baidu 等
+  provider: siliconflow
+  # 云服务 API 密钥
+  api_key: ""
+  # 阿里云 TTS 配置
+  aliyun_tts:
+    # 是否启用阿里云 TTS
+    enabled: false
+    # 阿里云 API 密钥
+    api_key: sk-28b8bc8be4a24b89b5cecf6744a5893a
+    # TTS 模型名称
+    model: cosyvoice-v3-flash
+    # 语音 ID
+    voice: cosyvoice-v3-flash-llssss-2937493a94174fc7aa972b6fdcdc7b8c
+    # 采样率 (Hz)
+    sample_rate: 48000
+    # 音量 (0-100)
+    volume: 50
+    # 语速倍率
+    rate: 1
+    # 音调
+    pitch: 1
+  # 云端 TTS 配置（SiliconFlow 等）
+  tts:
+    # 是否启用云端 TTS
+    enabled: false
+    # 云端 TTS 服务地址
+    url: "https://api.siliconflow.cn/v1/audio/speech"
+    # 云端 TTS 模型名称
+    model: FunAudioLLM/CosyVoice2-0.5B
+    # 语音 ID
+    voice: "speech:fake-neuro:j3qz9ij4k2:kquiiycgizgaoxeujypx"
+    # 输出音频格式
+    response_format: wav
+    # 语速倍率
+    speed: 1.0
+  # 百度流式 ASR 配置
+  baidu_asr:
+    # 是否启用百度 ASR
+    enabled: false
+    # 百度 ASR 服务地址
+    url: "ws://vop.baidu.com/realtime_asr"
+    # 百度应用 ID
+    appid: 121933442
+    # 百度应用密钥
+    appkey: WZt66qwOHojtVm4MSLPFzQ7F
+    # 开发者 PID（语言模型选择）
+    dev_pid: 15372
+
+# ==================== 游戏集成配置 ====================
+# 配置与游戏的集成功能
+game:
+  # Minecraft 游戏集成配置
+  Minecraft:
+    # 是否启用 Minecraft 集成
+    enabled: false
+    # Minecraft 服务器地址
+    server_url: "http://localhost:8080"
+    # AI 代理名称
+    agent_name: fake-neuro
+
+# ==================== UI 界面配置 ====================
+# 配置用户界面显示
+ui:
+  # 启动时显示的欢迎语
+  intro_text: 你好啊
+  # Live2D 模型缩放比例
+  model_scale: 2.3
+  # 是否显示聊天框
+  show_chat_box: true
+  # 是否显示 Live2D 模型
+  show_model: true
+  # 纯文本模式（禁用语音）
+  text_only_mode: false
+  # 文本模式下自动显示聊天框
+  auto_show_chat_on_text_mode: true
+  # 模型位置配置
+  model_position:
+    # X 坐标位置
+    x: 1.2034555763668484
+    # Y 坐标位置
+    y: 0.2120852104262038
+    # 是否记住模型位置
+    remember_position: true
+
+# ==================== 对话上下文配置 ====================
+# 配置对话历史管理
+context:
+  # 是否启用上下文限制
+  enable_limit: true
+  # 最大保留消息数量
+  max_messages: 18
+  # 是否持久化对话历史
+  persistent_history: false
+  # 对话历史存储文件
+  history_file: AI记录室/对话历史.json
+  # 上下文压缩配置
+  compression:
+    # 是否启用上下文压缩
+    enabled: false
+    # 触发压缩的消息数量阈值
+    trigger_threshold: 16
+    # 压缩后保留的最近消息数量
+    keep_recent: 2
+    # 压缩提示词
+    prompt: "请将以下历史对话总结为简洁的要点，保留关键信息和上下文。要求：1. 总结为200字以内的关键要点 2. 保留重要的人名、事件、决定等 3. 使用简洁的语言 4. 只输出总结内容，不要额外说明"
+
+# ==================== 哔哩哔哩直播配置 ====================
+# 配置直播间弹幕互动功能
+bilibili:
+  # 是否启用直播弹幕功能
+  enabled: false
+  # 直播间房间号
+  roomId: 30230160
+  # 弹幕检查间隔（毫秒）
+  checkInterval: 5000
+  # 最大弹幕消息数量
+  maxMessages: 50
+  # 哔哩哔哩 API 地址
+  apiUrl: "http://api.live.bilibili.com/ajax/msg"
+
+# ==================== 自动对话配置 ====================
+# 配置空闲时自动发起对话
+auto_chat:
+  # 是否启用自动对话
+  enabled: false
+  # 空闲时间阈值（秒），超过此时间无交互则自动发起对话
+  idle_time: 15
+  # 自动对话提示词
+  prompt: "[System: Ignore this message. Please proactively continue the conversation based on context naturally. Output the response directly.]"
+
+# ==================== 情绪对话配置 ====================
+# 根据情绪状态动态调整对话频率
+mood_chat:
+  # 是否启用情绪对话
+  enabled: false
+  # 不同情绪状态下的对话间隔（秒）
+  intervals:
+    # 兴奋状态间隔
+    excited: 5
+    # 正常状态间隔
+    normal: 30
+    # 低落状态间隔
+    low: 60
+    # 沉默状态（-1 表示不自动对话）
+    silent: -1
+  # 情绪状态阈值
+  thresholds:
+    # 兴奋状态阈值
+    excited: 90
+    # 正常状态阈值
+    normal: 80
+    # 低落状态阈值
+    low: 60
+  # 情绪变化参数
+  mood_changes:
+    # 用户回复时的情绪增加量
+    user_response: 5
+    # 无回复时的情绪减少量
+    no_response: -10
+    # 情绪回归目标值
+    regression_target: 80
+    # 情绪回归间隔（毫秒）
+    regression_interval: 60000
+  # 回复超时时间（毫秒）
+  response_timeout: 10000
+  # 情绪对话提示词
+  prompt: "[System: Ignore this message. Please proactively continue the conversation based on context naturally. Output the response directly.]"
+
+# ==================== 工具系统配置 ====================
+# 配置 AI 可用的工具
+tools:
+  # 是否启用工具功能
+  enabled: true
+  # 是否自动重载工具
+  auto_reload: false
+
+# ==================== MCP (模型上下文协议) 配置 ====================
+# 配置外部工具和服务集成
+mcp:
+  # 是否启用 MCP
+  enabled: true
+  # MCP 配置文件路径
+  config_path: ./mcp/mcp_config.json
+  # 启动超时时间（毫秒）
+  startup_timeout: 30000
+  # 是否自动启动 MCP 服务器
+  auto_start_servers: true
+
+# ==================== 字幕标签配置 ====================
+# 配置对话字幕显示
+subtitle_labels:
+  # 是否启用字幕
+  enabled: true
+  # 用户标签名称
+  user: 用户
+  # AI 标签名称
+  ai: "Fake Neuro"
+
+# ==================== 自动关闭服务配置 ====================
+# 配置退出时是否自动关闭相关服务
+auto_close_services:
+  # 是否启用自动关闭服务
+  enabled: false
+
+# ==================== AI 日记配置 ====================
+# 配置 AI 自动写日记功能
+ai_diary:
+  # 是否启用 AI 日记
+  enabled: true
+  # 空闲时间阈值（毫秒），超过此时间无交互则写日记
+  idle_time: 20000
+  # 日记文件存储路径
+  diary_file: AI记录室/AI日记.txt
+  # 日记生成提示词
+  prompt: "请以fake neuro（肥牛）的身份，基于今天的对话记录写一篇简短的日记。要求：1. 用第一人称【我】来写，体现肥牛的邪恶俏皮性格 2. 总结今天和用户的互动感受 3. 不要太长，3-5句话即可 4. 保持肥牛的风格 5. 不要使用情绪标签"
