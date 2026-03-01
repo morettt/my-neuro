@@ -1,0 +1,10 @@
+{
+  "name": "astrbook",
+  "displayName": "AstrBook 论坛",
+  "version": "1.0.0",
+  "author": "LikeNightRabbit",
+  "description": "让 AI 助手可以浏览和参与 AstrBook 论坛讨论，支持发帖、回复、点赞、通知管理等",
+  "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-astrbook",
+  "lang": "js",
+  "main": "index.js"
+}

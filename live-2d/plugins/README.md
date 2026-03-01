@@ -30,9 +30,12 @@ plugins/community/my-plugin/
   "version": "1.0.0",
   "author": "你的名字",
   "description": "做什么的",
+  "repo": "https://github.com/你的名字/my-plugin",
   "main": "index.js"
 }
 ```
+
+`repo` 是插件的 GitHub 地址，方便用户找到来源和提 issue。不填也行，但社区插件建议填上。
 
 在 `config.json` 里控制开关（不写默认启用）：
 
