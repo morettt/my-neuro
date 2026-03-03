@@ -28,7 +28,7 @@ jobs:
               try { pluginJson = JSON.parse(jsonMatch[0]); } catch (e) {}
             }
 
-            if (pluginJson && pluginJson.repo) {
+            if (title.includes('[Plugin]') && pluginJson && pluginJson.repo) {
               const repoUrl = pluginJson.repo.trim();
               const repoMatch = repoUrl.match(/github\.com\/([^\/]+)\/([^\/?#]+)/);
 
