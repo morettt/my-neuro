@@ -84,8 +84,7 @@ jobs:
               display_name: pluginJson.displayName || pluginJson.name,
               desc:         pluginJson.description || '',
               author:       pluginJson.author       || '',
-              repo:         pluginJson.repo.trim(),
-              tags:         []
+              repo:         pluginJson.repo.trim()
             };
 
             // ── 5. 创建新分支 ────────────────────────────────────────────
