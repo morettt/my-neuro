@@ -1,0 +1,166 @@
+name: Issue Review Bot
+
+on:
+  issues:
+    types: [opened, reopened]
+
+permissions:
+  issues: write
+
+jobs:
+  review-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Review Issue with llm
+        uses: actions/github-script@v7
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = context.payload.issue;
+            const title = issue.title;
+            const body = issue.body || '';
+
+            let pluginJson = null;
+            const jsonMatch = body.match(/\{[\s\S]*?\}/);
+            if (jsonMatch) {
+              try { pluginJson = JSON.parse(jsonMatch[0]); } catch (e) {}
+            }
+
+            if (pluginJson && pluginJson.repo) {
+              const repoUrl = pluginJson.repo.trim();
+              const repoMatch = repoUrl.match(/github\.com\/([^\/]+)\/([^\/?#]+)/);
+
+              if (!repoMatch) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number,
+                  body: ['## \u{1F916} AI \u63D2\u4EF6\u4EE3\u7801\u5BA1\u6838', '', '\u274C \u65E0\u6CD5\u89E3\u6790\u4ED3\u5E93\u5730\u5740\uFF1A`' + repoUrl + '`', '---', '*\u6B64\u8BC4\u8BBA\u7531 AI \u673A\u5668\u4EBA\u81EA\u52A8\u751F\u6210\uFF0C\u4EC5\u4F9B\u53C2\u8003\u3002*'].join('\n')
+                });
+                return;
+              }
+
+              const repoOwner = repoMatch[1];
+              const repoName  = repoMatch[2].replace(/\.git$/, '');
+
+              let fileTree;
+              try {
+                const treeResp = await github.rest.git.getTree({ owner: repoOwner, repo: repoName, tree_sha: 'HEAD', recursive: '1' });
+                fileTree = treeResp.data.tree.filter(f => f.type === 'blob');
+              } catch (err) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number,
+                  body: ['## \u{1F916} AI \u63D2\u4EF6\u4EE3\u7801\u5BA1\u6838', '', '\u274C \u65E0\u6CD5\u8BBF\u95EE\u4ED3\u5E93 `' + repoOwner + '/' + repoName + '`\uFF0C\u8BF7\u786E\u8BA4\u4ED3\u5E93\u662F\u516C\u5F00\u7684\u3002', '---', '*\u6B64\u8BC4\u8BBA\u7531 AI \u673A\u5668\u4EBA\u81EA\u52A8\u751F\u6210\uFF0C\u4EC5\u4F9B\u53C2\u8003\u3002*'].join('\n')
+                });
+                return;
+              }
+
+              const CODE_EXTS = ['.js', '.ts', '.mjs', '.cjs', '.py', '.go', '.rs', '.java', '.cpp', '.c', '.cs', '.rb', '.php', '.sh', '.bash', '.json', '.md'];
+              const MAX_FILES = 15;
+              const MAX_CHARS = 60000;
+
+              const mainFile = pluginJson.main || '';
+              const sortedFiles = fileTree
+                .filter(f => CODE_EXTS.some(ext => f.path.endsWith(ext)))
+                .sort((a, b) => { if (a.path === mainFile) return -1; if (b.path === mainFile) return 1; return 0; })
+                .slice(0, MAX_FILES);
+
+              let codeContents = '';
+              for (const file of sortedFiles) {
+                if (codeContents.length >= MAX_CHARS) break;
+                try {
+                  const resp = await github.rest.repos.getContent({ owner: repoOwner, repo: repoName, path: file.path });
+                  const raw = Buffer.from(resp.data.content, 'base64').toString('utf-8');
+                  codeContents += '\n\n=== ' + file.path + ' ===\n' + raw.slice(0, MAX_CHARS - codeContents.length);
+                } catch (e) {}
+              }
+
+              if (!codeContents.trim()) codeContents = '(\u672A\u627E\u5230\u53EF\u8BFB\u53D6\u7684\u4EE3\u7801\u6587\u4EF6)';
+
+              const systemPrompt = [
+                "你是一个专业的插件代码审核员。请严肃分析插件仓库代码，输出以下内容：",
+                "",
+                "功能：讲解这个插件是做什么的",
+                "1. 总体结论：✅ 通过 / ⚠️ 需关注 / ❌ 不通过",
+                "2. 代码质量：命名规范、结构清晰度、错误处理完善度",
+                "3. 安全风险：逐条列出发现的问题，没有则写未发现明显安全风险",
+                "4. 功能与描述的一致性：代码实现是否符合插件说明",
+                "5. 改进建议：具体可操作的建议",
+                "",
+                "最后加一段两个审核员的内部对话：一个是猫娘性格，可爱，觉得插件写得很好；另一个是傲娇性格，嘴硬不服气，对某些问题极为不满，两人互怼2-3轮，最后需要其中一个角色给出了结论。以及告诉开发者耐心等待维护者来看。不要加任何标题，直接写对话。",
+                "",
+                "用中文回复。"
+              ].join('\n');
+
+              const userPrompt = [
+                '\u8BF7\u5BA1\u6838\u4EE5\u4E0B\u63D2\u4EF6\uFF1A',
+                '',
+                '\u63D2\u4EF6\u540D\uFF1A' + (pluginJson.displayName || pluginJson.name || '\u672A\u77E5'),
+                '\u63CF\u8FF0\uFF1A' + (pluginJson.description || '(\u65E0)'),
+                '\u4F5C\u8005\uFF1A' + (pluginJson.author || '\u672A\u77E5'),
+                '\u5165\u53E3\u6587\u4EF6\uFF1A' + (pluginJson.main || '\u672A\u77E5'),
+                '\u4ED3\u5E93\uFF1A' + repoUrl,
+                '',
+                '\u4EE3\u7801\u5185\u5BB9\uFF08\u5171 ' + sortedFiles.length + ' \u4E2A\u6587\u4EF6\uFF09\uFF1A',
+                codeContents
+              ].join('\n');
+
+              let reviewText;
+              try {
+                const response = await fetch('https://www.dmxapi.cn/v1/chat/completions', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.OPENAI_API_KEY },
+                  body: JSON.stringify({
+                    model: 'gemini-2.0-flash',
+                    messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+                    max_tokens: 1500,
+                    temperature: 0.8
+                  })
+                });
+                const data = await response.json();
+                if (!response.ok) { core.setFailed('API failed: ' + (data.error && data.error.message ? data.error.message : 'unknown')); return; }
+                reviewText = data.choices[0].message.content;
+              } catch (err) {
+                core.setFailed('\u8BF7\u6C42\u5931\u8D25: ' + err.message);
+                return;
+              }
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number,
+                body: ['## \u{1F916} AI \u63D2\u4EF6\u4EE3\u7801\u5BA1\u6838', '', '**\u5BA1\u6838\u4ED3\u5E93\uFF1A** [`' + repoOwner + '/' + repoName + '`](' + repoUrl + ')  \u3000**\u5BA1\u6838\u6587\u4EF6\u6570\uFF1A** ' + sortedFiles.length + ' \u4E2A', '', '---', '', reviewText, '', '---', '*\u6B64\u8BC4\u8BBA\u7531 AI \u673A\u5668\u4EBA\u81EA\u52A8\u751F\u6210\uFF0C\u4EC5\u4F9B\u53C2\u8003\u3002\u6700\u7EC8\u5BA1\u6838\u7ED3\u8BBA\u4EE5\u4EBA\u5DE5\u590D\u6838\u4E3A\u51C6\u3002*'].join('\n')
+              });
+
+            } else {
+              const systemPromptB = [
+                '\u4F60\u662F\u4E00\u4E2A GitHub Issue \u8D28\u91CF\u5BA1\u6838\u52A9\u624B\u3002\u8BC4\u4F30\u7528\u6237\u63D0\u4EA4\u7684 Issue \u8D28\u91CF\uFF0C\u5E76\u7ED9\u51FA\u5EFA\u8BBE\u6027\u7684\u53CD\u9988\u3002',
+                '\u8BF7\u4ECE\u6807\u9898\u6E05\u6670\u5EA6\u3001\u63CF\u8FF0\u5B8C\u6574\u6027\u3001\u53EF\u64CD\u4F5C\u6027\u4E09\u4E2A\u7EF4\u5EA6\u8BC4\u4F30\u3002',
+                '\u8F93\u51FA\u8D28\u91CF\u8BC4\u5206\u3001\u4F18\u70B9\u3001\u6539\u8FDB\u5EFA\u8BAE\u3002\u8BED\u6C14\u53CB\u597D\u3002\u6309 Issue \u8BED\u8A00\u56DE\u590D\u3002'
+              ].join('\n');
+
+              const userPromptB = '\u8BF7\u5BA1\u6838\u4EE5\u4E0B GitHub Issue\uFF1A\n\n**\u6807\u9898**: ' + title + '\n\n**\u5185\u5BB9**:\n' + body;
+
+              let reviewText;
+              try {
+                const response = await fetch('https://www.dmxapi.cn/v1/chat/completions', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.OPENAI_API_KEY },
+                  body: JSON.stringify({
+                    model: 'gemini-2.0-flash',
+                    messages: [{ role: 'system', content: systemPromptB }, { role: 'user', content: userPromptB }],
+                    max_tokens: 600,
+                    temperature: 0.7
+                  })
+                });
+                const data = await response.json();
+                if (!response.ok) { core.setFailed('API failed'); return; }
+                reviewText = data.choices[0].message.content;
+              } catch (err) {
+                core.setFailed('\u8BF7\u6C42\u5931\u8D25: ' + err.message);
+                return;
+              }
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number,
+                body: '## \u{1F916} AI Issue \u8D28\u91CF\u5BA1\u6838\n\n' + reviewText + '\n\n---\n*\u6B64\u8BC4\u8BBA\u7531 AI \u673A\u5668\u4EBA\u81EA\u52A8\u751F\u6210\uFF0C\u4EC5\u4F9B\u53C2\u8003\u3002*'
+              });
+            }

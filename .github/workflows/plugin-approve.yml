@@ -1,0 +1,163 @@
+name: Plugin Approve Bot
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  issues: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  approve-plugin:
+    # 只在打上 "plugin approved" 标签时运行
+    if: github.event.label.name == 'plugin approved'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add plugin to plugin_hub.json and open PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue  = context.payload.issue;
+            const owner  = context.repo.owner;
+            const repo   = context.repo.repo;
+            const HUB_PATH = 'live-2d/plugins/plugin-house/plugin_hub.json';
+
+            // ── 1. 从 issue 正文里提取 JSON ─────────────────────────────
+            const body = issue.body || '';
+            let pluginJson = null;
+            const jsonMatch = body.match(/\{[\s\S]*?\}/);
+            if (jsonMatch) {
+              try { pluginJson = JSON.parse(jsonMatch[0]); } catch (e) {}
+            }
+
+            if (!pluginJson || !pluginJson.repo || !pluginJson.name) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issue.number,
+                body: [
+                  '## 🤖 插件收录失败',
+                  '',
+                  '❌ 在 issue 正文中未找到合法的插件 JSON，或 JSON 缺少 `name` / `repo` 字段。',
+                  '请检查 issue 内容格式后重新打标签。',
+                  '',
+                  '---',
+                  '*此评论由 Bot 自动生成。*'
+                ].join('\n')
+              });
+              return;
+            }
+
+            // ── 2. 读取当前 plugin_hub.json ──────────────────────────────
+            let fileData, hub;
+            try {
+              const resp = await github.rest.repos.getContent({ owner, repo, path: HUB_PATH });
+              fileData = resp.data;
+              hub = JSON.parse(Buffer.from(fileData.content, 'base64').toString('utf-8'));
+            } catch (err) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issue.number,
+                body: `## 🤖 插件收录失败\n\n❌ 无法读取 \`${HUB_PATH}\`：${err.message}\n\n---\n*此评论由 Bot 自动生成。*`
+              });
+              return;
+            }
+
+            // ── 3. 检查是否重复 ──────────────────────────────────────────
+            if (hub[pluginJson.name]) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issue.number,
+                body: [
+                  '## 🤖 插件已存在',
+                  '',
+                  `⚠️ 插件 \`${pluginJson.name}\` 已在 plugin_hub.json 中，无需重复添加。`,
+                  '',
+                  '---',
+                  '*此评论由 Bot 自动生成。*'
+                ].join('\n')
+              });
+              return;
+            }
+
+            // ── 4. 拼装新条目（对齐 plugin_hub.json 格式）────────────────
+            hub[pluginJson.name] = {
+              display_name: pluginJson.displayName || pluginJson.name,
+              desc:         pluginJson.description || '',
+              author:       pluginJson.author       || '',
+              repo:         pluginJson.repo.trim(),
+              tags:         []
+            };
+
+            // ── 5. 创建新分支 ────────────────────────────────────────────
+            const branchName = `plugin-add/${pluginJson.name}`;
+
+            // 获取 main 分支最新 SHA
+            const { data: mainRef } = await github.rest.git.getRef({
+              owner, repo, ref: 'heads/main'
+            });
+
+            // 如果同名分支已存在就先删掉（幂等）
+            try {
+              await github.rest.git.deleteRef({ owner, repo, ref: `heads/${branchName}` });
+            } catch (e) { /* 不存在时忽略 */ }
+
+            await github.rest.git.createRef({
+              owner, repo,
+              ref: `refs/heads/${branchName}`,
+              sha: mainRef.object.sha
+            });
+
+            // ── 6. 提交更新后的 plugin_hub.json 到新分支 ─────────────────
+            const newContent = JSON.stringify(hub, null, 2) + '\n';
+            await github.rest.repos.createOrUpdateFileContents({
+              owner, repo,
+              path:    HUB_PATH,
+              message: `feat: add plugin ${pluginJson.name} to plugin hub\n\nFrom issue #${issue.number}`,
+              content: Buffer.from(newContent).toString('base64'),
+              branch:  branchName,
+              sha:     fileData.sha
+            });
+
+            // ── 7. 创建 PR ───────────────────────────────────────────────
+            const { data: pr } = await github.rest.pulls.create({
+              owner, repo,
+              title: `feat: 收录插件 ${pluginJson.displayName || pluginJson.name}`,
+              head:  branchName,
+              base:  'main',
+              body: [
+                `## 新插件收录`,
+                '',
+                `本 PR 由 Bot 自动生成，来源：Issue #${issue.number}`,
+                '',
+                '| 字段 | 值 |',
+                '|------|-----|',
+                `| 名称 | ${pluginJson.displayName || pluginJson.name} |`,
+                `| 作者 | ${pluginJson.author || '未知'} |`,
+                `| 仓库 | [${pluginJson.repo}](${pluginJson.repo}) |`,
+                `| 描述 | ${pluginJson.description || '（无）'} |`,
+                '',
+                '```json',
+                JSON.stringify(hub[pluginJson.name], null, 2),
+                '```',
+                '',
+                '---',
+                '*此 PR 由 Plugin Approve Bot 自动生成。*'
+              ].join('\n')
+            });
+
+            // ── 8. 在 issue 下评论 PR 链接 ───────────────────────────────
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: issue.number,
+              body: [
+                '## 🤖 插件收录 PR 已创建',
+                '',
+                `✅ 已自动将插件 **${pluginJson.displayName || pluginJson.name}** 添加到 \`plugin_hub.json\`，PR 正在等待合并：`,
+                '',
+                `👉 ${pr.html_url}`,
+                '',
+                '维护者审核通过后合并即可完成收录。',
+                '',
+                '---',
+                '*此评论由 Bot 自动生成。*'
+              ].join('\n')
+            });
