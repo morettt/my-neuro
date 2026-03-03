@@ -3,7 +3,6 @@ const fs = require('fs');
 const path = require('path');
 const { eventBus } = require('../../core/event-bus.js');
 const { Events } = require('../../core/events.js');
-const { MessageEvent } = require('../../core/message-event.js');
 
 /**
  * 负责路由不同来源的输入（语音/文本/弹幕）
@@ -61,20 +60,6 @@ class InputRouter {
     }
 
     /**
-     * 运行插件的 onUserInput 钩子，返回处理后的 MessageEvent
-     * @param {string} text
-     * @param {string} source
-     * @returns {Promise<MessageEvent>}
-     */
-    async _runUserInputHooks(text, source) {
-        const event = new MessageEvent(text, source);
-        if (global.pluginManager) {
-            await global.pluginManager.runUserInputHooks(event);
-        }
-        return event;
-    }
-
-    /**
      * 处理语音输入
      */
     async handleVoiceInput(text) {
@@ -84,27 +69,31 @@ class InputRouter {
             this.barrageManager.clearNormalQueue();
         }
 
-        // 运行插件 onUserInput 钩子
-        // memory 插件：checkAndSaveMemoryAsync
-        // memos  插件：injectRelevantMemories
-        // 均在此处通过钩子触发，无需在下方重复调用
-        const event = await this._runUserInputHooks(text, 'voice');
-        if (event._defaultPrevented) return; // 插件自行处理，跳过 LLM
-
-        const finalText = event.text;
-
         // 检查游戏模式
         if (this.gameIntegration.isGameModeActive()) {
-            await this.gameIntegration.handleGameInput(finalText);
+            await this.gameIntegration.handleGameInput(text);
         } else {
-            // 处理插件追加的上下文
-            const contextAdditions = event.getContextAdditions();
-            const promptWithContext = contextAdditions.length > 0
-                ? finalText + '\n\n[额外上下文]\n' + contextAdditions.join('\n')
-                : finalText;
+            // 异步记忆检查，不阻塞对话流程
+            if (this.config.memory?.enabled !== false) {
+                this.memoryManager.checkAndSaveMemoryAsync(text);
+            }
+
+
+            // 🔥 新增：调用 MemOS 记忆检索并注入
+            if (this.voiceChatFacade) {
+                await this.voiceChatFacade.injectRelevantMemories(text);
+            }
+
 
             // 发送到LLM
-            await this.llmHandler(promptWithContext);
+            await this.llmHandler(text);
+
+            // 🔥 异步上下文压缩，不阻塞对话流程
+            if (this.contextCompressor) {
+                this.contextCompressor.checkAndCompressAsync().catch(error => {
+                    console.error('上下文压缩异常:', error);
+                });
+            }
         }
 
         // 保存到记忆库
@@ -124,23 +113,23 @@ class InputRouter {
         // 显示用户消息
         this.addChatMessage('user', text);
 
-        // 运行插件 onUserInput 钩子（memos 插件在此注入记忆）
-        const event = await this._runUserInputHooks(text, 'text');
-        if (event._defaultPrevented) return;
-
-        const finalText = event.text;
-
-        // 处理插件追加的上下文
-        const contextAdditions = event.getContextAdditions();
-        const promptWithContext = contextAdditions.length > 0
-            ? finalText + '\n\n[额外上下文]\n' + contextAdditions.join('\n')
-            : finalText;
+        // 🔥 新增：调用 MemOS 记忆检索并注入
+        if (this.voiceChatFacade) {
+            await this.voiceChatFacade.injectRelevantMemories(text);
+        }
 
         // 发送到LLM
-        await this.llmHandler(promptWithContext);
+        await this.llmHandler(text);
 
         // 触发用户消息已接收事件（用于心情系统）
         eventBus.emit(Events.USER_MESSAGE_RECEIVED);
+
+        // 🔥 异步上下文压缩，不阻塞对话流程
+        if (this.contextCompressor) {
+            this.contextCompressor.checkAndCompressAsync().catch(error => {
+                console.error('上下文压缩异常:', error);
+            });
+        }
     }
 
     /**

@@ -47,7 +47,7 @@ try {
     config = configLoader.load();
     console.log('配置文件加载成功');
     console.log('MCP配置:', config.mcp);
-    logToTerminal('info', '配置文件加载成功');
+    logToTerminal('info', '配置文件加载成功 (YAML 格式)');
 
     // 检查TTS和ASR配置
     const ttsEnabled = config.tts?.enabled !== false;
@@ -61,7 +61,7 @@ try {
 } catch (error) {
     console.error('配置加载失败:', error);
     logToTerminal('error', `配置加载失败: ${error.message}`);
-    alert(`配置文件错误: ${error.message}\n请检查config.json格式是否正确。`);
+    alert(`配置文件错误: ${error.message}\n请检查config.yaml格式是否正确。`);
     throw error;
 }
 

@@ -72,10 +72,9 @@ class ASRController {
             // USER_INPUT_START 事件已由 llm-handler.js 发送，此处不再重复发送
             // eventBus.emit(Events.USER_INPUT_START);
 
-            // 重置AI日记定时器（diary 插件存在时通过 global.diaryManager 访问）
-            const dm = this.diaryManager || global.diaryManager;
-            if (dm) {
-                dm.resetTimer();
+            // 重置AI日记定时器
+            if (this.diaryManager) {
+                this.diaryManager.resetTimer();
             }
 
             try {

@@ -3,13 +3,58 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
-// 读取配置文件
+// 读取配置文件（支持 YAML 格式）
 let config = {};
 try {
-    const configPath = path.join(__dirname, '../config.json');
-    config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const yamlPath = path.join(__dirname, '../config.yaml');
+    const jsonPath = path.join(__dirname, '../config.json');
+    
+    if (fs.existsSync(yamlPath)) {
+        const yamlContent = fs.readFileSync(yamlPath, 'utf8');
+        config = parseYAML(yamlContent);
+    } else if (fs.existsSync(jsonPath)) {
+        config = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+    }
 } catch (error) {
-    console.warn('无法读取config.json，使用默认配置');
+    console.warn('无法读取配置文件，使用默认配置');
+}
+
+// 简化的 YAML 解析函数
+function parseYAML(yamlStr) {
+    const result = {};
+    const lines = yamlStr.split('\n');
+    const stack = [{ obj: result, indent: -1 }];
+    
+    for (const line of lines) {
+        const stripped = line.trimStart();
+        if (!stripped || stripped.startsWith('#')) continue;
+        
+        const indent = line.length - stripped.length;
+        while (stack.length > 1 && indent <= stack[stack.length - 1].indent) {
+            stack.pop();
+        }
+        
+        if (stripped.includes(':')) {
+            const colonIndex = stripped.indexOf(':');
+            const key = stripped.substring(0, colonIndex).trim();
+            const value = stripped.substring(colonIndex + 1).trim();
+            
+            const current = stack[stack.length - 1].obj;
+            
+            if (value === '' || value.startsWith('#')) {
+                current[key] = {};
+                stack.push({ obj: current[key], indent: indent });
+            } else {
+                if (value === 'true') current[key] = true;
+                else if (value === 'false') current[key] = false;
+                else if (!isNaN(Number(value)) && value !== '') current[key] = Number(value);
+                else if (value.startsWith('"') && value.endsWith('"')) current[key] = value.slice(1, -1);
+                else current[key] = value;
+            }
+        }
+    }
+    
+    return result;
 }
 
 // 定义记忆检索工具
