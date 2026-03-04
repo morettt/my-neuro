@@ -9,10 +9,10 @@ const { logToTerminal } = require('../api-utils.js');
 class MoodChatModule {
     constructor(config) {
         this.config = config;
-        this.enabled = config.mood_chat?.enabled || false;
+        this.enabled = config.enabled || false;
 
         // 从配置读取参数
-        const moodConfig = config.mood_chat || {};
+        const moodConfig = config;
 
         // 对话间隔配置（秒）
         this.intervals = {

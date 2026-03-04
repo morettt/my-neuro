@@ -114,7 +114,8 @@ class PythonPluginBridge extends Plugin {
     async onInit() {
         await this._spawn();
         const config = this.context?.getConfig() || {};
-        await this._call('onInit', { config });
+        const pluginFileConfig = this.context?.getPluginFileConfig() || {};
+        await this._call('onInit', { config, pluginFileConfig });
         // 预加载工具列表（同步接口，需要提前缓存）
         const res = await this._call('getTools', {}).catch(() => null);
         this._tools = res?.tools || [];

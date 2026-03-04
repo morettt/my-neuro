@@ -12,11 +12,10 @@ class AutoChatPlugin extends Plugin {
     }
 
     async onStart() {
-        const config = this.context.getConfig();
-        if (!config.auto_chat?.enabled) return;
-
+        const pluginConfig = this.context.getPluginFileConfig();
+        const mainConfig = this.context.getConfig();
         const ttsProcessor = global.ttsProcessor || null;
-        this._module = new AutoChatModule(config, ttsProcessor);
+        this._module = new AutoChatModule(pluginConfig, mainConfig, ttsProcessor);
         global.autoChatModule = this._module;
         this._module.start();
     }

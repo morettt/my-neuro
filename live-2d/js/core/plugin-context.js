@@ -1,6 +1,8 @@
 // plugin-context.js - 插件上下文
 // 每个插件通过此对象访问核心能力，实现安全隔离
 
+const fs = require('fs');
+const path = require('path');
 const { eventBus } = require('./event-bus.js');
 
 class PluginStorage {
@@ -32,10 +34,11 @@ class PluginContext {
      * @param {object} config - 全局 config.json
      * @param {object} pluginManager - PluginManager 实例（用于插件间通信）
      */
-    constructor(pluginName, config, pluginManager) {
+    constructor(pluginName, config, pluginManager, pluginDir) {
         this._pluginName = pluginName;
         this._config = config;
         this._pluginManager = pluginManager;
+        this._pluginDir = pluginDir || null;
         this._systemPromptPatches = new Map();
 
         /** 每插件独立的持久化存储（内存版，可扩展为文件）*/
@@ -174,9 +177,26 @@ class PluginContext {
         return this._config;
     }
 
-    /** 获取本插件在 config.plugins.<name> 下的配置块 */
+    /** 获取插件的配置（读取 plugin_config.json，兼容旧调用） */
     getPluginConfig() {
-        return (this._config.plugins && this._config.plugins[this._pluginName]) || {};
+        return this.getPluginFileConfig();
+    }
+
+    /**
+     * 读取插件目录下的 plugin_config.json
+     * 如果文件不存在则返回空对象
+     * @returns {object}
+     */
+    getPluginFileConfig() {
+        if (!this._pluginDir) return {};
+        const cfgPath = path.join(this._pluginDir, 'plugin_config.json');
+        if (!fs.existsSync(cfgPath)) return {};
+        try {
+            return JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+        } catch (e) {
+            this.log('warn', `plugin_config.json 读取失败: ${e.message}`);
+            return {};
+        }
     }
 
     // ===== 插件间通信 =====

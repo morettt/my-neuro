@@ -24,6 +24,9 @@ class EnhancedTextProcessor {
         // TTS不可用标记：第一次失败后跳过后续所有TTS请求
         this.ttsUnavailable = false;
 
+        // 中止代数：每次interrupt时递增，用于丢弃过期请求结果
+        this.abortGeneration = 0;
+
         // 回退字幕状态
         this.fallbackDisplayText = '';
         this._fallbackTimer = null;
@@ -72,8 +75,17 @@ class EnhancedTextProcessor {
                     return;
                 }
 
+                const genSnapshot = this.abortGeneration;
                 try {
                     const audioData = await this.requestHandler.convertTextToSpeech(segment);
+
+                    // 如果中止代数已变化，说明请求属于旧一轮，直接丢弃结果
+                    if (genSnapshot !== this.abortGeneration) {
+                        this.isProcessing = false;
+                        setTimeout(processNext, 50);
+                        return;
+                    }
+
                     if (audioData) {
                         this.audioDataQueue.push({ audio: audioData, text: segment });
                     } else if (this.shouldStop) {
@@ -86,6 +98,11 @@ class EnhancedTextProcessor {
                         this.appendFallbackText(segment);
                     }
                 } catch (error) {
+                    if (genSnapshot !== this.abortGeneration) {
+                        this.isProcessing = false;
+                        setTimeout(processNext, 50);
+                        return;
+                    }
                     console.error('TTS处理错误:', error);
                     // 单个片段失败不标记整体不可用，只回退当前片段
                     this.appendFallbackText(segment);
@@ -251,8 +268,7 @@ class EnhancedTextProcessor {
         this.audioDataQueue = [];
         this.isProcessing = false;
         this.shouldStop = false;
-
-        // 注意：不重置 ttsUnavailable，避免每次对话都重新尝试失败的TTS
+        this.ttsUnavailable = false;
 
         // 🔥 取消之前的完成Promise
         if (this.completionResolve) {
@@ -274,6 +290,7 @@ class EnhancedTextProcessor {
 
         this.shouldStop = true;
         this.ttsUnavailable = false;
+        this.abortGeneration++;
         this.requestHandler.abortAllRequests();
         this.playbackEngine.stop();
 

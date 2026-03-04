@@ -71,11 +71,18 @@ class PluginManager {
         // config key 由 name 自动转换：连字符换下划线（auto-chat → auto_chat）
         const configKey = name.replace(/-/g, '_');
 
-        // 检查是否启用（config.plugins.<configKey>.enabled 或默认启用）
-        const pluginCfg = this._config.plugins && this._config.plugins[configKey];
-        if (pluginCfg && pluginCfg.enabled === false) {
-            logToTerminal('info', `⏭️ 插件已禁用，跳过: ${name}`);
-            return;
+        // 检查是否启用：从 plugin_config.json 读取 enabled（无文件则默认启用）
+        const pluginCfgPath = path.join(pluginDir, 'plugin_config.json');
+        if (fs.existsSync(pluginCfgPath)) {
+            try {
+                const pluginCfg = JSON.parse(fs.readFileSync(pluginCfgPath, 'utf8'));
+                if (pluginCfg.enabled === false) {
+                    logToTerminal('info', `⏭️ 插件已禁用，跳过: ${name}`);
+                    return;
+                }
+            } catch (e) {
+                logToTerminal('warn', `⚠️ plugin_config.json 读取失败 (${name}): ${e.message}`);
+            }
         }
 
         // 根据 lang 决定入口文件
@@ -88,7 +95,7 @@ class PluginManager {
         }
 
         // 创建插件上下文
-        const context = new PluginContext(configKey, this._config, this);
+        const context = new PluginContext(configKey, this._config, this, pluginDir);
 
         // 加载插件
         let plugin;
