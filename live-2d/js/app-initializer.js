@@ -375,7 +375,9 @@ class AppInitializer {
         console.log(`语音打断: ${this.config.asr?.voice_barge_in ? '启用' : '禁用'}`);
         console.log(`聊天框: ${this.shouldShowChatBox ? '显示' : '隐藏'}`);
         console.log(`直播模块: ${this.config.bilibili?.enabled ? '启用' : '禁用'}`);
-        console.log(`自动对话: ${this.config.auto_chat?.enabled ? '启用' : '禁用'}`);
+        let _autoChatEnabled = false;
+        try { _autoChatEnabled = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'plugins', 'built-in', 'auto-chat', 'plugin_config.json'), 'utf8')).enabled; } catch(e) {}
+        console.log(`自动对话: ${_autoChatEnabled ? '启用' : '禁用'}`);
         console.log(`Function Call工具: ${this.config.tools?.enabled ? '启用' : '禁用'}`);
         console.log(`MCP工具: ${this.config.mcp?.enabled ? '启用' : '禁用'}`);
 

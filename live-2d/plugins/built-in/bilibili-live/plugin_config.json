@@ -1,0 +1,7 @@
+{
+  "enabled": false,
+  "roomId": 30230160,
+  "checkInterval": 5000,
+  "maxMessages": 50,
+  "apiUrl": "http://api.live.bilibili.com/ajax/msg"
+}

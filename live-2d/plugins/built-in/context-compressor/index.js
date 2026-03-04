@@ -7,9 +7,7 @@ class ContextCompressorPlugin extends Plugin {
     }
 
     async onLLMResponse(response) {
-        const config = this.context.getConfig();
-        const cfg = config.context?.compression;
-        if (!cfg?.enabled) return;
+        const cfg = this.context.getPluginFileConfig();
         if (this._compressing) return;
 
         const voiceChat = global.voiceChat;
@@ -18,7 +16,6 @@ class ContextCompressorPlugin extends Plugin {
         const threshold = cfg.trigger_threshold || 15;
         if (voiceChat.messages.length < threshold) return;
 
-        // 异步执行，不阻塞 TTS 播放
         this._compress(voiceChat, cfg).catch(e => {
             this.context.log('warn', `上下文压缩失败: ${e.message}`);
         });
