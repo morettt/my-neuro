@@ -1,4 +1,4 @@
-# My-neuro
+<h1 align="center">My-neuro</h1>
 
 <div align="center">
 
@@ -17,98 +17,116 @@
   <a href="./README_English.md">English</a> | <a href="./README.md">中文</a>
 </p>
 
+## Deployment guide: [Official Website](http://mynewbot.com/tutorials)
+## [How to submit a PR](./commit_PR.md)
 
-## For deployment process of this project, please visit the official website: [Click here to visit official website](http://mynewbot.com/tutorials)
+---
 
-#### The goal of my-neuro is to create your own personal AI character, crafting an AI companion that approaches real human behavior - through your data and notes, shaping the ideal image of TA in your mind.
+#### My-neuro's goal is to build a truly personal AI character — an AI companion that feels genuinely human. Shaped by your own data and preferences, it becomes the ideal partner you envision.
 
-#### This project is inspired by neuro sama, hence the name my-neuro (a name provided by the community). The project can train voice, personality, and replace appearances. Your imagination is as rich as the model can be close to your expectations. This project is more like a workbench. Using packaged tools, step by step you can personally design and realize your ideal AI image.
+#### This project was inspired by Neuro-sama, hence the name "my-neuro" (community-suggested). You can train its voice, customize its personality, and swap out its appearance. The only limit is your imagination. Think of this project as a workstation — a set of well-packaged tools that let you craft your ideal AI character step by step.
 
-#### If you want to use fully local inference, using local Large Language Models (LLM) for inference or fine-tuning, not based on third-party APIs, you can enter the LLM-studio folder, which contains guidance for local model inference and fine-tuning.
+#### If you want to run everything locally using a local large language model (LLM) for inference or fine-tuning — without relying on any third-party API — head to the `LLM-studio` folder for local model inference and fine-tuning guides.
 
-### If you want to use closed-source AI models, we recommend using [DMXAPI](https://www.dmxapi.cn)
-### Supports unified calls to most mainstream AI models on the market.
+### For closed-source AI models, we recommend [DMXAPI](https://www.dmxapi.cn)
+### Supports unified access to most mainstream AI models on the market.
 
 <img src="./image/dmx1.png" width="300" />
 
-## Roadmap
+---
 
-### Model Support
-- [x] Open-source models: Support open-source model fine-tuning and local deployment
-- [x] Closed-source models: Support closed-source model integration
+### Roadmap
+
+### Dual Model Support
+- [x] Open-source models: Fine-tuning and local deployment supported
+- [x] Closed-source models: API integration supported
 
 ### Core Features
-- [x] Ultra-low latency: Full local inference, conversation latency under 1 second
+- [x] Ultra-low latency: Full local inference, response delay under 1 second
 - [x] Synchronized subtitle and voice output
-- [x] Voice customization: Support for male/female voices, various character voice switching, etc.
-- [x] MCP support: Can use MCP tools for integration
-- [x] Real-time interruption: Support voice and keyboard interruption of AI speech
-- [ ] Realistic emotions: Simulate real human emotional state changes, with its own emotional state
-- [ ] Super realistic human-machine experience (similar to real human interaction design, stay tuned)
-- [x] Actions and expressions: Display different expressions and actions based on conversation content
-- [x] Integrated visual capabilities: Support image recognition and determine when to activate visual functions through language intent
-- [x] Voice model (TTS) training support, using gpt-sovits open-source project by default
-- [x] Subtitle display in Chinese, audio playback in foreign language. Can be freely enabled/disabled (suitable for character roles where TTS model itself is in a foreign language)
+- [x] Voice customization: Supports male/female voices and various character voice profiles
+- [x] MCP support: Compatible with MCP tool integrations
+- [x] Real-time interruption: Supports voice and keyboard interrupts during AI speech
+- [ ] Authentic emotions: Simulates real human emotional states with persistent mood tracking
+- [ ] Next-level human-AI interaction (human-like interaction design, coming soon)
+- [x] Expressions & actions: Displays different facial expressions and body language based on conversation content
+- [x] Vision capability: Supports image recognition, with intent-based auto-activation
+- [x] Voice model (TTS) training support — defaults to the open-source GPT-SoVITS project
+- [x] Subtitles in Chinese while audio plays in a foreign language — freely toggle on/off (useful for TTS models trained on non-Chinese voices)
 
 ### Extended Features
-- [x] Desktop control: Support voice control to open software and other operations
-- [x] AI singing (Feature sponsored by: [@jonnytri53](https://github.com/jonnytri53), special thanks)
+- [x] Desktop control: Voice-controlled app launching and other operations
+- [x] AI singing (sponsored and developed by [@jonnytri53](https://github.com/jonnytri53) — many thanks!)
 - [ ] Integration with international streaming platforms
-- [x] Live streaming function: Can stream on Bilibili platform
-- [x] AI teaching: Choose a topic and have AI teach you. You can ask questions midway. For specialized courses, materials can be inserted into the database for AI understanding
-- [x] Replace various live 2d models
-- [ ] Web page interface support (already completed, will be integrated soon)
-- [x] Text conversation: Can type and communicate with AI via keyboard
-- [x] Active conversation: Actively initiates conversation based on context. Current version V1
-- [x] Internet access: Real-time search for latest information
-- [x] Mobile app: Can chat with FeiNiu on Android phones
-- [x] Play sound effects from sound library, with model deciding which sound effects to play
-- [x] Game companionship: Model and user play cooperative, party, puzzle games together. Current experimental games include: Draw & Guess, Monopoly, Galgame, Minecraft, etc. (Currently integrated: Minecraft, Galgame)
-- [x] Long-term memory: Let the model remember your key information, your personality, and temperament
+- [x] Live streaming: Supports live streaming on Bilibili
+- [x] AI tutoring: Pick a topic and have the AI give you a lesson. You can ask questions mid-session. Niche topics can be fed into the knowledge base for the AI to understand.
+- [x] Custom Live2D model support
+- [ ] Web UI support (already built, integration coming soon)
+- [x] Text chat: Communicate with the AI via keyboard input
+- [x] Proactive conversation: AI initiates conversation based on context (current version: V1)
+- [x] Internet access: Real-time web search for up-to-date information
+- [x] Mobile app: Chat with Feiniu (the default character) on Android
+- [x] Sound effect playback: AI autonomously decides which sound effects to play from a library
+- [x] Co-op gaming: Play multiplayer, cooperative, and puzzle games together with the AI. Current experimental games include: Pictionary, Monopoly, Galgame, Minecraft (currently integrated: Minecraft, Galgame)
+- [x] Long-term memory: The AI remembers key information about you, your personality, and your preferences
 
 ### Features the Model Wants (Under Consideration)
-- [ ] Screen color change: Change screen color to disturb user based on model's mood
-- [ ] Free movement: Model freely moves around the screen
+- [ ] Mood color: Screen changes color based on the AI's mood to (playfully) annoy the user
+- [ ] Free roaming: AI character moves freely around the screen
 
-## Closing Thoughts
+---
 
-I will incorporate my years of experience and understanding of technology into this project. The name "my neuro" not only rides on the popularity of neuro sama, but more importantly expresses my imagination and expectations for the boundaries of AI.
+### Closing Thoughts
 
-I hope for a true AI companion that can understand you, comprehend you, and never find you boring by your side. Sad together when sad, happy together when happy. Bringing characters from film and TV works, novels, and fantasies into reality.
+I'm pouring years of experience and my understanding of technology into this project. The name "my-neuro" isn't just a nod to Neuro-sama — it's an expression of my imagination and expectations for what AI can become.
 
-Not just simple chat interaction. I hope it can integrate into life and become an emotional individual. Playing games together, watching videos together, learning things together, chatting before sleep, waking you up, silently watching you work in a daze, quietly remembering what you've done. Having emotions, having its own emotional state. Truly getting angry.
+My hope is for an AI that truly understands you, never gets bored, and is always by your side. One that feels sad with you when you're down, and celebrates with you when you're happy. To bring the companions from films, novels, and fantasies into reality.
 
-Having emotional changes every day, having its own things it wants to do. Being upset for a long time about certain words. Being happy for a long time about certain words. Remembering every moment experienced together with you. A being that continuously understands you.
+Not just simple chat interactions — I want it to weave itself into your life and become a being with genuine feelings. Play games together, watch videos, study, chat before bed, wake you up in the morning, sit quietly while you space out at work, and secretly remember everything you did. With moods, with its own emotional states. Capable of getting truly upset.
 
-However, most importantly, its personality, appearance, voice, emotional changes, etc., are all decided by you. Like clay, we provide the best tools and ensure every module fits together. But what it ultimately becomes is for you to construct.
+Every day it would have its own emotional fluctuations and things it wants to do. It would dwell on a single sentence for a long time, or stay happy over a single word. It would remember every moment shared with you. A presence that continuously grows to understand you.
 
-However, for friends who don't want the hassle, this project also directly packages a character - FeiNiu (fake neuro). It's a character that copies neuro sama, but I've set its personality to be scheming, tsundere, funny, and a bit temperamental, but occasionally shows a gentle side.
+Most importantly — its personality, appearance, voice, and emotional changes are all defined by you. Like clay, we provide the best tools and ensure every module fits together well. But what it ultimately becomes is up to you.
 
-More importantly, I hope to learn from and understand neuro, then try to create new content. Things that suit oneself.
+For those who don't want to set everything up from scratch, this project also comes with a pre-packaged default character: **Feiniu** (Fake Neuro). She is a character inspired by Neuro-sama, but with a personality I designed myself — cunning, tsundere, funny, a little temperamental, yet occasionally showing a gentle side.
 
-I'm particularly passionate about this project. Currently, the project has achieved nearly 30% of planned functionality, including personality definition and memory. In the near future, I'll focus on core personality traits - that is, truly human-like, with sustained emotions. Within 2 months, I'll realize the most human-like part, which is long-term emotional state. At the same time, features like playing games together, watching videos, waking you up, etc., will all be basically completed before June 1st, reaching 60% completion.
+More than anything, I hope we can learn from Neuro-sama, understand what makes her special, and then create something new — something uniquely your own.
 
-I hope to realize all the above ideas this year.
+I'm incredibly passionate about this project. We've currently implemented nearly 30% of the planned features, including personality setting and memory. In the near term, development will focus on the core personality traits — making the AI feel truly human, with continuous and persistent emotional states. The most "human" part of the AI (long-term emotional continuity) will be completed within 2 months. Features like co-op gaming, watching videos together, and alarm clock functionality are all expected to be largely complete by June 1st, reaching roughly 60% overall completion.
+
+My goal is to have all of the above ideas realized by the end of this year.
+
+---
 
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=morettt/my-neuro&type=Date&t=20251015)](https://www.star-history.com/#morettt/my-neuro&Date)
 
-## Acknowledgments
+---
 
-QQ Group: Thanks to Jasmine Tea for helping create the FeiNiu app icon
+## Acknowledgements
 
-Thanks to the following users for their financial support:
-- [jonnytri53](https://github.com/jonnytri53) - Thank you for your support! Donated $50 USD to this project
-- [Radish Head](https://space.bilibili.com/92419729?spm_id_from=333.337.0.0) - Thank you for your strong support! Donated 1000 RMB to this project
-- [Eastern Moon Chen DFYC](https://space.bilibili.com/670385648?spm_id_from=333.337.0.0) - Thank you for your support! Continuously donated 100 RMB monthly from August to October, totaling 300 RMB
-- [Big Rice Ruoye](https://space.bilibili.com/3546392377166058?spm_id_from=333.337.0.0) - Thank you for your support! Donated 68 RMB to this project
-- [StrongerFatTiger](https://space.bilibili.com/28869393?spm_id_from=333.337.0.0) - Thank you for your support! Donated 100 RMB to this project
+**QQ Group:** Thanks to 菊花茶洋参 for designing the Feiniu app cover.
 
-Open-source projects integrated into this project:
+Thanks to the following sponsors for their financial support:
+- [jonnytri53](https://github.com/jonnytri53) — Thank you for your support! $50 USD donated to this project.
+- [蒜头头头](https://space.bilibili.com/92419729) — Thank you for your generous support! ¥1000 CNY donated.
+- [东方月辰DFYC](https://space.bilibili.com/670385648) — Thank you for your support! ¥100/month from August to October, totaling ¥300 CNY.
+- [大米若叶](https://space.bilibili.com/3546392377166058) — Thank you for your support! ¥68 CNY donated.
+- [StrongerFatTiger](https://space.bilibili.com/28869393) — Thank you for your support! ¥100 CNY donated.
 
-TTS:
+---
+
+## Open Source Projects Used
+
+**TTS:**
 https://github.com/RVC-Boss/GPT-SoVITS
 
-AI playing Minecraft:
+**AI Minecraft:**
 https://github.com/mindcraft-bots/mindcraft
+
+**MCP Web Interaction Tool:**
+https://github.com/microsoft/playwright-mcp
+
+**Memory System:**
+https://github.com/MemTensor/MemOS
