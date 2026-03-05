@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Neuro - 控制中心</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>My Neuro - 控制中心</h1>
+            <p class="subtitle">统一管理 AI 虚拟助手各项服务与配置</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-button active" onclick="switchTab('dashboard')">服务控制</button>
+            <button class="tab-button" onclick="switchTab('basic-config')">基础配置</button>
+            <button class="tab-button" onclick="switchTab('dialog-config')">对话配置</button>
+            <button class="tab-button" onclick="switchTab('llm-config')">LLM 配置</button>
+            <button class="tab-button" onclick="switchTab('voice-settings')">云端配置</button>
+            <button class="tab-button" onclick="switchTab('game-center')">游戏</button>
+            <button class="tab-button" onclick="switchTab('model-manager')">模型管理</button>
+            <button class="tab-button" onclick="switchTab('tools')">工具屋</button>
+            <button class="tab-button" onclick="switchTab('ui-settings')">UI 设置</button>
+            <button class="tab-button" onclick="switchTab('plugins')">插件管理</button>
+        </div>
+
+        <!-- 服务控制面板 -->
+        <div id="dashboard" class="tab-content active">
+            <!-- 系统信息栏 -->
+            <div class="system-info-bar">
+                <div class="info-item">
+                    <span class="info-label">WebUI 版本:</span>
+                    <span class="info-value" id="webui-version">加载中...</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">运行时间:</span>
+                    <span class="info-value" id="system-uptime">0 小时 0 分钟 0 秒</span>
+                </div>
+                <div class="info-actions">
+                    <button class="btn-start" onclick="startAllServices()">一键启动全部</button>
+                    <button class="btn-stop" onclick="stopAllServices()">一键停止全部</button>
+                </div>
+            </div>
+            
+            <div class="dashboard">
+                <div class="card">
+                    <h3><span class="status" id="live2d-status"></span>Live2D 主服务</h3>
+                    <p>核心 Live2D 桌面宠物服务</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('live2d')" id="live2d-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('live2d')" id="live2d-stop" disabled>停止</button>
+                        <button class="btn-restart" onclick="restartService('live2d')" id="live2d-restart">重启</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="asr-status"></span>ASR 语音识别</h3>
+                    <p>语音转文字服务</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('asr')" id="asr-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('asr')" id="asr-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="tts-status"></span>TTS 语音合成</h3>
+                    <p>文字转语音服务</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('tts')" id="tts-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('tts')" id="tts-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="memos-status"></span>记忆系统</h3>
+                    <p>MemOS 记忆存储与检索</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('memos')" id="memos-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('memos')" id="memos-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="rag-status"></span>RAG 服务</h3>
+                    <p>检索增强生成服务</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('rag')" id="rag-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('rag')" id="rag-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="bert-status"></span>BERT 服务</h3>
+                    <p>情感分析与文本分类</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('bert')" id="bert-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('bert')" id="bert-stop" disabled>停止</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 多日志系统 -->
+            <div class="log-section">
+                <div class="log-tabs">
+                    <button class="log-tab active" onclick="switchLogTab('system-log')">系统日志</button>
+                    <button class="log-tab" onclick="switchLogTab('pet-log')">桌宠日志</button>
+                    <button class="log-tab" onclick="switchLogTab('tool-log')">工具日志</button>
+                    <button class="log-tab" onclick="clearCurrentLog()">清空日志</button>
+                </div>
+
+                <div id="system-log" class="log-panel active">
+                    <div class="log-container">
+                        <div id="system-log-output">
+                            <div class="log-entry log-info">系统控制台已启动，等待服务操作...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="pet-log" class="log-panel">
+                    <div class="log-container">
+                        <div id="pet-log-output">
+                            <div class="log-entry log-info">等待桌宠服务启动...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tool-log" class="log-panel">
+                    <div class="log-container">
+                        <div id="tool-log-output">
+                            <div class="log-entry log-info">等待工具调用...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LLM 配置面板 -->
+        <div id="llm-config" class="tab-content">
+            <h3>LLM 配置</h3>
+            <div class="section">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="api-key">API Key</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" id="api-key" placeholder="输入您的 API 密钥" style="flex: 1;">
+                            <button type="button" onclick="toggleApiKeyVisibility()" style="width: auto; padding: 12px 20px;">👁️</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="api-url">API URL</label>
+                        <input type="text" id="api-url" placeholder="https://api.example.com/v1">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="model">模型</label>
+                        <input type="text" id="model" placeholder="gpt-4, qwen3.5-27b 等">
+                    </div>
+                    <div class="form-group">
+                        <label for="temperature">Temperature</label>
+                        <input type="number" id="temperature" min="0" max="2" step="0.1" value="0.9">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="system-prompt">系统提示词</label>
+                    <textarea id="system-prompt" placeholder="在这里输入系统提示词..."></textarea>
+                </div>
+                <button onclick="saveLLMConfig()" class="btn-start">保存配置</button>
+            </div>
+        </div>
+
+        <!-- 云端配置面板 -->
+        <div id="voice-settings" class="tab-content">
+            <h3>云端配置</h3>
+            <div class="section">
+                <h4>TTS 配置</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tts-enabled">
+                    <label for="tts-enabled">启用 TTS（语音合成）</label>
+                </div>
+                <div class="form-group">
+                    <label for="tts-url">TTS 服务地址</label>
+                    <input type="text" id="tts-url" placeholder="http://127.0.0.1:5000">
+                </div>
+                <div class="form-group">
+                    <label for="tts-language">语言</label>
+                    <select id="tts-language">
+                        <option value="zh">中文</option>
+                        <option value="en">英语</option>
+                        <option value="ja">日语</option>
+                    </select>
+                </div>
+            </div>
+            <div class="section">
+                <h4>云端 TTS（声音克隆）</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="cloud-tts-enabled">
+                    <label for="cloud-tts-enabled">启用云端 TTS</label>
+                </div>
+                <div class="form-group">
+                    <label for="cloud-tts-api-key">SiliconFlow API Key</label>
+                    <input type="password" id="cloud-tts-api-key" placeholder="sk-...">
+                </div>
+                <div class="form-group">
+                    <label for="cloud-tts-model">模型</label>
+                    <input type="text" id="cloud-tts-model" placeholder="FunAudioLLM/CosyVoice2-0.5B">
+                </div>
+                <div class="form-group">
+                    <label for="cloud-tts-voice">音色</label>
+                    <input type="text" id="cloud-tts-voice" placeholder="speech:fake-neuro:...">
+                </div>
+            </div>
+            <div class="section">
+                <h4>ASR 配置</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="asr-enabled">
+                    <label for="asr-enabled">启用 ASR（语音识别）</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="voice-barge-in">
+                    <label for="voice-barge-in">语音打断</label>
+                </div>
+                <div class="form-group">
+                    <label for="vad-url">VAD 服务地址</label>
+                    <input type="text" id="vad-url" placeholder="ws://127.0.0.1:1000/v1/ws/vad">
+                </div>
+            </div>
+            <div class="section">
+                <h4>百度语音识别</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="baidu-asr-enabled">
+                    <label for="baidu-asr-enabled">启用百度 ASR</label>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="baidu-appid">AppID</label>
+                        <input type="text" id="baidu-appid">
+                    </div>
+                    <div class="form-group">
+                        <label for="baidu-appkey">AppKey</label>
+                        <input type="password" id="baidu-appkey">
+                    </div>
+                </div>
+            </div>
+            <button onclick="saveVoiceSettings()" class="btn-start">保存声音设置</button>
+        </div>
+
+        <!-- 游戏中心 -->
+        <div id="game-center" class="tab-content">
+            <h3>游戏中心</h3>
+            <div class="section">
+                <h4>Minecraft 服务器</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="minecraft-enabled">
+                    <label for="minecraft-enabled">启用 Minecraft 游戏支持</label>
+                </div>
+                <div class="form-group">
+                    <label for="minecraft-server-url">服务器地址</label>
+                    <input type="text" id="minecraft-server-url" placeholder="http://localhost:8080">
+                </div>
+                <div class="form-group">
+                    <label for="minecraft-agent-name">Agent 名称</label>
+                    <input type="text" id="minecraft-agent-name" placeholder="fake-neuro">
+                </div>
+                <button onclick="downloadMinecraft()" class="btn-start">下载 Minecraft 服务器</button>
+            </div>
+            <div class="section">
+                <h4>可用游戏列表</h4>
+                <ul class="game-list" id="game-list">
+                    <li>
+                        <span>🎮 Minecraft - 我的世界</span>
+                        <button class="btn-start" onclick="launchGame('minecraft')">启动</button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 模型管理 -->
+        <div id="model-manager" class="tab-content">
+            <h3>模型管理</h3>
+            <div class="section">
+                <h4>当前使用的模型</h4>
+                <div class="form-group">
+                    <label for="current-model">当前模型</label>
+                    <select id="current-model">
+                        <option value="">选择模型...</option>
+                    </select>
+                </div>
+                <button onclick="saveCurrentModel()" class="btn-start">切换模型</button>
+            </div>
+            <div class="section">
+                <h4>可用模型列表</h4>
+                <div class="model-grid" id="model-list"></div>
+                <button onclick="refreshModelList()" class="btn-start" style="margin-top: 20px;">刷新模型列表</button>
+            </div>
+        </div>
+
+        <!-- 工具屋面板 -->
+        <div id="tools" class="tab-content">
+            <h3>工具屋</h3>
+            <div class="section">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tools-enabled">
+                    <label for="tools-enabled">启用 Function Call 工具</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="mcp-enabled">
+                    <label for="mcp-enabled">启用 MCP 工具</label>
+                </div>
+            </div>
+            
+            <!-- 工具子选项卡 -->
+            <div class="sub-tabs">
+                <button class="sub-tab-button active" onclick="switchToolTab('fc')">Function Call 工具</button>
+                <button class="sub-tab-button" onclick="switchToolTab('mcp')">MCP Tools</button>
+            </div>
+            
+            <!-- Function Call 工具列表 -->
+            <div id="fc-tools-panel" class="tool-panel active">
+                <div class="tool-list" id="fc-tools-list">
+                    <div class="log-entry log-info">加载 Function Call 工具中...</div>
+                </div>
+            </div>
+            
+            <!-- MCP 工具列表 -->
+            <div id="mcp-tools-panel" class="tool-panel">
+                <div class="tool-list" id="mcp-tools-list">
+                    <div class="log-entry log-info">加载 MCP 工具中...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- UI 设置面板 -->
+        <div id="ui-settings" class="tab-content">
+            <h3>UI 设置</h3>
+            <div class="section">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="subtitle-enabled">
+                    <label for="subtitle-enabled">启用字幕显示</label>
+                </div>
+                <div class="form-group">
+                    <label for="model-scale">模型缩放比例</label>
+                    <input type="number" id="model-scale" min="0.1" max="5" step="0.1" value="2.3">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="subtitle-user">用户标签</label>
+                        <input type="text" id="subtitle-user" placeholder="用户名称">
+                    </div>
+                    <div class="form-group">
+                        <label for="subtitle-ai">AI 标签</label>
+                        <input type="text" id="subtitle-ai" placeholder="AI 名称">
+                    </div>
+                </div>
+                <button onclick="saveUISettings()" class="btn-start">保存设置</button>
+            </div>
+        </div>
+
+        <!-- 基础配置面板 -->
+        <div id="basic-config" class="tab-content">
+            <h3>基础配置</h3>
+            
+            <!-- 视觉功能 -->
+            <div class="section">
+                <h4>视觉功能</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="vision-enabled">
+                    <label for="vision-enabled">启用视觉功能</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="auto-screenshot">
+                    <label for="auto-screenshot">开启后，每次对话 AI 都会去识图（会增加延迟）</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="use-vision-model">
+                    <label for="use-vision-model">启用辅助视觉模型</label>
+                </div>
+                <div class="form-group" style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: bold; color: #66b3ff;">
+                        💡 说明：当主模型（LLM）不支持图片识别时，可以启用此配置。在需要视觉功能时，系统会自动使用此辅助模型处理
+                    </label>
+                    <label style="font-size: 13px; opacity: 0.8;">视觉模型 API Key:</label>
+                    <input type="text" id="vision-model-api-key" placeholder="sk-..." style="margin-bottom: 10px;">
+                    <label style="font-size: 13px; opacity: 0.8;">视觉模型 API URL:</label>
+                    <input type="text" id="vision-model-api-url" placeholder="https://..." style="margin-bottom: 10px;">
+                    <label style="font-size: 13px; opacity: 0.8;">视觉模型名称:</label>
+                    <input type="text" id="vision-model-name" placeholder="qwen-vl-max 等">
+                </div>
+            </div>
+            
+            <!-- Live2D 模型选择 -->
+            <div class="section">
+                <h4>Live2D 模型选择</h4>
+                <div class="form-group">
+                    <label for="live2d-model-select">选择模型：</label>
+                    <select id="live2d-model-select" style="width: 100%; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.3); color: white;">
+                        <option value="fake-neuro">肥牛</option>
+                    </select>
+                </div>
+                <button onclick="saveLive2DModel()" class="btn-start" style="margin-top: 10px;">应用模型</button>
+            </div>
+            
+            <!-- 语音打断 -->
+            <div class="section">
+                <h4>语音设置</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="voice-barge-in">
+                    <label for="voice-barge-in">开启语音打断（实时语音打断 AI 说话）</label>
+                </div>
+            </div>
+            
+            <!-- 工具开关 -->
+            <div class="section">
+                <h4>工具配置</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tools-enabled">
+                    <label for="tools-enabled">启用 Function Call 工具</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="mcp-enabled">
+                    <label for="mcp-enabled">启用 MCP 工具</label>
+                </div>
+            </div>
+            
+            <!-- UI 显示 -->
+            <div class="section">
+                <h4>界面显示</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="show-chat-box">
+                    <label for="show-chat-box">显示聊天框</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="show-model">
+                    <label for="show-model">显示模型</label>
+                </div>
+            </div>
+            
+            <!-- 系统设置 -->
+            <div class="section">
+                <h4>系统设置</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="auto-close-services">
+                    <label for="auto-close-services">关闭 UI 时自动关闭所有服务</label>
+                </div>
+            </div>
+            
+            <button onclick="saveBasicSettings()" class="btn-start">保存基础配置</button>
+        </div>
+
+        <!-- 对话配置面板 -->
+        <div id="dialog-config" class="tab-content">
+            <h3>对话配置</h3>
+            <div class="section">
+                <h4>基础设置</h4>
+                <div class="form-group">
+                    <label for="intro-text">开场白:</label>
+                    <textarea id="intro-text" placeholder="你好啊" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="max-messages">最大消息数:</label>
+                    <input type="number" id="max-messages" min="1" max="100" value="30">
+                </div>
+            </div>
+            
+            <div class="section">
+                <h4>功能开关</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="asr-enabled">
+                    <label for="asr-enabled">启用 ASR（语音识别）</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tts-enabled">
+                    <label for="tts-enabled">启用 TTS（语音合成）</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="enable-limit">
+                    <label for="enable-limit">启用上下文限制（超出对话轮次截断）</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="persistent-history">
+                    <label for="persistent-history">启用对话历史记忆</label>
+                    <span style="font-size: 12px; color: #f87171; margin-left: 10px;">⚠️ 警告：这个目前有 bug 会导致 AI 复读混乱，请暂时别选择</span>
+                </div>
+            </div>
+            
+            <button onclick="saveDialogSettings()" class="btn-start">保存对话配置</button>
+        </div>
+
+        <!-- 插件管理面板 -->
+        <div id="plugins" class="tab-content">
+            <h3>插件管理</h3>
+            <p style="opacity: 0.7; margin-bottom: 20px;">
+                管理所有已安装的插件，控制功能启用状态<br>
+                💡 提示：点击"打开配置"可打开插件目录或配置文件，在 config.json 中配置详细参数
+            </p>
+            
+            <!-- 内置插件 -->
+            <div class="plugin-section">
+                <h4 style="color: #66b3ff; margin-bottom: 15px;">🔧 内置插件</h4>
+                <div id="builtin-plugins-list" class="plugins-container"></div>
+            </div>
+            
+            <!-- 社区插件 -->
+            <div class="plugin-section" style="margin-top: 30px;">
+                <h4 style="color: #a5b4fc; margin-bottom: 15px;">🌐 社区插件</h4>
+                <div id="community-plugins-list" class="plugins-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
