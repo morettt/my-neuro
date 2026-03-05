@@ -30,18 +30,6 @@
     "enabled": true,
     "url": "http://127.0.0.1:8002/ask"
   },
-  "memory": {
-    "enabled": false,
-    "file_path": "AI记录室/核心用户记忆.txt"
-  },
-  "memos": {
-    "enabled": true,
-    "api_url": "http://127.0.0.1:8003",
-    "auto_inject": true,
-    "inject_top_k": 3,
-    "similarity_threshold": 0.6,
-    "save_interval": 5
-  },
   "vision": {
     "enabled": true,
     "auto_screenshot": false,
@@ -51,13 +39,6 @@
       "api_url": "",
       "model": ""
     }
-  },
-  "translation": {
-    "enabled": false,
-    "api_key": "",
-    "api_url": "",
-    "model": "",
-    "system_prompt": "你是一个专业翻译助手，请将以下中文准确翻译成英语，保持原意和语调，只返回翻译结果，不要添加任何解释："
   },
   "cloud": {
     "provider": "siliconflow",
@@ -112,47 +93,7 @@
     "enable_limit": true,
     "max_messages": 18,
     "persistent_history": false,
-    "history_file": "AI记录室/对话历史.json",
-    "compression": {
-      "enabled": false,
-      "trigger_threshold": 16,
-      "keep_recent": 4,
-      "prompt": "请将以下历史对话总结为简洁的要点，保留关键信息和上下文。要求：1. 总结为200字以内的关键要点 2. 保留重要的人名、事件、决定等 3. 使用简洁的语言 4. 只输出总结内容，不要额外说明"
-    }
-  },
-  "bilibili": {
-    "enabled": false,
-    "roomId": 30230160,
-    "checkInterval": 5000,
-    "maxMessages": 50,
-    "apiUrl": "http://api.live.bilibili.com/ajax/msg"
-  },
-  "auto_chat": {
-    "enabled": false,
-    "idle_time": 15,
-    "prompt": "[System: Ignore this message. Please proactively continue the conversation based on context naturally. Output the response directly.]"
-  },
-  "mood_chat": {
-    "enabled": false,
-    "intervals": {
-      "excited": 5,
-      "normal": 30,
-      "low": 60,
-      "silent": -1
-    },
-    "thresholds": {
-      "excited": 90,
-      "normal": 80,
-      "low": 60
-    },
-    "mood_changes": {
-      "user_response": 5,
-      "no_response": -10,
-      "regression_target": 80,
-      "regression_interval": 60000
-    },
-    "response_timeout": 10000,
-    "prompt": "[System: Ignore this message. Please proactively continue the conversation based on context naturally. Output the response directly.]"
+    "history_file": "AI记录室/对话历史.json"
   },
   "tools": {
     "enabled": true,
@@ -172,58 +113,5 @@
   "auto_close_services": {
     "enabled": false
   },
-  "ai_diary": {
-    "enabled": true,
-    "idle_time": 20000,
-    "diary_file": "AI记录室/AI日记.txt",
-    "prompt": "请以fake neuro（肥牛）的身份，基于今天的对话记录写一篇简短的日记。要求：1. 用第一人称\"我\"来写，体现肥牛的邪恶俏皮性格 2. 总结今天和用户的互动感受 3. 不要太长，3-5句话即可 4. 保持肥牛的风格 5. 不要使用情绪标签<>"
-  },
-  "version": "v6.2.3",
-  "plugins": {
-    "mood_chat": {
-      "enabled": true
-    },
-    "auto_chat": {
-      "enabled": false
-    },
-    "bilibili_live": {
-      "enabled": true
-    },
-    "memory": {
-      "enabled": true
-    },
-    "diary": {
-      "enabled": true
-    },
-    "memos": {
-      "enabled": true
-    },
-    "dynamic_persona": {
-      "enabled": false,
-      "update_frequency": 3
-    },
-    "time_awareness": {
-      "enabled": false
-    },
-    "test_logger": {
-      "enabled": false
-    },
-    "translation": {
-      "enabled": false
-    },
-    "context_compressor": {
-      "enabled": false
-    },
-    "hello_python": {
-      "enabled": false
-    },
-    "notes": {
-      "enabled": false,
-      "file": "AI记录室/备忘录.json"
-    },
-    "check_in": {
-      "enabled": false,
-      "interval": 20
-    }
-  }
+  "version": "v6.2.5"
 }

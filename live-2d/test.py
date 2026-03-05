@@ -1837,7 +1837,6 @@ class set_pyqt(QWidget):
     def set_btu(self):
         self.ui.pushButton.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(1))
         self.ui.pushButton_3.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(0))
-        self.ui.pushButton_2.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(5))  # 直播改成5
         self.ui.pushButton_5.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(2))
         self.ui.pushButton_6.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(3))
         self.ui.pushButton_animation.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(4))  # 动画改成4
@@ -1848,6 +1847,8 @@ class set_pyqt(QWidget):
         self.ui.pushButton_tools.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(10))  # 工具屋页面
         self.ui.pushButton_cloud_config.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(12))  # 云端配置页面
         self.ui.pushButton_prompt_market.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(13))  # 提示词广场页面
+        self.setup_plugins_page()
+        self.ui.pushButton_plugins.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(self._plugins_page_index))
         self.ui.pushButton_chat_history.clicked.connect(self.open_chat_history)  # 对话记录页面
         self.ui.saveConfigButton.clicked.connect(self.save_config)
         # 复位皮套位置按钮
@@ -2398,19 +2399,15 @@ class set_pyqt(QWidget):
         self.ui.doubleSpinBox_temperature.setValue(self.config['llm'].get('temperature', 1.0))
         self.ui.lineEdit_4.setText(self.config['ui']['intro_text'])
         self.ui.lineEdit_5.setText(str(self.config['context']['max_messages']))
-        self.ui.lineEdit_idle_time.setText(str(self.config['auto_chat']['idle_time']))
-        self.ui.textEdit_prompt.setPlainText(self.config['auto_chat']['prompt'])
-        self.ui.lineEdit_6.setText(str(self.config['bilibili']['roomId']))
+        _ac_cfg = self._load_plugin_file_config('built-in', 'auto-chat')
+        self.ui.lineEdit_idle_time.setText(str(_ac_cfg.get('idle_time', 15)))
+        self.ui.textEdit_prompt.setPlainText(_ac_cfg.get('prompt', ''))
         self.ui.checkBox_mcp.setChecked(self.config.get('tools', {}).get('enabled', True))
         self.ui.checkBox_mcp_enable.setChecked(self.config.get('mcp', {}).get('enabled', True))
         self.ui.checkBox_5.setChecked(self.config['vision']['auto_screenshot'])
         self.ui.checkBox_3.setChecked(self.config['ui']['show_chat_box'])
         self.ui.checkBox_4.setChecked(self.config['context']['enable_limit'])
-        self.ui.checkBox.setChecked(self.config['auto_chat']['enabled'])
-        self.ui.checkBox_2.setChecked(self.config['bilibili']['enabled'])
-        # 新增：动态主动对话配置
-        self.ui.checkBox_mood_chat_enabled.setChecked(self.config.get('mood_chat', {}).get('enabled', True))
-        self.ui.textEdit_mood_chat_prompt.setPlainText(self.config.get('mood_chat', {}).get('prompt', ''))
+        self.ui.checkBox.setChecked(_ac_cfg.get('enabled', False))
         # 新增ASR和TTS配置
         self.ui.checkBox_asr.setChecked(self.config['asr']['enabled'])
         self.ui.checkBox_tts.setChecked(self.config['tts']['enabled'])
@@ -2423,13 +2420,6 @@ class set_pyqt(QWidget):
         index = self.ui.comboBox_tts_language.findText(tts_language)
         if index >= 0:
             self.ui.comboBox_tts_language.setCurrentIndex(index)
-
-        # 新增：设置翻译配置
-        self.ui.checkBox_translation_enabled.setChecked(self.config['translation']['enabled'])
-        self.ui.lineEdit_translation_api_key.setText(self.config['translation']['api_key'])
-        self.ui.lineEdit_translation_api_url.setText(self.config['translation']['api_url'])
-        self.ui.lineEdit_translation_model.setText(self.config['translation']['model'])
-        self.ui.textEdit_translation_prompt.setPlainText(self.config['translation']['system_prompt'])
 
         # 新增：设置UI设置配置
         subtitle_labels = self.config.get('subtitle_labels', {})
@@ -2488,13 +2478,6 @@ class set_pyqt(QWidget):
         self.ui.lineEdit_gateway_base_url.setText(api_gateway.get('base_url', ''))
         self.ui.lineEdit_gateway_api_key.setText(api_gateway.get('api_key', ''))
 
-        # 新增：设置总结压缩配置
-        compression_config = self.config.get('context', {}).get('compression', {})
-        self.ui.checkBox_compression_enabled.setChecked(compression_config.get('enabled', False))
-        self.ui.lineEdit_compression_trigger.setText(str(compression_config.get('trigger_threshold', 15)))
-        self.ui.lineEdit_compression_keep.setText(str(compression_config.get('keep_recent', 2)))
-        self.ui.textEdit_compression_prompt.setPlainText(compression_config.get('prompt', '请将以下历史对话总结为简洁的要点，保留关键信息和上下文。要求：1. 总结为200字以内的关键要点 2. 保留重要的人名、事件、决定等 3. 使用简洁的语言 4. 只输出总结内容，不要额外说明'))
-
         # 新增：设置辅助视觉模型配置
         vision_config = self.config.get('vision', {})
         self.ui.checkBox_use_vision_model.setChecked(vision_config.get('use_vision_model', True))
@@ -2503,15 +2486,302 @@ class set_pyqt(QWidget):
         self.ui.lineEdit_vision_api_url.setText(vision_model_config.get('api_url', ''))
         self.ui.lineEdit_vision_model.setText(vision_model_config.get('model', ''))
 
-        # 新增：设置AI日记配置
-        ai_diary_config = self.config.get('ai_diary', {})
-        self.ui.checkBox_diary_enabled.setChecked(ai_diary_config.get('enabled', False))
-        self.ui.lineEdit_diary_idle_time.setText(str(ai_diary_config.get('idle_time', 20000)))
-        self.ui.lineEdit_diary_file.setText(ai_diary_config.get('diary_file', 'AI记录室/AI日记.txt'))
-        self.ui.textEdit_diary_prompt.setPlainText(ai_diary_config.get('prompt', '请以fake neuro（肥牛）的身份，基于今天的对话记录写一篇简短的日记。'))
 
-        # 新增：设置Memos记忆配置（从独立的memos_config.json读取）
-        self.load_memos_config()
+
+    # ===== 插件配置文件读写 =====
+
+    def _plugin_config_path(self, plugin_type, plugin_name):
+        app_path = get_app_path()
+        return os.path.join(app_path, 'plugins', plugin_type, plugin_name, 'plugin_config.json')
+
+    def _load_plugin_file_config(self, plugin_type, plugin_name):
+        path = self._plugin_config_path(plugin_type, plugin_name)
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    def _save_plugin_file_config(self, plugin_type, plugin_name, cfg):
+        path = self._plugin_config_path(plugin_type, plugin_name)
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            QMessageBox.warning(self, '保存失败', f'插件配置保存失败: {e}')
+
+    # ===== 插件管理页 =====
+
+    def setup_plugins_page(self):
+        app_path = get_app_path()
+        self._plugin_infos = []
+
+        # --- 列表页：对齐提示词广场布局风格 ---
+        list_page = QWidget()
+        outer = QVBoxLayout(list_page)
+        outer.setContentsMargins(20, 20, 20, 20)
+        outer.setSpacing(15)
+
+        tab_widget = QTabWidget()
+        tab_widget.setFont(self._ui_font())
+        outer.addWidget(tab_widget)
+
+        for plugin_type, base_dir, tab_title in [
+            ('built-in',  os.path.join(app_path, 'plugins', 'built-in'),  '内置插件'),
+            ('community', os.path.join(app_path, 'plugins', 'community'), '社区插件'),
+        ]:
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.NoFrame)
+            scroll.setStyleSheet('QScrollArea { border: none; background-color: transparent; }')
+            content = QWidget()
+            content.setStyleSheet('background-color: transparent;')
+            layout = QVBoxLayout(content)
+            layout.setContentsMargins(0, 10, 0, 10)
+            layout.setSpacing(15)
+
+            if os.path.isdir(base_dir):
+                for entry in sorted(os.listdir(base_dir)):
+                    plugin_dir = os.path.join(base_dir, entry)
+                    meta_path  = os.path.join(plugin_dir, 'metadata.json')
+                    cfg_path   = os.path.join(plugin_dir, 'plugin_config.json')
+                    if not os.path.isdir(plugin_dir) or not os.path.exists(meta_path):
+                        continue
+                    try:
+                        with open(meta_path, 'r', encoding='utf-8') as f:
+                            meta = json.load(f)
+                    except Exception:
+                        continue
+                    cfg = {}
+                    if os.path.exists(cfg_path):
+                        try:
+                            with open(cfg_path, 'r', encoding='utf-8') as f:
+                                cfg = json.load(f)
+                        except Exception:
+                            pass
+                    info = {'meta': meta, 'cfg': cfg, 'cfg_path': cfg_path,
+                            'plugin_type': plugin_type, 'plugin_name': entry}
+                    self._plugin_infos.append(info)
+                    self._build_plugin_row(info, layout)
+
+            layout.addStretch()
+            scroll.setWidget(content)
+            tab_widget.addTab(scroll, tab_title)
+
+        self._plugins_page_index = self.ui.stackedWidget.addWidget(list_page)
+
+        # --- 详情页（对齐提示词广场按钮风格）---
+        self._detail_page = QWidget()
+        d = QVBoxLayout(self._detail_page)
+        d.setContentsMargins(20, 20, 20, 20)
+        d.setSpacing(15)
+
+        back_btn = QPushButton('← 返回插件列表')
+        back_btn.setFont(QFont('微软雅黑', 11, QFont.Bold))
+        back_btn.setMinimumHeight(40)
+        back_btn.setStyleSheet("""
+            QPushButton { background-color: #3498db; color: white; border-radius: 8px; padding: 8px; border: none; }
+            QPushButton:hover { background-color: #5dade2; }
+            QPushButton:pressed { background-color: #2874a6; }
+        """)
+        back_btn.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(self._plugins_page_index))
+        d.addWidget(back_btn)
+
+        self._detail_name_lbl = QLabel()
+        self._detail_name_lbl.setFont(self._ui_font(11, bold=True))
+        d.addWidget(self._detail_name_lbl)
+
+        self._detail_desc_lbl = QLabel()
+        self._detail_desc_lbl.setFont(self._ui_font())
+        self._detail_desc_lbl.setWordWrap(True)
+        d.addWidget(self._detail_desc_lbl)
+
+        self._detail_form_layout = QVBoxLayout()
+        self._detail_form_layout.setSpacing(15)
+        d.addLayout(self._detail_form_layout)
+
+        d.addStretch()
+
+        self._plugins_detail_index = self.ui.stackedWidget.addWidget(self._detail_page)
+        self._detail_edits = {}
+        self._detail_current_info = None
+
+    def _ui_font(self, size=10, bold=False):
+        f = self.font()
+        f.setFamily('微软雅黑')
+        f.setPointSize(size)
+        f.setBold(bold)
+        return f
+
+    def _build_plugin_row(self, info, parent_layout):
+        meta       = info['meta']
+        cfg        = info['cfg']
+        cfg_path   = info['cfg_path']
+        extra_keys = [k for k in cfg if k != 'enabled']
+
+        display_name = meta.get('displayName', meta.get('name', ''))
+        desc         = meta.get('description', '')
+
+        # 白色卡片容器，和提示词广场风格一致
+        card = QWidget()
+        card.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border-radius: 8px;
+                border: 1px solid #e0e0e0;
+            }
+        """)
+
+        card_layout = QHBoxLayout(card)
+        card_layout.setContentsMargins(15, 12, 15, 12)
+        card_layout.setSpacing(15)
+
+        # 左：插件名称 + 描述
+        summary_text = f'<b>{display_name}</b>'
+        if desc:
+            summary_text += f'  <span style="color: #777; font-size: 9pt;">{desc}</span>'
+        title_lbl = QLabel(summary_text)
+        title_lbl.setFont(QFont('微软雅黑', 10))
+        title_lbl.setStyleSheet('color: #2c3e50; border: none; background: transparent;')
+        title_lbl.setWordWrap(True)
+        card_layout.addWidget(title_lbl, stretch=1)
+
+        # 右：开关 checkbox + 可选配置按钮
+        if os.path.exists(cfg_path):
+            chk = QCheckBox('启用')
+            chk.setFont(self._ui_font())
+            chk.setChecked(cfg.get('enabled', False))
+            chk.stateChanged.connect(lambda state, p=cfg_path, c=cfg: self._on_plugin_enabled_changed(p, c, state))
+            card_layout.addWidget(chk)
+            if extra_keys:
+                btn = QPushButton('配置')
+                btn.setFont(self._ui_font())
+                btn.setMinimumSize(60, 30)
+                btn.clicked.connect(lambda checked=False, i=info: self._open_plugin_detail(i))
+                card_layout.addWidget(btn)
+        else:
+            always_lbl = QLabel('始终启用')
+            always_lbl.setFont(self._ui_font())
+            always_lbl.setStyleSheet('color: #777; border: none; background: transparent;')
+            card_layout.addWidget(always_lbl)
+
+        parent_layout.addWidget(card)
+
+    def _open_plugin_detail(self, info):
+        """切换到详情页并刷新内容"""
+        self._detail_current_info = info
+        meta = info['meta']
+        cfg  = info['cfg']
+
+        self._detail_name_lbl.setText(meta.get('displayName', meta.get('name', '')))
+        desc = meta.get('description', '')
+        self._detail_desc_lbl.setText(desc)
+        self._detail_desc_lbl.setVisible(bool(desc))
+
+        # 清空旧表单
+        while self._detail_form_layout.count():
+            item = self._detail_form_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                while item.layout().count():
+                    sub = item.layout().takeAt(0)
+                    if sub.widget():
+                        sub.widget().deleteLater()
+        self._detail_edits = {}
+
+        extra_keys = [k for k in cfg if k != 'enabled']
+        for key in extra_keys:
+            val = cfg[key]
+            if isinstance(val, dict):
+                # 嵌套 dict：显示分组标题 + 子字段
+                section_lbl = QLabel(f'── {key} ──')
+                section_lbl.setFont(self._ui_font(bold=True))
+                self._detail_form_layout.addWidget(section_lbl)
+                for sub_key, sub_val in val.items():
+                    row = QHBoxLayout()
+                    row.setSpacing(10)
+                    lbl = QLabel(f'  {sub_key}：')
+                    lbl.setFont(self._ui_font())
+                    lbl.setFixedWidth(120)
+                    row.addWidget(lbl)
+                    edit = QLineEdit(str(sub_val))
+                    edit.setFont(self._ui_font())
+                    self._detail_edits[f'{key}.{sub_key}'] = edit
+                    row.addWidget(edit)
+                    self._detail_form_layout.addLayout(row)
+            else:
+                row = QHBoxLayout()
+                row.setSpacing(10)
+                lbl = QLabel(key + '：')
+                lbl.setFont(self._ui_font())
+                lbl.setFixedWidth(120)
+                row.addWidget(lbl)
+                edit = QLineEdit(str(val))
+                edit.setFont(self._ui_font())
+                self._detail_edits[key] = edit
+                row.addWidget(edit)
+                self._detail_form_layout.addLayout(row)
+
+        self.ui.stackedWidget.setCurrentIndex(self._plugins_detail_index)
+
+    def _save_plugin_detail(self):
+        if not self._detail_current_info:
+            return
+        cfg      = self._detail_current_info['cfg']
+        cfg_path = self._detail_current_info['cfg_path']
+        for key, edit in self._detail_edits.items():
+            text = edit.text()
+            if '.' in key:
+                # 嵌套 dict 字段，如 llm.model
+                parent_key, child_key = key.split('.', 1)
+                original = cfg.get(parent_key, {}).get(child_key)
+                if isinstance(original, int):
+                    try:
+                        cfg[parent_key][child_key] = int(text)
+                    except ValueError:
+                        QMessageBox.warning(self, '格式错误', f'{key} 必须是整数')
+                        return
+                elif isinstance(original, float):
+                    try:
+                        cfg[parent_key][child_key] = float(text)
+                    except ValueError:
+                        QMessageBox.warning(self, '格式错误', f'{key} 必须是数字')
+                        return
+                else:
+                    cfg[parent_key][child_key] = text
+            else:
+                original = cfg.get(key)
+                if isinstance(original, int):
+                    try:
+                        cfg[key] = int(text)
+                    except ValueError:
+                        QMessageBox.warning(self, '格式错误', f'{key} 必须是整数')
+                        return
+                elif isinstance(original, float):
+                    try:
+                        cfg[key] = float(text)
+                    except ValueError:
+                        QMessageBox.warning(self, '格式错误', f'{key} 必须是数字')
+                        return
+                else:
+                    cfg[key] = text
+        try:
+            with open(cfg_path, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+            self.toast.show_message("配置已保存", 1500)
+        except Exception as e:
+            self.toast.show_message(f"保存失败: {e}", 3000)
+
+    def _on_plugin_enabled_changed(self, cfg_path, cfg, state):
+        cfg['enabled'] = (state == Qt.Checked)
+        try:
+            with open(cfg_path, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            QMessageBox.warning(self, '保存失败', str(e))
 
     def toggle_live_2d(self):
         """切换桌宠启动/关闭状态"""
@@ -2786,69 +3056,12 @@ class set_pyqt(QWidget):
         except Exception as e:
             print(f"保存Minecraft配置失败: {e}")
 
-    def load_memos_config(self):
-        """加载Memos记忆系统配置文件"""
-        try:
-            app_path = get_app_path()
-            # memos_system在父目录，不是当前目录
-            memos_config_path = os.path.join(os.path.dirname(app_path), 'memos_system', 'config', 'memos_config.json')
-            print(f"[DEBUG] Memos配置路径: {memos_config_path}")
-            print(f"[DEBUG] 文件是否存在: {os.path.exists(memos_config_path)}")
-
-            if os.path.exists(memos_config_path):
-                with open(memos_config_path, 'r', encoding='utf-8') as f:
-                    memos_config = json.load(f)
-
-                print(f"[DEBUG] Memos配置内容: {memos_config}")
-                llm_config = memos_config.get('llm', {}).get('config', {})
-                print(f"[DEBUG] LLM配置: {llm_config}")
-                self.ui.lineEdit_memos_model.setText(llm_config.get('model', ''))
-                self.ui.lineEdit_memos_api_key.setText(llm_config.get('api_key', ''))
-                self.ui.lineEdit_memos_base_url.setText(llm_config.get('base_url', ''))
-                print(f"[DEBUG] Memos配置已加载到UI")
-            else:
-                print(f"[DEBUG] Memos配置文件不存在，设置为空")
-                # 如果文件不存在，设置为空
-                self.ui.lineEdit_memos_model.setText('')
-                self.ui.lineEdit_memos_api_key.setText('')
-                self.ui.lineEdit_memos_base_url.setText('')
-        except Exception as e:
-            print(f"加载Memos配置失败: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def save_memos_config(self):
-        """保存Memos记忆系统配置文件"""
-        try:
-            app_path = get_app_path()
-            # memos_system在父目录，不是当前目录
-            memos_config_path = os.path.join(os.path.dirname(app_path), 'memos_system', 'config', 'memos_config.json')
-
-            # 创建目录（如果不存在）
-            os.makedirs(os.path.dirname(memos_config_path), exist_ok=True)
-
-            # 读取原文件内容
-            with open(memos_config_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-
-            # 加载JSON配置
-            config = json.loads(content)
-
-            # 只修改llm.config的三个字段值，按照标准顺序：api_key, base_url, model
-            if 'llm' in config and 'config' in config['llm']:
-                config['llm']['config']['api_key'] = self.ui.lineEdit_memos_api_key.text()
-                config['llm']['config']['base_url'] = self.ui.lineEdit_memos_base_url.text()
-                config['llm']['config']['model'] = self.ui.lineEdit_memos_model.text()
-
-            # 保存时保持原格式（2空格缩进，确保字段顺序）
-            with open(memos_config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
-
-            print("Memos配置已保存")
-        except Exception as e:
-            print(f"保存Memos配置失败: {e}")
-
     def save_config(self):
+        # 如果当前在插件详情页，同时保存插件配置
+        if self.ui.stackedWidget.currentIndex() == self._plugins_detail_index:
+            self._save_plugin_detail()
+            return
+
         current_config = self.load_config()
 
         current_config['llm'] = {
@@ -2861,15 +3074,10 @@ class set_pyqt(QWidget):
 
         current_config["ui"]["intro_text"] = self.ui.lineEdit_4.text()
         current_config['context']['max_messages'] = int(self.ui.lineEdit_5.text())
-        current_config['auto_chat']['idle_time'] = int(self.ui.lineEdit_idle_time.text())
-        current_config['auto_chat']['prompt'] = self.ui.textEdit_prompt.toPlainText()
-
-        # 处理房间号
-        room_id_text = self.ui.lineEdit_6.text()
-        if room_id_text == "你的哔哩哔哩直播间的房间号" or room_id_text == "":
-            current_config['bilibili']['roomId'] = 0
-        else:
-            current_config['bilibili']['roomId'] = int(room_id_text)
+        _ac_cfg = self._load_plugin_file_config('built-in', 'auto-chat')
+        _ac_cfg['idle_time'] = int(self.ui.lineEdit_idle_time.text()) if self.ui.lineEdit_idle_time.text() else 15
+        _ac_cfg['prompt'] = self.ui.textEdit_prompt.toPlainText()
+        self._save_plugin_file_config('built-in', 'auto-chat', _ac_cfg)
 
         # 确保tools配置存在
         if 'tools' not in current_config:
@@ -2893,21 +3101,6 @@ class set_pyqt(QWidget):
         current_config['context']['enable_limit'] = self.ui.checkBox_4.isChecked()
         current_config['context']['persistent_history'] = self.ui.checkBox_persistent_history.isChecked()
 
-        # 新增：保存总结压缩配置
-        if 'compression' not in current_config['context']:
-            current_config['context']['compression'] = {}
-        current_config['context']['compression']['enabled'] = self.ui.checkBox_compression_enabled.isChecked()
-        current_config['context']['compression']['trigger_threshold'] = int(self.ui.lineEdit_compression_trigger.text()) if self.ui.lineEdit_compression_trigger.text() else 15
-        current_config['context']['compression']['keep_recent'] = int(self.ui.lineEdit_compression_keep.text()) if self.ui.lineEdit_compression_keep.text() else 2
-        current_config['context']['compression']['prompt'] = self.ui.textEdit_compression_prompt.toPlainText()
-
-        current_config['auto_chat']['enabled'] = self.ui.checkBox.isChecked()
-        current_config['bilibili']['enabled'] = self.ui.checkBox_2.isChecked()
-        # 新增：保存动态主动对话配置
-        if 'mood_chat' not in current_config:
-            current_config['mood_chat'] = {}
-        current_config['mood_chat']['enabled'] = self.ui.checkBox_mood_chat_enabled.isChecked()
-        current_config['mood_chat']['prompt'] = self.ui.textEdit_mood_chat_prompt.toPlainText()
         # 保存本地ASR和TTS配置（保持现有配置结构，只更新enabled状态）
         current_config['asr']['enabled'] = self.ui.checkBox_asr.isChecked()
         current_config['asr']['voice_barge_in'] = self.ui.checkBox_voice_barge_in.isChecked()
@@ -2916,26 +3109,6 @@ class set_pyqt(QWidget):
         # 保存TTS语言
         tts_language = self.ui.comboBox_tts_language.currentText().split(' - ')[0]
         current_config['tts']['language'] = tts_language
-
-        # 新增：保存翻译配置
-        current_config['translation'] = {
-            "enabled": self.ui.checkBox_translation_enabled.isChecked(),
-            "api_key": self.ui.lineEdit_translation_api_key.text(),
-            "api_url": self.ui.lineEdit_translation_api_url.text(),
-            "model": self.ui.lineEdit_translation_model.text(),
-            "system_prompt": self.ui.textEdit_translation_prompt.toPlainText()
-        }
-
-        # 新增：保存AI日记配置
-        current_config['ai_diary'] = {
-            "enabled": self.ui.checkBox_diary_enabled.isChecked(),
-            "idle_time": int(self.ui.lineEdit_diary_idle_time.text()) if self.ui.lineEdit_diary_idle_time.text() else 20000,
-            "diary_file": self.ui.lineEdit_diary_file.text(),
-            "prompt": self.ui.textEdit_diary_prompt.toPlainText()
-        }
-
-        # 新增：保存Memos记忆配置（保存到独立的memos_config.json）
-        self.save_memos_config()
 
         # 新增：保存云端配置
         if 'cloud' not in current_config:

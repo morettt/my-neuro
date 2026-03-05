@@ -1,0 +1,22 @@
+{
+  "enabled": false,
+  "intervals": {
+    "excited": 5,
+    "normal": 30,
+    "low": 60,
+    "silent": -1
+  },
+  "thresholds": {
+    "excited": 90,
+    "normal": 80,
+    "low": 60
+  },
+  "mood_changes": {
+    "user_response": 5,
+    "no_response": -10,
+    "regression_target": 80,
+    "regression_interval": 60000
+  },
+  "response_timeout": 10000,
+  "prompt": "[System: Ignore this message. Please proactively continue the conversation based on context naturally. Output the response directly.]"
+}

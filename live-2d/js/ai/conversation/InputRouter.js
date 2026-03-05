@@ -9,10 +9,9 @@ const { MessageEvent } = require('../../core/message-event.js');
  * 负责路由不同来源的输入（语音/文本/弹幕）
  */
 class InputRouter {
-    constructor(conversationCore, gameIntegration, memoryManager, contextCompressor, memosClient, config) {
+    constructor(conversationCore, gameIntegration, _unused1, contextCompressor, memosClient, config) {
         this.conversationCore = conversationCore;
         this.gameIntegration = gameIntegration;
-        this.memoryManager = memoryManager;
         this.contextCompressor = contextCompressor;
         this.memosClient = memosClient;  // 🔥 新增：MemOS 客户端
         this.config = config;
@@ -85,9 +84,7 @@ class InputRouter {
         }
 
         // 运行插件 onUserInput 钩子
-        // memory 插件：checkAndSaveMemoryAsync
-        // memos  插件：injectRelevantMemories
-        // 均在此处通过钩子触发，无需在下方重复调用
+        // memos 插件：injectRelevantMemories 均在此处通过钩子触发，无需在下方重复调用
         const event = await this._runUserInputHooks(text, 'voice');
         if (event._defaultPrevented) return; // 插件自行处理，跳过 LLM
 

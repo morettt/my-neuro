@@ -1,7 +1,4 @@
 // plugins/built-in/mood-chat/index.js
-// 心情对话系统插件 - Service Plugin
-// 包装现有 MoodChatModule，使其以插件形式运行
-
 const { Plugin } = require('../../../js/core/plugin-base.js');
 const { MoodChatModule } = require('../../../js/ai/MoodChatModule.js');
 
@@ -12,8 +9,8 @@ class MoodChatPlugin extends Plugin {
     }
 
     async onStart() {
-        const config = this.context.getConfig();
-        this._module = new MoodChatModule(config);
+        const pluginConfig = this.context.getPluginFileConfig();
+        this._module = new MoodChatModule(pluginConfig);
         global.moodChatModule = this._module;
         this._module.start();
     }

@@ -39,6 +39,7 @@ class PluginContext:
     def __init__(self, send_fn, config=None):
         self._send = send_fn
         self._config = config or {}
+        self._plugin_file_config = {}
         self.storage = _Storage()
 
     def log(self, level, message):
@@ -52,8 +53,8 @@ class PluginContext:
         return self._config
 
     def get_plugin_config(self):
-        name = self._config.get('_plugin_name', '')
-        return self._config.get('plugins', {}).get(name, {})
+        """获取插件自身的 plugin_config.json 内容"""
+        return self._plugin_file_config
 
 
 # ===== 事件对象 =====
@@ -122,6 +123,8 @@ async def _dispatch(plugin, msg):
         if event == 'onInit':
             if 'config' in data:
                 plugin.context._config = data['config']
+            if 'pluginFileConfig' in data:
+                plugin.context._plugin_file_config = data['pluginFileConfig']
             await plugin.on_init()
             return {'id': id_, 'status': 'ok'}
 
