@@ -296,6 +296,29 @@ class ToastNotification(QLabel):
             self.opacity_animation.start()
 
 
+class _CloneWorker(QThread):
+    """后台执行 git clone，结果通过信号回到主线程"""
+    done = pyqtSignal(bool, str)  # (success, error_message)
+
+    def __init__(self, repo_url, target_dir):
+        super().__init__()
+        self.repo_url = repo_url
+        self.target_dir = target_dir
+
+    def run(self):
+        try:
+            result = subprocess.run(
+                ["git", "clone", self.repo_url, self.target_dir],
+                capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=120
+            )
+            if result.returncode == 0:
+                self.done.emit(True, "")
+            else:
+                self.done.emit(False, result.stderr.strip())
+        except Exception as ex:
+            self.done.emit(False, str(ex))
+
+
 class CustomTitleBar(QWidget):
     """自定义标题栏"""
 
@@ -2570,6 +2593,47 @@ class set_pyqt(QWidget):
             scroll.setWidget(content)
             tab_widget.addTab(scroll, tab_title)
 
+        # --- 插件广场标签 ---
+        market_tab = QWidget()
+        market_tab.setStyleSheet('background-color: transparent;')
+        market_vbox = QVBoxLayout(market_tab)
+        market_vbox.setContentsMargins(0, 10, 0, 0)
+        market_vbox.setSpacing(10)
+
+        # 刷新按钮
+        refresh_btn = QPushButton('🔄 刷新列表')
+        refresh_btn.setFont(self._ui_font(10, bold=True))
+        refresh_btn.setMinimumHeight(36)
+        refresh_btn.setStyleSheet("""
+            QPushButton { background-color: #27ae60; color: white; border-radius: 8px; border: none; padding: 6px 14px; }
+            QPushButton:hover { background-color: #2ecc71; }
+            QPushButton:pressed { background-color: #1e8449; }
+        """)
+        refresh_btn.clicked.connect(self.refresh_plugin_market)
+        market_vbox.addWidget(refresh_btn)
+
+        # 卡片滚动区
+        market_scroll = QScrollArea()
+        market_scroll.setWidgetResizable(True)
+        market_scroll.setFrameShape(QFrame.NoFrame)
+        market_scroll.setStyleSheet('QScrollArea { border: none; background-color: transparent; }')
+        self._plugin_market_content = QWidget()
+        self._plugin_market_content.setStyleSheet('background-color: transparent;')
+        self._plugin_market_layout = QVBoxLayout(self._plugin_market_content)
+        self._plugin_market_layout.setContentsMargins(0, 0, 0, 0)
+        self._plugin_market_layout.setSpacing(12)
+        # 初始提示
+        hint = QLabel('点击「🔄 刷新列表」加载插件广场')
+        hint.setAlignment(Qt.AlignCenter)
+        hint.setFont(self._ui_font(11))
+        hint.setStyleSheet('color: #aaa; border: none;')
+        self._plugin_market_layout.addWidget(hint)
+        self._plugin_market_layout.addStretch()
+        market_scroll.setWidget(self._plugin_market_content)
+        market_vbox.addWidget(market_scroll)
+
+        tab_widget.addTab(market_tab, '🧩 插件广场')
+
         self._plugins_page_index = self.ui.stackedWidget.addWidget(list_page)
 
         # --- 详情页（对齐提示词广场按钮风格）---
@@ -2782,6 +2846,138 @@ class set_pyqt(QWidget):
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
         except Exception as e:
             QMessageBox.warning(self, '保存失败', str(e))
+
+    # ===== 插件广场 =====
+
+    def refresh_plugin_market(self):
+        RAW_URL = "https://raw.githubusercontent.com/morettt/my-neuro/main/live-2d/plugins/plugin-house/plugin_hub.json"
+        print("开始刷新插件广场...")
+        try:
+            resp = requests.get(RAW_URL, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            plugins = [
+                {
+                    "id":           key,
+                    "display_name": info.get("display_name", key),
+                    "desc":         info.get("desc", ""),
+                    "author":       info.get("author", ""),
+                    "repo":         info.get("repo", ""),
+                }
+                for key, info in data.items()
+            ]
+            self._display_plugin_market(plugins)
+            self.toast.show_message(f"插件广场已加载，共 {len(plugins)} 个插件", 2000)
+        except Exception as e:
+            print(f"拉取插件列表失败: {e}")
+            self.toast.show_message(f"获取插件列表失败: {e}", 3000)
+
+    def _display_plugin_market(self, plugins):
+        layout = self._plugin_market_layout
+        while layout.count() > 0:
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        app_path = get_app_path()
+        for plugin in plugins:
+            card = self._build_market_card(plugin, app_path)
+            layout.addWidget(card)
+        layout.addStretch()
+
+    def _build_market_card(self, plugin, app_path):
+        target_dir = os.path.join(app_path, "plugins", "community", plugin["id"])
+        already_installed = os.path.exists(target_dir)
+
+        card = QWidget()
+        card.setStyleSheet("""
+            QWidget { background-color: white; border-radius: 8px; border: 1px solid #e0e0e0; }
+        """)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(14, 12, 14, 12)
+        card_layout.setSpacing(6)
+
+        # 标题行 + 安装按钮
+        title_row = QHBoxLayout()
+        name_lbl = QLabel(f"🧩 <b>{plugin['display_name']}</b>")
+        name_lbl.setFont(self._ui_font(11))
+        name_lbl.setStyleSheet('color: #2c3e50; border: none;')
+        title_row.addWidget(name_lbl, 1)
+
+        install_btn = QPushButton("✓ 已安装" if already_installed else "⬇ 安装")
+        install_btn.setFont(self._ui_font(9, bold=True))
+        install_btn.setMinimumSize(88, 32)
+        install_btn.setEnabled(not already_installed)
+        install_btn.setStyleSheet("""
+            QPushButton { background-color: #27ae60; color: white; border-radius: 7px; border: none; }
+            QPushButton:hover { background-color: #2ecc71; }
+            QPushButton:pressed { background-color: #1e8449; }
+            QPushButton:disabled { background-color: #95a5a6; }
+        """)
+        install_btn.clicked.connect(lambda _, p=plugin, b=install_btn: self._install_plugin(p, b))
+        title_row.addWidget(install_btn)
+        card_layout.addLayout(title_row)
+
+        # 描述
+        if plugin.get("desc"):
+            desc_lbl = QLabel(plugin["desc"])
+            desc_lbl.setFont(self._ui_font(9))
+            desc_lbl.setStyleSheet('color: #555; border: none;')
+            desc_lbl.setWordWrap(True)
+            card_layout.addWidget(desc_lbl)
+
+        # 作者 + 来源
+        meta_row = QHBoxLayout()
+        author_lbl = QLabel(f"👤 {plugin.get('author', '未知')}")
+        author_lbl.setFont(self._ui_font(8))
+        author_lbl.setStyleSheet('color: #888; border: none;')
+        meta_row.addWidget(author_lbl)
+
+        repo = plugin.get("repo", "")
+        if repo:
+            repo_lbl = QLabel(f'<a href="{repo}" style="color:#3498db;">📎 查看来源</a>')
+            repo_lbl.setFont(self._ui_font(8))
+            repo_lbl.setStyleSheet('border: none;')
+            repo_lbl.setOpenExternalLinks(True)
+            meta_row.addWidget(repo_lbl)
+
+        meta_row.addStretch()
+        card_layout.addLayout(meta_row)
+        return card
+
+    def _install_plugin(self, plugin, btn):
+        repo_url  = plugin.get("repo", "")
+        plugin_id = plugin.get("id", "")
+        if not repo_url or not plugin_id:
+            self.toast.show_message("插件信息不完整，无法安装", 3000)
+            return
+
+        target_dir = os.path.join(get_app_path(), "plugins", "community", plugin_id)
+        if os.path.exists(target_dir):
+            self.toast.show_message(f"{plugin['display_name']} 已安装", 2000)
+            return
+
+        btn.setEnabled(False)
+        btn.setText("安装中...")
+        self.toast.show_message(f"正在安装 {plugin['display_name']}...", 2000)
+
+        worker = _CloneWorker(repo_url, target_dir)
+
+        def on_done(success, err):
+            if success:
+                btn.setText("✓ 已安装")
+                self.toast.show_message(f"✓ {plugin['display_name']} 安装成功！重启后生效", 4000)
+            else:
+                btn.setText("⬇ 安装")
+                btn.setEnabled(True)
+                self.toast.show_message(f"✗ 安装失败: {err}", 4000)
+                print(f"插件安装失败: {err}")
+
+        worker.done.connect(on_done)
+        worker.start()
+        if not hasattr(self, '_clone_workers'):
+            self._clone_workers = []
+        self._clone_workers.append(worker)
 
     def toggle_live_2d(self):
         """切换桌宠启动/关闭状态"""
