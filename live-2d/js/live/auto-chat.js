@@ -4,23 +4,22 @@ const { eventBus } = require('../core/event-bus.js');
 const { Events } = require('../core/events.js');
 
 class AutoChatModule {
-   constructor(config, ttsProcessor) {
-       this.config = config;
+   constructor(pluginConfig, mainConfig, ttsProcessor) {
        // 注意：ttsProcessor参数保留但不再直接使用，因为sendToLLM已经处理TTS
+       this.pluginConfig = pluginConfig;
        this.timeoutId = null;
        this.isRunning = false;
-       this.enabled = config.auto_chat.enabled;
-       this.idleTimeThreshold = config.auto_chat.idle_time * 1000; // 转换为毫秒
+       this.idleTimeThreshold = (pluginConfig.idle_time || 15) * 1000; // 转换为毫秒
        this.lastInteractionTime = Date.now();
        this.isProcessing = false;
 
        // 自动截图相关配置
-       this.autoScreenshot = config.vision?.auto_screenshot || false;
-       this.screenshotEnabled = config.vision?.enabled || false;
+       this.autoScreenshot = mainConfig.vision?.auto_screenshot || false;
+       this.screenshotEnabled = mainConfig.vision?.enabled || false;
    }
 
    start() {
-       if (!this.enabled || this.isRunning) return;
+       if (this.isRunning) return;
 
        console.log(`自动对话启动，间隔：${this.idleTimeThreshold}ms`);
        this.isRunning = true;
@@ -90,7 +89,7 @@ class AutoChatModule {
                return;
            }
 
-           let prompt = `[自动触发] ${this.config.auto_chat.prompt}`;
+           let prompt = `[自动触发] ${this.pluginConfig.prompt || ''}`;
 
            // 🎯 核心简化：检查是否需要截图，如果需要则修改prompt让sendToLLM处理
            if (this.screenshotEnabled && this.autoScreenshot) {

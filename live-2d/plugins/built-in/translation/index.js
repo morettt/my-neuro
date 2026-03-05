@@ -3,10 +3,8 @@ const { Plugin } = require('../../../js/core/plugin-base.js');
 class TranslationPlugin extends Plugin {
 
     async onTTSText(text) {
-        const config = this.context.getConfig();
-        if (!config.translation?.enabled) return text;
-
-        const { api_key, api_url, model, system_prompt } = config.translation;
+        const cfg = this.context.getPluginFileConfig();
+        const { api_key, api_url, model, system_prompt } = cfg;
         if (!api_key || !api_url || !model) return text;
 
         try {
