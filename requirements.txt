@@ -32,3 +32,6 @@ pyinstaller
 streamlit
 aiohttp
 pydantic>=2.0.0
+
+#webUI依赖
+flask
