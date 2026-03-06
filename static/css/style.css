@@ -420,3 +420,257 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
 .plugin-section {
     margin-bottom: 30px;
 }
+
+/* ============ 广场样式 ============ */
+
+.market-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.market-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    padding: 10px;
+}
+
+.market-card {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 20px;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.market-card:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(102, 126, 234, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+.market-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.market-card-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: #fff;
+    margin: 0;
+}
+
+.market-card-summary {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 10px 0;
+    line-height: 1.5;
+}
+
+.market-card-warning {
+    font-size: 12px;
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.1);
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-top: 10px;
+}
+
+.market-panel {
+    display: none;
+}
+
+.market-panel.active {
+    display: block;
+}
+
+@media (max-width: 768px) {
+    .market-list {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============ 动作管理样式 ============ */
+
+.ui-sub-panel {
+    display: none;
+}
+
+.ui-sub-panel.active {
+    display: block;
+}
+
+.emotion-categories-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+@media (max-width: 900px) {
+    .emotion-categories-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .emotion-categories-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.emotion-category {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 15px;
+}
+
+.emotion-category-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: #fff;
+}
+
+.emotion-category-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    min-height: 50px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+}
+
+.motion-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.motion-item button {
+    margin-left: 10px;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.uncategorized-motions {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+}
+
+.empty-tip {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+    padding: 20px;
+    text-align: center;
+    width: 100%;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+}
+
+.btn-sm:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* ============ 云端配置样式 ============ */
+
+.cloud-panel {
+    display: none;
+}
+
+.cloud-panel.active {
+    display: block;
+}
+
+.info-tip {
+    background: rgba(33, 150, 243, 0.1);
+    border-left: 4px solid #2196F3;
+    padding: 15px;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 15px 0;
+}
+
+/* ============ 声音克隆样式 ============ */
+
+.voice-clone-panel {
+    display: none;
+}
+
+.voice-clone-panel.active {
+    display: block;
+}
+
+.file-drop-area {
+    border: 2px dashed rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    padding: 30px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.05);
+    margin-bottom: 10px;
+}
+
+.file-drop-area:hover {
+    border-color: rgba(102, 179, 255, 0.6);
+    background: rgba(102, 179, 255, 0.1);
+}
+
+.file-drop-area.drag-over {
+    border-color: rgba(102, 179, 255, 0.8);
+    background: rgba(102, 179, 255, 0.15);
+}
+
+.file-drop-text {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+}
+
+.file-status {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    margin-top: 8px;
+}
+
+.file-status.has-file {
+    color: rgba(76, 175, 80, 0.9);
+    background: rgba(76, 175, 80, 0.1);
+}

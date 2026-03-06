@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 WebUI 控制器 - 用于统一管理启动和控制各项服务
-v3.4 - 修复服务状态检测和日志系统问题
+v1.4 - 修复服务状态检测和日志系统问题
 """
 
 import os
@@ -20,7 +20,7 @@ import re
 import datetime
 
 # WebUI 版本
-WEBUI_VERSION = 'v3.5'
+WEBUI_VERSION = 'v1.5'
 
 # 记录启动时间
 START_TIME = datetime.datetime.now()
@@ -609,14 +609,16 @@ def handle_dialog_settings():
         context_config = config.get('context', {})
         tts_config = config.get('tts', {})
         asr_config = config.get('asr', {})
-        
+
         return jsonify({
             'intro_text': ui_config.get('intro_text', '你好啊'),
             'max_messages': context_config.get('max_messages', 30),
             'enable_limit': context_config.get('enable_limit', True),
             'persistent_history': context_config.get('persistent_history', False),
             'tts_enabled': tts_config.get('enabled', True),
-            'asr_enabled': asr_config.get('enabled', True)
+            'asr_enabled': asr_config.get('enabled', True),
+            'voice_barge_in': asr_config.get('voice_barge_in', True),
+            'text_only_mode': ui_config.get('text_only_mode', False)
         })
     elif request.method == 'POST':
         try:
@@ -629,14 +631,16 @@ def handle_dialog_settings():
                 config['tts'] = {}
             if 'asr' not in config:
                 config['asr'] = {}
-            
+
             config['ui']['intro_text'] = data.get('intro_text', '你好啊')
             config['context']['max_messages'] = data.get('max_messages', 30)
             config['context']['enable_limit'] = data.get('enable_limit', True)
             config['context']['persistent_history'] = data.get('persistent_history', False)
             config['tts']['enabled'] = data.get('tts_enabled', True)
             config['asr']['enabled'] = data.get('asr_enabled', True)
-            
+            config['asr']['voice_barge_in'] = data.get('voice_barge_in', True)
+            config['ui']['text_only_mode'] = data.get('text_only_mode', False)
+
             if save_config(config):
                 return jsonify({'success': True})
             return jsonify({'error': '保存失败'}), 500
@@ -993,6 +997,93 @@ def list_mcp_tools():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/market/prompts', methods=['GET'])
+def get_prompt_market():
+    """获取提示词广场列表（从远程服务器）"""
+    try:
+        import urllib.request
+        import json as json_module
+        
+        # 从远程服务器获取提示词列表
+        req = urllib.request.Request('http://mynewbot.com/api/get-prompts')
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json_module.loads(response.read().decode('utf-8'))
+        
+        if data.get('success'):
+            return jsonify({
+                'success': True,
+                'prompts': data.get('prompts', [])
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': '获取提示词列表失败'
+            }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'网络请求失败：{str(e)}'
+        }), 500
+
+
+@app.route('/api/market/tools', methods=['GET'])
+def get_tool_market():
+    """获取工具广场列表（从远程服务器）"""
+    try:
+        import urllib.request
+        import json as json_module
+        
+        # 从远程服务器获取工具列表
+        req = urllib.request.Request('http://mynewbot.com/api/get-tools')
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json_module.loads(response.read().decode('utf-8'))
+        
+        if data.get('success'):
+            return jsonify({
+                'success': True,
+                'tools': data.get('tools', [])
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': '获取工具列表失败'
+            }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'网络请求失败：{str(e)}'
+        }), 500
+
+
+@app.route('/api/market/fc-tools', methods=['GET'])
+def get_fc_market():
+    """获取 FC 广场列表（从远程服务器）"""
+    try:
+        import urllib.request
+        import json as json_module
+        
+        # 从远程服务器获取 FC 工具列表
+        req = urllib.request.Request('http://mynewbot.com/api/get-fc-tools')
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json_module.loads(response.read().decode('utf-8'))
+        
+        if data.get('success'):
+            return jsonify({
+                'success': True,
+                'fc_tools': data.get('fc_tools', [])
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': '获取 FC 工具列表失败'
+            }), 500
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'网络请求失败：{str(e)}'
+        }), 500
+
+
 @app.route('/api/tools/toggle', methods=['POST'])
 def toggle_tool():
     """切换工具启用状态（.js ↔ .txt 重命名 或 外部工具 name ↔ name_disabled）"""
@@ -1113,6 +1204,118 @@ def download_minecraft():
             return jsonify({'success': True, 'message': '正在下载 Minecraft 服务器...'})
         else:
             return jsonify({'error': '下载脚本不存在'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/settings/minecraft', methods=['GET', 'POST'])
+def handle_minecraft_settings():
+    """处理 Minecraft 配置设置"""
+    config_path = PROJECT_ROOT / 'live-2d' / 'config.json'
+    andy_config_path = PROJECT_ROOT / 'live-2d' / 'GAME' / 'Minecraft' / 'andy.json'
+    keys_config_path = PROJECT_ROOT / 'live-2d' / 'GAME' / 'Minecraft' / 'keys.json'
+    
+    if request.method == 'GET':
+        # 从 config.json 读取启用状态
+        config = load_config()
+        minecraft_config = config.get('game', {}).get('Minecraft', {})
+        
+        # 从 andy.json 读取详细配置
+        andy_config = {}
+        if andy_config_path.exists():
+            try:
+                with open(andy_config_path, 'r', encoding='utf-8') as f:
+                    andy_config = json.load(f)
+            except Exception:
+                pass
+        
+        # 从 keys.json 读取 API Key
+        keys_config = {}
+        if keys_config_path.exists():
+            try:
+                with open(keys_config_path, 'r', encoding='utf-8') as f:
+                    keys_config = json.load(f)
+            except Exception:
+                pass
+        
+        return jsonify({
+            'game_enabled': minecraft_config.get('enabled', False),
+            'api_key': keys_config.get('OPENAI_API_KEY', ''),
+            'bot_name': andy_config.get('name', ''),
+            'model_name': andy_config.get('model', {}).get('model', ''),
+            'model_url': andy_config.get('model', {}).get('url', ''),
+            'conversing': andy_config.get('conversing', '')
+        })
+    
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            
+            # 更新 config.json 中的启用状态
+            config = load_config()
+            if 'game' not in config:
+                config['game'] = {}
+            if 'Minecraft' not in config['game']:
+                config['game']['Minecraft'] = {}
+            config['game']['Minecraft']['enabled'] = data.get('game_enabled', False)
+            save_config(config)
+            
+            # 更新 andy.json 配置
+            andy_config = {
+                'name': data.get('bot_name', ''),
+                'model': {
+                    'model': data.get('model_name', ''),
+                    'url': data.get('model_url', '')
+                },
+                'conversing': data.get('conversing', '')
+            }
+            
+            # 确保目录存在
+            andy_config_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(andy_config_path, 'w', encoding='utf-8') as f:
+                json.dump(andy_config, f, ensure_ascii=False, indent=2)
+            
+            # 更新 keys.json 配置
+            existing_keys = {}
+            if keys_config_path.exists():
+                try:
+                    with open(keys_config_path, 'r', encoding='utf-8') as f:
+                        existing_keys = json.load(f)
+                except Exception:
+                    pass
+            
+            if data.get('api_key'):
+                existing_keys['OPENAI_API_KEY'] = data.get('api_key')
+                keys_config_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(keys_config_path, 'w', encoding='utf-8') as f:
+                    json.dump(existing_keys, f, ensure_ascii=False, indent=2)
+            
+            return jsonify({'success': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/game/minecraft/start', methods=['POST'])
+def start_minecraft_game():
+    """启动 Minecraft 游戏"""
+    try:
+        bat_file = PROJECT_ROOT / 'live-2d' / 'GAME' / 'Minecraft' / '开启游戏终端.bat'
+        
+        if not bat_file.exists():
+            return jsonify({
+                'success': False,
+                'error': '启动脚本不存在：开启游戏终端.bat'
+            }), 404
+        
+        # 启动 bat 文件
+        game_dir = PROJECT_ROOT / 'live-2d' / 'GAME' / 'Minecraft'
+        subprocess.Popen(
+            ['cmd', '/c', 'start', 'cmd', '/k', str(bat_file)],
+            cwd=str(game_dir),
+            creationflags=subprocess.CREATE_NEW_CONSOLE
+        )
+        
+        return jsonify({'success': True, 'message': 'Minecraft 游戏已启动'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1283,3 +1486,246 @@ if __name__ == '__main__':
     print("启动 My Neuro 服务控制中心...")
     print("正在初始化 WebUI 控制面板...")
     run_app()
+
+
+# ============ Live2D 动作管理 API ============
+
+@app.route('/api/live2d/singing/start', methods=['POST'])
+def start_singing():
+    """开始唱歌"""
+    try:
+        # 调用 Live2D 唱歌 API（需要根据实际实现调整）
+        live2d_api_url = 'http://127.0.0.1:3000/api/singing/start'
+        import urllib.request
+        req = urllib.request.Request(live2d_api_url, method='POST')
+        with urllib.request.urlopen(req, timeout=5) as response:
+            pass
+        return jsonify({'success': True, 'message': '已开始唱歌'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'启动失败：{str(e)}'}), 500
+
+
+@app.route('/api/live2d/singing/stop', methods=['POST'])
+def stop_singing():
+    """停止唱歌"""
+    try:
+        live2d_api_url = 'http://127.0.0.1:3000/api/singing/stop'
+        import urllib.request
+        req = urllib.request.Request(live2d_api_url, method='POST')
+        with urllib.request.urlopen(req, timeout=5) as response:
+            pass
+        return jsonify({'success': True, 'message': '已停止唱歌'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'停止失败：{str(e)}'}), 500
+
+
+@app.route('/api/live2d/motion/reset', methods=['POST'])
+def reset_motion():
+    """复位动作"""
+    try:
+        live2d_api_url = 'http://127.0.0.1:3000/api/motion/reset'
+        import urllib.request
+        req = urllib.request.Request(live2d_api_url, method='POST')
+        with urllib.request.urlopen(req, timeout=5) as response:
+            pass
+        return jsonify({'success': True, 'message': '已复位动作'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'复位失败：{str(e)}'}), 500
+
+
+@app.route('/api/live2d/motion/preview', methods=['POST'])
+def preview_motion():
+    """预览动作"""
+    try:
+        data = request.get_json()
+        motion_name = data.get('motion', '')
+        
+        # 调用 Live2D API 预览动作
+        live2d_api_url = 'http://127.0.0.1:3000/api/motion/preview'
+        import urllib.request
+        import json as json_module
+        json_data = json_module.dumps({'motion': motion_name}).encode('utf-8')
+        req = urllib.request.Request(live2d_api_url, data=json_data, method='POST')
+        req.add_header('Content-Type', 'application/json')
+        with urllib.request.urlopen(req, timeout=5) as response:
+            pass
+        return jsonify({'success': True, 'message': f'正在预览动作：{motion_name}'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'预览失败：{str(e)}'}), 500
+
+
+@app.route('/api/live2d/motions/uncategorized', methods=['GET'])
+def get_uncategorized_motions():
+    """获取未分类动作列表"""
+    try:
+        # 从 live-2d 目录扫描未分类的动作文件
+        motions_dir = PROJECT_ROOT / 'live-2d' / 'motions'
+        if not motions_dir.exists():
+            return jsonify({'motions': []})
+        
+        motions = []
+        for file_path in motions_dir.iterdir():
+            if file_path.suffix == '.json' and 'motion' in file_path.name.lower():
+                motions.append(file_path.name)
+        
+        return jsonify({'motions': motions})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/live2d/motions/save', methods=['POST'])
+def save_motions():
+    """保存动作配置"""
+    try:
+        data = request.get_json()
+        categories = data.get('categories', [])
+        
+        # 保存动作配置到文件
+        motion_config_path = PROJECT_ROOT / 'live-2d' / 'motion_config.json'
+        config = {
+            'categories': categories,
+            'updated_at': datetime.datetime.now().isoformat()
+        }
+        
+        with open(motion_config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        
+        return jsonify({'success': True, 'message': '动作配置已保存'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============ 广场下载 API ============
+
+@app.route('/api/market/prompts/apply', methods=['POST'])
+def apply_prompt():
+    """应用提示词到 AI 人设"""
+    try:
+        data = request.get_json()
+        prompt_content = data.get('content', '')
+        
+        # 更新 config.json 中的 system_prompt
+        config = load_config()
+        if 'llm' not in config:
+            config['llm'] = {}
+        config['llm']['system_prompt'] = prompt_content
+        
+        if save_config(config):
+            return jsonify({'success': True, 'message': '提示词已应用到 AI 人设'})
+        return jsonify({'success': False, 'error': '保存失败'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/market/tools/download', methods=['POST'])
+def download_tool():
+    """下载工具"""
+    try:
+        data = request.get_json()
+        tool_name = data.get('tool_name', '')
+        tool_url = data.get('download_url', '')
+        
+        if not tool_name or not tool_url:
+            return jsonify({'success': False, 'error': '缺少参数'}), 400
+        
+        # 下载工具文件到 server-tools 目录
+        import urllib.request
+        server_tools_path = PROJECT_ROOT / 'live-2d' / 'server-tools'
+        server_tools_path.mkdir(parents=True, exist_ok=True)
+        
+        file_path = server_tools_path / f'{tool_name}.js'
+        urllib.request.urlretrieve(tool_url, file_path)
+        
+        return jsonify({'success': True, 'message': f'工具 {tool_name} 已下载'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/market/fc-tools/download', methods=['POST'])
+def download_fc_tool():
+    """下载 FC 工具"""
+    try:
+        data = request.get_json()
+        tool_name = data.get('tool_name', '')
+        tool_url = data.get('download_url', '')
+        
+        if not tool_name or not tool_url:
+            return jsonify({'success': False, 'error': '缺少参数'}), 400
+        
+        # 下载工具文件到 server-tools 目录
+        import urllib.request
+        server_tools_path = PROJECT_ROOT / 'live-2d' / 'server-tools'
+        server_tools_path.mkdir(parents=True, exist_ok=True)
+        
+        file_path = server_tools_path / f'{tool_name}.js'
+        urllib.request.urlretrieve(tool_url, file_path)
+        
+        return jsonify({'success': True, 'message': f'FC 工具 {tool_name} 已下载'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============ 声音克隆 API ============
+
+@app.route('/api/voice-clone/generate-bat', methods=['POST'])
+def generate_tts_bat():
+    """生成 TTS 的 bat 文件"""
+    try:
+        # 获取上传的文件
+        model_file = request.files.get('model_file')
+        audio_file = request.files.get('audio_file')
+        role_name = request.form.get('role_name', '')
+        language = request.form.get('language', 'zh')
+        text = request.form.get('text', '')
+        
+        if not model_file or not audio_file or not role_name or not text:
+            return jsonify({'success': False, 'error': '缺少必要参数'}), 400
+        
+        # 保存到 Voice_Model_Factory 目录
+        voice_model_dir = PROJECT_ROOT / 'live-2d' / 'Voice_Model_Factory'
+        voice_model_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 保存模型文件
+        model_filename = f'{role_name}.pth'
+        model_path = voice_model_dir / model_filename
+        model_file.save(model_path)
+        
+        # 保存音频文件
+        audio_filename = f'{role_name}.wav'
+        audio_path = voice_model_dir / audio_filename
+        audio_file.save(audio_path)
+        
+        # 生成 bat 文件
+        bat_content = f'''@echo off
+chcp 65001 >nul
+echo.
+echo ========================================
+echo  TTS 声音克隆 - {role_name}
+echo ========================================
+echo.
+echo 正在生成 TTS...
+echo.
+
+python -m tools.tts_inference \\
+    --model_path "Voice_Model_Factory/{model_filename}" \\
+    --audio_path "Voice_Model_Factory/{audio_filename}" \\
+    --language {language} \\
+    --text "{text}"
+
+echo.
+echo 生成完成！
+echo.
+pause
+'''
+        
+        bat_path = voice_model_dir / f'{role_name}.bat'
+        with open(bat_path, 'w', encoding='utf-8') as f:
+            f.write(bat_content)
+        
+        return jsonify({
+            'success': True,
+            'message': f'已生成 TTS 的 bat 文件：{role_name}.bat',
+            'bat_path': str(bat_path)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
