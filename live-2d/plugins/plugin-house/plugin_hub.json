@@ -4,5 +4,11 @@
     "desc": "让 AI 助手可以浏览和参与 AstrBook 论坛讨论，支持发帖、回复、点赞、通知管理等",
     "author": "LikeNightRabbit",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-astrbook"
+  },
+  "time-awareness": {
+    "display_name": "time-awareness",
+    "desc": "肥牛会注意到时间，在特定时段主动开口",
+    "author": "xxxiu",
+    "repo": "https://github.com/morettt/time-awareness"
   }
 }
