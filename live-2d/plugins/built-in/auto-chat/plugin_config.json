@@ -1,5 +1,4 @@
 {
-  "enabled": false,
   "idle_time": 15,
   "prompt": "[System: Ignore this message. Please proactively continue the conversation based on context naturally. Output the response directly.]"
 }

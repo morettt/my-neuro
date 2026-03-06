@@ -1,5 +1,4 @@
 {
-  "enabled": false,
   "api_url": "http://127.0.0.1:8003",
   "auto_inject": true,
   "inject_top_k": 3,

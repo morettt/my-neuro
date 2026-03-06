@@ -12,9 +12,37 @@ class PluginManager {
         /** 动态注册的工具（由 context.registerTool 调用）*/
         this._dynamicTools = new Map(); // pluginName -> toolDef[]
 
-        // 内置插件目录和社区插件目录
+        // 插件根目录、内置插件目录和社区插件目录
+        this._pluginsDir = path.join(__dirname, '..', '..', 'plugins');
         this._builtinDir = path.join(__dirname, '..', '..', 'plugins', 'built-in');
         this._communityDir = path.join(__dirname, '..', '..', 'plugins', 'community');
+
+        /** 已启用的插件相对路径集合，null 表示尚未加载 */
+        this._enabledPlugins = null;
+    }
+
+    /**
+     * 加载 enabled_plugins.json，结果缓存到 this._enabledPlugins
+     */
+    _loadEnabledList() {
+        if (this._enabledPlugins !== null) return;
+
+        const listPath = path.join(this._pluginsDir, 'enabled_plugins.json');
+        if (!fs.existsSync(listPath)) {
+            logToTerminal('warn', '⚠️ 未找到 enabled_plugins.json，所有插件将被禁用');
+            this._enabledPlugins = new Set();
+            return;
+        }
+        try {
+            const data = JSON.parse(fs.readFileSync(listPath, 'utf8'));
+            // 统一使用正斜杠，方便跨平台匹配
+            this._enabledPlugins = new Set(
+                (data.plugins || []).map(p => p.replace(/\\/g, '/'))
+            );
+        } catch (e) {
+            logToTerminal('warn', `⚠️ enabled_plugins.json 读取失败: ${e.message}`);
+            this._enabledPlugins = new Set();
+        }
     }
 
     // ===== 加载 =====
@@ -71,18 +99,12 @@ class PluginManager {
         // config key 由 name 自动转换：连字符换下划线（auto-chat → auto_chat）
         const configKey = name.replace(/-/g, '_');
 
-        // 检查是否启用：从 plugin_config.json 读取 enabled（无文件则默认启用）
-        const pluginCfgPath = path.join(pluginDir, 'plugin_config.json');
-        if (fs.existsSync(pluginCfgPath)) {
-            try {
-                const pluginCfg = JSON.parse(fs.readFileSync(pluginCfgPath, 'utf8'));
-                if (pluginCfg.enabled === false) {
-                    logToTerminal('info', `⏭️ 插件已禁用，跳过: ${name}`);
-                    return;
-                }
-            } catch (e) {
-                logToTerminal('warn', `⚠️ plugin_config.json 读取失败 (${name}): ${e.message}`);
-            }
+        // 检查是否启用：从 enabled_plugins.json 白名单中查找
+        this._loadEnabledList();
+        const relPath = path.relative(this._pluginsDir, pluginDir).replace(/\\/g, '/');
+        if (!this._enabledPlugins.has(relPath)) {
+            logToTerminal('info', `⏭️ 插件未启用，跳过: ${name}`);
+            return;
         }
 
         // 根据 lang 决定入口文件

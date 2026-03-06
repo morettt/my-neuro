@@ -2430,7 +2430,7 @@ class set_pyqt(QWidget):
         self.ui.checkBox_5.setChecked(self.config['vision']['auto_screenshot'])
         self.ui.checkBox_3.setChecked(self.config['ui']['show_chat_box'])
         self.ui.checkBox_4.setChecked(self.config['context']['enable_limit'])
-        self.ui.checkBox.setChecked(_ac_cfg.get('enabled', False))
+        self.ui.checkBox.setChecked('built-in/auto-chat' in self._load_enabled_plugins())
         # 新增ASR和TTS配置
         self.ui.checkBox_asr.setChecked(self.config['asr']['enabled'])
         self.ui.checkBox_tts.setChecked(self.config['tts']['enabled'])
@@ -2534,6 +2534,30 @@ class set_pyqt(QWidget):
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
         except Exception as e:
             QMessageBox.warning(self, '保存失败', f'插件配置保存失败: {e}')
+
+    # ===== enabled_plugins.json 读写 =====
+
+    def _enabled_plugins_path(self):
+        return os.path.join(get_app_path(), 'plugins', 'enabled_plugins.json')
+
+    def _load_enabled_plugins(self):
+        path = self._enabled_plugins_path()
+        if not os.path.exists(path):
+            return set()
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return set(data.get('plugins', []))
+        except Exception:
+            return set()
+
+    def _save_enabled_plugins(self, enabled_set):
+        path = self._enabled_plugins_path()
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump({'plugins': sorted(enabled_set)}, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            QMessageBox.warning(self, '保存失败', f'enabled_plugins.json 写入失败: {e}')
 
     # ===== 插件管理页 =====
 
@@ -2680,10 +2704,11 @@ class set_pyqt(QWidget):
         return f
 
     def _build_plugin_row(self, info, parent_layout):
-        meta       = info['meta']
-        cfg        = info['cfg']
-        cfg_path   = info['cfg_path']
-        extra_keys = [k for k in cfg if k != 'enabled']
+        meta         = info['meta']
+        cfg          = info['cfg']
+        plugin_type  = info['plugin_type']
+        plugin_name  = info['plugin_name']
+        extra_keys   = list(cfg.keys())
 
         display_name = meta.get('displayName', meta.get('name', ''))
         desc         = meta.get('description', '')
@@ -2712,24 +2737,20 @@ class set_pyqt(QWidget):
         title_lbl.setWordWrap(True)
         card_layout.addWidget(title_lbl, stretch=1)
 
-        # 右：开关 checkbox + 可选配置按钮
-        if os.path.exists(cfg_path):
-            chk = QCheckBox('启用')
-            chk.setFont(self._ui_font())
-            chk.setChecked(cfg.get('enabled', False))
-            chk.stateChanged.connect(lambda state, p=cfg_path, c=cfg: self._on_plugin_enabled_changed(p, c, state))
-            card_layout.addWidget(chk)
-            if extra_keys:
-                btn = QPushButton('配置')
-                btn.setFont(self._ui_font())
-                btn.setMinimumSize(60, 30)
-                btn.clicked.connect(lambda checked=False, i=info: self._open_plugin_detail(i))
-                card_layout.addWidget(btn)
-        else:
-            always_lbl = QLabel('始终启用')
-            always_lbl.setFont(self._ui_font())
-            always_lbl.setStyleSheet('color: #777; border: none; background: transparent;')
-            card_layout.addWidget(always_lbl)
+        # 右：开关 checkbox（读取 enabled_plugins.json）+ 可选配置按钮
+        rel_path = f'{plugin_type}/{plugin_name}'
+        enabled_set = self._load_enabled_plugins()
+        chk = QCheckBox('启用')
+        chk.setFont(self._ui_font())
+        chk.setChecked(rel_path in enabled_set)
+        chk.stateChanged.connect(lambda state, pt=plugin_type, pn=plugin_name: self._on_plugin_enabled_changed(pt, pn, state))
+        card_layout.addWidget(chk)
+        if extra_keys:
+            btn = QPushButton('配置')
+            btn.setFont(self._ui_font())
+            btn.setMinimumSize(60, 30)
+            btn.clicked.connect(lambda checked=False, i=info: self._open_plugin_detail(i))
+            card_layout.addWidget(btn)
 
         parent_layout.addWidget(card)
 
@@ -2756,7 +2777,7 @@ class set_pyqt(QWidget):
                         sub.widget().deleteLater()
         self._detail_edits = {}
 
-        extra_keys = [k for k in cfg if k != 'enabled']
+        extra_keys = list(cfg.keys())
         for key in extra_keys:
             val = cfg[key]
             if isinstance(val, dict):
@@ -2839,13 +2860,14 @@ class set_pyqt(QWidget):
         except Exception as e:
             self.toast.show_message(f"保存失败: {e}", 3000)
 
-    def _on_plugin_enabled_changed(self, cfg_path, cfg, state):
-        cfg['enabled'] = (state == Qt.Checked)
-        try:
-            with open(cfg_path, 'w', encoding='utf-8') as f:
-                json.dump(cfg, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            QMessageBox.warning(self, '保存失败', str(e))
+    def _on_plugin_enabled_changed(self, plugin_type, plugin_name, state):
+        rel_path = f'{plugin_type}/{plugin_name}'
+        enabled_set = self._load_enabled_plugins()
+        if state == Qt.Checked:
+            enabled_set.add(rel_path)
+        else:
+            enabled_set.discard(rel_path)
+        self._save_enabled_plugins(enabled_set)
 
     # ===== 插件广场 =====
 
