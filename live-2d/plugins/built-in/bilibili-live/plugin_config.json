@@ -1,5 +1,4 @@
 {
-  "enabled": false,
   "roomId": 30230160,
   "checkInterval": 5000,
   "maxMessages": 50,

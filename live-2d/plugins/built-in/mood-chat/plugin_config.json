@@ -1,5 +1,4 @@
 {
-  "enabled": false,
   "intervals": {
     "excited": 5,
     "normal": 30,

@@ -6,7 +6,7 @@
     ]
   },
   "random-acg-pic": {
-    "command": "C:\\Users\\救赎\\Desktop\\最新肥牛\\新my-neuro-bug处理\\my-neuro\\live-2d\\node\\node.exe",
+    "command": "node",
     "args": [
       "./mcp/tools/random-acg-pic.js"
     ]
