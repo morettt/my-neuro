@@ -183,8 +183,9 @@ class PluginContext {
     }
 
     /**
-     * 读取插件目录下的 plugin_config.json
-     * 如果文件不存在则返回空对象
+     * 读取插件目录下的 plugin_config.json，支持 schema 格式和旧版平铺格式
+     * schema 格式：每个 key 对应 { title, description, type, default, value?, fields? }
+     * 返回平铺的 { key: value } 对象，插件代码无需感知 schema 结构
      * @returns {object}
      */
     getPluginFileConfig() {
@@ -192,11 +193,32 @@ class PluginContext {
         const cfgPath = path.join(this._pluginDir, 'plugin_config.json');
         if (!fs.existsSync(cfgPath)) return {};
         try {
-            return JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+            const raw = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+            return this._resolveSchema(raw);
         } catch (e) {
             this.log('warn', `plugin_config.json 读取失败: ${e.message}`);
             return {};
         }
+    }
+
+    /**
+     * 将 schema 格式解析为平铺的 { key: value } 对象
+     * 若值不是 schema 条目（无 type 字段），直接原样返回（兼容旧格式）
+     */
+    _resolveSchema(schema) {
+        const result = {};
+        for (const [key, def] of Object.entries(schema)) {
+            if (def !== null && typeof def === 'object' && 'type' in def) {
+                if (def.type === 'object' && def.fields) {
+                    result[key] = this._resolveSchema(def.fields);
+                } else {
+                    result[key] = def.value !== undefined ? def.value : def.default;
+                }
+            } else {
+                result[key] = def;
+            }
+        }
+        return result;
     }
 
     // ===== 插件间通信 =====

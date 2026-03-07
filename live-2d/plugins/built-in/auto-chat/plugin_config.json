@@ -1,4 +1,14 @@
 {
-  "idle_time": 15,
-  "prompt": "[System: Ignore this message. Please proactively continue the conversation based on context naturally. Output the response directly.]"
+  "idle_time": {
+    "title": "空闲触发时间（秒）",
+    "description": "用户无输入超过此秒数后，自动发起对话",
+    "type": "int",
+    "default": 15
+  },
+  "prompt": {
+    "title": "触发提示词",
+    "description": "自动对话时附加给 LLM 的系统指令",
+    "type": "text",
+    "default": "[System: Ignore this message. Please proactively continue the conversation based on context naturally. Output the response directly.]"
+  }
 }
