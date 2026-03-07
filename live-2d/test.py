@@ -297,24 +297,38 @@ class ToastNotification(QLabel):
 
 
 class _CloneWorker(QThread):
-    """后台执行 git clone，结果通过信号回到主线程"""
-    done = pyqtSignal(bool, str)  # (success, error_message)
+    """后台执行 git clone（+ 可选 pip install），结果通过信号回到主线程"""
+    done     = pyqtSignal(bool, str)  # (success, error_message)
+    progress = pyqtSignal(str)        # 进度提示文字
 
     def __init__(self, repo_url, target_dir):
         super().__init__()
-        self.repo_url = repo_url
+        self.repo_url   = repo_url
         self.target_dir = target_dir
 
     def run(self):
+        import sys
         try:
             result = subprocess.run(
                 ["git", "clone", self.repo_url, self.target_dir],
                 capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=120
             )
-            if result.returncode == 0:
-                self.done.emit(True, "")
-            else:
+            if result.returncode != 0:
                 self.done.emit(False, result.stderr.strip())
+                return
+
+            req_path = os.path.join(self.target_dir, 'requirements.txt')
+            if os.path.exists(req_path):
+                self.progress.emit("正在安装依赖...")
+                pip_result = subprocess.run(
+                    [sys.executable, '-m', 'pip', 'install', '-r', req_path],
+                    capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=300
+                )
+                if pip_result.returncode != 0:
+                    self.done.emit(False, f'依赖安装失败:\n{pip_result.stderr.strip()}')
+                    return
+
+            self.done.emit(True, "")
         except Exception as ex:
             self.done.emit(False, str(ex))
 
@@ -3308,6 +3322,7 @@ class set_pyqt(QWidget):
                 print(f"插件安装失败: {err}")
 
         worker.done.connect(on_done)
+        worker.progress.connect(lambda msg: self.toast.show_message(msg, 10000))
         worker.start()
         if not hasattr(self, '_clone_workers'):
             self._clone_workers = []
