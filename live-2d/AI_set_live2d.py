@@ -28,14 +28,43 @@ def get_motions_from_folder(character_path):
     return motion_files_list
 
 
+def get_expressions_from_folder(character_path):
+    """获取角色文件夹下expressions文件夹中的所有expression文件"""
+    expression_files_list = []
+    
+    try:
+        items = os.listdir(character_path)
+        for item in items:
+            item_path = os.path.join(character_path, item)
+            if os.path.isdir(item_path) and "expressions" in item.lower():
+                try:
+                    expression_items = os.listdir(item_path)
+                    for expression_item in expression_items:
+                        if expression_item.endswith('.exp3.json'):
+                            expression_entry = {
+                                "File": f"expressions/{expression_item}",
+                                "Name": expression_item.replace('.exp3.json', '')
+                            }
+                            expression_files_list.append(expression_entry)
+                except PermissionError:
+                    print(f"      警告：无法访问 {item_path}")
+    except PermissionError:
+        print(f"   警告：无法访问 {character_path}")
+    
+    return expression_files_list
+
+
+
 def process_model_file(model_file_path, character_path):
-    """处理单个model3.json文件，重构Motions结构"""
+    """处理单个model3.json文件，重构Motions结构并添加Expressions"""
     try:
         with open(model_file_path, 'r', encoding='utf-8') as f:
             model_data = json.load(f)
 
         has_motions = False
+        has_expressions = False
 
+        # 检查Motions
         if "FileReferences" in model_data and "Motions" in model_data["FileReferences"]:
             has_motions = True
             motions_location = model_data["FileReferences"]
@@ -43,6 +72,15 @@ def process_model_file(model_file_path, character_path):
             has_motions = True
             motions_location = model_data
 
+        # 检查Expressions
+        if "FileReferences" in model_data and "Expressions" in model_data["FileReferences"]:
+            has_expressions = True
+            expressions_location = model_data["FileReferences"]
+        elif "Expressions" in model_data:
+            has_expressions = True
+            expressions_location = model_data
+
+        # 处理动作文件
         if has_motions:
             motion_files_list = get_motions_from_folder(character_path)
             original_motions = motions_location["Motions"]
@@ -69,15 +107,55 @@ def process_model_file(model_file_path, character_path):
             print(f"      ├─ 已重新构建Motions结构")
             print(f"      ├─ TapBody: {len(motion_files_list)} 个动作文件")
 
-            # 直接覆盖原文件
+        
+
+        # 直接覆盖原文件
             with open(model_file_path, 'w', encoding='utf-8') as f:
                 json.dump(model_data, f, ensure_ascii=False, indent=2)
 
             print(f"      └─ 已覆盖原文件: {os.path.basename(model_file_path)}")
             return True
-        else:
+        elif not has_motions:
             print(f"      └─ 文件中不存在Motions字段，跳过处理")
             return False
+        
+        
+        # 处理表情文件
+        if has_expressions:
+            expression_files_list = get_expressions_from_folder(character_path)
+            original_expressions = expressions_location["Expressions"]
+            new_expressions= {}
+
+            # 处理Idle标签
+            if "Idle" in original_expressions:
+                new_expressions["Idle"] = original_expressions["Idle"]
+                print(f"      ├─ 保留原有Idle设置")
+            else:
+                new_expressions["Idle"] = [
+                    {
+                        "File": "",
+                        "FadeInTime": 0.5,
+                        "FadeOutTime": 0.5
+                    }
+                ]
+                print(f"      ├─ 添加默认Idle设置")
+
+            # 重构TapBody
+            new_expressions["TapBody"] = expression_files_list
+            expressions_location["Expressions"] = new_expressions
+
+            print(f"      ├─ 已重新构建Expressions结构")
+            print(f"      ├─ TapBody: {len(expression_files_list)} 个表情文件")
+
+            with open(model_file_path, 'w', encoding='utf-8') as f:
+                json.dump(model_data, f, ensure_ascii=False, indent=2)
+
+            print(f"      └─ 已覆盖原文件: {os.path.basename(model_file_path)}")
+            return True       
+        elif not has_expressions:
+            print(f"      └─ 文件中不存在expressions字段，跳过处理")
+            return False
+
 
     except Exception as e:
         print(f"      └─ 处理文件失败 {model_file_path}: {e}")
@@ -154,9 +232,12 @@ def process_motion_files_in_folder(character_path):
     return processed_motion_count
 
 
+
+# 修改 scan_character_folder 函数
 def scan_character_folder(folder_path):
-    """扫描单个角色文件夹，返回动作文件列表"""
+    """扫描单个角色文件夹，返回动作文件列表和表情文件列表"""
     motion_files = []
+    expression_files = []  
     processed_model_count = 0
 
     try:
@@ -185,6 +266,17 @@ def scan_character_folder(folder_path):
                             motion_files.append(f"motions/{motion_item}")
                 except PermissionError:
                     print(f"      警告：无法访问 {item_path}")
+            
+            # 扫描expressions文件夹
+            if os.path.isdir(item_path) and "expressions" in item.lower():
+                print(f"   └─ 扫描expressions文件夹生成配置: {item}")
+                try:
+                    expression_items = os.listdir(item_path)
+                    for expression_item in expression_items:
+                        if expression_item.endswith('.exp3.json'):
+                            expression_files.append(f"expressions/{expression_item}")
+                except PermissionError:
+                    print(f"      警告：无法访问 {item_path}")
 
         if processed_motion_count > 0:
             print(f"   ├─ 成功处理 {processed_motion_count} 个motion文件（删除mouth相关Curves并更新CurveCount）")
@@ -192,7 +284,7 @@ def scan_character_folder(folder_path):
     except PermissionError:
         print(f"   警告：无法访问 {folder_path}")
 
-    return motion_files, processed_model_count
+    return motion_files, expression_files, processed_model_count  # 修改返回值
 
 
 def get_latest_motions_time():
@@ -237,6 +329,37 @@ def should_update_config(force_update=False):
 
     config_path = 'emotion_actions.json'
 
+    # 检查是否有新模型文件夹
+    folder_2d = "2D"
+    if not os.path.exists(folder_2d):
+        return False
+    
+    # 读取现有配置中的角色
+    existing_characters = set()
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                existing_characters = set(data.keys())
+        except:
+            existing_characters = set()
+    
+    # 扫描2D文件夹中的实际角色
+    actual_characters = set()
+    try:
+        for item in os.listdir(folder_2d):
+            item_path = os.path.join(folder_2d, item)
+            if os.path.isdir(item_path):
+                actual_characters.add(item)
+    except:
+        pass
+    
+    # 如果有新角色文件夹，需要更新配置
+    new_characters = actual_characters - existing_characters
+    if new_characters:
+        print(f"检测到新角色文件夹: {new_characters}")
+        return True
+
     if not os.path.exists(config_path):
         print("配置文件不存在，需要生成")
         return True
@@ -253,6 +376,96 @@ def should_update_config(force_update=False):
     else:
         print("motions文件无变化，跳过配置更新")
         return False
+    
+def get_latest_expressions_time():
+    """获取所有expressions文件夹的最新修改时间"""
+    folder_2d = "2D"
+    latest_time = 0
+
+    if not os.path.exists(folder_2d):
+        return 0
+
+    try:
+        for item in os.listdir(folder_2d):
+            item_path = os.path.join(folder_2d, item)
+            if os.path.isdir(item_path):
+                expressions_path = os.path.join(item_path, "expressions")
+                if os.path.exists(expressions_path):
+                    folder_time = os.path.getmtime(expressions_path)
+                    if folder_time > latest_time:
+                        latest_time = folder_time
+
+                    # 检查expressions文件夹内文件的修改时间
+                    try:
+                        for expression_files in os.listdir(expressions_path):
+                            if expression_files.endswith('.exp3.json'):
+                                file_path = os.path.join(expressions_path, expression_files)
+                                file_time = os.path.getmtime(file_path)
+                                if file_time > latest_time:
+                                    latest_time = file_time
+                    except PermissionError:
+                        pass
+    except PermissionError:
+        pass
+
+    return latest_time
+
+
+def should_update_config1(force_update=False):
+    """检查是否需要更新配置"""
+    if force_update:
+        print("强制更新模式")
+        return True
+
+    config_path = 'emotion_expressions.json'
+
+    # 检查是否有新模型文件夹
+    folder_2d = "2D"
+    if not os.path.exists(folder_2d):
+        return False
+    
+    # 读取现有配置中的角色
+    existing_characters = set()
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                existing_characters = set(data.keys())
+        except:
+            existing_characters = set()
+    
+    # 扫描2D文件夹中的实际角色
+    actual_characters = set()
+    try:
+        for item in os.listdir(folder_2d):
+            item_path = os.path.join(folder_2d, item)
+            if os.path.isdir(item_path):
+                actual_characters.add(item)
+    except:
+        pass
+    
+    # 如果有新角色文件夹，需要更新配置
+    new_characters = actual_characters - existing_characters
+    if new_characters:
+        print(f"检测到新角色文件夹: {new_characters}")
+        return True
+
+    if not os.path.exists(config_path):
+        print("配置文件不存在，需要生成")
+        return True
+
+    # 获取配置文件修改时间
+    config_time = os.path.getmtime(config_path)
+
+    # 获取motions文件的最新修改时间
+    latest_expression_time = get_latest_expressions_time()
+
+    if latest_expression_time > config_time:
+        print("检测到expressions文件变化，需要更新配置")
+        return True
+    else:
+        print("expressions文件无变化，跳过配置更新")
+        return False    
 
 
 def create_character_backups(all_emotions_data):
@@ -306,6 +519,58 @@ def create_character_backups(all_emotions_data):
 
     return updated_count
 
+def create_character_backups1(all_expressions_data):  # 改为接收表情数据
+    """为每个角色创建独立的表情备份记录"""
+    backup_file = 'character_backups1.json'
+
+    # 读取现有备份文件
+    existing_backups = {}
+    if os.path.exists(backup_file):
+        try:
+            with open(backup_file, 'r', encoding='utf-8') as f:
+                existing_backups = json.load(f)
+        except:
+            existing_backups = {}
+
+    # 为新角色或更新的角色创建备份
+    current_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    updated_count = 0
+
+    for character_name, character_data in all_expressions_data.items():
+        # 如果角色不存在备份，或者需要强制更新，则创建/更新备份
+        if character_name not in existing_backups:
+            existing_backups[character_name] = {
+                "original_config1": character_data,  # 改为 original_config1
+                "backup_time": current_time_str,
+                "created_by": "AI_set_live2d.py"
+            }
+            updated_count += 1
+            print(f"   ├─ 为角色 {character_name} 创建表情原始配置备份")
+        else:
+            # 检查表情数量是否发生变化，如果变化则更新备份
+            old_expressions = existing_backups[character_name].get("original_config1").get("emotion_expressions")
+            new_expressions = character_data.get("emotion_expressions")
+
+            old_expression_count = len([k for k in old_expressions.keys() if k.startswith("表情")])
+            new_expression_count = len([k for k in new_expressions.keys() if k.startswith("表情")])
+
+            if old_expression_count != new_expression_count:
+                existing_backups[character_name]["original_config1"] = character_data
+                existing_backups[character_name]["backup_time"] = current_time_str
+                existing_backups[character_name]["updated_by"] = "AI_set_live2d.py"
+                updated_count += 1
+                print(f"   ├─ 角色 {character_name} 表情数量变化 ({old_expression_count} -> {new_expression_count})，更新备份")
+
+    # 保存备份文件
+    with open(backup_file, 'w', encoding='utf-8') as f:
+        json.dump(existing_backups, f, ensure_ascii=False, indent=2)
+
+    if updated_count > 0:
+        print(f"[备份] 创建/更新了 {updated_count} 个角色的表情配置备份")
+
+    return updated_count
+
+
 
 def main(force_update=False):
     """主函数，支持强制更新参数"""
@@ -316,7 +581,7 @@ def main(force_update=False):
         return
 
     # 检查是否需要更新配置
-    if not should_update_config(force_update):
+    if not should_update_config(force_update) and not should_update_config1(force_update):
         return
 
     character_folders = []
@@ -333,6 +598,7 @@ def main(force_update=False):
     print("=" * 60)
 
     all_emotions_data = {}
+    all_expressions_data = {}  
     total_processed_files = 0
     default_emotions = ["开心", "生气", "难过", "惊讶", "害羞", "俏皮"]
 
@@ -340,10 +606,11 @@ def main(force_update=False):
         print(f"[文件夹] 正在扫描: {character_name}")
 
         character_path = os.path.join(folder_2d, character_name)
-        motion_files, processed_model_count = scan_character_folder(character_path)
+        motion_files, expression_files, processed_model_count = scan_character_folder(character_path)  # 修改调用
 
         total_processed_files += processed_model_count
 
+        # 处理动作配置
         if motion_files:
             print(f"   ├─ 找到 {len(motion_files)} 个动作文件")
             print(f"   └─ 成功处理 {processed_model_count} 个model文件")
@@ -360,24 +627,46 @@ def main(force_update=False):
                 character_emotions["emotion_actions"][action_name] = [motion_file]
 
             all_emotions_data[character_name] = character_emotions
-        else:
+        elif not motion_files:
             print(f"   └─ 未找到动作文件")
+
+        # 处理表情配置
+        if expression_files:
+            print(f"   ├─ 找到 {len(expression_files)} 个表情文件")
+            
+            character_expressions = {
+                "emotion_expressions": {}
+            }
+
+            for emotion in default_emotions:
+                character_expressions["emotion_expressions"][emotion] = []
+
+            for i, expression_file in enumerate(expression_files, 1):
+                expression_name = f"表情{i}"
+                character_expressions["emotion_expressions"][expression_name] = [expression_file]
+
+            all_expressions_data[character_name] = character_expressions
+        elif not expression_files:
+            print(f"   └─ 未找到表情文件")
 
         print("-" * 40)
 
     # 保存配置文件（只有需要更新时才执行到这里）
+    
+    # 保存动作配置文件
     if all_emotions_data:
         config_file = 'emotion_actions.json'
-
         with open(config_file, 'w', encoding='utf-8') as f:
             json.dump(all_emotions_data, f, ensure_ascii=False, indent=2)
+        
 
         # 设置文件时间戳为当前时间
         current_time = time.time()
         os.utime(config_file, (current_time, current_time))
 
-        # 创建分角色备份
+        # 创建分角色备份（需要修改备份函数以支持表情）
         backup_count = create_character_backups(all_emotions_data)
+        
 
         print("=" * 60)
         print("[成功] 任务完成！")
@@ -385,18 +674,52 @@ def main(force_update=False):
         print(f"[备份文件] character_backups.json 文件")
         print(f"[文件处理] 总共处理了 {total_processed_files} 个model文件")
         print(f"[角色统计] 总共处理了 {len(all_emotions_data)} 个角色:")
-
+        
         for character_name, data in all_emotions_data.items():
             action_count = len([k for k in data["emotion_actions"].keys() if k.startswith("动作")])
             print(f"   - {character_name}: {action_count} 个动作")
-
+        
         print("\n文件处理结果:")
-        print("  - emotion_actions.json (配置文件)")
+        print("  - emotion_actions.json (动作配置文件)")
         print("  - character_backups.json (分角色备份文件)")
         print("  - 各角色的 .model3.json 文件已直接更新")
-        print("  - motions文件夹中的 .motion3.json 文件已删除mouth相关Curves并更新CurveCount")
-    else:
-        print("\n[错误] 没有找到任何包含动作文件的角色文件夹")
+        print("  - motions文件夹中的 .motion3.json 文件已删除mouth相关Curves并更新CurveCount") 
+    elif not all_emotions_data:
+        print("\n[错误] 没有找到任何包含动作文件的角色文件夹")       
+            
+    # 保存表情配置文件
+    if all_expressions_data:
+        expression_config_file = 'emotion_expressions.json'
+        with open(expression_config_file, 'w', encoding='utf-8') as f:
+            json.dump(all_expressions_data, f, ensure_ascii=False, indent=2)
+        
+
+        # 设置文件时间戳为当前时间
+        current_time = time.time()
+        os.utime(expression_config_file, (current_time, current_time))
+        
+
+        # 创建分角色备份（需要修改备份函数以支持表情）
+        backup_count = create_character_backups1(all_expressions_data)
+
+        print("=" * 60)
+        print("[成功] 任务完成！")
+        print(f"[配置文件] 成功生成 emotion_expressions.json 文件")
+        print(f"[备份文件] character_backups1.json 文件")
+        print(f"[角色统计] 总共处理了 {len(all_emotions_data)} 个角色:")
+        
+        
+        
+        for character_name, data in all_expressions_data.items():
+            expression_count = len([k for k in data["emotion_expressions"].keys() if k.startswith("表情")])
+            print(f"   - {character_name}: {expression_count} 个表情")
+
+        print("\n文件处理结果:")
+        print("  - emotion_expressions.json (动作配置文件)")
+        print("  - character_backups1.json (分角色备份文件)")
+        print("  - 各角色的 .exp3.json 文件已直接更新")   
+    elif not all_expressions_data:
+        print("\n[错误] 没有找到任何包含表情文件的角色文件夹")    
 
 
 if __name__ == '__main__':
