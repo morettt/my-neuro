@@ -4,5 +4,11 @@
     "desc": "肥牛会注意到时间，在特定时段主动开口",
     "author": "xxxiu",
     "repo": "https://github.com/morettt/time-awareness"
+  },
+  "my-neuro-plugin-hitokoto": {
+    "display_name": "my-neuro-plugin-hitokoto",
+    "desc": "启动时获取一条一言注入 AI 上下文",
+    "author": "xxxiu",
+    "repo": "https://github.com/morettt/my-neuro-plugin-hitokoto"
   }
 }
