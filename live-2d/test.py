@@ -2422,9 +2422,9 @@ class set_pyqt(QWidget):
         self.ui.doubleSpinBox_temperature.setValue(self.config['llm'].get('temperature', 1.0))
         self.ui.lineEdit_4.setText(self.config['ui']['intro_text'])
         self.ui.lineEdit_5.setText(str(self.config['context']['max_messages']))
-        _ac_cfg = self._load_plugin_file_config('built-in', 'auto-chat')
+        _ac_cfg = self._resolve_plugin_schema(self._load_plugin_file_config('built-in', 'auto-chat'))
         self.ui.lineEdit_idle_time.setText(str(_ac_cfg.get('idle_time', 15)))
-        self.ui.textEdit_prompt.setPlainText(_ac_cfg.get('prompt', ''))
+        self.ui.textEdit_prompt.setPlainText(_ac_cfg.get('prompt', '') or '')
         self.ui.checkBox_mcp.setChecked(self.config.get('tools', {}).get('enabled', True))
         self.ui.checkBox_mcp_enable.setChecked(self.config.get('mcp', {}).get('enabled', True))
         self.ui.checkBox_5.setChecked(self.config['vision']['auto_screenshot'])
@@ -2559,11 +2559,33 @@ class set_pyqt(QWidget):
         except Exception as e:
             QMessageBox.warning(self, '保存失败', f'enabled_plugins.json 写入失败: {e}')
 
+    def _resolve_plugin_schema(self, raw):
+        """将 schema 格式的 plugin_config 解析为 {key: value} 平铺字典"""
+        result = {}
+        for key, field_def in raw.items():
+            if isinstance(field_def, dict) and 'type' in field_def:
+                if field_def['type'] == 'object' and 'fields' in field_def:
+                    result[key] = self._resolve_plugin_schema(field_def['fields'])
+                else:
+                    result[key] = field_def.get('value', field_def.get('default'))
+            else:
+                result[key] = field_def
+        return result
+
+    def _set_schema_value(self, raw, key, value):
+        """将值写入 schema 条目的 value 字段（兼容旧格式）"""
+        if isinstance(raw.get(key), dict) and 'type' in raw[key]:
+            raw[key]['value'] = value
+        else:
+            raw[key] = value
+
     # ===== 插件管理页 =====
 
     def setup_plugins_page(self):
         app_path = get_app_path()
         self._plugin_infos = []
+        self._plugin_tab_layouts = {}
+        self._plugin_tab_dirs    = {}
 
         # --- 列表页：对齐提示词广场布局风格 ---
         list_page = QWidget()
@@ -2616,6 +2638,15 @@ class set_pyqt(QWidget):
             layout.addStretch()
             scroll.setWidget(content)
             tab_widget.addTab(scroll, tab_title)
+
+            self._plugin_tab_layouts[plugin_type] = layout
+            self._plugin_tab_dirs[plugin_type]    = base_dir
+
+        self._plugin_watcher = QFileSystemWatcher()
+        for _watch_dir in self._plugin_tab_dirs.values():
+            if os.path.isdir(_watch_dir):
+                self._plugin_watcher.addPath(_watch_dir)
+        self._plugin_watcher.directoryChanged.connect(self._on_plugin_dir_changed)
 
         # --- 插件广场标签 ---
         market_tab = QWidget()
@@ -2677,20 +2708,37 @@ class set_pyqt(QWidget):
         back_btn.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(self._plugins_page_index))
         d.addWidget(back_btn)
 
+        header_row = QHBoxLayout()
         self._detail_name_lbl = QLabel()
         self._detail_name_lbl.setFont(self._ui_font(11, bold=True))
-        d.addWidget(self._detail_name_lbl)
+        header_row.addWidget(self._detail_name_lbl, stretch=1)
+
+        self._detail_readme_btn = QPushButton('📖 此插件教程')
+        self._detail_readme_btn.setFont(self._ui_font(9, bold=True))
+        self._detail_readme_btn.setMinimumHeight(30)
+        self._detail_readme_btn.setStyleSheet(
+            'QPushButton{background:#8e44ad;color:white;border-radius:6px;border:none;padding:4px 12px;}'
+            'QPushButton:hover{background:#9b59b6;}'
+            'QPushButton:pressed{background:#6c3483;}'
+            'QPushButton:checked{background:#6c3483;}'
+        )
+        self._detail_readme_btn.setCheckable(True)
+        self._detail_readme_btn.setVisible(False)
+        self._detail_readme_btn.toggled.connect(self._toggle_plugin_readme)
+        header_row.addWidget(self._detail_readme_btn)
+        d.addLayout(header_row)
 
         self._detail_desc_lbl = QLabel()
         self._detail_desc_lbl.setFont(self._ui_font())
         self._detail_desc_lbl.setWordWrap(True)
         d.addWidget(self._detail_desc_lbl)
 
-        self._detail_form_layout = QVBoxLayout()
-        self._detail_form_layout.setSpacing(15)
-        d.addLayout(self._detail_form_layout)
-
-        d.addStretch()
+        self._detail_form_scroll = QScrollArea()
+        self._detail_form_scroll.setWidgetResizable(True)
+        self._detail_form_scroll.setFrameShape(QFrame.NoFrame)
+        self._detail_form_scroll.setStyleSheet('QScrollArea { border: none; background-color: transparent; }')
+        d.addWidget(self._detail_form_scroll)
+        self._detail_form_layout = None
 
         self._plugins_detail_index = self.ui.stackedWidget.addWidget(self._detail_page)
         self._detail_edits = {}
@@ -2754,8 +2802,160 @@ class set_pyqt(QWidget):
 
         parent_layout.addWidget(card)
 
+    def _toggle_plugin_readme(self, checked):
+        if checked:
+            # 显示 README
+            if not self._detail_current_readme:
+                return
+            try:
+                with open(self._detail_current_readme, 'r', encoding='utf-8') as f:
+                    md_text = f.read()
+            except Exception as e:
+                self._detail_readme_btn.setChecked(False)
+                return
+            browser = QTextBrowser()
+            browser.setOpenExternalLinks(True)
+            browser.setHtml(self._md_to_html(md_text))
+            browser.setStyleSheet('QTextBrowser{background:#fff;border:none;}')
+            self._detail_form_scroll.setWidget(browser)
+            self._detail_readme_btn.setText('⚙ 返回配置')
+        else:
+            # 恢复配置表单
+            self._detail_readme_btn.setText('📖 此插件教程')
+            if self._detail_current_info:
+                self._rebuild_detail_form(self._detail_current_info['cfg'])
+
+    def _rebuild_detail_form(self, cfg):
+        form_widget = QWidget()
+        form_widget.setStyleSheet('background-color: transparent;')
+        self._detail_form_layout = QVBoxLayout(form_widget)
+        self._detail_form_layout.setSpacing(12)
+        self._detail_form_layout.setContentsMargins(0, 0, 0, 0)
+        self._detail_edits = {}
+        for key, field_def in cfg.items():
+            if not isinstance(field_def, dict) or 'type' not in field_def:
+                self._add_detail_field(key, key, '', 'string', field_def)
+                continue
+            field_type = field_def.get('type', 'string')
+            if field_type == 'object' and 'fields' in field_def:
+                section_lbl = QLabel(f'── {field_def.get("title", key)} ──')
+                section_lbl.setFont(self._ui_font(bold=True))
+                section_lbl.setStyleSheet('color:#555;border:none;background:transparent;')
+                self._detail_form_layout.addWidget(section_lbl)
+                if field_def.get('description'):
+                    hint = QLabel(field_def['description'])
+                    hint.setFont(self._ui_font(9))
+                    hint.setStyleSheet('color:#999;border:none;background:transparent;')
+                    hint.setWordWrap(True)
+                    self._detail_form_layout.addWidget(hint)
+                for sub_key, sub_def in field_def['fields'].items():
+                    if not isinstance(sub_def, dict) or 'type' not in sub_def:
+                        continue
+                    cur_val = sub_def.get('value', sub_def.get('default'))
+                    self._add_detail_field(f'{key}.{sub_key}',
+                                           sub_def.get('title', sub_key),
+                                           sub_def.get('description', ''),
+                                           sub_def.get('type', 'string'), cur_val)
+            else:
+                cur_val = field_def.get('value', field_def.get('default'))
+                self._add_detail_field(key, field_def.get('title', key),
+                                       field_def.get('description', ''),
+                                       field_type, cur_val)
+        self._detail_form_layout.addStretch()
+        self._detail_form_scroll.setWidget(form_widget)
+
+    def _show_plugin_readme(self, readme_path, plugin_name):
+        """弹出对话框展示插件 README.md（支持基础 Markdown 渲染）"""
+        try:
+            with open(readme_path, 'r', encoding='utf-8') as f:
+                md_text = f.read()
+        except Exception as e:
+            QMessageBox.warning(self, '读取失败', str(e))
+            return
+
+        html = self._md_to_html(md_text)
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f'{plugin_name} - 教程')
+        dlg.resize(720, 560)
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        browser = QTextBrowser()
+        browser.setOpenExternalLinks(True)
+        browser.setHtml(html)
+        browser.setStyleSheet('QTextBrowser { background: #fff; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }')
+        layout.addWidget(browser)
+
+        close_btn = QPushButton('关闭')
+        close_btn.setMinimumHeight(36)
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+
+        dlg.exec_()
+
+    def _md_to_html(self, text):
+        """Markdown → 带样式 HTML，优先用 markdown 库，否则用内置转换"""
+        try:
+            import markdown
+            body = markdown.markdown(
+                text,
+                extensions=['fenced_code', 'tables', 'nl2br', 'sane_lists']
+            )
+        except ImportError:
+            import re as _re, html as _html
+            t = _html.escape(text)
+            # 代码块（```...```）
+            def code_block(m):
+                return f'<pre style="background:#f6f8fa;padding:12px;border-radius:6px;overflow-x:auto;font-family:Consolas,monospace;font-size:12px;">{m.group(1)}</pre>'
+            t = _re.sub(r'```[^\n]*\n(.*?)```', code_block, t, flags=_re.DOTALL)
+            # 标题
+            t = _re.sub(r'^### (.+)$', lambda m: f'<h3 style="color:#1a252f;font-size:15px;margin:14px 0 6px;border-bottom:1px solid #eee;padding-bottom:4px;">{m.group(1)}</h3>', t, flags=_re.MULTILINE)
+            t = _re.sub(r'^## (.+)$',  lambda m: f'<h2 style="color:#1a252f;font-size:18px;margin:16px 0 8px;border-bottom:2px solid #eee;padding-bottom:6px;">{m.group(1)}</h2>', t, flags=_re.MULTILINE)
+            t = _re.sub(r'^# (.+)$',   lambda m: f'<h1 style="color:#1a252f;font-size:22px;margin:18px 0 10px;border-bottom:3px solid #3498db;padding-bottom:8px;">{m.group(1)}</h1>', t, flags=_re.MULTILINE)
+            # 加粗 / 斜体
+            t = _re.sub(r'\*\*(.+?)\*\*', lambda m: f'<strong>{m.group(1)}</strong>', t)
+            t = _re.sub(r'\*(.+?)\*',     lambda m: f'<em>{m.group(1)}</em>', t)
+            # 行内代码
+            t = _re.sub(r'`(.+?)`', lambda m: f'<code style="background:#f0f0f0;padding:2px 5px;border-radius:3px;font-family:Consolas,monospace;font-size:12px;">{m.group(1)}</code>', t)
+            # 链接
+            t = _re.sub(r'\[([^\]]+)\]\(([^)]+)\)', lambda m: f'<a href="{m.group(2)}" style="color:#2980b9;">{m.group(1)}</a>', t)
+            # 列表项
+            t = _re.sub(r'^[-*] (.+)$', lambda m: f'<li style="margin:4px 0;">{m.group(1)}</li>', t, flags=_re.MULTILINE)
+            t = _re.sub(r'(<li.*</li>)', r'<ul style="padding-left:20px;margin:8px 0;">\1</ul>', t, flags=_re.DOTALL)
+            # 分割线
+            t = _re.sub(r'^---+$', '<hr style="border:none;border-top:1px solid #ddd;margin:16px 0;">', t, flags=_re.MULTILINE)
+            # 换行
+            t = t.replace('\n', '<br>')
+            body = t
+
+        return (
+            '<!DOCTYPE html><html><head><meta charset="utf-8">'
+            '<style>'
+            'body{font-family:"Microsoft YaHei",sans-serif;font-size:13px;line-height:1.8;color:#2c3e50;padding:16px;}'
+            'h1{color:#1a252f;font-size:22px;border-bottom:3px solid #3498db;padding-bottom:8px;margin:18px 0 10px;}'
+            'h2{color:#1a252f;font-size:18px;border-bottom:2px solid #eee;padding-bottom:6px;margin:16px 0 8px;}'
+            'h3{color:#1a252f;font-size:15px;border-bottom:1px solid #eee;padding-bottom:4px;margin:14px 0 6px;}'
+            'code{background:#f0f0f0;padding:2px 5px;border-radius:3px;font-family:Consolas,monospace;font-size:12px;}'
+            'pre{background:#f6f8fa;padding:12px;border-radius:6px;overflow-x:auto;border:1px solid #e1e4e8;}'
+            'pre code{background:none;padding:0;}'
+            'a{color:#2980b9;text-decoration:none;}'
+            'a:hover{text-decoration:underline;}'
+            'blockquote{border-left:4px solid #3498db;margin:12px 0;padding:8px 16px;background:#f8f9fa;color:#555;}'
+            'table{border-collapse:collapse;width:100%;margin:12px 0;}'
+            'th,td{border:1px solid #ddd;padding:8px 12px;text-align:left;}'
+            'th{background:#f0f0f0;font-weight:bold;}'
+            'tr:nth-child(even){background:#f9f9f9;}'
+            'hr{border:none;border-top:1px solid #ddd;margin:16px 0;}'
+            'ul,ol{padding-left:24px;margin:8px 0;}'
+            'li{margin:4px 0;}'
+            'img{max-width:100%;border-radius:4px;}'
+            '</style></head>'
+            f'<body>{body}</body></html>'
+        )
+
     def _open_plugin_detail(self, info):
-        """切换到详情页并刷新内容"""
+        """切换到详情页并刷新内容（支持 schema 格式）"""
         self._detail_current_info = info
         meta = info['meta']
         cfg  = info['cfg']
@@ -2765,100 +2965,211 @@ class set_pyqt(QWidget):
         self._detail_desc_lbl.setText(desc)
         self._detail_desc_lbl.setVisible(bool(desc))
 
-        # 清空旧表单
-        while self._detail_form_layout.count():
-            item = self._detail_form_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-            elif item.layout():
-                while item.layout().count():
-                    sub = item.layout().takeAt(0)
-                    if sub.widget():
-                        sub.widget().deleteLater()
+        # 教程按钮：有 README.md 才显示，重置为未激活状态
+        readme_path = os.path.join(get_app_path(), 'plugins',
+                                   info['plugin_type'], info['plugin_name'], 'README.md')
+        self._detail_current_readme = readme_path if os.path.exists(readme_path) else None
+        self._detail_readme_btn.setVisible(self._detail_current_readme is not None)
+        self._detail_readme_btn.setChecked(False)
+
+        # 每次创建全新的内容 widget，setWidget 会自动销毁旧的
+        form_widget = QWidget()
+        form_widget.setStyleSheet('background-color: transparent;')
+        self._detail_form_layout = QVBoxLayout(form_widget)
+        self._detail_form_layout.setSpacing(12)
+        self._detail_form_layout.setContentsMargins(0, 0, 0, 0)
         self._detail_edits = {}
 
-        extra_keys = list(cfg.keys())
-        for key in extra_keys:
-            val = cfg[key]
-            if isinstance(val, dict):
-                # 嵌套 dict：显示分组标题 + 子字段
-                section_lbl = QLabel(f'── {key} ──')
-                section_lbl.setFont(self._ui_font(bold=True))
-                self._detail_form_layout.addWidget(section_lbl)
-                for sub_key, sub_val in val.items():
-                    row = QHBoxLayout()
-                    row.setSpacing(10)
-                    lbl = QLabel(f'  {sub_key}：')
-                    lbl.setFont(self._ui_font())
-                    lbl.setFixedWidth(120)
-                    row.addWidget(lbl)
-                    edit = QLineEdit(str(sub_val))
-                    edit.setFont(self._ui_font())
-                    self._detail_edits[f'{key}.{sub_key}'] = edit
-                    row.addWidget(edit)
-                    self._detail_form_layout.addLayout(row)
-            else:
-                row = QHBoxLayout()
-                row.setSpacing(10)
-                lbl = QLabel(key + '：')
-                lbl.setFont(self._ui_font())
-                lbl.setFixedWidth(120)
-                row.addWidget(lbl)
-                edit = QLineEdit(str(val))
-                edit.setFont(self._ui_font())
-                self._detail_edits[key] = edit
-                row.addWidget(edit)
-                self._detail_form_layout.addLayout(row)
+        for key, field_def in cfg.items():
+            if not isinstance(field_def, dict) or 'type' not in field_def:
+                self._add_detail_field(key, key, '', 'string', field_def)
+                continue
 
+            field_type = field_def.get('type', 'string')
+
+            if field_type == 'object' and 'fields' in field_def:
+                section_lbl = QLabel(f'── {field_def.get("title", key)} ──')
+                section_lbl.setFont(self._ui_font(bold=True))
+                section_lbl.setStyleSheet('color: #555; border: none; background: transparent;')
+                self._detail_form_layout.addWidget(section_lbl)
+                if field_def.get('description'):
+                    hint = QLabel(field_def['description'])
+                    hint.setFont(self._ui_font(9))
+                    hint.setStyleSheet('color: #999; border: none; background: transparent;')
+                    hint.setWordWrap(True)
+                    self._detail_form_layout.addWidget(hint)
+                for sub_key, sub_def in field_def['fields'].items():
+                    if not isinstance(sub_def, dict) or 'type' not in sub_def:
+                        continue
+                    cur_val = sub_def.get('value', sub_def.get('default'))
+                    self._add_detail_field(f'{key}.{sub_key}',
+                                           sub_def.get('title', sub_key),
+                                           sub_def.get('description', ''),
+                                           sub_def.get('type', 'string'),
+                                           cur_val)
+            else:
+                cur_val = field_def.get('value', field_def.get('default'))
+                self._add_detail_field(key,
+                                       field_def.get('title', key),
+                                       field_def.get('description', ''),
+                                       field_type,
+                                       cur_val)
+
+        self._detail_form_layout.addStretch()
+        self._detail_form_scroll.setWidget(form_widget)
         self.ui.stackedWidget.setCurrentIndex(self._plugins_detail_index)
+
+    def _add_detail_field(self, edit_key, title, description, field_type, current_value):
+        """在详情页添加一个配置字段"""
+        container = QVBoxLayout()
+        container.setSpacing(3)
+
+        row = QHBoxLayout()
+        row.setSpacing(10)
+
+        lbl = QLabel(title + '：')
+        lbl.setFont(self._ui_font(bold=True))
+        lbl.setFixedWidth(150)
+        lbl.setStyleSheet('color: #2c3e50; border: none; background: transparent;')
+        row.addWidget(lbl)
+
+        if field_type == 'bool':
+            widget = QCheckBox()
+            widget.setChecked(bool(current_value))
+            self._detail_edits[edit_key] = widget
+            row.addWidget(widget)
+            row.addStretch()
+            container.addLayout(row)
+        elif field_type == 'text':
+            widget = QTextEdit()
+            widget.setFont(self._ui_font())
+            widget.setPlainText(str(current_value) if current_value is not None else '')
+            widget.setMinimumHeight(80)
+            widget.setMaximumHeight(120)
+            self._detail_edits[edit_key] = widget
+            container.addLayout(row)
+            container.addWidget(widget)
+        else:
+            widget = QLineEdit(str(current_value) if current_value is not None else '')
+            widget.setFont(self._ui_font())
+            self._detail_edits[edit_key] = widget
+            row.addWidget(widget)
+            container.addLayout(row)
+
+        if description:
+            desc_lbl = QLabel(description)
+            desc_lbl.setFont(self._ui_font(9))
+            desc_lbl.setStyleSheet('color: #999; border: none; background: transparent;')
+            desc_lbl.setWordWrap(True)
+            container.addWidget(desc_lbl)
+
+        self._detail_form_layout.addLayout(container)
 
     def _save_plugin_detail(self):
         if not self._detail_current_info:
             return
         cfg      = self._detail_current_info['cfg']
         cfg_path = self._detail_current_info['cfg_path']
-        for key, edit in self._detail_edits.items():
-            text = edit.text()
-            if '.' in key:
-                # 嵌套 dict 字段，如 llm.model
-                parent_key, child_key = key.split('.', 1)
-                original = cfg.get(parent_key, {}).get(child_key)
-                if isinstance(original, int):
-                    try:
-                        cfg[parent_key][child_key] = int(text)
-                    except ValueError:
-                        QMessageBox.warning(self, '格式错误', f'{key} 必须是整数')
-                        return
-                elif isinstance(original, float):
-                    try:
-                        cfg[parent_key][child_key] = float(text)
-                    except ValueError:
-                        QMessageBox.warning(self, '格式错误', f'{key} 必须是数字')
-                        return
-                else:
-                    cfg[parent_key][child_key] = text
+
+        for edit_key, widget in self._detail_edits.items():
+            if isinstance(widget, QCheckBox):
+                value = widget.isChecked()
+            elif isinstance(widget, QTextEdit):
+                value = widget.toPlainText()
             else:
-                original = cfg.get(key)
-                if isinstance(original, int):
-                    try:
-                        cfg[key] = int(text)
-                    except ValueError:
-                        QMessageBox.warning(self, '格式错误', f'{key} 必须是整数')
-                        return
-                elif isinstance(original, float):
-                    try:
-                        cfg[key] = float(text)
-                    except ValueError:
-                        QMessageBox.warning(self, '格式错误', f'{key} 必须是数字')
-                        return
+                value = widget.text()
+
+            if '.' in edit_key:
+                parent_key, child_key = edit_key.split('.', 1)
+                field_def = cfg.get(parent_key, {}).get('fields', {}).get(child_key, {})
+                value = self._cast_value(value, field_def.get('type', 'string'), edit_key)
+                if value is None:
+                    return
+                cfg[parent_key]['fields'][child_key]['value'] = value
+            else:
+                field_def = cfg.get(edit_key, {})
+                if isinstance(field_def, dict) and 'type' in field_def:
+                    if field_def.get('type') != 'bool':
+                        value = self._cast_value(value, field_def.get('type', 'string'), edit_key)
+                        if value is None:
+                            return
+                    cfg[edit_key]['value'] = value
                 else:
-                    cfg[key] = text
+                    cfg[edit_key] = value
+
         try:
             with open(cfg_path, 'w', encoding='utf-8') as f:
+                import json
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
             self.toast.show_message("配置已保存", 1500)
         except Exception as e:
             self.toast.show_message(f"保存失败: {e}", 3000)
+
+    def _cast_value(self, value, field_type, key):
+        """根据 type 转换输入值，失败返回 None"""
+        if field_type == 'int':
+            try:
+                return int(value)
+            except ValueError:
+                QMessageBox.warning(self, '格式错误', f'{key} 必须是整数')
+                return None
+        elif field_type == 'float':
+            try:
+                return float(value)
+            except ValueError:
+                QMessageBox.warning(self, '格式错误', f'{key} 必须是数字')
+                return None
+        return value
+
+    def _on_plugin_dir_changed(self, path):
+        """文件系统监听回调：插件目录有变化时刷新对应 tab"""
+        for plugin_type, base_dir in self._plugin_tab_dirs.items():
+            if os.path.normpath(path) == os.path.normpath(base_dir):
+                self._refresh_plugin_tab(plugin_type)
+                break
+
+    def _refresh_plugin_tab(self, plugin_type):
+        """清空并重建指定插件 tab 的卡片列表"""
+        layout  = self._plugin_tab_layouts.get(plugin_type)
+        base_dir = self._plugin_tab_dirs.get(plugin_type)
+        if not layout or not base_dir:
+            return
+
+        # 清除旧卡片
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        # 从 _plugin_infos 中移除该 type 的旧条目
+        self._plugin_infos = [i for i in self._plugin_infos if i['plugin_type'] != plugin_type]
+
+        # 重新扫描并构建卡片
+        if os.path.isdir(base_dir):
+            for entry in sorted(os.listdir(base_dir)):
+                plugin_dir = os.path.join(base_dir, entry)
+                meta_path  = os.path.join(plugin_dir, 'metadata.json')
+                cfg_path   = os.path.join(plugin_dir, 'plugin_config.json')
+                if not os.path.isdir(plugin_dir) or not os.path.exists(meta_path):
+                    continue
+                try:
+                    with open(meta_path, 'r', encoding='utf-8') as f:
+                        meta = json.load(f)
+                except Exception:
+                    continue
+                cfg = {}
+                if os.path.exists(cfg_path):
+                    try:
+                        with open(cfg_path, 'r', encoding='utf-8') as f:
+                            cfg = json.load(f)
+                    except Exception:
+                        pass
+                info = {'meta': meta, 'cfg': cfg, 'cfg_path': cfg_path,
+                        'plugin_type': plugin_type, 'plugin_name': entry}
+                self._plugin_infos.append(info)
+                self._build_plugin_row(info, layout)
+
+        layout.addStretch()
 
     def _on_plugin_enabled_changed(self, plugin_type, plugin_name, state):
         rel_path = f'{plugin_type}/{plugin_name}'
@@ -2988,7 +3299,8 @@ class set_pyqt(QWidget):
         def on_done(success, err):
             if success:
                 btn.setText("✓ 已安装")
-                self.toast.show_message(f"✓ {plugin['display_name']} 安装成功！重启后生效", 4000)
+                self.toast.show_message(f"✓ {plugin['display_name']} 安装成功！", 4000)
+                self._refresh_plugin_tab('community')
             else:
                 btn.setText("⬇ 安装")
                 btn.setEnabled(True)
@@ -3292,10 +3604,10 @@ class set_pyqt(QWidget):
 
         current_config["ui"]["intro_text"] = self.ui.lineEdit_4.text()
         current_config['context']['max_messages'] = int(self.ui.lineEdit_5.text())
-        _ac_cfg = self._load_plugin_file_config('built-in', 'auto-chat')
-        _ac_cfg['idle_time'] = int(self.ui.lineEdit_idle_time.text()) if self.ui.lineEdit_idle_time.text() else 15
-        _ac_cfg['prompt'] = self.ui.textEdit_prompt.toPlainText()
-        self._save_plugin_file_config('built-in', 'auto-chat', _ac_cfg)
+        _ac_raw = self._load_plugin_file_config('built-in', 'auto-chat')
+        self._set_schema_value(_ac_raw, 'idle_time', int(self.ui.lineEdit_idle_time.text()) if self.ui.lineEdit_idle_time.text() else 15)
+        self._set_schema_value(_ac_raw, 'prompt', self.ui.textEdit_prompt.toPlainText())
+        self._save_plugin_file_config('built-in', 'auto-chat', _ac_raw)
 
         # 确保tools配置存在
         if 'tools' not in current_config:

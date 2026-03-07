@@ -1,6 +1,26 @@
 {
-  "api_key": "",
-  "api_url": "",
-  "model": "",
-  "system_prompt": "你是一个专业翻译助手，请将以下中文准确翻译成英语，保持原意和语调，只返回翻译结果，不要添加任何解释："
+  "api_key": {
+    "title": "翻译 API Key",
+    "description": "用于翻译的 LLM API 密钥，留空则使用全局配置",
+    "type": "string",
+    "default": ""
+  },
+  "api_url": {
+    "title": "翻译 API 地址",
+    "description": "用于翻译的 LLM API 地址，留空则使用全局配置",
+    "type": "string",
+    "default": ""
+  },
+  "model": {
+    "title": "翻译模型",
+    "description": "用于翻译的 LLM 模型名称，留空则使用全局配置",
+    "type": "string",
+    "default": ""
+  },
+  "system_prompt": {
+    "title": "翻译系统提示词",
+    "description": "指导 LLM 执行翻译任务的提示词",
+    "type": "text",
+    "default": "你是一个专业翻译助手，请将以下中文准确翻译成英语，保持原意和语调，只返回翻译结果，不要添加任何解释："
+  }
 }

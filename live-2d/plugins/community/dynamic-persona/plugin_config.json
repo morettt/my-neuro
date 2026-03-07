@@ -1,3 +1,8 @@
 {
-  "update_frequency": 3
+  "update_frequency": {
+    "title": "人格更新频率（条）",
+    "description": "每隔多少条对话更新一次动态人格",
+    "type": "int",
+    "default": 3
+  }
 }
