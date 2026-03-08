@@ -28,5 +28,11 @@
     "desc": "A plugin to manage and fetch SKILLs.",
     "author": "xxynet",
     "repo": "https://github.com/xxynet/myneuro-plugin-skills"
+  },
+  "core-memory-injector": {
+    "display_name": "core-memory-injector",
+    "desc": "启动时读取核心用户记忆.txt并注入到系统提示词，文件变更时自动刷新",
+    "author": "A-night-owl-Rabbit",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-core-memory-injector"
   }
 }
