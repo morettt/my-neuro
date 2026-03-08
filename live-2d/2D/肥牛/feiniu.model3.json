@@ -1,0 +1,116 @@
+{
+  "Version": 3,
+  "FileReferences": {
+    "Moc": "feiniu.moc3",
+    "Textures": [
+      "feiniu.2048/texture_00.png",
+      "feiniu.2048/texture_01.png"
+    ],
+    "Physics": "feiniu.physics3.json",
+    "Pose": "feiniu.pose3.json",
+    "DisplayInfo": "feiniu.cdi3.json",
+    "Expressions": [
+      {
+        "Name": "expression1",
+        "File": "expressions/expression1.exp3.json"
+      },
+      {
+        "Name": "expression2",
+        "File": "expressions/expression2.exp3.json"
+      },
+      {
+        "Name": "expression3",
+        "File": "expressions/expression3.exp3.json"
+      },
+      {
+        "Name": "expression4",
+        "File": "expressions/expression4.exp3.json"
+      },
+      {
+        "Name": "expression5",
+        "File": "expressions/expression5.exp3.json"
+      },
+      {
+        "Name": "expression6",
+        "File": "expressions/expression6.exp3.json"
+      },
+      {
+        "Name": "expression7",
+        "File": "expressions/expression7.exp3.json"
+      }
+    ],
+    "Motions": {
+      "Idle": [
+        {
+          "File": "motions/hiyori_m01.motion3.json",
+          "FadeInTime": 0.5,
+          "FadeOutTime": 0.5
+        }
+      ],
+      "TapBody": [
+        {
+          "File": "motions/hiyori_m01.motion3.json"
+        },
+        {
+          "File": "motions/hiyori_m02.motion3.json"
+        },
+        {
+          "File": "motions/hiyori_m03.motion3.json"
+        },
+        {
+          "File": "motions/hiyori_m04.motion3.json"
+        },
+        {
+          "File": "motions/hiyori_m05.motion3.json"
+        },
+        {
+          "File": "motions/hiyori_m06.motion3.json"
+        },
+        {
+          "File": "motions/hiyori_m07.motion3.json"
+        },
+        {
+          "File": "motions/hiyori_m08.motion3.json"
+        },
+        {
+          "File": "motions/hiyori_m09.motion3.json"
+        },
+        {
+          "File": "motions/hiyori_m10.motion3.json"
+        },
+        {
+          "File": "motions/micoff.motion3.json"
+        },
+        {
+          "File": "motions/micon.motion3.json"
+        },
+        {
+          "File": "motions/singing.motion3.json"
+        }
+      ]
+    }
+  },
+  "Groups": [
+    {
+      "Target": "Parameter",
+      "Name": "LipSync",
+      "Ids": [
+        "ParamMouthOpenY"
+      ]
+    },
+    {
+      "Target": "Parameter",
+      "Name": "EyeBlink",
+      "Ids": [
+        "ParamEyeLOpen",
+        "ParamEyeROpen"
+      ]
+    }
+  ],
+  "HitAreas": [
+    {
+      "Id": "HitArea",
+      "Name": ""
+    }
+  ]
+}

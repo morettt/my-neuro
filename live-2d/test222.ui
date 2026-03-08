@@ -736,7 +736,7 @@ QTabWidget#tabWidget_tools QTabBar {
           </font>
          </property>
          <property name="text">
-          <string>动画</string>
+          <string>表情与动作</string>
          </property>
          <property name="checkable">
           <bool>true</bool>

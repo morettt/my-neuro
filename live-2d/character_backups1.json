@@ -1,0 +1,107 @@
+{
+  "feiniu": {
+    "original_config1": {
+      "emotion_expressions": {
+        "开心": [],
+        "生气": [],
+        "难过": [],
+        "惊讶": [],
+        "害羞": [],
+        "俏皮": [],
+        "表情1": [
+          "expressions/expression1.exp3.json"
+        ],
+        "表情2": [
+          "expressions/expression2.exp3.json"
+        ],
+        "表情3": [
+          "expressions/expression3.exp3.json"
+        ],
+        "表情4": [
+          "expressions/expression4.exp3.json"
+        ],
+        "表情5": [
+          "expressions/expression5.exp3.json"
+        ],
+        "表情6": [
+          "expressions/expression6.exp3.json"
+        ],
+        "表情7": [
+          "expressions/expression7.exp3.json"
+        ]
+      }
+    },
+    "backup_time": "2026-01-05 18:03:40",
+    "created_by": "AI_set_live2d.py"
+  },
+  "3": {
+    "original_config1": {
+      "emotion_expressions": {
+        "开心": [],
+        "生气": [],
+        "难过": [],
+        "惊讶": [],
+        "害羞": [],
+        "俏皮": [],
+        "表情1": [
+          "expressions/expression1.exp3.json"
+        ],
+        "表情2": [
+          "expressions/expression2.exp3.json"
+        ],
+        "表情3": [
+          "expressions/expression3.exp3.json"
+        ],
+        "表情4": [
+          "expressions/expression4.exp3.json"
+        ],
+        "表情5": [
+          "expressions/expression5.exp3.json"
+        ],
+        "表情6": [
+          "expressions/expression6.exp3.json"
+        ],
+        "表情7": [
+          "expressions/expression7.exp3.json"
+        ]
+      }
+    },
+    "backup_time": "2026-01-17 05:30:05",
+    "created_by": "AI_set_live2d.py"
+  },
+  "肥牛": {
+    "original_config1": {
+      "emotion_expressions": {
+        "开心": [],
+        "生气": [],
+        "难过": [],
+        "惊讶": [],
+        "害羞": [],
+        "俏皮": [],
+        "表情1": [
+          "expressions/expression1.exp3.json"
+        ],
+        "表情2": [
+          "expressions/expression2.exp3.json"
+        ],
+        "表情3": [
+          "expressions/expression3.exp3.json"
+        ],
+        "表情4": [
+          "expressions/expression4.exp3.json"
+        ],
+        "表情5": [
+          "expressions/expression5.exp3.json"
+        ],
+        "表情6": [
+          "expressions/expression6.exp3.json"
+        ],
+        "表情7": [
+          "expressions/expression7.exp3.json"
+        ]
+      }
+    },
+    "backup_time": "2026-02-24 14:59:07",
+    "created_by": "AI_set_live2d.py"
+  }
+}

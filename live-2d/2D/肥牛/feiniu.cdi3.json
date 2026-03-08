@@ -352,9 +352,39 @@
 			"Name": "[6]侧发右"
 		},
 		{
-			"Id": "mic",
-			"GroupId": "",
-			"Name": "话筒出现"
+			"Id": "biaoqing1",
+			"GroupId": "ParamGroup5",
+			"Name": "开心"
+		},
+		{
+			"Id": "biaoqing2",
+			"GroupId": "ParamGroup5",
+			"Name": "生气"
+		},
+		{
+			"Id": "biaoqing3",
+			"GroupId": "ParamGroup5",
+			"Name": "难过"
+		},
+		{
+			"Id": "biaoqing4",
+			"GroupId": "ParamGroup5",
+			"Name": "惊讶"
+		},
+		{
+			"Id": "biaoqing5",
+			"GroupId": "ParamGroup5",
+			"Name": "害羞"
+		},
+		{
+			"Id": "biaoqing6",
+			"GroupId": "ParamGroup5",
+			"Name": "俏皮"
+		},
+		{
+			"Id": "mic1",
+			"GroupId": "ParamGroup6",
+			"Name": "麦克风"
 		}
 	],
 	"ParameterGroups": [
@@ -417,9 +447,23 @@
 			"Id": "ParamGroup3",
 			"GroupId": "",
 			"Name": "摇动 侧发右"
+		},
+		{
+			"Id": "ParamGroup5",
+			"GroupId": "",
+			"Name": "表情"
+		},
+		{
+			"Id": "ParamGroup6",
+			"GroupId": "",
+			"Name": "麦克风"
 		}
 	],
 	"Parts": [
+		{
+			"Id": "Part5",
+			"Name": "麦克风"
+		},
 		{
 			"Id": "PartCore",
 			"Name": "Core"
