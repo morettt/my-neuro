@@ -3,12 +3,9 @@ const { MessageInitializer } = require('./MessageInitializer.js');
 const { ConversationCore } = require('./ConversationCore.js');
 const { ASRController } = require('./ASRController.js');
 const { InputRouter } = require('./InputRouter.js');
-const { MemoryManager } = require('../MemoryManager.js');
 const { DiaryManager } = require('../DiaryManager.js');
 const { ScreenshotManager } = require('../ScreenshotManager.js');
-const { GameIntegration } = require('../GameIntegration.js');
 const { ContextManager } = require('../ContextManager.js');
-const { ContextCompressor } = require('../ContextCompressor.js');
 const { MemosClient } = require('../memos-client.js');
 
 /**
@@ -40,14 +37,11 @@ class VoiceChatFacade {
         this.autoScreenshot = config.vision.auto_screenshot || false;
         this._autoScreenshotFlag = false;
 
-        // 记忆文件路径
-        this.memoryFilePath = config.memory.file_path;
-
-        // AI日记功能
-        this.aiDiaryEnabled = config.ai_diary?.enabled || false;
-        this.aiDiaryIdleTime = config.ai_diary?.idle_time || 600000;
-        this.aiDiaryFile = config.ai_diary?.diary_file || "AI日记.txt";
-        this.aiDiaryPrompt = config.ai_diary?.prompt || "请以fake neuro（肥牛）的身份，基于今天的对话记录写一篇简短的日记。";
+        // AI日记功能（配置由 diary 插件的 plugin_config.json 管理）
+        this.aiDiaryEnabled = false;
+        this.aiDiaryIdleTime = 20000;
+        this.aiDiaryFile = 'AI记录室/AI日记.txt';
+        this.aiDiaryPrompt = '';
         this.lastInteractionTime = Date.now();
         this.diaryTimer = null;
 
@@ -70,26 +64,17 @@ class VoiceChatFacade {
         // 创建临时的conversationCore（等异步初始化完成后替换）
         this.conversationCore = new ConversationCore('', [], this.config);
 
-        // 创建游戏集成
-        this.gameIntegration = new GameIntegration(this, this.config);
-        this.gameModules = this.gameIntegration.gameModules;
-        this.isGameModeActive = this.gameIntegration.isGameModeActive();
-
         // 创建子模块
-        this.memoryManager = new MemoryManager(this);
         this.diaryManager = new DiaryManager(this);
         this.screenshotManager = new ScreenshotManager(this);
-        this.contextCompressor = new ContextCompressor(this, this.config);
-        
         // 创建MemOS客户端
         this.memosClient = new MemosClient(this.config);
 
         // 创建输入路由
         this.inputRouter = new InputRouter(
             this.conversationCore,
-            this.gameIntegration,
-            this.memoryManager,
-            this.contextCompressor,
+            null,
+            null,
             this.memosClient,
             this.config
         );
@@ -145,8 +130,8 @@ class VoiceChatFacade {
                 this.trimMessages();
             }
 
-            // 启动AI日记定时器
-            if (this.aiDiaryEnabled) {
+            // 启动AI日记定时器（diary 插件存在时由插件接管，此处不重复启动）
+            if (this.aiDiaryEnabled && !global.pluginManager?.getPlugin('diary')) {
                 this.startDiaryTimer();
             }
 
@@ -159,11 +144,6 @@ class VoiceChatFacade {
     // ========== 委托给 ConversationCore 的方法 ==========
     enhanceSystemPrompt() {
         return this.conversationCore.enhanceSystemPrompt();
-    }
-
-    // ========== 委托给 MemoryManager 的方法 ==========
-    async checkAndSaveMemoryAsync(text) {
-        return this.memoryManager.checkAndSaveMemoryAsync(text);
     }
 
     // ========== 委托给 DiaryManager 的方法 ==========
@@ -186,11 +166,6 @@ class VoiceChatFacade {
 
     async takeScreenshotBase64() {
         return this.screenshotManager.takeScreenshotBase64();
-    }
-
-    // ========== 委托给 GameIntegration 的方法 ==========
-    async handleGameInput(text) {
-        return this.gameIntegration.handleGameInput(text);
     }
 
     // ========== 委托给 ContextManager 的方法 ==========
@@ -284,14 +259,14 @@ class VoiceChatFacade {
      * @param {string} userInput - 用户输入
      * @returns {Promise<boolean>} - 是否成功注入
      */
-    async injectRelevantMemories(userInput) {
-        if (!this.memosClient || !this.config.memos?.enabled) {
+    async injectRelevantMemories(userInput, injectTopK = 3) {
+        if (!this.memosClient) {
             return false;
         }
 
         try {
             // 搜索相关记忆
-            const memories = await this.memosClient.search(userInput, this.config.memos?.inject_top_k || 3);
+            const memories = await this.memosClient.search(userInput, injectTopK);
             
             if (memories && memories.length > 0) {
                 // 构建记忆注入文本

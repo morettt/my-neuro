@@ -1,0 +1,8 @@
+{
+  "file": {
+    "title": "备忘录文件路径",
+    "description": "用于存储备忘录数据的 JSON 文件路径（相对于程序根目录）",
+    "type": "string",
+    "default": "AI记录室/备忘录.json"
+  }
+}

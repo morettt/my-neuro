@@ -8,7 +8,6 @@ const path = require('path');
 class MessageInitializer {
     constructor(config) {
         this.config = config;
-        this.memoryFilePath = config.memory.file_path;
     }
 
     /**
@@ -21,11 +20,8 @@ class MessageInitializer {
         // 获取交互编号
         const sessionInteractionNumber = this.getNextInteractionNumber();
 
-        // 读取记忆库内容
-        const memoryContent = this.loadMemoryContent();
-
         // 构建系统提示词
-        const systemPrompt = this.buildSystemPrompt(memoryContent);
+        const systemPrompt = this.buildSystemPrompt();
 
         // 加载对话历史
         const { fullHistory, historyForAI } = this.loadConversationHistory();
@@ -84,29 +80,10 @@ class MessageInitializer {
     }
 
     /**
-     * 读取记忆库文件内容
-     */
-    loadMemoryContent() {
-        try {
-            const fullMemoryPath = path.join(__dirname, '..', '..', '..', this.memoryFilePath);
-            const memoryContent = fs.readFileSync(fullMemoryPath, 'utf8');
-            console.log('成功读取核心用户记忆内容');
-            console.log('读取路径:', fullMemoryPath);
-            return memoryContent;
-        } catch (error) {
-            console.error('读取核心用户记忆文件失败:', error);
-            console.error('尝试读取的路径:', path.join(__dirname, '..', '..', '..', this.memoryFilePath));
-            return "无法读取记忆库内容";
-        }
-    }
-
-    /**
      * 构建系统提示词
      */
-    buildSystemPrompt(memoryContent) {
-        const baseSystemPrompt = this.config.llm.system_prompt;
-        return `${baseSystemPrompt}这些数据里面是有关用户的各种信息。你可以观测，在必要的时候参考这些内容，正常普通的对话不要提起：
-${memoryContent}`;
+    buildSystemPrompt() {
+        return this.config.llm.system_prompt;
     }
 
     /**

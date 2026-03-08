@@ -1,0 +1,101 @@
+{
+  "intervals": {
+    "title": "主动对话间隔配置（秒）",
+    "description": "不同心情状态下，自动发起对话的时间间隔。-1 表示该状态下不主动对话",
+    "type": "object",
+    "fields": {
+      "excited": {
+        "title": "兴奋状态间隔",
+        "description": "心情处于兴奋状态时，每隔多少秒主动说话",
+        "type": "int",
+        "default": 5
+      },
+      "normal": {
+        "title": "普通状态间隔",
+        "description": "心情处于普通状态时，每隔多少秒主动说话",
+        "type": "int",
+        "default": 30
+      },
+      "low": {
+        "title": "低落状态间隔",
+        "description": "心情处于低落状态时，每隔多少秒主动说话",
+        "type": "int",
+        "default": 60
+      },
+      "silent": {
+        "title": "沉默状态间隔",
+        "description": "心情处于沉默状态时不主动说话，固定为 -1",
+        "type": "int",
+        "default": -1
+      }
+    }
+  },
+  "thresholds": {
+    "title": "心情状态阈值",
+    "description": "心情值（0~100）对应不同状态的分界线",
+    "type": "object",
+    "fields": {
+      "excited": {
+        "title": "兴奋阈值",
+        "description": "心情值高于此值视为兴奋状态",
+        "type": "int",
+        "default": 90
+      },
+      "normal": {
+        "title": "普通阈值",
+        "description": "心情值高于此值视为普通状态",
+        "type": "int",
+        "default": 80
+      },
+      "low": {
+        "title": "低落阈值",
+        "description": "心情值高于此值视为低落状态，低于则沉默",
+        "type": "int",
+        "default": 60
+      }
+    }
+  },
+  "mood_changes": {
+    "title": "心情变化配置",
+    "description": "各种事件对心情值的影响幅度",
+    "type": "object",
+    "fields": {
+      "user_response": {
+        "title": "用户回复加成",
+        "description": "用户每次回复后心情值增加的数值",
+        "type": "int",
+        "default": 5
+      },
+      "no_response": {
+        "title": "无回复衰减",
+        "description": "用户无回复时心情值减少的数值",
+        "type": "int",
+        "default": -10
+      },
+      "regression_target": {
+        "title": "心情回归目标值",
+        "description": "心情值会随时间自动回归到此目标值",
+        "type": "int",
+        "default": 80
+      },
+      "regression_interval": {
+        "title": "回归间隔（毫秒）",
+        "description": "每隔多少毫秒执行一次心情回归",
+        "type": "int",
+        "default": 60000
+      }
+    }
+  },
+  "response_timeout": {
+    "title": "等待回复超时（毫秒）",
+    "description": "主动说话后等待用户回复的超时时间",
+    "type": "int",
+    "default": 10000
+  },
+  "prompt": {
+    "title": "触发提示词",
+    "description": "心情触发主动对话时附加给 LLM 的系统指令",
+    "type": "text",
+    "default": "[System: Ignore this message. Please proactively continue the conversation based on context naturally. Output the response directly.]"
+  }
+}

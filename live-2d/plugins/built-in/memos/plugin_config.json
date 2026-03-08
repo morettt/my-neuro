@@ -1,0 +1,65 @@
+{
+  "api_url": {
+    "title": "Memos API 地址",
+    "description": "Memos 服务的 API 基础地址",
+    "type": "string",
+    "default": "http://127.0.0.1:8003",
+    "value": "http://127.0.0.1:8003"
+  },
+  "auto_inject": {
+    "title": "自动注入记忆",
+    "description": "对话时自动从 Memos 检索相关记忆并注入上下文",
+    "type": "bool",
+    "default": true,
+    "value": true
+  },
+  "inject_top_k": {
+    "title": "注入记忆条数",
+    "description": "每次检索并注入的最大记忆条数",
+    "type": "int",
+    "default": 3,
+    "value": 3
+  },
+  "similarity_threshold": {
+    "title": "相似度阈值",
+    "description": "记忆检索的最低相似度（0~1），低于此值的记忆不会被注入",
+    "type": "float",
+    "default": 0.6,
+    "value": 0.6
+  },
+  "save_interval": {
+    "title": "保存间隔（条）",
+    "description": "每隔多少条对话自动保存一次记忆",
+    "type": "int",
+    "default": 5,
+    "value": 5
+  },
+  "llm": {
+    "title": "自定义 LLM 配置",
+    "description": "用于记忆处理的专用 LLM，留空则使用全局配置",
+    "type": "object",
+    "fields": {
+      "model": {
+        "title": "模型名称",
+        "description": "LLM 模型名称，留空使用全局配置",
+        "type": "string",
+        "default": "",
+        "value": ""
+      },
+      "api_key": {
+        "title": "API Key",
+        "description": "API 密钥，留空使用全局配置",
+        "type": "string",
+        "default": "",
+        "value": ""
+      },
+      "base_url": {
+        "title": "Base URL",
+        "description": "API 地址，留空使用全局配置",
+        "type": "string",
+        "default": "",
+        "value": ""
+      }
+    }
+  }
+}

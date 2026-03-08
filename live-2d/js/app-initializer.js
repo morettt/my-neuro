@@ -6,12 +6,15 @@ const { UIController } = require('./ui/ui-controller.js');
 const { TTSFactory } = require('./voice/tts-factory.js');
 const { ModelSetup } = require('./model/model-setup.js');
 const { BarrageManager } = require('./live/barrage-manager.js');
-const { LiveStreamModule } = require('./live/LiveStreamModule.js');
-const { AutoChatModule } = require('./live/auto-chat.js');
-const { MoodChatModule } = require('./ai/MoodChatModule.js');
+// LiveStreamModule → plugins/built-in/bilibili-live
+// AutoChatModule   → plugins/built-in/auto-chat
+// MoodChatModule   → plugins/built-in/mood-chat
 const { IPCHandlers } = require('./ipc-handlers.js');
 const { LLMHandler } = require('./ai/llm-handler.js');
 const { logToTerminal } = require('./api-utils.js');
+const { PluginManager } = require('./core/plugin-manager.js');
+const { eventBus } = require('./core/event-bus.js');
+const { Events } = require('./core/events.js');
 
 class AppInitializer {
     constructor(config, modelController, onBarrageTTSComplete, enhanceSystemPrompt) {
@@ -35,6 +38,9 @@ class AppInitializer {
         this.moodChatModule = null;
         this.ipcHandlers = null;
 
+        // 插件管理器
+        this.pluginManager = null;
+
         // 配置标志
         this.ttsEnabled = config.tts?.enabled !== false;
         // ASR启用：本地ASR或百度流式ASR任一启用即可
@@ -47,6 +53,9 @@ class AppInitializer {
     // 主初始化流程
     async initialize() {
         try {
+            // 第零阶段: 初始化插件系统
+            await this.initializePlugins();
+
             // 第一阶段: 初始化MCP系统
             await this.initializeMCP();
 
@@ -92,7 +101,8 @@ class AppInitializer {
                 barrageManager: this.barrageManager,
                 liveStreamModule: this.liveStreamModule,
                 autoChatModule: this.autoChatModule,
-                moodChatModule: this.moodChatModule
+                moodChatModule: this.moodChatModule,
+                pluginManager: this.pluginManager
             };
         } catch (error) {
             console.error("应用初始化错误:", error);
@@ -101,6 +111,18 @@ class AppInitializer {
                 logToTerminal('error', `错误堆栈: ${error.stack}`);
             }
             throw error;
+        }
+    }
+
+    // 第零阶段: 初始化插件系统
+    async initializePlugins() {
+        try {
+            this.pluginManager = new PluginManager(this.config);
+            global.pluginManager = this.pluginManager;
+            await this.pluginManager.loadAll();
+        } catch (error) {
+            logToTerminal('error', `❌ 插件系统初始化失败: ${error.message}`);
+            this.pluginManager = null;
         }
     }
 
@@ -195,6 +217,7 @@ class AppInitializer {
 
         // 更新voiceChat的ttsProcessor引用
         this.voiceChat.ttsProcessor = this.ttsProcessor;
+        global.ttsProcessor = this.ttsProcessor;
 
         // 配置语音打断功能
         if (this.config.asr?.voice_barge_in && this.voiceChat.asrProcessor && this.ttsProcessor) {
@@ -276,24 +299,8 @@ class AppInitializer {
             this.voiceChat.inputRouter.setBarrageManager(this.barrageManager);
         }
 
-        // 直播模块初始化
-        if (this.config.bilibili && this.config.bilibili.enabled) {
-            this.liveStreamModule = new LiveStreamModule({
-                roomId: this.config.bilibili.roomId || '30230160',
-                checkInterval: this.config.bilibili.checkInterval || 5000,
-                maxMessages: this.config.bilibili.maxMessages || 50,
-                apiUrl: this.config.bilibili.apiUrl || 'http://api.live.bilibili.com/ajax/msg',
-                onNewMessage: (message) => {
-                    console.log(`收到弹幕: ${message.nickname}: ${message.text}`);
-                    logToTerminal('info', `收到弹幕: ${message.nickname}: ${message.text}`);
-                    this.barrageManager.addToQueue(message.nickname, message.text);
-                }
-            });
-
-            this.liveStreamModule.start();
-            console.log('直播模块已启动，监听房间:', this.liveStreamModule.roomId);
-            logToTerminal('info', `直播模块已启动，监听房间: ${this.liveStreamModule.roomId}`);
-        }
+        // LiveStreamModule 已迁移至插件 plugins/built-in/bilibili-live
+        global.barrageManager = this.barrageManager;
     }
 
     // 第九阶段: 播放欢迎语和启动录音
@@ -317,23 +324,24 @@ class AppInitializer {
             }, 3000);
         }
 
-        // 自动对话模块初始化
-        setTimeout(() => {
-            this.autoChatModule = new AutoChatModule(this.config, this.ttsProcessor);
-            global.autoChatModule = this.autoChatModule;
-            this.autoChatModule.start();
-            // console.log('自动对话模块初始化完成');  // 不显示技术日志
-            // logToTerminal('info', '自动对话模块初始化完成');
-        }, 8000);
+        // AutoChatModule 和 MoodChatModule 已迁移至插件
+        // plugins/built-in/auto-chat 和 plugins/built-in/mood-chat
 
-        // 心情对话模块初始化（延迟1秒，确保voiceChat已初始化）
+        // 插件系统 onStart（应用完全就绪后启动所有插件）
         setTimeout(() => {
-            this.moodChatModule = new MoodChatModule(this.config);
-            global.moodChatModule = this.moodChatModule;
-            this.moodChatModule.start();
-            // console.log('心情对话模块初始化完成');  // 不显示技术日志
-            // logToTerminal('info', '心情对话模块初始化完成');
-        }, 1000);
+            if (this.pluginManager) {
+                this.pluginManager.startAll().catch(err => {
+                    logToTerminal('error', `❌ 插件 startAll 失败: ${err.message}`);
+                });
+
+                // 监听 TTS_END 事件，触发插件 onTTSEnd 钩子
+                eventBus.on(Events.TTS_END, () => {
+                    if (this.pluginManager) {
+                        this.pluginManager.runTTSEndHooks().catch(() => {});
+                    }
+                });
+            }
+        }, 2000);
     }
 
     // 第十阶段: 初始化聊天界面和IPC
@@ -367,7 +375,9 @@ class AppInitializer {
         console.log(`语音打断: ${this.config.asr?.voice_barge_in ? '启用' : '禁用'}`);
         console.log(`聊天框: ${this.shouldShowChatBox ? '显示' : '隐藏'}`);
         console.log(`直播模块: ${this.config.bilibili?.enabled ? '启用' : '禁用'}`);
-        console.log(`自动对话: ${this.config.auto_chat?.enabled ? '启用' : '禁用'}`);
+        let _autoChatEnabled = false;
+        try { _autoChatEnabled = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'plugins', 'built-in', 'auto-chat', 'plugin_config.json'), 'utf8')).enabled; } catch(e) {}
+        console.log(`自动对话: ${_autoChatEnabled ? '启用' : '禁用'}`);
         console.log(`Function Call工具: ${this.config.tools?.enabled ? '启用' : '禁用'}`);
         console.log(`MCP工具: ${this.config.mcp?.enabled ? '启用' : '禁用'}`);
 

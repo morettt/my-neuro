@@ -1,0 +1,10 @@
+{
+  "name": "memos",
+  "displayName": "MemOS 长期记忆",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "用户输入时检索并注入长期记忆，LLM 回复后将对话批量保存到 MemOS",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

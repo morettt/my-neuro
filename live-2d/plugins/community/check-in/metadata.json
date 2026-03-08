@@ -1,0 +1,9 @@
+{
+  "name": "check-in",
+  "displayName": "定时问候",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "每隔一段时间让 AI 主动问用户在做什么",
+  "lang": "python",
+  "main": "index.py"
+}
