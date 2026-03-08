@@ -74,7 +74,7 @@ async def startup_event():
         print("\n🤖 配置记忆加工 LLM...")
         llm_config = OpenAILLMConfig(
             model_name_or_path="zai-org/GLM-4.6",
-            api_key="sk-iosvzdshjjrzzldouqqnxefokpfncjfkwizvkwzxdjdmxvvm",
+            api_key="sk-your-api-key-here",
             api_base="https://api.siliconflow.cn/v1",
             temperature=0.2,
             max_tokens=2000  # 保留更多细节
