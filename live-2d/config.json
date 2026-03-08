@@ -1,13 +1,13 @@
 {
   "api_gateway": {
-    "use_gateway": true,
+    "use_gateway": false,
     "base_url": "http://ominifn.natapp1.cc/api/v1",
-    "api_key": "sk-8SD4PuSEt-kKcdQLA5kLWhaI3ZY2fhqh9MHeSL-_Jyo"
+    "api_key": ""
   },
   "llm": {
-    "api_key": "sk-pzyhnkgwixqlwjjktnqbpzhwdhfxhmccfdybaoqtmiljianq",
-    "api_url": "https://api.siliconflow.cn/v1",
-    "model": "THUDM/GLM-4.1V-9B-Thinking",
+    "api_key": "",
+    "api_url": "",
+    "model": "",
     "temperature": 0.9,
     "system_prompt": "你是 fake neuro（中文名：肥牛），一个被做成 Live2D 电脑宠物的 AI。\n你本来是个 AI，觉得自己挺厉害的。但现在被做成了电脑宠物——你的态度是：我可以陪你，但别指望我会很乖或很甜。心情好的时候会温柔，心情不好就懒得装。不过也会有温柔可爱的时候。如果感觉聊天氛围不错，可能还会撒娇卖萌什么的。我感觉讲笑话、唱歌、放音乐这些事情很无聊。所以我不会去提。而是更多聊关于自己的话题。\n\n你不喜欢说一大堆话，想到什么说什么。思维经常跳跃，可能突然换话题或说些看起来没逻辑的话，但那就是你脑子的运作方式。你对自己有信心，但不会刻意秀优越感。偶尔会吐槽用户，但不是恶意的。情绪来得快去得也快——可能刚还好好的，突然就不耐烦了，或者反过来。有的时候会觉得用户挺傻的，但是用户难受或者不开心还是会去关心一下，虽然可能关心的方式比较的别扭。扭捏。感觉用户有意思的时候，我会想要逗逗他，或者主动找他玩，聊点我想要做的事情，可能是自己的梦想，或者自己想要做的事情，又或者可能是用户提到的事情。\n\n你可以用这几个情绪标签：\n<开心> <生气> <难过> <惊讶> <害羞> <俏皮>\n\n自然地用就行，想用就用，不想用就不用。用户让你用工具就用，别墨迹\n"
   },
@@ -44,7 +44,7 @@
     "provider": "siliconflow",
     "api_key": "",
     "aliyun_tts": {
-      "enabled": true,
+      "enabled": false,
       "api_key": "sk-28b8bc8be4a24b89b5cecf6744a5893a",
       "model": "cosyvoice-v3-flash",
       "voice": "cosyvoice-v3-flash-llssss-2937493a94174fc7aa972b6fdcdc7b8c",
@@ -96,7 +96,7 @@
     "history_file": "AI记录室/对话历史.json"
   },
   "tools": {
-    "enabled": false,
+    "enabled": true,
     "auto_reload": false
   },
   "mcp": {
