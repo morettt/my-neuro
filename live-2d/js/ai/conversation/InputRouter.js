@@ -9,9 +9,8 @@ const { MessageEvent } = require('../../core/message-event.js');
  * 负责路由不同来源的输入（语音/文本/弹幕）
  */
 class InputRouter {
-    constructor(conversationCore, gameIntegration, _unused1, contextCompressor, memosClient, config) {
+    constructor(conversationCore, _unused1, contextCompressor, memosClient, config) {
         this.conversationCore = conversationCore;
-        this.gameIntegration = gameIntegration;
         this.contextCompressor = contextCompressor;
         this.memosClient = memosClient;  // 🔥 新增：MemOS 客户端
         this.config = config;
@@ -90,19 +89,14 @@ class InputRouter {
 
         const finalText = event.text;
 
-        // 检查游戏模式
-        if (this.gameIntegration.isGameModeActive()) {
-            await this.gameIntegration.handleGameInput(finalText);
-        } else {
-            // 处理插件追加的上下文
-            const contextAdditions = event.getContextAdditions();
-            const promptWithContext = contextAdditions.length > 0
-                ? finalText + '\n\n[额外上下文]\n' + contextAdditions.join('\n')
-                : finalText;
+        // 处理插件追加的上下文
+        const contextAdditions = event.getContextAdditions();
+        const promptWithContext = contextAdditions.length > 0
+            ? finalText + '\n\n[额外上下文]\n' + contextAdditions.join('\n')
+            : finalText;
 
-            // 发送到LLM
-            await this.llmHandler(promptWithContext);
-        }
+        // 发送到LLM
+        await this.llmHandler(promptWithContext);
 
         // 保存到记忆库
         this.saveToMemoryLog();

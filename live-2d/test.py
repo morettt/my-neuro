@@ -296,6 +296,43 @@ class ToastNotification(QLabel):
             self.opacity_animation.start()
 
 
+class _CloneWorker(QThread):
+    """后台执行 git clone（+ 可选 pip install），结果通过信号回到主线程"""
+    done     = pyqtSignal(bool, str)  # (success, error_message)
+    progress = pyqtSignal(str)        # 进度提示文字
+
+    def __init__(self, repo_url, target_dir):
+        super().__init__()
+        self.repo_url   = repo_url
+        self.target_dir = target_dir
+
+    def run(self):
+        import sys
+        try:
+            result = subprocess.run(
+                ["git", "clone", self.repo_url, self.target_dir],
+                capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=120
+            )
+            if result.returncode != 0:
+                self.done.emit(False, result.stderr.strip())
+                return
+
+            req_path = os.path.join(self.target_dir, 'requirements.txt')
+            if os.path.exists(req_path):
+                self.progress.emit("正在安装依赖...")
+                pip_result = subprocess.run(
+                    [sys.executable, '-m', 'pip', 'install', '-r', req_path],
+                    capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=300
+                )
+                if pip_result.returncode != 0:
+                    self.done.emit(False, f'依赖安装失败:\n{pip_result.stderr.strip()}')
+                    return
+
+            self.done.emit(True, "")
+        except Exception as ex:
+            self.done.emit(False, str(ex))
+
+
 class CustomTitleBar(QWidget):
     """自定义标题栏"""
 
@@ -428,7 +465,6 @@ class set_pyqt(QWidget):
         self.bert_process = None  # 新增：BERT进程
         self.rag_process = None  # 新增：RAG进程
         self.voice_clone_process = None  # 新增：声音克隆进程
-        self.minecraft_terminal_process = None  # 新增：Minecraft终端进程
         self.selected_model_path = None  # 选择的模型文件路径
         self.selected_audio_path = None  # 选择的音频文件路径
         self.config_path = 'config.json'
@@ -610,7 +646,6 @@ class set_pyqt(QWidget):
                 self.stop_rag()
                 self.stop_voice_tts()
                 self.stop_terminal()
-                self.stop_minecraft_terminal()
 
                 print("所有服务已关闭")
             else:
@@ -1838,15 +1873,13 @@ class set_pyqt(QWidget):
         self.ui.pushButton.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(1))
         self.ui.pushButton_3.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(0))
         self.ui.pushButton_5.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(2))
-        self.ui.pushButton_6.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(3))
-        self.ui.pushButton_animation.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(4))  # 动画改成4
-        self.ui.pushButton_terminal.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(7))
-        self.ui.pushButton_game.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(9))
-        self.ui.pushButton_voice_clone.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(6))  # 声音克隆页面
-        self.ui.pushButton_ui_settings.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(11))  # UI设置页面
-        self.ui.pushButton_tools.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(10))  # 工具屋页面
-        self.ui.pushButton_cloud_config.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(12))  # 云端配置页面
-        self.ui.pushButton_prompt_market.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(13))  # 提示词广场页面
+        self.ui.pushButton_animation.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(3))  # 动画
+        self.ui.pushButton_terminal.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(6))
+        self.ui.pushButton_voice_clone.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(5))  # 声音克隆页面
+        self.ui.pushButton_ui_settings.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(9))  # UI设置页面
+        self.ui.pushButton_tools.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(8))  # 工具屋页面
+        self.ui.pushButton_cloud_config.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(10))  # 云端配置页面
+        self.ui.pushButton_prompt_market.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(11))  # 提示词广场页面
         self.setup_plugins_page()
         self.ui.pushButton_plugins.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(self._plugins_page_index))
         self.ui.pushButton_chat_history.clicked.connect(self.open_chat_history)  # 对话记录页面
@@ -1872,9 +1905,6 @@ class set_pyqt(QWidget):
         self.ui.pushButton_select_model.clicked.connect(self.select_model_file)
         self.ui.pushButton_select_audio.clicked.connect(self.select_audio_file)
         self.ui.pushButton_tutorial.clicked.connect(self.show_tutorial)
-
-        # 添加Minecraft游戏终端按钮绑定
-        self.ui.pushButton_start_minecraft_terminal.clicked.connect(self.start_minecraft_terminal)
 
         self.ui.pushButton_back_to_home.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(0))
 
@@ -1902,9 +1932,6 @@ class set_pyqt(QWidget):
 
         # 云端肥牛网页导航按钮
         self.ui.pushButton_gateway_website.clicked.connect(self.open_gateway_website)
-
-        # 加载Minecraft配置到UI
-        self.load_minecraft_config()
 
         # 初始化桌宠切换按钮样式（默认为"启动"状态）
         self.update_toggle_button_style(False)
@@ -2399,21 +2426,16 @@ class set_pyqt(QWidget):
         self.ui.doubleSpinBox_temperature.setValue(self.config['llm'].get('temperature', 1.0))
         self.ui.lineEdit_4.setText(self.config['ui']['intro_text'])
         self.ui.lineEdit_5.setText(str(self.config['context']['max_messages']))
-        _ac_cfg = self._load_plugin_file_config('built-in', 'auto-chat')
-        self.ui.lineEdit_idle_time.setText(str(_ac_cfg.get('idle_time', 15)))
-        self.ui.textEdit_prompt.setPlainText(_ac_cfg.get('prompt', ''))
         self.ui.checkBox_mcp.setChecked(self.config.get('tools', {}).get('enabled', True))
         self.ui.checkBox_mcp_enable.setChecked(self.config.get('mcp', {}).get('enabled', True))
         self.ui.checkBox_5.setChecked(self.config['vision']['auto_screenshot'])
         self.ui.checkBox_3.setChecked(self.config['ui']['show_chat_box'])
         self.ui.checkBox_4.setChecked(self.config['context']['enable_limit'])
-        self.ui.checkBox.setChecked(_ac_cfg.get('enabled', False))
         # 新增ASR和TTS配置
         self.ui.checkBox_asr.setChecked(self.config['asr']['enabled'])
         self.ui.checkBox_tts.setChecked(self.config['tts']['enabled'])
         self.ui.checkBox_persistent_history.setChecked(self.config['context']['persistent_history'])
         self.ui.checkBox_voice_barge_in.setChecked(self.config['asr']['voice_barge_in'])
-        self.ui.checkBox_game_minecraft.setChecked(self.config['game']['Minecraft']['enabled'])
 
         # 新增：设置TTS语言下拉框
         tts_language = self.ui.comboBox_tts_language.currentText().split(' - ')[0]
@@ -2512,11 +2534,57 @@ class set_pyqt(QWidget):
         except Exception as e:
             QMessageBox.warning(self, '保存失败', f'插件配置保存失败: {e}')
 
+    # ===== enabled_plugins.json 读写 =====
+
+    def _enabled_plugins_path(self):
+        return os.path.join(get_app_path(), 'plugins', 'enabled_plugins.json')
+
+    def _load_enabled_plugins(self):
+        path = self._enabled_plugins_path()
+        if not os.path.exists(path):
+            return set()
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return set(data.get('plugins', []))
+        except Exception:
+            return set()
+
+    def _save_enabled_plugins(self, enabled_set):
+        path = self._enabled_plugins_path()
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump({'plugins': sorted(enabled_set)}, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            QMessageBox.warning(self, '保存失败', f'enabled_plugins.json 写入失败: {e}')
+
+    def _resolve_plugin_schema(self, raw):
+        """将 schema 格式的 plugin_config 解析为 {key: value} 平铺字典"""
+        result = {}
+        for key, field_def in raw.items():
+            if isinstance(field_def, dict) and 'type' in field_def:
+                if field_def['type'] == 'object' and 'fields' in field_def:
+                    result[key] = self._resolve_plugin_schema(field_def['fields'])
+                else:
+                    result[key] = field_def.get('value', field_def.get('default'))
+            else:
+                result[key] = field_def
+        return result
+
+    def _set_schema_value(self, raw, key, value):
+        """将值写入 schema 条目的 value 字段（兼容旧格式）"""
+        if isinstance(raw.get(key), dict) and 'type' in raw[key]:
+            raw[key]['value'] = value
+        else:
+            raw[key] = value
+
     # ===== 插件管理页 =====
 
     def setup_plugins_page(self):
         app_path = get_app_path()
         self._plugin_infos = []
+        self._plugin_tab_layouts = {}
+        self._plugin_tab_dirs    = {}
 
         # --- 列表页：对齐提示词广场布局风格 ---
         list_page = QWidget()
@@ -2570,6 +2638,56 @@ class set_pyqt(QWidget):
             scroll.setWidget(content)
             tab_widget.addTab(scroll, tab_title)
 
+            self._plugin_tab_layouts[plugin_type] = layout
+            self._plugin_tab_dirs[plugin_type]    = base_dir
+
+        self._plugin_watcher = QFileSystemWatcher()
+        for _watch_dir in self._plugin_tab_dirs.values():
+            if os.path.isdir(_watch_dir):
+                self._plugin_watcher.addPath(_watch_dir)
+        self._plugin_watcher.directoryChanged.connect(self._on_plugin_dir_changed)
+
+        # --- 插件广场标签 ---
+        market_tab = QWidget()
+        market_tab.setStyleSheet('background-color: transparent;')
+        market_vbox = QVBoxLayout(market_tab)
+        market_vbox.setContentsMargins(0, 10, 0, 0)
+        market_vbox.setSpacing(10)
+
+        # 刷新按钮
+        refresh_btn = QPushButton('🔄 刷新列表')
+        refresh_btn.setFont(self._ui_font(10, bold=True))
+        refresh_btn.setMinimumHeight(36)
+        refresh_btn.setStyleSheet("""
+            QPushButton { background-color: #27ae60; color: white; border-radius: 8px; border: none; padding: 6px 14px; }
+            QPushButton:hover { background-color: #2ecc71; }
+            QPushButton:pressed { background-color: #1e8449; }
+        """)
+        refresh_btn.clicked.connect(self.refresh_plugin_market)
+        market_vbox.addWidget(refresh_btn)
+
+        # 卡片滚动区
+        market_scroll = QScrollArea()
+        market_scroll.setWidgetResizable(True)
+        market_scroll.setFrameShape(QFrame.NoFrame)
+        market_scroll.setStyleSheet('QScrollArea { border: none; background-color: transparent; }')
+        self._plugin_market_content = QWidget()
+        self._plugin_market_content.setStyleSheet('background-color: transparent;')
+        self._plugin_market_layout = QVBoxLayout(self._plugin_market_content)
+        self._plugin_market_layout.setContentsMargins(0, 0, 0, 0)
+        self._plugin_market_layout.setSpacing(12)
+        # 初始提示
+        hint = QLabel('点击「🔄 刷新列表」加载插件广场')
+        hint.setAlignment(Qt.AlignCenter)
+        hint.setFont(self._ui_font(11))
+        hint.setStyleSheet('color: #aaa; border: none;')
+        self._plugin_market_layout.addWidget(hint)
+        self._plugin_market_layout.addStretch()
+        market_scroll.setWidget(self._plugin_market_content)
+        market_vbox.addWidget(market_scroll)
+
+        tab_widget.addTab(market_tab, '🧩 插件广场')
+
         self._plugins_page_index = self.ui.stackedWidget.addWidget(list_page)
 
         # --- 详情页（对齐提示词广场按钮风格）---
@@ -2589,20 +2707,37 @@ class set_pyqt(QWidget):
         back_btn.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(self._plugins_page_index))
         d.addWidget(back_btn)
 
+        header_row = QHBoxLayout()
         self._detail_name_lbl = QLabel()
         self._detail_name_lbl.setFont(self._ui_font(11, bold=True))
-        d.addWidget(self._detail_name_lbl)
+        header_row.addWidget(self._detail_name_lbl, stretch=1)
+
+        self._detail_readme_btn = QPushButton('📖 此插件教程')
+        self._detail_readme_btn.setFont(self._ui_font(9, bold=True))
+        self._detail_readme_btn.setMinimumHeight(30)
+        self._detail_readme_btn.setStyleSheet(
+            'QPushButton{background:#8e44ad;color:white;border-radius:6px;border:none;padding:4px 12px;}'
+            'QPushButton:hover{background:#9b59b6;}'
+            'QPushButton:pressed{background:#6c3483;}'
+            'QPushButton:checked{background:#6c3483;}'
+        )
+        self._detail_readme_btn.setCheckable(True)
+        self._detail_readme_btn.setVisible(False)
+        self._detail_readme_btn.toggled.connect(self._toggle_plugin_readme)
+        header_row.addWidget(self._detail_readme_btn)
+        d.addLayout(header_row)
 
         self._detail_desc_lbl = QLabel()
         self._detail_desc_lbl.setFont(self._ui_font())
         self._detail_desc_lbl.setWordWrap(True)
         d.addWidget(self._detail_desc_lbl)
 
-        self._detail_form_layout = QVBoxLayout()
-        self._detail_form_layout.setSpacing(15)
-        d.addLayout(self._detail_form_layout)
-
-        d.addStretch()
+        self._detail_form_scroll = QScrollArea()
+        self._detail_form_scroll.setWidgetResizable(True)
+        self._detail_form_scroll.setFrameShape(QFrame.NoFrame)
+        self._detail_form_scroll.setStyleSheet('QScrollArea { border: none; background-color: transparent; }')
+        d.addWidget(self._detail_form_scroll)
+        self._detail_form_layout = None
 
         self._plugins_detail_index = self.ui.stackedWidget.addWidget(self._detail_page)
         self._detail_edits = {}
@@ -2616,10 +2751,11 @@ class set_pyqt(QWidget):
         return f
 
     def _build_plugin_row(self, info, parent_layout):
-        meta       = info['meta']
-        cfg        = info['cfg']
-        cfg_path   = info['cfg_path']
-        extra_keys = [k for k in cfg if k != 'enabled']
+        meta         = info['meta']
+        cfg          = info['cfg']
+        plugin_type  = info['plugin_type']
+        plugin_name  = info['plugin_name']
+        extra_keys   = list(cfg.keys())
 
         display_name = meta.get('displayName', meta.get('name', ''))
         desc         = meta.get('description', '')
@@ -2648,29 +2784,177 @@ class set_pyqt(QWidget):
         title_lbl.setWordWrap(True)
         card_layout.addWidget(title_lbl, stretch=1)
 
-        # 右：开关 checkbox + 可选配置按钮
-        if os.path.exists(cfg_path):
-            chk = QCheckBox('启用')
-            chk.setFont(self._ui_font())
-            chk.setChecked(cfg.get('enabled', False))
-            chk.stateChanged.connect(lambda state, p=cfg_path, c=cfg: self._on_plugin_enabled_changed(p, c, state))
-            card_layout.addWidget(chk)
-            if extra_keys:
-                btn = QPushButton('配置')
-                btn.setFont(self._ui_font())
-                btn.setMinimumSize(60, 30)
-                btn.clicked.connect(lambda checked=False, i=info: self._open_plugin_detail(i))
-                card_layout.addWidget(btn)
-        else:
-            always_lbl = QLabel('始终启用')
-            always_lbl.setFont(self._ui_font())
-            always_lbl.setStyleSheet('color: #777; border: none; background: transparent;')
-            card_layout.addWidget(always_lbl)
+        # 右：开关 checkbox（读取 enabled_plugins.json）+ 可选配置按钮
+        rel_path = f'{plugin_type}/{plugin_name}'
+        enabled_set = self._load_enabled_plugins()
+        chk = QCheckBox('启用')
+        chk.setFont(self._ui_font())
+        chk.setChecked(rel_path in enabled_set)
+        chk.stateChanged.connect(lambda state, pt=plugin_type, pn=plugin_name: self._on_plugin_enabled_changed(pt, pn, state))
+        card_layout.addWidget(chk)
+        if extra_keys:
+            btn = QPushButton('配置')
+            btn.setFont(self._ui_font())
+            btn.setMinimumSize(60, 30)
+            btn.clicked.connect(lambda checked=False, i=info: self._open_plugin_detail(i))
+            card_layout.addWidget(btn)
 
         parent_layout.addWidget(card)
 
+    def _toggle_plugin_readme(self, checked):
+        if checked:
+            # 显示 README
+            if not self._detail_current_readme:
+                return
+            try:
+                with open(self._detail_current_readme, 'r', encoding='utf-8') as f:
+                    md_text = f.read()
+            except Exception as e:
+                self._detail_readme_btn.setChecked(False)
+                return
+            browser = QTextBrowser()
+            browser.setOpenExternalLinks(True)
+            browser.setHtml(self._md_to_html(md_text))
+            browser.setStyleSheet('QTextBrowser{background:#fff;border:none;}')
+            self._detail_form_scroll.setWidget(browser)
+            self._detail_readme_btn.setText('⚙ 返回配置')
+        else:
+            # 恢复配置表单
+            self._detail_readme_btn.setText('📖 此插件教程')
+            if self._detail_current_info:
+                self._rebuild_detail_form(self._detail_current_info['cfg'])
+
+    def _rebuild_detail_form(self, cfg):
+        form_widget = QWidget()
+        form_widget.setStyleSheet('background-color: transparent;')
+        self._detail_form_layout = QVBoxLayout(form_widget)
+        self._detail_form_layout.setSpacing(12)
+        self._detail_form_layout.setContentsMargins(0, 0, 0, 0)
+        self._detail_edits = {}
+        for key, field_def in cfg.items():
+            if not isinstance(field_def, dict) or 'type' not in field_def:
+                self._add_detail_field(key, key, '', 'string', field_def)
+                continue
+            field_type = field_def.get('type', 'string')
+            if field_type == 'object' and 'fields' in field_def:
+                section_lbl = QLabel(f'── {field_def.get("title", key)} ──')
+                section_lbl.setFont(self._ui_font(bold=True))
+                section_lbl.setStyleSheet('color:#555;border:none;background:transparent;')
+                self._detail_form_layout.addWidget(section_lbl)
+                if field_def.get('description'):
+                    hint = QLabel(field_def['description'])
+                    hint.setFont(self._ui_font(9))
+                    hint.setStyleSheet('color:#999;border:none;background:transparent;')
+                    hint.setWordWrap(True)
+                    self._detail_form_layout.addWidget(hint)
+                for sub_key, sub_def in field_def['fields'].items():
+                    if not isinstance(sub_def, dict) or 'type' not in sub_def:
+                        continue
+                    cur_val = sub_def.get('value', sub_def.get('default'))
+                    self._add_detail_field(f'{key}.{sub_key}',
+                                           sub_def.get('title', sub_key),
+                                           sub_def.get('description', ''),
+                                           sub_def.get('type', 'string'), cur_val)
+            else:
+                cur_val = field_def.get('value', field_def.get('default'))
+                self._add_detail_field(key, field_def.get('title', key),
+                                       field_def.get('description', ''),
+                                       field_type, cur_val)
+        self._detail_form_layout.addStretch()
+        self._detail_form_scroll.setWidget(form_widget)
+
+    def _show_plugin_readme(self, readme_path, plugin_name):
+        """弹出对话框展示插件 README.md（支持基础 Markdown 渲染）"""
+        try:
+            with open(readme_path, 'r', encoding='utf-8') as f:
+                md_text = f.read()
+        except Exception as e:
+            QMessageBox.warning(self, '读取失败', str(e))
+            return
+
+        html = self._md_to_html(md_text)
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f'{plugin_name} - 教程')
+        dlg.resize(720, 560)
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        browser = QTextBrowser()
+        browser.setOpenExternalLinks(True)
+        browser.setHtml(html)
+        browser.setStyleSheet('QTextBrowser { background: #fff; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }')
+        layout.addWidget(browser)
+
+        close_btn = QPushButton('关闭')
+        close_btn.setMinimumHeight(36)
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+
+        dlg.exec_()
+
+    def _md_to_html(self, text):
+        """Markdown → 带样式 HTML，优先用 markdown 库，否则用内置转换"""
+        try:
+            import markdown
+            body = markdown.markdown(
+                text,
+                extensions=['fenced_code', 'tables', 'nl2br', 'sane_lists']
+            )
+        except ImportError:
+            import re as _re, html as _html
+            t = _html.escape(text)
+            # 代码块（```...```）
+            def code_block(m):
+                return f'<pre style="background:#f6f8fa;padding:12px;border-radius:6px;overflow-x:auto;font-family:Consolas,monospace;font-size:12px;">{m.group(1)}</pre>'
+            t = _re.sub(r'```[^\n]*\n(.*?)```', code_block, t, flags=_re.DOTALL)
+            # 标题
+            t = _re.sub(r'^### (.+)$', lambda m: f'<h3 style="color:#1a252f;font-size:15px;margin:14px 0 6px;border-bottom:1px solid #eee;padding-bottom:4px;">{m.group(1)}</h3>', t, flags=_re.MULTILINE)
+            t = _re.sub(r'^## (.+)$',  lambda m: f'<h2 style="color:#1a252f;font-size:18px;margin:16px 0 8px;border-bottom:2px solid #eee;padding-bottom:6px;">{m.group(1)}</h2>', t, flags=_re.MULTILINE)
+            t = _re.sub(r'^# (.+)$',   lambda m: f'<h1 style="color:#1a252f;font-size:22px;margin:18px 0 10px;border-bottom:3px solid #3498db;padding-bottom:8px;">{m.group(1)}</h1>', t, flags=_re.MULTILINE)
+            # 加粗 / 斜体
+            t = _re.sub(r'\*\*(.+?)\*\*', lambda m: f'<strong>{m.group(1)}</strong>', t)
+            t = _re.sub(r'\*(.+?)\*',     lambda m: f'<em>{m.group(1)}</em>', t)
+            # 行内代码
+            t = _re.sub(r'`(.+?)`', lambda m: f'<code style="background:#f0f0f0;padding:2px 5px;border-radius:3px;font-family:Consolas,monospace;font-size:12px;">{m.group(1)}</code>', t)
+            # 链接
+            t = _re.sub(r'\[([^\]]+)\]\(([^)]+)\)', lambda m: f'<a href="{m.group(2)}" style="color:#2980b9;">{m.group(1)}</a>', t)
+            # 列表项
+            t = _re.sub(r'^[-*] (.+)$', lambda m: f'<li style="margin:4px 0;">{m.group(1)}</li>', t, flags=_re.MULTILINE)
+            t = _re.sub(r'(<li.*</li>)', r'<ul style="padding-left:20px;margin:8px 0;">\1</ul>', t, flags=_re.DOTALL)
+            # 分割线
+            t = _re.sub(r'^---+$', '<hr style="border:none;border-top:1px solid #ddd;margin:16px 0;">', t, flags=_re.MULTILINE)
+            # 换行
+            t = t.replace('\n', '<br>')
+            body = t
+
+        return (
+            '<!DOCTYPE html><html><head><meta charset="utf-8">'
+            '<style>'
+            'body{font-family:"Microsoft YaHei",sans-serif;font-size:13px;line-height:1.8;color:#2c3e50;padding:16px;}'
+            'h1{color:#1a252f;font-size:22px;border-bottom:3px solid #3498db;padding-bottom:8px;margin:18px 0 10px;}'
+            'h2{color:#1a252f;font-size:18px;border-bottom:2px solid #eee;padding-bottom:6px;margin:16px 0 8px;}'
+            'h3{color:#1a252f;font-size:15px;border-bottom:1px solid #eee;padding-bottom:4px;margin:14px 0 6px;}'
+            'code{background:#f0f0f0;padding:2px 5px;border-radius:3px;font-family:Consolas,monospace;font-size:12px;}'
+            'pre{background:#f6f8fa;padding:12px;border-radius:6px;overflow-x:auto;border:1px solid #e1e4e8;}'
+            'pre code{background:none;padding:0;}'
+            'a{color:#2980b9;text-decoration:none;}'
+            'a:hover{text-decoration:underline;}'
+            'blockquote{border-left:4px solid #3498db;margin:12px 0;padding:8px 16px;background:#f8f9fa;color:#555;}'
+            'table{border-collapse:collapse;width:100%;margin:12px 0;}'
+            'th,td{border:1px solid #ddd;padding:8px 12px;text-align:left;}'
+            'th{background:#f0f0f0;font-weight:bold;}'
+            'tr:nth-child(even){background:#f9f9f9;}'
+            'hr{border:none;border-top:1px solid #ddd;margin:16px 0;}'
+            'ul,ol{padding-left:24px;margin:8px 0;}'
+            'li{margin:4px 0;}'
+            'img{max-width:100%;border-radius:4px;}'
+            '</style></head>'
+            f'<body>{body}</body></html>'
+        )
+
     def _open_plugin_detail(self, info):
-        """切换到详情页并刷新内容"""
+        """切换到详情页并刷新内容（支持 schema 格式）"""
         self._detail_current_info = info
         meta = info['meta']
         cfg  = info['cfg']
@@ -2680,108 +2964,354 @@ class set_pyqt(QWidget):
         self._detail_desc_lbl.setText(desc)
         self._detail_desc_lbl.setVisible(bool(desc))
 
-        # 清空旧表单
-        while self._detail_form_layout.count():
-            item = self._detail_form_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-            elif item.layout():
-                while item.layout().count():
-                    sub = item.layout().takeAt(0)
-                    if sub.widget():
-                        sub.widget().deleteLater()
+        # 教程按钮：有 README.md 才显示，重置为未激活状态
+        readme_path = os.path.join(get_app_path(), 'plugins',
+                                   info['plugin_type'], info['plugin_name'], 'README.md')
+        self._detail_current_readme = readme_path if os.path.exists(readme_path) else None
+        self._detail_readme_btn.setVisible(self._detail_current_readme is not None)
+        self._detail_readme_btn.setChecked(False)
+
+        # 每次创建全新的内容 widget，setWidget 会自动销毁旧的
+        form_widget = QWidget()
+        form_widget.setStyleSheet('background-color: transparent;')
+        self._detail_form_layout = QVBoxLayout(form_widget)
+        self._detail_form_layout.setSpacing(12)
+        self._detail_form_layout.setContentsMargins(0, 0, 0, 0)
         self._detail_edits = {}
 
-        extra_keys = [k for k in cfg if k != 'enabled']
-        for key in extra_keys:
-            val = cfg[key]
-            if isinstance(val, dict):
-                # 嵌套 dict：显示分组标题 + 子字段
-                section_lbl = QLabel(f'── {key} ──')
-                section_lbl.setFont(self._ui_font(bold=True))
-                self._detail_form_layout.addWidget(section_lbl)
-                for sub_key, sub_val in val.items():
-                    row = QHBoxLayout()
-                    row.setSpacing(10)
-                    lbl = QLabel(f'  {sub_key}：')
-                    lbl.setFont(self._ui_font())
-                    lbl.setFixedWidth(120)
-                    row.addWidget(lbl)
-                    edit = QLineEdit(str(sub_val))
-                    edit.setFont(self._ui_font())
-                    self._detail_edits[f'{key}.{sub_key}'] = edit
-                    row.addWidget(edit)
-                    self._detail_form_layout.addLayout(row)
-            else:
-                row = QHBoxLayout()
-                row.setSpacing(10)
-                lbl = QLabel(key + '：')
-                lbl.setFont(self._ui_font())
-                lbl.setFixedWidth(120)
-                row.addWidget(lbl)
-                edit = QLineEdit(str(val))
-                edit.setFont(self._ui_font())
-                self._detail_edits[key] = edit
-                row.addWidget(edit)
-                self._detail_form_layout.addLayout(row)
+        for key, field_def in cfg.items():
+            if not isinstance(field_def, dict) or 'type' not in field_def:
+                self._add_detail_field(key, key, '', 'string', field_def)
+                continue
 
+            field_type = field_def.get('type', 'string')
+
+            if field_type == 'object' and 'fields' in field_def:
+                section_lbl = QLabel(f'── {field_def.get("title", key)} ──')
+                section_lbl.setFont(self._ui_font(bold=True))
+                section_lbl.setStyleSheet('color: #555; border: none; background: transparent;')
+                self._detail_form_layout.addWidget(section_lbl)
+                if field_def.get('description'):
+                    hint = QLabel(field_def['description'])
+                    hint.setFont(self._ui_font(9))
+                    hint.setStyleSheet('color: #999; border: none; background: transparent;')
+                    hint.setWordWrap(True)
+                    self._detail_form_layout.addWidget(hint)
+                for sub_key, sub_def in field_def['fields'].items():
+                    if not isinstance(sub_def, dict) or 'type' not in sub_def:
+                        continue
+                    cur_val = sub_def.get('value', sub_def.get('default'))
+                    self._add_detail_field(f'{key}.{sub_key}',
+                                           sub_def.get('title', sub_key),
+                                           sub_def.get('description', ''),
+                                           sub_def.get('type', 'string'),
+                                           cur_val)
+            else:
+                cur_val = field_def.get('value', field_def.get('default'))
+                self._add_detail_field(key,
+                                       field_def.get('title', key),
+                                       field_def.get('description', ''),
+                                       field_type,
+                                       cur_val)
+
+        self._detail_form_layout.addStretch()
+        self._detail_form_scroll.setWidget(form_widget)
         self.ui.stackedWidget.setCurrentIndex(self._plugins_detail_index)
+
+    def _add_detail_field(self, edit_key, title, description, field_type, current_value):
+        """在详情页添加一个配置字段"""
+        container = QVBoxLayout()
+        container.setSpacing(3)
+
+        row = QHBoxLayout()
+        row.setSpacing(10)
+
+        lbl = QLabel(title + '：')
+        lbl.setFont(self._ui_font(bold=True))
+        lbl.setFixedWidth(150)
+        lbl.setStyleSheet('color: #2c3e50; border: none; background: transparent;')
+        row.addWidget(lbl)
+
+        if field_type == 'bool':
+            widget = QCheckBox()
+            widget.setChecked(bool(current_value))
+            self._detail_edits[edit_key] = widget
+            row.addWidget(widget)
+            row.addStretch()
+            container.addLayout(row)
+        elif field_type == 'text':
+            widget = QTextEdit()
+            widget.setFont(self._ui_font())
+            widget.setPlainText(str(current_value) if current_value is not None else '')
+            widget.setMinimumHeight(80)
+            widget.setMaximumHeight(120)
+            self._detail_edits[edit_key] = widget
+            container.addLayout(row)
+            container.addWidget(widget)
+        else:
+            widget = QLineEdit(str(current_value) if current_value is not None else '')
+            widget.setFont(self._ui_font())
+            self._detail_edits[edit_key] = widget
+            row.addWidget(widget)
+            container.addLayout(row)
+
+        if description:
+            desc_lbl = QLabel(description)
+            desc_lbl.setFont(self._ui_font(9))
+            desc_lbl.setStyleSheet('color: #999; border: none; background: transparent;')
+            desc_lbl.setWordWrap(True)
+            container.addWidget(desc_lbl)
+
+        self._detail_form_layout.addLayout(container)
 
     def _save_plugin_detail(self):
         if not self._detail_current_info:
             return
         cfg      = self._detail_current_info['cfg']
         cfg_path = self._detail_current_info['cfg_path']
-        for key, edit in self._detail_edits.items():
-            text = edit.text()
-            if '.' in key:
-                # 嵌套 dict 字段，如 llm.model
-                parent_key, child_key = key.split('.', 1)
-                original = cfg.get(parent_key, {}).get(child_key)
-                if isinstance(original, int):
-                    try:
-                        cfg[parent_key][child_key] = int(text)
-                    except ValueError:
-                        QMessageBox.warning(self, '格式错误', f'{key} 必须是整数')
-                        return
-                elif isinstance(original, float):
-                    try:
-                        cfg[parent_key][child_key] = float(text)
-                    except ValueError:
-                        QMessageBox.warning(self, '格式错误', f'{key} 必须是数字')
-                        return
-                else:
-                    cfg[parent_key][child_key] = text
+
+        for edit_key, widget in self._detail_edits.items():
+            if isinstance(widget, QCheckBox):
+                value = widget.isChecked()
+            elif isinstance(widget, QTextEdit):
+                value = widget.toPlainText()
             else:
-                original = cfg.get(key)
-                if isinstance(original, int):
-                    try:
-                        cfg[key] = int(text)
-                    except ValueError:
-                        QMessageBox.warning(self, '格式错误', f'{key} 必须是整数')
-                        return
-                elif isinstance(original, float):
-                    try:
-                        cfg[key] = float(text)
-                    except ValueError:
-                        QMessageBox.warning(self, '格式错误', f'{key} 必须是数字')
-                        return
+                value = widget.text()
+
+            if '.' in edit_key:
+                parent_key, child_key = edit_key.split('.', 1)
+                field_def = cfg.get(parent_key, {}).get('fields', {}).get(child_key, {})
+                value = self._cast_value(value, field_def.get('type', 'string'), edit_key)
+                if value is None:
+                    return
+                cfg[parent_key]['fields'][child_key]['value'] = value
+            else:
+                field_def = cfg.get(edit_key, {})
+                if isinstance(field_def, dict) and 'type' in field_def:
+                    if field_def.get('type') != 'bool':
+                        value = self._cast_value(value, field_def.get('type', 'string'), edit_key)
+                        if value is None:
+                            return
+                    cfg[edit_key]['value'] = value
                 else:
-                    cfg[key] = text
+                    cfg[edit_key] = value
+
         try:
             with open(cfg_path, 'w', encoding='utf-8') as f:
+                import json
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
             self.toast.show_message("配置已保存", 1500)
         except Exception as e:
             self.toast.show_message(f"保存失败: {e}", 3000)
 
-    def _on_plugin_enabled_changed(self, cfg_path, cfg, state):
-        cfg['enabled'] = (state == Qt.Checked)
+    def _cast_value(self, value, field_type, key):
+        """根据 type 转换输入值，失败返回 None"""
+        if field_type == 'int':
+            try:
+                return int(value)
+            except ValueError:
+                QMessageBox.warning(self, '格式错误', f'{key} 必须是整数')
+                return None
+        elif field_type == 'float':
+            try:
+                return float(value)
+            except ValueError:
+                QMessageBox.warning(self, '格式错误', f'{key} 必须是数字')
+                return None
+        return value
+
+    def _on_plugin_dir_changed(self, path):
+        """文件系统监听回调：插件目录有变化时刷新对应 tab"""
+        for plugin_type, base_dir in self._plugin_tab_dirs.items():
+            if os.path.normpath(path) == os.path.normpath(base_dir):
+                self._refresh_plugin_tab(plugin_type)
+                break
+
+    def _refresh_plugin_tab(self, plugin_type):
+        """清空并重建指定插件 tab 的卡片列表"""
+        layout  = self._plugin_tab_layouts.get(plugin_type)
+        base_dir = self._plugin_tab_dirs.get(plugin_type)
+        if not layout or not base_dir:
+            return
+
+        # 清除旧卡片
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        # 从 _plugin_infos 中移除该 type 的旧条目
+        self._plugin_infos = [i for i in self._plugin_infos if i['plugin_type'] != plugin_type]
+
+        # 重新扫描并构建卡片
+        if os.path.isdir(base_dir):
+            for entry in sorted(os.listdir(base_dir)):
+                plugin_dir = os.path.join(base_dir, entry)
+                meta_path  = os.path.join(plugin_dir, 'metadata.json')
+                cfg_path   = os.path.join(plugin_dir, 'plugin_config.json')
+                if not os.path.isdir(plugin_dir) or not os.path.exists(meta_path):
+                    continue
+                try:
+                    with open(meta_path, 'r', encoding='utf-8') as f:
+                        meta = json.load(f)
+                except Exception:
+                    continue
+                cfg = {}
+                if os.path.exists(cfg_path):
+                    try:
+                        with open(cfg_path, 'r', encoding='utf-8') as f:
+                            cfg = json.load(f)
+                    except Exception:
+                        pass
+                info = {'meta': meta, 'cfg': cfg, 'cfg_path': cfg_path,
+                        'plugin_type': plugin_type, 'plugin_name': entry}
+                self._plugin_infos.append(info)
+                self._build_plugin_row(info, layout)
+
+        layout.addStretch()
+
+    def _on_plugin_enabled_changed(self, plugin_type, plugin_name, state):
+        rel_path = f'{plugin_type}/{plugin_name}'
+        enabled_set = self._load_enabled_plugins()
+        if state == Qt.Checked:
+            enabled_set.add(rel_path)
+        else:
+            enabled_set.discard(rel_path)
+        self._save_enabled_plugins(enabled_set)
+
+    # ===== 插件广场 =====
+
+    def refresh_plugin_market(self):
+        RAW_URL = "https://raw.githubusercontent.com/morettt/my-neuro/main/live-2d/plugins/plugin-house/plugin_hub.json"
+        print("开始刷新插件广场...")
         try:
-            with open(cfg_path, 'w', encoding='utf-8') as f:
-                json.dump(cfg, f, ensure_ascii=False, indent=2)
+            resp = requests.get(RAW_URL, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            plugins = [
+                {
+                    "id":           key,
+                    "display_name": info.get("display_name", key),
+                    "desc":         info.get("desc", ""),
+                    "author":       info.get("author", ""),
+                    "repo":         info.get("repo", ""),
+                }
+                for key, info in data.items()
+            ]
+            self._display_plugin_market(plugins)
+            self.toast.show_message(f"插件广场已加载，共 {len(plugins)} 个插件", 2000)
         except Exception as e:
-            QMessageBox.warning(self, '保存失败', str(e))
+            print(f"拉取插件列表失败: {e}")
+            self.toast.show_message(f"获取插件列表失败: {e}", 3000)
+
+    def _display_plugin_market(self, plugins):
+        layout = self._plugin_market_layout
+        while layout.count() > 0:
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        app_path = get_app_path()
+        for plugin in plugins:
+            card = self._build_market_card(plugin, app_path)
+            layout.addWidget(card)
+        layout.addStretch()
+
+    def _build_market_card(self, plugin, app_path):
+        target_dir = os.path.join(app_path, "plugins", "community", plugin["id"])
+        already_installed = os.path.exists(target_dir)
+
+        card = QWidget()
+        card.setStyleSheet("""
+            QWidget { background-color: white; border-radius: 8px; border: 1px solid #e0e0e0; }
+        """)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(14, 12, 14, 12)
+        card_layout.setSpacing(6)
+
+        # 标题行 + 安装按钮
+        title_row = QHBoxLayout()
+        name_lbl = QLabel(f"🧩 <b>{plugin['display_name']}</b>")
+        name_lbl.setFont(self._ui_font(11))
+        name_lbl.setStyleSheet('color: #2c3e50; border: none;')
+        title_row.addWidget(name_lbl, 1)
+
+        install_btn = QPushButton("✓ 已安装" if already_installed else "⬇ 安装")
+        install_btn.setFont(self._ui_font(9, bold=True))
+        install_btn.setMinimumSize(88, 32)
+        install_btn.setEnabled(not already_installed)
+        install_btn.setStyleSheet("""
+            QPushButton { background-color: #27ae60; color: white; border-radius: 7px; border: none; }
+            QPushButton:hover { background-color: #2ecc71; }
+            QPushButton:pressed { background-color: #1e8449; }
+            QPushButton:disabled { background-color: #95a5a6; }
+        """)
+        install_btn.clicked.connect(lambda _, p=plugin, b=install_btn: self._install_plugin(p, b))
+        title_row.addWidget(install_btn)
+        card_layout.addLayout(title_row)
+
+        # 描述
+        if plugin.get("desc"):
+            desc_lbl = QLabel(plugin["desc"])
+            desc_lbl.setFont(self._ui_font(9))
+            desc_lbl.setStyleSheet('color: #555; border: none;')
+            desc_lbl.setWordWrap(True)
+            card_layout.addWidget(desc_lbl)
+
+        # 作者 + 来源
+        meta_row = QHBoxLayout()
+        author_lbl = QLabel(f"👤 {plugin.get('author', '未知')}")
+        author_lbl.setFont(self._ui_font(8))
+        author_lbl.setStyleSheet('color: #888; border: none;')
+        meta_row.addWidget(author_lbl)
+
+        repo = plugin.get("repo", "")
+        if repo:
+            repo_lbl = QLabel(f'<a href="{repo}" style="color:#3498db;">📎 查看来源</a>')
+            repo_lbl.setFont(self._ui_font(8))
+            repo_lbl.setStyleSheet('border: none;')
+            repo_lbl.setOpenExternalLinks(True)
+            meta_row.addWidget(repo_lbl)
+
+        meta_row.addStretch()
+        card_layout.addLayout(meta_row)
+        return card
+
+    def _install_plugin(self, plugin, btn):
+        repo_url  = plugin.get("repo", "")
+        plugin_id = plugin.get("id", "")
+        if not repo_url or not plugin_id:
+            self.toast.show_message("插件信息不完整，无法安装", 3000)
+            return
+
+        target_dir = os.path.join(get_app_path(), "plugins", "community", plugin_id)
+        if os.path.exists(target_dir):
+            self.toast.show_message(f"{plugin['display_name']} 已安装", 2000)
+            return
+
+        btn.setEnabled(False)
+        btn.setText("安装中...")
+        self.toast.show_message(f"正在安装 {plugin['display_name']}...", 2000)
+
+        worker = _CloneWorker(repo_url, target_dir)
+
+        def on_done(success, err):
+            if success:
+                btn.setText("✓ 已安装")
+                self.toast.show_message(f"✓ {plugin['display_name']} 安装成功！", 4000)
+                self._refresh_plugin_tab('community')
+            else:
+                btn.setText("⬇ 安装")
+                btn.setEnabled(True)
+                self.toast.show_message(f"✗ 安装失败: {err}", 4000)
+                print(f"插件安装失败: {err}")
+
+        worker.done.connect(on_done)
+        worker.progress.connect(lambda msg: self.toast.show_message(msg, 10000))
+        worker.start()
+        if not hasattr(self, '_clone_workers'):
+            self._clone_workers = []
+        self._clone_workers.append(worker)
 
     def toggle_live_2d(self):
         """切换桌宠启动/关闭状态"""
@@ -2975,87 +3505,6 @@ class set_pyqt(QWidget):
         with open(self.config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
 
-    def load_minecraft_config(self):
-        """加载Minecraft配置文件"""
-        try:
-            app_path = get_app_path()
-            andy_config_path = os.path.join(app_path, 'GAME', 'Minecraft', 'andy.json')
-            keys_config_path = os.path.join(app_path, 'GAME', 'Minecraft', 'keys.json')
-
-            # 加载andy.json配置
-            if os.path.exists(andy_config_path):
-                with open(andy_config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-
-                # 将配置加载到UI控件中
-                self.ui.lineEdit_minecraft_name.setText(config.get('name', ''))
-                self.ui.lineEdit_minecraft_model_name.setText(config.get('model', {}).get('model', ''))
-                self.ui.lineEdit_minecraft_model_url.setText(config.get('model', {}).get('url', ''))
-                self.ui.textEdit_minecraft_conversing.setPlainText(config.get('conversing', ''))
-
-            # 加载keys.json中的API KEY
-            if os.path.exists(keys_config_path):
-                with open(keys_config_path, 'r', encoding='utf-8') as f:
-                    keys_config = json.load(f)
-                    self.ui.lineEdit_minecraft_api_key.setText(keys_config.get('OPENAI_API_KEY', ''))
-
-        except Exception as e:
-            print(f"加载Minecraft配置失败: {e}")
-
-    def save_minecraft_config(self):
-        """保存Minecraft配置文件"""
-        try:
-            app_path = get_app_path()
-            andy_config_path = os.path.join(app_path, 'GAME', 'Minecraft', 'andy.json')
-            keys_config_path = os.path.join(app_path, 'GAME', 'Minecraft', 'keys.json')
-
-            # 创建目录（如果不存在）
-            os.makedirs(os.path.dirname(andy_config_path), exist_ok=True)
-
-            # 先读取现有配置，保留嵌入模型配置
-            existing_config = {}
-            if os.path.exists(andy_config_path):
-                with open(andy_config_path, 'r', encoding='utf-8') as f:
-                    existing_config = json.load(f)
-
-            # 构建配置数据，保留原有的embedding配置
-            config = {
-                "name": self.ui.lineEdit_minecraft_name.text(),
-                "model": {
-                    "api": existing_config.get('model', {}).get('api', 'openai'),  # 保持默认值
-                    "model": self.ui.lineEdit_minecraft_model_name.text(),
-                    "url": self.ui.lineEdit_minecraft_model_url.text()
-                },
-                "embedding": existing_config.get('embedding', {
-                    "api": "openai",
-                    "model": "text-embedding-ada-002",
-                    "url": "https://api.zhizengzeng.com/v1"
-                }),  # 保留原有embedding配置
-                "conversing": self.ui.textEdit_minecraft_conversing.toPlainText()
-            }
-
-            # 保存andy.json
-            with open(andy_config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=4)
-
-            # 保存API KEY到keys.json
-            existing_keys = {}
-            if os.path.exists(keys_config_path):
-                with open(keys_config_path, 'r', encoding='utf-8') as f:
-                    existing_keys = json.load(f)
-
-            # 更新API KEY
-            existing_keys['OPENAI_API_KEY'] = self.ui.lineEdit_minecraft_api_key.text()
-
-            # 保存keys.json
-            with open(keys_config_path, 'w', encoding='utf-8') as f:
-                json.dump(existing_keys, f, ensure_ascii=False, indent=4)
-
-            print("Minecraft配置已保存")
-
-        except Exception as e:
-            print(f"保存Minecraft配置失败: {e}")
-
     def save_config(self):
         # 如果当前在插件详情页，同时保存插件配置
         if self.ui.stackedWidget.currentIndex() == self._plugins_detail_index:
@@ -3074,11 +3523,6 @@ class set_pyqt(QWidget):
 
         current_config["ui"]["intro_text"] = self.ui.lineEdit_4.text()
         current_config['context']['max_messages'] = int(self.ui.lineEdit_5.text())
-        _ac_cfg = self._load_plugin_file_config('built-in', 'auto-chat')
-        _ac_cfg['idle_time'] = int(self.ui.lineEdit_idle_time.text()) if self.ui.lineEdit_idle_time.text() else 15
-        _ac_cfg['prompt'] = self.ui.textEdit_prompt.toPlainText()
-        self._save_plugin_file_config('built-in', 'auto-chat', _ac_cfg)
-
         # 确保tools配置存在
         if 'tools' not in current_config:
             current_config['tools'] = {}
@@ -3153,12 +3597,6 @@ class set_pyqt(QWidget):
         current_config['api_gateway']['use_gateway'] = self.ui.checkBox_gateway_enabled.isChecked()
         current_config['api_gateway']['base_url'] = self.ui.lineEdit_gateway_base_url.text()
         current_config['api_gateway']['api_key'] = self.ui.lineEdit_gateway_api_key.text()
-
-        # 新增：保存游戏配置
-        current_config['game']['Minecraft']['enabled'] = self.ui.checkBox_game_minecraft.isChecked()
-
-        # 保存Minecraft配置到andy.json
-        self.save_minecraft_config()
 
         # 新增：保存UI设置
         if 'subtitle_labels' not in current_config:
@@ -3474,61 +3912,6 @@ class set_pyqt(QWidget):
 
         except Exception as e:
             print(f"运行皮套动作扫描失败: {str(e)}")
-
-    def start_minecraft_terminal(self):
-        """启动Minecraft游戏终端"""
-        try:
-            if self.minecraft_terminal_process and hasattr(self.minecraft_terminal_process, 'poll') and self.minecraft_terminal_process.poll() is None:
-                self.toast.show_message("Minecraft游戏终端已在运行中", 2000)
-                return
-
-            app_path = get_app_path()
-            bat_file = os.path.join(app_path, "GAME", "Minecraft", "开启游戏终端.bat")
-            
-            if not os.path.exists(bat_file):
-                error_msg = f"找不到文件：{bat_file}"
-                print(f"错误：{error_msg}")
-                self.toast.show_message(error_msg, 3000)
-                return
-
-            print("正在启动Minecraft游戏终端.....")
-            
-            # 启动bat文件 - 直接用os.system启动新cmd窗口
-            minecraft_dir = os.path.join(app_path, "GAME", "Minecraft")
-            current_dir = os.getcwd()  # 保存当前目录
-            
-            os.chdir(minecraft_dir)
-            os.system(f'start cmd /k "{bat_file}"')
-            os.chdir(current_dir)  # 恢复原来的目录
-            
-            # 保持进程引用为了后续管理
-            self.minecraft_terminal_process = True  # 标记为已启动
-
-            print("Minecraft游戏终端进程已启动")
-            print("当前Minecraft游戏终端已成功启动！！！")
-            
-            self.toast.show_message("Minecraft游戏终端启动成功", 2000)
-
-        except Exception as e:
-            error_msg = f"启动Minecraft游戏终端失败：{str(e)}"
-            print(f"错误：{error_msg}")
-            self.toast.show_message(error_msg, 3000)
-
-    def stop_minecraft_terminal(self):
-        """关闭Minecraft游戏终端"""
-        try:
-            if self.minecraft_terminal_process and hasattr(self.minecraft_terminal_process, 'poll') and self.minecraft_terminal_process.poll() is None:
-                self.minecraft_terminal_process.terminate()
-                self.minecraft_terminal_process = None
-                print("Minecraft游戏终端已关闭")
-                self.toast.show_message("Minecraft游戏终端已关闭", 2000)
-            else:
-                self.minecraft_terminal_process = None  # 重置状态
-                self.toast.show_message("Minecraft游戏终端未在运行", 2000)
-        except Exception as e:
-            error_msg = f"关闭Minecraft游戏终端失败：{str(e)}"
-            print(f"错误：{error_msg}")
-            self.toast.show_message(error_msg, 3000)
 
     def refresh_tools_list(self):
         """刷新工具列表 - 卡片布局"""
@@ -4307,7 +4690,6 @@ class set_pyqt(QWidget):
             api_key_fields = [
                 self.ui.lineEdit,  # 主要LLM API KEY
                 self.ui.lineEdit_translation_api_key,  # 同传API KEY
-                self.ui.lineEdit_minecraft_api_key  # Minecraft API KEY
             ]
 
             for line_edit in api_key_fields:
@@ -4917,7 +5299,7 @@ class set_pyqt(QWidget):
         """打开对话记录页面并自动加载"""
         try:
             # 先切换到对话记录页面
-            self.ui.stackedWidget.setCurrentIndex(14)
+            self.ui.stackedWidget.setCurrentIndex(12)
 
             # 检查是否已经创建了WebView
             # 打包后禁用 WebEngineView，直接使用 QTextEdit 避免崩溃

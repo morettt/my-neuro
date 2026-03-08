@@ -1,7 +1,26 @@
 {
-  "enabled": false,
-  "roomId": 30230160,
-  "checkInterval": 5000,
-  "maxMessages": 50,
-  "apiUrl": "http://api.live.bilibili.com/ajax/msg"
+  "roomId": {
+    "title": "直播间 ID",
+    "description": "B站直播间的房间号",
+    "type": "int",
+    "default": 30230160
+  },
+  "checkInterval": {
+    "title": "弹幕拉取间隔（毫秒）",
+    "description": "每隔多少毫秒拉取一次直播间弹幕",
+    "type": "int",
+    "default": 5000
+  },
+  "maxMessages": {
+    "title": "单次最大弹幕数",
+    "description": "每次拉取最多处理的弹幕条数",
+    "type": "int",
+    "default": 50
+  },
+  "apiUrl": {
+    "title": "弹幕 API 地址",
+    "description": "B站弹幕接口地址，一般无需修改",
+    "type": "string",
+    "default": "http://api.live.bilibili.com/ajax/msg"
+  }
 }

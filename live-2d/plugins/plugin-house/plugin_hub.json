@@ -1,8 +1,32 @@
 {
-  "astrbook": {
-    "display_name": "AstrBook 论坛",
-    "desc": "让 AI 助手可以浏览和参与 AstrBook 论坛讨论，支持发帖、回复、点赞、通知管理等",
-    "author": "LikeNightRabbit",
-    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-astrbook"
+  "time-awareness": {
+    "display_name": "time-awareness",
+    "desc": "肥牛会注意到时间，在特定时段主动开口",
+    "author": "xxxiu",
+    "repo": "https://github.com/morettt/time-awareness"
+  },
+  "my-neuro-plugin-hitokoto": {
+    "display_name": "my-neuro-plugin-hitokoto",
+    "desc": "启动时获取一条一言注入 AI 上下文",
+    "author": "xxxiu",
+    "repo": "https://github.com/morettt/my-neuro-plugin-hitokoto"
+  },
+  "my-neuro-plugin-memos": {
+    "display_name": "my-neuro-plugin-memos",
+    "desc": "为 AI 提供跨会话长期记忆能力，自动检索注入记忆、自动保存对话、12 个 Function Call 工具（搜索/添加记忆、图片记忆、知识库导入、记忆修正、偏好查询），后端基于 Qdrant 向量库 + NetworkX 知识图谱 + BM25 混合检索",
+    "author": "A-night-owl-Rabbit",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-memos"
+  },
+  "loki-shadow": {
+    "display_name": "loki-shadow",
+    "desc": "游戏陪玩智能插件：自动检测游戏、搜索本地攻略库，从游民星空/B站/TapTap/NGA/米游社 5 个来源并行下载攻略，DeepSeek 主 Agent + Qwen 后备 Agent 编排全流程，支持截图分析与防剧透引导",
+    "author": "A-night-owl-Rabbit",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-loki-shadow"
+  },
+  "myneuro-plugin-skills": {
+    "display_name": "myneuro-plugin-skills",
+    "desc": "A plugin to manage and fetch SKILLs.",
+    "author": "xxynet",
+    "repo": "https://github.com/xxynet/myneuro-plugin-skills"
   }
 }
