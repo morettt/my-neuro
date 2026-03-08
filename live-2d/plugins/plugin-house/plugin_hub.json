@@ -22,5 +22,11 @@
     "desc": "游戏陪玩智能插件：自动检测游戏、搜索本地攻略库，从游民星空/B站/TapTap/NGA/米游社 5 个来源并行下载攻略，DeepSeek 主 Agent + Qwen 后备 Agent 编排全流程，支持截图分析与防剧透引导",
     "author": "A-night-owl-Rabbit",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-loki-shadow"
+  },
+  "myneuro-plugin-skills": {
+    "display_name": "myneuro-plugin-skills",
+    "desc": "A plugin to manage and fetch SKILLs.",
+    "author": "xxynet",
+    "repo": "https://github.com/xxynet/myneuro-plugin-skills"
   }
 }
