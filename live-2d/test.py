@@ -465,7 +465,6 @@ class set_pyqt(QWidget):
         self.bert_process = None  # 新增：BERT进程
         self.rag_process = None  # 新增：RAG进程
         self.voice_clone_process = None  # 新增：声音克隆进程
-        self.minecraft_terminal_process = None  # 新增：Minecraft终端进程
         self.selected_model_path = None  # 选择的模型文件路径
         self.selected_audio_path = None  # 选择的音频文件路径
         self.config_path = 'config.json'
@@ -647,7 +646,6 @@ class set_pyqt(QWidget):
                 self.stop_rag()
                 self.stop_voice_tts()
                 self.stop_terminal()
-                self.stop_minecraft_terminal()
 
                 print("所有服务已关闭")
             else:
@@ -1875,15 +1873,13 @@ class set_pyqt(QWidget):
         self.ui.pushButton.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(1))
         self.ui.pushButton_3.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(0))
         self.ui.pushButton_5.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(2))
-        self.ui.pushButton_6.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(3))
-        self.ui.pushButton_animation.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(4))  # 动画改成4
-        self.ui.pushButton_terminal.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(7))
-        self.ui.pushButton_game.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(9))
-        self.ui.pushButton_voice_clone.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(6))  # 声音克隆页面
-        self.ui.pushButton_ui_settings.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(11))  # UI设置页面
-        self.ui.pushButton_tools.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(10))  # 工具屋页面
-        self.ui.pushButton_cloud_config.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(12))  # 云端配置页面
-        self.ui.pushButton_prompt_market.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(13))  # 提示词广场页面
+        self.ui.pushButton_animation.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(3))  # 动画
+        self.ui.pushButton_terminal.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(6))
+        self.ui.pushButton_voice_clone.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(5))  # 声音克隆页面
+        self.ui.pushButton_ui_settings.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(9))  # UI设置页面
+        self.ui.pushButton_tools.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(8))  # 工具屋页面
+        self.ui.pushButton_cloud_config.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(10))  # 云端配置页面
+        self.ui.pushButton_prompt_market.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(11))  # 提示词广场页面
         self.setup_plugins_page()
         self.ui.pushButton_plugins.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(self._plugins_page_index))
         self.ui.pushButton_chat_history.clicked.connect(self.open_chat_history)  # 对话记录页面
@@ -1909,9 +1905,6 @@ class set_pyqt(QWidget):
         self.ui.pushButton_select_model.clicked.connect(self.select_model_file)
         self.ui.pushButton_select_audio.clicked.connect(self.select_audio_file)
         self.ui.pushButton_tutorial.clicked.connect(self.show_tutorial)
-
-        # 添加Minecraft游戏终端按钮绑定
-        self.ui.pushButton_start_minecraft_terminal.clicked.connect(self.start_minecraft_terminal)
 
         self.ui.pushButton_back_to_home.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(0))
 
@@ -1939,9 +1932,6 @@ class set_pyqt(QWidget):
 
         # 云端肥牛网页导航按钮
         self.ui.pushButton_gateway_website.clicked.connect(self.open_gateway_website)
-
-        # 加载Minecraft配置到UI
-        self.load_minecraft_config()
 
         # 初始化桌宠切换按钮样式（默认为"启动"状态）
         self.update_toggle_button_style(False)
@@ -2436,21 +2426,16 @@ class set_pyqt(QWidget):
         self.ui.doubleSpinBox_temperature.setValue(self.config['llm'].get('temperature', 1.0))
         self.ui.lineEdit_4.setText(self.config['ui']['intro_text'])
         self.ui.lineEdit_5.setText(str(self.config['context']['max_messages']))
-        _ac_cfg = self._resolve_plugin_schema(self._load_plugin_file_config('built-in', 'auto-chat'))
-        self.ui.lineEdit_idle_time.setText(str(_ac_cfg.get('idle_time', 15)))
-        self.ui.textEdit_prompt.setPlainText(_ac_cfg.get('prompt', '') or '')
         self.ui.checkBox_mcp.setChecked(self.config.get('tools', {}).get('enabled', True))
         self.ui.checkBox_mcp_enable.setChecked(self.config.get('mcp', {}).get('enabled', True))
         self.ui.checkBox_5.setChecked(self.config['vision']['auto_screenshot'])
         self.ui.checkBox_3.setChecked(self.config['ui']['show_chat_box'])
         self.ui.checkBox_4.setChecked(self.config['context']['enable_limit'])
-        self.ui.checkBox.setChecked('built-in/auto-chat' in self._load_enabled_plugins())
         # 新增ASR和TTS配置
         self.ui.checkBox_asr.setChecked(self.config['asr']['enabled'])
         self.ui.checkBox_tts.setChecked(self.config['tts']['enabled'])
         self.ui.checkBox_persistent_history.setChecked(self.config['context']['persistent_history'])
         self.ui.checkBox_voice_barge_in.setChecked(self.config['asr']['voice_barge_in'])
-        self.ui.checkBox_game_minecraft.setChecked(self.config['game']['Minecraft']['enabled'])
 
         # 新增：设置TTS语言下拉框
         tts_language = self.ui.comboBox_tts_language.currentText().split(' - ')[0]
@@ -3520,87 +3505,6 @@ class set_pyqt(QWidget):
         with open(self.config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
 
-    def load_minecraft_config(self):
-        """加载Minecraft配置文件"""
-        try:
-            app_path = get_app_path()
-            andy_config_path = os.path.join(app_path, 'GAME', 'Minecraft', 'andy.json')
-            keys_config_path = os.path.join(app_path, 'GAME', 'Minecraft', 'keys.json')
-
-            # 加载andy.json配置
-            if os.path.exists(andy_config_path):
-                with open(andy_config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-
-                # 将配置加载到UI控件中
-                self.ui.lineEdit_minecraft_name.setText(config.get('name', ''))
-                self.ui.lineEdit_minecraft_model_name.setText(config.get('model', {}).get('model', ''))
-                self.ui.lineEdit_minecraft_model_url.setText(config.get('model', {}).get('url', ''))
-                self.ui.textEdit_minecraft_conversing.setPlainText(config.get('conversing', ''))
-
-            # 加载keys.json中的API KEY
-            if os.path.exists(keys_config_path):
-                with open(keys_config_path, 'r', encoding='utf-8') as f:
-                    keys_config = json.load(f)
-                    self.ui.lineEdit_minecraft_api_key.setText(keys_config.get('OPENAI_API_KEY', ''))
-
-        except Exception as e:
-            print(f"加载Minecraft配置失败: {e}")
-
-    def save_minecraft_config(self):
-        """保存Minecraft配置文件"""
-        try:
-            app_path = get_app_path()
-            andy_config_path = os.path.join(app_path, 'GAME', 'Minecraft', 'andy.json')
-            keys_config_path = os.path.join(app_path, 'GAME', 'Minecraft', 'keys.json')
-
-            # 创建目录（如果不存在）
-            os.makedirs(os.path.dirname(andy_config_path), exist_ok=True)
-
-            # 先读取现有配置，保留嵌入模型配置
-            existing_config = {}
-            if os.path.exists(andy_config_path):
-                with open(andy_config_path, 'r', encoding='utf-8') as f:
-                    existing_config = json.load(f)
-
-            # 构建配置数据，保留原有的embedding配置
-            config = {
-                "name": self.ui.lineEdit_minecraft_name.text(),
-                "model": {
-                    "api": existing_config.get('model', {}).get('api', 'openai'),  # 保持默认值
-                    "model": self.ui.lineEdit_minecraft_model_name.text(),
-                    "url": self.ui.lineEdit_minecraft_model_url.text()
-                },
-                "embedding": existing_config.get('embedding', {
-                    "api": "openai",
-                    "model": "text-embedding-ada-002",
-                    "url": "https://api.zhizengzeng.com/v1"
-                }),  # 保留原有embedding配置
-                "conversing": self.ui.textEdit_minecraft_conversing.toPlainText()
-            }
-
-            # 保存andy.json
-            with open(andy_config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=4)
-
-            # 保存API KEY到keys.json
-            existing_keys = {}
-            if os.path.exists(keys_config_path):
-                with open(keys_config_path, 'r', encoding='utf-8') as f:
-                    existing_keys = json.load(f)
-
-            # 更新API KEY
-            existing_keys['OPENAI_API_KEY'] = self.ui.lineEdit_minecraft_api_key.text()
-
-            # 保存keys.json
-            with open(keys_config_path, 'w', encoding='utf-8') as f:
-                json.dump(existing_keys, f, ensure_ascii=False, indent=4)
-
-            print("Minecraft配置已保存")
-
-        except Exception as e:
-            print(f"保存Minecraft配置失败: {e}")
-
     def save_config(self):
         # 如果当前在插件详情页，同时保存插件配置
         if self.ui.stackedWidget.currentIndex() == self._plugins_detail_index:
@@ -3619,11 +3523,6 @@ class set_pyqt(QWidget):
 
         current_config["ui"]["intro_text"] = self.ui.lineEdit_4.text()
         current_config['context']['max_messages'] = int(self.ui.lineEdit_5.text())
-        _ac_raw = self._load_plugin_file_config('built-in', 'auto-chat')
-        self._set_schema_value(_ac_raw, 'idle_time', int(self.ui.lineEdit_idle_time.text()) if self.ui.lineEdit_idle_time.text() else 15)
-        self._set_schema_value(_ac_raw, 'prompt', self.ui.textEdit_prompt.toPlainText())
-        self._save_plugin_file_config('built-in', 'auto-chat', _ac_raw)
-
         # 确保tools配置存在
         if 'tools' not in current_config:
             current_config['tools'] = {}
@@ -3698,12 +3597,6 @@ class set_pyqt(QWidget):
         current_config['api_gateway']['use_gateway'] = self.ui.checkBox_gateway_enabled.isChecked()
         current_config['api_gateway']['base_url'] = self.ui.lineEdit_gateway_base_url.text()
         current_config['api_gateway']['api_key'] = self.ui.lineEdit_gateway_api_key.text()
-
-        # 新增：保存游戏配置
-        current_config['game']['Minecraft']['enabled'] = self.ui.checkBox_game_minecraft.isChecked()
-
-        # 保存Minecraft配置到andy.json
-        self.save_minecraft_config()
 
         # 新增：保存UI设置
         if 'subtitle_labels' not in current_config:
@@ -4019,61 +3912,6 @@ class set_pyqt(QWidget):
 
         except Exception as e:
             print(f"运行皮套动作扫描失败: {str(e)}")
-
-    def start_minecraft_terminal(self):
-        """启动Minecraft游戏终端"""
-        try:
-            if self.minecraft_terminal_process and hasattr(self.minecraft_terminal_process, 'poll') and self.minecraft_terminal_process.poll() is None:
-                self.toast.show_message("Minecraft游戏终端已在运行中", 2000)
-                return
-
-            app_path = get_app_path()
-            bat_file = os.path.join(app_path, "GAME", "Minecraft", "开启游戏终端.bat")
-            
-            if not os.path.exists(bat_file):
-                error_msg = f"找不到文件：{bat_file}"
-                print(f"错误：{error_msg}")
-                self.toast.show_message(error_msg, 3000)
-                return
-
-            print("正在启动Minecraft游戏终端.....")
-            
-            # 启动bat文件 - 直接用os.system启动新cmd窗口
-            minecraft_dir = os.path.join(app_path, "GAME", "Minecraft")
-            current_dir = os.getcwd()  # 保存当前目录
-            
-            os.chdir(minecraft_dir)
-            os.system(f'start cmd /k "{bat_file}"')
-            os.chdir(current_dir)  # 恢复原来的目录
-            
-            # 保持进程引用为了后续管理
-            self.minecraft_terminal_process = True  # 标记为已启动
-
-            print("Minecraft游戏终端进程已启动")
-            print("当前Minecraft游戏终端已成功启动！！！")
-            
-            self.toast.show_message("Minecraft游戏终端启动成功", 2000)
-
-        except Exception as e:
-            error_msg = f"启动Minecraft游戏终端失败：{str(e)}"
-            print(f"错误：{error_msg}")
-            self.toast.show_message(error_msg, 3000)
-
-    def stop_minecraft_terminal(self):
-        """关闭Minecraft游戏终端"""
-        try:
-            if self.minecraft_terminal_process and hasattr(self.minecraft_terminal_process, 'poll') and self.minecraft_terminal_process.poll() is None:
-                self.minecraft_terminal_process.terminate()
-                self.minecraft_terminal_process = None
-                print("Minecraft游戏终端已关闭")
-                self.toast.show_message("Minecraft游戏终端已关闭", 2000)
-            else:
-                self.minecraft_terminal_process = None  # 重置状态
-                self.toast.show_message("Minecraft游戏终端未在运行", 2000)
-        except Exception as e:
-            error_msg = f"关闭Minecraft游戏终端失败：{str(e)}"
-            print(f"错误：{error_msg}")
-            self.toast.show_message(error_msg, 3000)
 
     def refresh_tools_list(self):
         """刷新工具列表 - 卡片布局"""
@@ -4852,7 +4690,6 @@ class set_pyqt(QWidget):
             api_key_fields = [
                 self.ui.lineEdit,  # 主要LLM API KEY
                 self.ui.lineEdit_translation_api_key,  # 同传API KEY
-                self.ui.lineEdit_minecraft_api_key  # Minecraft API KEY
             ]
 
             for line_edit in api_key_fields:
@@ -5462,7 +5299,7 @@ class set_pyqt(QWidget):
         """打开对话记录页面并自动加载"""
         try:
             # 先切换到对话记录页面
-            self.ui.stackedWidget.setCurrentIndex(14)
+            self.ui.stackedWidget.setCurrentIndex(12)
 
             # 检查是否已经创建了WebView
             # 打包后禁用 WebEngineView，直接使用 QTextEdit 避免崩溃

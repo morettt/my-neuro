@@ -14,7 +14,7 @@ import sys
 import json
 import asyncio
 import concurrent.futures
-
+import copy
 
 # ===== 上下文对象 =====
 
@@ -22,8 +22,8 @@ class _Storage:
     def __init__(self):
         self._data = {}
 
-    def get(self, key):
-        return self._data.get(key)
+    def get(self, key, default=None):
+        return copy.deepcopy(self._data.get(key, default))
 
     def set(self, key, value):
         self._data[key] = value
@@ -32,7 +32,7 @@ class _Storage:
         self._data.pop(key, None)
 
     def get_all(self):
-        return dict(self._data)
+        return copy.deepcopy(self._data)
 
 
 class PluginContext:
@@ -110,6 +110,7 @@ class Plugin:
 
     def get_tools(self): return []
     async def execute_tool(self, name, params): return 'Not implemented'
+
 
 
 # ===== 事件分发 =====

@@ -5,7 +5,6 @@ const { ASRController } = require('./ASRController.js');
 const { InputRouter } = require('./InputRouter.js');
 const { DiaryManager } = require('../DiaryManager.js');
 const { ScreenshotManager } = require('../ScreenshotManager.js');
-const { GameIntegration } = require('../GameIntegration.js');
 const { ContextManager } = require('../ContextManager.js');
 const { MemosClient } = require('../memos-client.js');
 
@@ -65,11 +64,6 @@ class VoiceChatFacade {
         // 创建临时的conversationCore（等异步初始化完成后替换）
         this.conversationCore = new ConversationCore('', [], this.config);
 
-        // 创建游戏集成
-        this.gameIntegration = new GameIntegration(this, this.config);
-        this.gameModules = this.gameIntegration.gameModules;
-        this.isGameModeActive = this.gameIntegration.isGameModeActive();
-
         // 创建子模块
         this.diaryManager = new DiaryManager(this);
         this.screenshotManager = new ScreenshotManager(this);
@@ -79,7 +73,6 @@ class VoiceChatFacade {
         // 创建输入路由
         this.inputRouter = new InputRouter(
             this.conversationCore,
-            this.gameIntegration,
             null,
             null,
             this.memosClient,
@@ -173,11 +166,6 @@ class VoiceChatFacade {
 
     async takeScreenshotBase64() {
         return this.screenshotManager.takeScreenshotBase64();
-    }
-
-    // ========== 委托给 GameIntegration 的方法 ==========
-    async handleGameInput(text) {
-        return this.gameIntegration.handleGameInput(text);
     }
 
     // ========== 委托给 ContextManager 的方法 ==========
