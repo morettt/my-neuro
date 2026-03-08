@@ -34,5 +34,5 @@ aiohttp
 
 pydantic>=2.0.0
 
-#给肥牛.exe 用的插件教程md
 markdown
+
