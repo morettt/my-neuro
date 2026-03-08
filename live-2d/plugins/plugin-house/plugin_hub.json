@@ -16,5 +16,11 @@
     "desc": "为 AI 提供跨会话长期记忆能力，自动检索注入记忆、自动保存对话、12 个 Function Call 工具（搜索/添加记忆、图片记忆、知识库导入、记忆修正、偏好查询），后端基于 Qdrant 向量库 + NetworkX 知识图谱 + BM25 混合检索",
     "author": "A-night-owl-Rabbit",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-memos"
+  },
+  "loki-shadow": {
+    "display_name": "loki-shadow",
+    "desc": "游戏陪玩智能插件：自动检测游戏、搜索本地攻略库，从游民星空/B站/TapTap/NGA/米游社 5 个来源并行下载攻略，DeepSeek 主 Agent + Qwen 后备 Agent 编排全流程，支持截图分析与防剧透引导",
+    "author": "A-night-owl-Rabbit",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-loki-shadow"
   }
 }
