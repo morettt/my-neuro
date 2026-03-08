@@ -1,0 +1,10 @@
+{
+  "name": "minecraft",
+  "displayName": "Minecraft 游戏集成",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "连接 Mindcraft 服务器，将语音输入转发给 MC 机器人",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}
