@@ -357,11 +357,11 @@ class LLMClient {
 
                 for (const line of lines) {
                     const trimmed = line.trim();
-                    if (!trimmed || trimmed === 'data: [DONE]') continue;
+                    if (!trimmed || trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]') continue;//添加心流API支持
 
-                    if (trimmed.startsWith('data: ')) {
+                    if (trimmed.startsWith('data:')) {
                         try {
-                            const jsonStr = trimmed.slice(6); // 移除 "data: " 前缀
+                            const jsonStr = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed.slice(5); // 移除 "data: " 前缀，自适应有无空格
                             const chunk = JSON.parse(jsonStr);
 
                             // 提取内容
