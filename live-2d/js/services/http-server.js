@@ -122,6 +122,54 @@ class HttpServer {
                 .catch(error => res.json({ success: false, message: error.toString() }));
         });
 
+        
+
+        // 表情控制接口
+        this.emotionApp.post('/control-expression', (req, res) => {
+            const { expression_name } = req.body;
+            const mainWindow = BrowserWindow.getAllWindows()[0];
+
+            if (!mainWindow) {
+                return res.json({ success: false, message: '应用窗口未找到' });
+            }
+
+            const jsCode = `
+                if (global.expressionMapper && global.expressionMapper.triggerExpression) {
+                    global.expressionMapper.triggerExpression('${expression_name}');
+                    "触发表情: ${expression_name}";
+                } else {
+                    "表情映射器未初始化";
+                }
+            `;
+
+            mainWindow.webContents.executeJavaScript(jsCode)
+                .then(result => res.json({ success: true, message: result }))
+                .catch(error => res.json({ success: false, message: error.toString() }));
+        });
+        
+        // 表情绑定接口
+        this.emotionApp.post('/bind-expression', (req, res) => {
+            const { expression_name, emotion_name } = req.body;
+            const mainWindow = BrowserWindow.getAllWindows()[0];
+
+            if (!mainWindow) {
+                return res.json({ success: false, message: '应用窗口未找到' });
+            }
+
+            const jsCode = `
+                if (global.expressionMapper && global.expressionMapper.bindExpressionToEmotion) {
+                    const result = global.expressionMapper.bindExpressionToEmotion('${emotion_name}', '${expression_name}');
+                    result ? "绑定成功" : "表情已绑定";
+                } else {
+                    "表情映射器未初始化";
+                }
+            `;
+
+            mainWindow.webContents.executeJavaScript(jsCode)
+                .then(result => res.json({ success: true, message: result }))
+                .catch(error => res.json({ success: false, message: error.toString() }));
+        });
+
         // 配置重新加载接口
         this.emotionApp.post('/reload-config', (req, res) => {
             const mainWindow = BrowserWindow.getAllWindows()[0];

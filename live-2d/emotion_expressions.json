@@ -1,0 +1,76 @@
+{
+  "feiniu": {
+    "emotion_expressions": {
+      "开心": [],
+      "生气": [],
+      "难过": [],
+      "惊讶": [],
+      "害羞": [],
+      "俏皮": [],
+      "表情1": [
+        "expressions/expression1.exp3.json"
+      ],
+      "表情2": [
+        "expressions/expression2.exp3.json"
+      ],
+      "表情3": [
+        "expressions/expression3.exp3.json"
+      ],
+      "表情4": [
+        "expressions/expression4.exp3.json"
+      ],
+      "表情5": [
+        "expressions/expression5.exp3.json"
+      ],
+      "表情6": [
+        "expressions/expression6.exp3.json"
+      ],
+      "表情7": [
+        "expressions/expression7.exp3.json"
+      ]
+    }
+  },
+  "肥牛": {
+    "emotion_expressions": {
+      "开心": [
+        "expressions/expression2.exp3.json"
+      ],
+      "生气": [
+        "expressions/expression3.exp3.json"
+      ],
+      "难过": [
+        "expressions/expression4.exp3.json"
+      ],
+      "惊讶": [
+        "expressions/expression5.exp3.json"
+      ],
+      "害羞": [
+        "expressions/expression6.exp3.json"
+      ],
+      "俏皮": [
+        "expressions/expression7.exp3.json"
+      ],
+      "表情1": [
+        "expressions/expression1.exp3.json"
+      ],
+      "表情2": [
+        "expressions/expression2.exp3.json"
+      ],
+      "表情3": [
+        "expressions/expression3.exp3.json"
+      ],
+      "表情4": [
+        "expressions/expression4.exp3.json"
+      ],
+      "表情5": [
+        "expressions/expression5.exp3.json"
+      ],
+      "表情6": [
+        "expressions/expression6.exp3.json"
+      ],
+      "表情7": [
+        "expressions/expression7.exp3.json"
+      ]
+    }
+  }
+}

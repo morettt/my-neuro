@@ -84,8 +84,8 @@
     "text_only_mode": false,
     "auto_show_chat_on_text_mode": true,
     "model_position": {
-      "x": 1.3173444652557373,
-      "y": 0.7958061406587621,
+      "x": 1.2759382152557373,
+      "y": -0.0013367164840950149,
       "remember_position": true
     }
   },
@@ -100,7 +100,7 @@
     "auto_reload": false
   },
   "mcp": {
-    "enabled": true,
+    "enabled": false,
     "config_path": "./mcp/mcp_config.json",
     "startup_timeout": 30000,
     "auto_start_servers": true

@@ -45,6 +45,12 @@ class EnhancedTextProcessor {
         this.playbackEngine.setEmotionMapper(emotionMapper);
     }
 
+        // 表情映射器
+    setExpressionMapper(expressionMapper) {
+        this.playbackEngine.setExpressionMapper(expressionMapper);
+    }
+
+
     // 处理线程 - 将文本转换为音频
     startProcessingThread() {
         const processNext = async () => {
@@ -88,7 +94,7 @@ class EnhancedTextProcessor {
 
                     if (audioData) {
                         this.audioDataQueue.push({ audio: audioData, text: segment });
-                    } else if (this.shouldStop) {
+                    }else if (this.shouldStop) {
                         // 被主动打断（abort），不标记为不可用
                         return;
                     } else {
@@ -203,7 +209,13 @@ class EnhancedTextProcessor {
         const hideDelay = this.fallbackDisplayText ? 3000 : 1000;
         setTimeout(() => {
             if (typeof hideSubtitle === 'function') hideSubtitle();
-        }, hideDelay);
+            // 🔥 通过 playbackEngine 调用表情映射器
+            if (this.playbackEngine.expressionMapper) {
+                // this.playbackEngine.expressionMapper.triggerExpression("表情7");
+                const defaultExpr = this.playbackEngine.expressionMapper.defaultExpression || "表情1";
+                this.playbackEngine.expressionMapper.triggerExpression(defaultExpr);
+            }
+        }, 1000);
 
         if (this.playbackEngine.onEndCallback) {
             this.playbackEngine.onEndCallback();
@@ -306,6 +318,10 @@ class EnhancedTextProcessor {
 
         if (typeof hideSubtitle === 'function') hideSubtitle();
         if (this.playbackEngine.onEndCallback) this.playbackEngine.onEndCallback();
+        if (this.playbackEngine.expressionMapper) {
+            const defaultExpr = this.playbackEngine.expressionMapper.defaultExpression || "表情1";
+            this.playbackEngine.expressionMapper.triggerExpression(defaultExpr);
+        }
 
         setTimeout(() => {
             this.shouldStop = false;
