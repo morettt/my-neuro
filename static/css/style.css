@@ -170,148 +170,178 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
 
 .tool-list {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
     position: relative;
 }
 
-@media (max-width: 1000px) {
+@media (max-width: 1200px) {
+    .tool-list {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    .tool-list {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
     .tool-list {
         grid-template-columns: 1fr;
     }
 }
 
-/* 折叠式工具卡片 */
+/* 工具卡片 */
 .tool-card {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
     border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    overflow: visible;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    overflow: hidden;
     transition: all 0.3s ease;
+    position: relative;
     display: flex;
     flex-direction: column;
-    min-height: 70px;
-    position: relative;
-    z-index: 1;
 }
 
 .tool-card:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(102, 126, 234, 0.5);
-    z-index: 2;
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(102, 126, 234, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.tool-card-body {
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
 }
 
 .tool-card-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 15px 20px;
-    cursor: pointer;
-    user-select: none;
-    flex-grow: 1;
-    background: transparent;
-    border-radius: 12px;
+    align-items: flex-start;
+    gap: 8px;
 }
 
-.tool-card-header h4 {
-    margin: 0;
-    color: #66b3ff;
-    font-size: 16px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+.tool-card-main {
     flex: 1;
+    min-width: 0;
 }
 
-.tool-short-desc {
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.6);
-    font-weight: normal;
-    margin-left: 10px;
-}
-
-.tool-type-label {
-    background: rgba(102, 126, 234, 0.3);
-    color: #a5b4fc;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    margin: 0 15px;
+.tool-name {
+    margin: 0 0 6px 0;
+    color: #66b3ff;
+    font-size: 14px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.toggle-icon {
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 14px;
-    transition: transform 0.3s ease;
-    margin-left: 15px;
-    min-width: 20px;
+.tool-brief {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    min-height: 34px;
 }
 
-.tool-card.expanded .toggle-icon {
-    transform: rotate(180deg);
+.tool-status-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.tool-status-inline.enabled {
+    background: rgba(74, 222, 128, 0.15);
+    color: #4ade80;
+}
+
+.tool-status-inline.disabled {
+    background: rgba(248, 113, 113, 0.15);
+    color: #f87171;
+}
+
+.tool-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-tool-toggle {
+    background: rgba(102, 126, 234, 0.3);
+    border: 1px solid rgba(102, 126, 234, 0.5);
+    color: #a5b4fc;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-tool-toggle:hover {
+    background: rgba(102, 126, 234, 0.5);
+    border-color: rgba(102, 126, 234, 0.7);
+    color: white;
+}
+
+.btn-tool-expand {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.7);
+    width: 26px;
+    height: 26px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.btn-tool-expand:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
 }
 
 .tool-card-detail {
     display: none;
-    padding: 15px 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
-    margin-top: 10px;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: #1a1a2e;
-    border-radius: 0 0 12px 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    z-index: 100;
-    border: 1px solid rgba(102, 126, 234, 0.5);
-    border-top: none;
+    padding: 12px 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.25);
 }
 
-.tool-card-detail.expanded {
+.tool-card.expanded .tool-card-detail {
     display: block;
 }
 
-.tool-card.expanded {
-    z-index: 100;
-}
-
-.tool-description {
-    color: rgba(255, 255, 255, 0.8);
+.tool-full-desc {
+    margin: 0 0 12px 0;
+    color: rgba(255, 255, 255, 0.75);
     font-size: 14px;
     line-height: 1.6;
-    margin: 15px 0;
     padding: 12px;
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.15);
     border-radius: 8px;
-}
-
-.tool-status-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 10px;
-}
-
-.tool-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: bold;
-}
-
-.tool-status.enabled {
-    background: rgba(40, 167, 69, 0.25);
-    color: #4ade80;
-}
-
-.tool-status.disabled {
-    background: rgba(220, 53, 69, 0.25);
-    color: #f87171;
 }
 
 .btn-toggle-tool {
@@ -674,3 +704,14 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
     color: rgba(76, 175, 80, 0.9);
     background: rgba(76, 175, 80, 0.1);
 }
+
+/* ============ 插件管理样式 ============ */
+
+.plugin-panel {
+    display: none;
+}
+
+.plugin-panel.active {
+    display: block;
+}
+

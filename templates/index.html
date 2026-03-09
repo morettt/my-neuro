@@ -19,7 +19,6 @@
             <button class="tab-button" onclick="switchTab('dialog-config')">对话配置</button>
             <button class="tab-button" onclick="switchTab('llm-config')">LLM 配置</button>
             <button class="tab-button" onclick="switchTab('voice-settings')">云端配置</button>
-            <button class="tab-button" onclick="switchTab('game-center')">游戏</button>
             <button class="tab-button" onclick="switchTab('model-manager')">声音克隆</button>
             <button class="tab-button" onclick="switchTab('market')">广场</button>
             <button class="tab-button" onclick="switchTab('tools')">工具屋</button>
@@ -193,7 +192,10 @@
                     </div>
                     <div class="form-group">
                         <label for="gateway-api-key">肥牛密钥：</label>
-                        <input type="password" id="gateway-api-key" placeholder="输入肥牛密钥">
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" id="gateway-api-key" placeholder="输入肥牛密钥" style="flex: 1;">
+                            <button type="button" onclick="togglePasswordVisibility('gateway-api-key')" style="width: 40px;">👁️</button>
+                        </div>
                     </div>
                     <div class="info-tip">
                         💡 提示：启动就能用！语音识别、语音合成、智能对话这些功能全在云端跑，你的电脑上不用装任何东西。不管是 Windows 还是 Mac、Linux，只要能上网就行。点击下方的按键前往肥牛官网注册登录后。选择肥牛 API 密钥，在那即可获取到肥牛的 API KEY
@@ -212,7 +214,10 @@
                     </div>
                     <div class="form-group">
                         <label for="cloud-api-key">API KEY：</label>
-                        <input type="password" id="cloud-api-key" placeholder="输入云服务 API 密钥">
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" id="cloud-api-key" placeholder="输入云服务 API 密钥" style="flex: 1;">
+                            <button type="button" onclick="togglePasswordVisibility('cloud-api-key')" style="width: 40px;">👁️</button>
+                        </div>
                     </div>
                 </div>
                 <div class="section">
@@ -258,7 +263,10 @@
                     </div>
                     <div class="form-group">
                         <label for="aliyun-tts-api-key">API KEY：</label>
-                        <input type="password" id="aliyun-tts-api-key" placeholder="输入阿里云 API 密钥">
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" id="aliyun-tts-api-key" placeholder="输入阿里云 API 密钥" style="flex: 1;">
+                            <button type="button" onclick="togglePasswordVisibility('aliyun-tts-api-key')" style="width: 40px;">👁️</button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="aliyun-tts-model">模型名：</label>
@@ -289,7 +297,10 @@
                     </div>
                     <div class="form-group">
                         <label for="baidu-asr-appkey">APP KEY：</label>
-                        <input type="password" id="baidu-asr-appkey" placeholder="百度语音应用的 APP Key">
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" id="baidu-asr-appkey" placeholder="百度语音应用的 APP Key" style="flex: 1;">
+                            <button type="button" onclick="togglePasswordVisibility('baidu-asr-appkey')" style="width: 40px;">👁️</button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="baidu-asr-devpid">DEV PID：</label>
@@ -299,42 +310,6 @@
             </div>
             
             <button onclick="saveCloudSettings()" class="btn-start">保存云端配置</button>
-        </div>
-
-        <!-- 游戏中心 -->
-        <div id="game-center" class="tab-content">
-            <h3>游戏中心</h3>
-            <div class="section">
-                <h4>Minecraft 配置</h4>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="minecraft-game-enabled">
-                    <label for="minecraft-game-enabled">对话模块映射到游戏</label>
-                </div>
-                <div class="form-group">
-                    <label for="minecraft-api-key">API Key</label>
-                    <input type="password" id="minecraft-api-key" placeholder="输入 API 密钥">
-                </div>
-                <div class="form-group">
-                    <label for="minecraft-bot-name">机器人名称</label>
-                    <input type="text" id="minecraft-bot-name" placeholder="例如：fake-neuro">
-                </div>
-                <div class="form-group">
-                    <label for="minecraft-model-name">模型名称</label>
-                    <input type="text" id="minecraft-model-name" placeholder="例如：gemini-2.0-flash">
-                </div>
-                <div class="form-group">
-                    <label for="minecraft-model-url">模型 URL</label>
-                    <input type="text" id="minecraft-model-url" placeholder="例如：https://api.example.com/v1">
-                </div>
-                <div class="form-group">
-                    <label for="minecraft-conversing">对话设定</label>
-                    <textarea id="minecraft-conversing" placeholder="输入 Minecraft 机器人的对话设定..." rows="4"></textarea>
-                </div>
-                <div class="action-buttons" style="display: flex; gap: 15px; margin-top: 20px;">
-                    <button onclick="startMinecraftGame()" class="btn-start">启动 Minecraft 游戏</button>
-                    <button onclick="saveMinecraftConfig()" class="btn-start">更新配置</button>
-                </div>
-            </div>
         </div>
 
         <!-- 声音克隆 -->
@@ -438,6 +413,7 @@
                 <button class="sub-tab-button active" onclick="switchMarketTab('prompt')">提示词广场</button>
                 <button class="sub-tab-button" onclick="switchMarketTab('tool')">工具广场</button>
                 <button class="sub-tab-button" onclick="switchMarketTab('fc')">FC 广场</button>
+                <button class="sub-tab-button" onclick="switchMarketTab('plugin')">插件广场</button>
             </div>
 
             <!-- 提示词广场 -->
@@ -467,6 +443,16 @@
                 </div>
                 <div class="market-list" id="fc-market-list">
                     <div class="log-entry log-info">点击刷新按钮加载 FC 工具列表...</div>
+                </div>
+            </div>
+
+            <!-- 插件广场 -->
+            <div id="plugin-market-panel" class="market-panel">
+                <div class="market-header">
+                    <button onclick="refreshPluginMarket()" class="btn-start">🔄 刷新插件列表</button>
+                </div>
+                <div class="market-list" id="plugin-market-list">
+                    <div class="log-entry log-info">点击刷新按钮加载插件列表...</div>
                 </div>
             </div>
         </div>
@@ -612,7 +598,10 @@
                         💡 说明：当主模型（LLM）不支持图片识别时，可以启用此配置。在需要视觉功能时，系统会自动使用此辅助模型处理
                     </label>
                     <label style="font-size: 13px; opacity: 0.8;">视觉模型 API Key:</label>
-                    <input type="text" id="vision-model-api-key" placeholder="sk-..." style="margin-bottom: 10px;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <input type="password" id="vision-model-api-key" placeholder="sk-..." style="flex: 1;">
+                        <button type="button" onclick="togglePasswordVisibility('vision-model-api-key')" style="width: 40px;">👁️</button>
+                    </div>
                     <label style="font-size: 13px; opacity: 0.8;">视觉模型 API URL:</label>
                     <input type="text" id="vision-model-api-url" placeholder="https://..." style="margin-bottom: 10px;">
                     <label style="font-size: 13px; opacity: 0.8;">视觉模型名称:</label>
@@ -630,6 +619,7 @@
                     </select>
                 </div>
                 <button onclick="saveLive2DModel()" class="btn-start" style="margin-top: 10px;">应用模型</button>
+                <button onclick="resetModelPosition()" class="btn-start" style="margin-top: 10px; background: linear-gradient(135deg, #f59e0b, #d97706);">复位皮套位置</button>
             </div>
             
             <!-- 工具开关 -->
@@ -678,8 +668,8 @@
                     <label for="voice-barge-in">开启语音打断（实时语音打断 AI 说话）</label>
                 </div>
                 <div class="checkbox-group">
-                    <input type="checkbox" id="text-only-mode">
-                    <label for="text-only-mode">文字输入框（可打字交互）</label>
+                    <input type="checkbox" id="show-chat-box">
+                    <label for="show-chat-box">文字输入框（可打字交互）</label>
                 </div>
                 <div class="checkbox-group">
                     <input type="checkbox" id="enable-limit">
@@ -700,23 +690,27 @@
             <h3>插件管理</h3>
             <p style="opacity: 0.7; margin-bottom: 20px;">
                 管理所有已安装的插件，控制功能启用状态<br>
-                💡 提示：点击"打开配置"可打开插件目录或配置文件，在 config.json 中配置详细参数
+                💡 提示：点击"打开配置"可打开插件目录或配置文件，在 plugin_config.json 中配置详细参数
             </p>
-            
-            <!-- 内置插件 -->
-            <div class="plugin-section">
-                <h4 style="color: #66b3ff; margin-bottom: 15px;">🔧 内置插件</h4>
+
+            <!-- 插件子选项卡 -->
+            <div class="sub-tabs">
+                <button class="sub-tab-button active" onclick="switchPluginTab('builtin')">内置插件</button>
+                <button class="sub-tab-button" onclick="switchPluginTab('community')">社区插件</button>
+            </div>
+
+            <!-- 内置插件面板 -->
+            <div id="builtin-plugin-panel" class="plugin-panel active">
                 <div id="builtin-plugins-list" class="plugins-container"></div>
             </div>
-            
-            <!-- 社区插件 -->
-            <div class="plugin-section" style="margin-top: 30px;">
-                <h4 style="color: #a5b4fc; margin-bottom: 15px;">🌐 社区插件</h4>
+
+            <!-- 社区插件面板 -->
+            <div id="community-plugin-panel" class="plugin-panel">
                 <div id="community-plugins-list" class="plugins-container"></div>
             </div>
         </div>
     </div>
 
-    <script src="static\js/app.js"></script>
+    <script src="static/js/app.js?v=20260309p"></script>
 </body>
 </html>

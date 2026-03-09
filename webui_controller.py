@@ -370,11 +370,14 @@ def handle_voice_settings():
     """处理声音设置"""
     config = load_config()
     if request.method == 'GET':
+        cloud_config = config.get('cloud', {})
         return jsonify({
             'tts': config.get('tts', {}),
             'asr': config.get('asr', {}),
-            'cloud_tts': config.get('cloud', {}).get('tts', {}),
-            'baidu_asr': config.get('cloud', {}).get('baidu_asr', {})
+            'cloud_tts': cloud_config.get('tts', {}),
+            'aliyun_tts': cloud_config.get('aliyun_tts', {}),  # 添加阿里云 TTS
+            'baidu_asr': cloud_config.get('baidu_asr', {}),
+            'api_gateway': config.get('api_gateway', {})  # 添加云端肥牛网关
         })
     elif request.method == 'POST':
         try:
@@ -391,26 +394,41 @@ def handle_voice_settings():
                     'vad_url': data['asr'].get('vad_url', ''),
                     'voice_barge_in': data['asr'].get('voice_barge_in', True)
                 }
+            # 保存云端配置
+            if 'cloud' not in config:
+                config['cloud'] = {}
+            if 'provider' in data:
+                config['cloud']['provider'] = data['provider']
+            if 'api_key' in data:
+                config['cloud']['api_key'] = data['api_key']
             if 'cloud_tts' in data:
-                if 'cloud' not in config:
-                    config['cloud'] = {}
                 config['cloud']['tts'] = {
                     'enabled': data['cloud_tts'].get('enabled', False),
                     'url': data['cloud_tts'].get('url', 'https://api.siliconflow.cn/v1/audio/speech'),
                     'model': data['cloud_tts'].get('model', 'FunAudioLLM/CosyVoice2-0.5B'),
                     'voice': data['cloud_tts'].get('voice', '')
                 }
-                if data['cloud_tts'].get('api_key'):
-                    config['cloud']['api_key'] = data['cloud_tts'].get('api_key')
+            if 'aliyun_tts' in data:
+                config['cloud']['aliyun_tts'] = {
+                    'enabled': data['aliyun_tts'].get('enabled', False),
+                    'api_key': data['aliyun_tts'].get('api_key', ''),
+                    'model': data['aliyun_tts'].get('model', 'cosyvoice-v3-flash'),
+                    'voice': data['aliyun_tts'].get('voice', '')
+                }
             if 'baidu_asr' in data:
-                if 'cloud' not in config:
-                    config['cloud'] = {}
                 config['cloud']['baidu_asr'] = {
                     'enabled': data['baidu_asr'].get('enabled', False),
                     'url': data['baidu_asr'].get('url', 'ws://vop.baidu.com/realtime_asr'),
                     'appid': data['baidu_asr'].get('appid', ''),
                     'appkey': data['baidu_asr'].get('appkey', '')
                 }
+            # 保存云端肥牛网关配置
+            if 'api_gateway' in data:
+                if 'api_gateway' not in config:
+                    config['api_gateway'] = {}
+                config['api_gateway']['use_gateway'] = data['api_gateway'].get('use_gateway', False)
+                config['api_gateway']['base_url'] = data['api_gateway'].get('base_url', '')
+                config['api_gateway']['api_key'] = data['api_gateway'].get('api_key', '')
             if save_config(config):
                 return jsonify({'success': True})
             return jsonify({'error': '保存失败'}), 500
@@ -449,27 +467,6 @@ def handle_bilibili_settings():
             return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/settings/game', methods=['GET', 'POST'])
-def handle_game_settings():
-    """处理游戏设置"""
-    config = load_config()
-    if request.method == 'GET':
-        game_config = config.get('game', {})
-        return jsonify(game_config)
-    elif request.method == 'POST':
-        try:
-            data = request.get_json()
-            if 'game' not in config:
-                config['game'] = {}
-            if 'minecraft' in data:
-                config['game']['Minecraft'] = data['minecraft']
-            if save_config(config):
-                return jsonify({'success': True})
-            return jsonify({'error': '保存失败'}), 500
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-
-
 @app.route('/api/settings/ui', methods=['GET', 'POST'])
 def handle_ui_settings():
     """处理 UI 设置"""
@@ -482,7 +479,8 @@ def handle_ui_settings():
             'show_model': ui_config.get('show_model', True),
             'model_scale': ui_config.get('model_scale', 2.3),
             'subtitle_user': subtitle_config.get('user', '用户'),
-            'subtitle_ai': subtitle_config.get('ai', 'AI')
+            'subtitle_ai': subtitle_config.get('ai', 'AI'),
+            'subtitle_enabled': subtitle_config.get('enabled', False)  # 添加字幕启用状态
         })
     elif request.method == 'POST':
         try:
@@ -496,6 +494,7 @@ def handle_ui_settings():
             config['ui']['model_scale'] = data.get('model_scale', 2.3)
             config['subtitle_labels']['user'] = data.get('subtitle_user', '用户')
             config['subtitle_labels']['ai'] = data.get('subtitle_ai', 'AI')
+            config['subtitle_labels']['enabled'] = data.get('subtitle_enabled', False)  # 保存字幕启用状态
             if save_config(config):
                 return jsonify({'success': True})
             return jsonify({'error': '保存失败'}), 500
@@ -618,7 +617,7 @@ def handle_dialog_settings():
             'tts_enabled': tts_config.get('enabled', True),
             'asr_enabled': asr_config.get('enabled', True),
             'voice_barge_in': asr_config.get('voice_barge_in', True),
-            'text_only_mode': ui_config.get('text_only_mode', False)
+            'show_chat_box': ui_config.get('show_chat_box', True)
         })
     elif request.method == 'POST':
         try:
@@ -639,7 +638,7 @@ def handle_dialog_settings():
             config['tts']['enabled'] = data.get('tts_enabled', True)
             config['asr']['enabled'] = data.get('asr_enabled', True)
             config['asr']['voice_barge_in'] = data.get('voice_barge_in', True)
-            config['ui']['text_only_mode'] = data.get('text_only_mode', False)
+            config['ui']['show_chat_box'] = data.get('show_chat_box', True)
 
             if save_config(config):
                 return jsonify({'success': True})
@@ -677,50 +676,74 @@ def handle_tools_settings():
 
 # ============ 插件管理 API ============
 
+def load_enabled_plugins():
+    """从 enabled_plugins.json 加载已启用的插件列表"""
+    enabled_path = PROJECT_ROOT / 'live-2d' / 'plugins' / 'enabled_plugins.json'
+    if not enabled_path.exists():
+        return []
+    try:
+        with open(enabled_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data.get('plugins', [])
+    except Exception as e:
+        logger.error(f'加载 enabled_plugins.json 失败：{e}')
+        return []
+
+
+def save_enabled_plugins(enabled_list):
+    """保存已启用的插件列表到 enabled_plugins.json"""
+    enabled_path = PROJECT_ROOT / 'live-2d' / 'plugins' / 'enabled_plugins.json'
+    try:
+        with open(enabled_path, 'w', encoding='utf-8') as f:
+            json.dump({'plugins': enabled_list}, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f'保存 enabled_plugins.json 失败：{e}')
+        return False
+
+
 def scan_plugins_directory():
     """自动扫描插件目录（built-in 和 community）"""
     plugins = []
     plugins_base = PROJECT_ROOT / 'live-2d' / 'plugins'
-    config = load_config()
-    plugins_config = config.get('plugins', {})
-    
+    enabled_plugins = load_enabled_plugins()
+
     for category in ['built-in', 'community']:
         category_path = plugins_base / category
         if not category_path.exists():
             continue
-        
+
         for plugin_dir in category_path.iterdir():
             if not plugin_dir.is_dir():
                 continue
-            
+
             metadata_path = plugin_dir / 'metadata.json'
             if not metadata_path.exists():
                 continue
-            
+
             try:
                 with open(metadata_path, 'r', encoding='utf-8') as f:
                     metadata = json.load(f)
-                
-                # 获取插件配置状态
-                plugin_name = metadata.get('name', plugin_dir.name)
-                plugin_config_key = plugin_name.replace('-', '_')
-                plugin_enabled = plugins_config.get(plugin_config_key, {}).get('enabled', False)
-                
+
+                # 检查插件是否在 enabled_plugins.json 中
+                plugin_path = f"{category}/{metadata.get('name', plugin_dir.name)}"
+                plugin_enabled = plugin_path in enabled_plugins
+
                 plugins.append({
-                    'name': plugin_name,
-                    'display_name': metadata.get('displayName', plugin_name),
+                    'name': metadata.get('name', plugin_dir.name),
+                    'display_name': metadata.get('displayName', metadata.get('name', plugin_dir.name)),
                     'description': metadata.get('description', '无描述'),
                     'version': metadata.get('version', '1.0.0'),
                     'author': metadata.get('author', 'unknown'),
                     'category': category,
                     'enabled': plugin_enabled,
-                    'config_key': plugin_config_key,
+                    'plugin_path': plugin_path,
                     'plugin_dir': str(plugin_dir),
-                    'has_own_config': (plugin_dir / 'config.json').exists()
+                    'has_own_config': (plugin_dir / 'plugin_config.json').exists()
                 })
             except Exception as e:
                 logger.error(f'读取插件元数据失败 {plugin_dir.name}: {e}')
-    
+
     return plugins
 
 
@@ -736,25 +759,44 @@ def list_plugins():
 
 @app.route('/api/plugins/<plugin_name>/toggle', methods=['POST'])
 def toggle_plugin(plugin_name):
-    """切换插件启用状态"""
-    config = load_config()
+    """切换插件启用状态（使用 enabled_plugins.json）"""
+    enabled_plugins = load_enabled_plugins()
     
-    if 'plugins' not in config:
-        config['plugins'] = {}
+    # 查找插件的完整路径（built-in/xxx 或 community/xxx）
+    plugin_path = None
+    for category in ['built-in', 'community']:
+        test_path = f"{category}/{plugin_name}"
+        plugins_base = PROJECT_ROOT / 'live-2d' / 'plugins'
+        category_path = plugins_base / category / plugin_name.replace('_', '-')
+        if not category_path.exists():
+            category_path = plugins_base / category / plugin_name
+        if category_path.exists():
+            # 从 metadata.json 获取正确的插件名
+            metadata_path = category_path / 'metadata.json'
+            if metadata_path.exists():
+                with open(metadata_path, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+                actual_name = metadata.get('name', plugin_name)
+                plugin_path = f"{category}/{actual_name}"
+                break
     
-    plugin_config_key = plugin_name.replace('-', '_')
-    if plugin_config_key not in config['plugins']:
-        config['plugins'][plugin_config_key] = {}
+    if not plugin_path:
+        return jsonify({'success': False, 'error': f'插件不存在：{plugin_name}'})
     
     # 切换状态
-    current = config['plugins'][plugin_config_key].get('enabled', False)
-    config['plugins'][plugin_config_key]['enabled'] = not current
+    if plugin_path in enabled_plugins:
+        enabled_plugins.remove(plugin_path)
+        action = 'disabled'
+    else:
+        enabled_plugins.append(plugin_path)
+        action = 'enabled'
     
-    if save_config(config):
+    if save_enabled_plugins(enabled_plugins):
         return jsonify({
             'success': True,
-            'enabled': not current,
-            'plugin_name': plugin_name
+            'action': action,
+            'plugin_name': plugin_name,
+            'plugin_path': plugin_path
         })
     return jsonify({'success': False, 'error': '保存失败'}), 500
 
@@ -833,6 +875,32 @@ def handle_current_model():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/live2d/model/reset-position', methods=['POST'])
+def reset_model_position():
+    """复位 Live2D 模型位置到默认值"""
+    try:
+        config = load_config()
+        
+        # 设置默认位置（与 model-interaction.js 中的默认值一致）
+        default_x = 1.35  # 屏幕宽度的 135%（右边）
+        default_y = 0.8   # 屏幕高度的 80%（下方）
+        
+        if 'ui' not in config:
+            config['ui'] = {}
+        if 'model_position' not in config['ui']:
+            config['ui']['model_position'] = {}
+        
+        config['ui']['model_position']['x'] = default_x
+        config['ui']['model_position']['y'] = default_y
+        config['ui']['model_position']['remember_position'] = True
+        
+        if save_config(config):
+            return jsonify({'success': True, 'message': '皮套位置已保存，请重启桌宠生效'})
+        return jsonify({'error': '保存失败'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/tools/list')
 def list_tools():
     """列出可用工具（已废弃，保留用于兼容）"""
@@ -888,19 +956,37 @@ def get_tool_description(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read(2000)
-        # 尝试多种注释格式
+
+        # 优先尝试从 JS 代码中提取 name 和 description 字段（参考 test.py 的实现）
+        pattern = r'name:\s*["\']([^"\']+)["\']\s*,\s*description:\s*["\']([^"\']*(?:[^"\'\\]|\\.)*)["\']'
+        matches = re.findall(pattern, content, re.DOTALL)
+
+        if matches:
+            # 取第一个匹配的工具描述
+            name, description = matches[0]
+            # 清理描述文本
+            clean_desc = re.sub(r'\s+', ' ', description.strip())
+            short_desc = clean_desc.split('.')[0].split('。')[0].strip()
+            if len(short_desc) > 30:
+                short_desc = short_desc[:27] + '...'
+            return clean_desc, short_desc
+
+        # 如果没有找到 name/description 字段，尝试从文件头注释提取
         match = re.search(r'/\*\*(.*?)\*/', content, re.DOTALL)
         if match:
             desc = match.group(1).strip()
-            # 清理描述中的多余空白
+            # 清理注释中的 * 号和多余空白
+            desc = re.sub(r'^\s*\*\s*', '', desc, flags=re.MULTILINE)
             desc = re.sub(r'\s+', ' ', desc)
-            # 提取第一句作为简短描述
-            short_desc = desc.split('。')[0].split('.')[0].strip()
+            desc = desc.strip('*').strip()
+            short_desc = desc.split('\n')[0].strip()
             if len(short_desc) > 30:
                 short_desc = short_desc[:27] + '...'
             return desc, short_desc
+
         return "无描述", "无描述"
-    except:
+    except Exception as e:
+        logger.warning(f'读取工具描述失败 {file_path}: {e}')
         return "无法读取描述", "无法读取描述"
 
 
@@ -1003,12 +1089,12 @@ def get_prompt_market():
     try:
         import urllib.request
         import json as json_module
-        
+
         # 从远程服务器获取提示词列表
         req = urllib.request.Request('http://mynewbot.com/api/get-prompts')
         with urllib.request.urlopen(req, timeout=10) as response:
             data = json_module.loads(response.read().decode('utf-8'))
-        
+
         if data.get('success'):
             return jsonify({
                 'success': True,
@@ -1026,18 +1112,90 @@ def get_prompt_market():
         }), 500
 
 
+@app.route('/api/market/plugins', methods=['GET'])
+def get_plugin_market():
+    """获取插件广场列表（从本地 plugin_hub.json 文件）"""
+    try:
+        import json as json_module
+        
+        # 从本地文件获取插件列表
+        plugin_hub_path = PROJECT_ROOT / 'live-2d' / 'plugins' / 'plugin-house' / 'plugin_hub.json'
+        
+        if not plugin_hub_path.exists():
+            return jsonify({
+                'success': False,
+                'error': '插件商店数据文件不存在'
+            }), 500
+        
+        with open(plugin_hub_path, 'r', encoding='utf-8') as f:
+            plugins_data = json_module.load(f)
+        
+        # 转换为列表格式
+        plugins = []
+        for key, value in plugins_data.items():
+            plugins.append({
+                'name': key,
+                'display_name': value.get('display_name', key),
+                'description': value.get('desc', '无描述'),
+                'author': value.get('author', '未知'),
+                'repo': value.get('repo', ''),
+                'download_url': value.get('repo', '') + '/archive/refs/heads/main.zip'
+            })
+        
+        return jsonify({
+            'success': True,
+            'plugins': plugins
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'加载插件商店数据失败：{str(e)}'
+        }), 500
+
+
+@app.route('/api/market/plugins/download', methods=['POST'])
+def download_plugin():
+    """下载插件"""
+    try:
+        data = request.get_json()
+        plugin_name = data.get('plugin_name', '')
+        plugin_url = data.get('download_url', '')
+
+        if not plugin_name or not plugin_url:
+            return jsonify({'success': False, 'error': '缺少参数'}), 400
+
+        # 下载插件到 community 目录
+        import urllib.request
+        plugins_base = PROJECT_ROOT / 'live-2d' / 'plugins' / 'community'
+        plugins_base.mkdir(parents=True, exist_ok=True)
+
+        plugin_dir = plugins_base / plugin_name
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+
+        # 下载插件文件（假设是 zip 格式）
+        zip_path = plugin_dir / f'{plugin_name}.zip'
+        urllib.request.urlretrieve(plugin_url, zip_path)
+
+        return jsonify({
+            'success': True,
+            'message': f'插件 {plugin_name} 已下载，请解压后使用'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/market/tools', methods=['GET'])
 def get_tool_market():
     """获取工具广场列表（从远程服务器）"""
     try:
         import urllib.request
         import json as json_module
-        
+
         # 从远程服务器获取工具列表
         req = urllib.request.Request('http://mynewbot.com/api/get-tools')
         with urllib.request.urlopen(req, timeout=10) as response:
             data = json_module.loads(response.read().decode('utf-8'))
-        
+
         if data.get('success'):
             return jsonify({
                 'success': True,
@@ -1061,12 +1219,12 @@ def get_fc_market():
     try:
         import urllib.request
         import json as json_module
-        
+
         # 从远程服务器获取 FC 工具列表
         req = urllib.request.Request('http://mynewbot.com/api/get-fc-tools')
         with urllib.request.urlopen(req, timeout=10) as response:
             data = json_module.loads(response.read().decode('utf-8'))
-        
+
         if data.get('success'):
             return jsonify({
                 'success': True,
@@ -1189,164 +1347,32 @@ def list_models():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/game/minecraft/download', methods=['POST'])
-def download_minecraft():
-    """下载 Minecraft 服务器"""
-    try:
-        game_path = PROJECT_ROOT / 'live-2d' / 'GAME'
-        bat_path = game_path / 'download_mindcraft.bat'
-        if bat_path.exists():
-            subprocess.Popen(
-                ['cmd', '/c', 'start', 'cmd', '/k', str(bat_path)],
-                cwd=str(game_path),
-                creationflags=subprocess.CREATE_NEW_CONSOLE
-            )
-            return jsonify({'success': True, 'message': '正在下载 Minecraft 服务器...'})
-        else:
-            return jsonify({'error': '下载脚本不存在'}), 404
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/settings/minecraft', methods=['GET', 'POST'])
-def handle_minecraft_settings():
-    """处理 Minecraft 配置设置"""
-    config_path = PROJECT_ROOT / 'live-2d' / 'config.json'
-    andy_config_path = PROJECT_ROOT / 'live-2d' / 'GAME' / 'Minecraft' / 'andy.json'
-    keys_config_path = PROJECT_ROOT / 'live-2d' / 'GAME' / 'Minecraft' / 'keys.json'
-    
-    if request.method == 'GET':
-        # 从 config.json 读取启用状态
-        config = load_config()
-        minecraft_config = config.get('game', {}).get('Minecraft', {})
-        
-        # 从 andy.json 读取详细配置
-        andy_config = {}
-        if andy_config_path.exists():
-            try:
-                with open(andy_config_path, 'r', encoding='utf-8') as f:
-                    andy_config = json.load(f)
-            except Exception:
-                pass
-        
-        # 从 keys.json 读取 API Key
-        keys_config = {}
-        if keys_config_path.exists():
-            try:
-                with open(keys_config_path, 'r', encoding='utf-8') as f:
-                    keys_config = json.load(f)
-            except Exception:
-                pass
-        
-        return jsonify({
-            'game_enabled': minecraft_config.get('enabled', False),
-            'api_key': keys_config.get('OPENAI_API_KEY', ''),
-            'bot_name': andy_config.get('name', ''),
-            'model_name': andy_config.get('model', {}).get('model', ''),
-            'model_url': andy_config.get('model', {}).get('url', ''),
-            'conversing': andy_config.get('conversing', '')
-        })
-    
-    elif request.method == 'POST':
-        try:
-            data = request.get_json()
-            
-            # 更新 config.json 中的启用状态
-            config = load_config()
-            if 'game' not in config:
-                config['game'] = {}
-            if 'Minecraft' not in config['game']:
-                config['game']['Minecraft'] = {}
-            config['game']['Minecraft']['enabled'] = data.get('game_enabled', False)
-            save_config(config)
-            
-            # 更新 andy.json 配置
-            andy_config = {
-                'name': data.get('bot_name', ''),
-                'model': {
-                    'model': data.get('model_name', ''),
-                    'url': data.get('model_url', '')
-                },
-                'conversing': data.get('conversing', '')
-            }
-            
-            # 确保目录存在
-            andy_config_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(andy_config_path, 'w', encoding='utf-8') as f:
-                json.dump(andy_config, f, ensure_ascii=False, indent=2)
-            
-            # 更新 keys.json 配置
-            existing_keys = {}
-            if keys_config_path.exists():
-                try:
-                    with open(keys_config_path, 'r', encoding='utf-8') as f:
-                        existing_keys = json.load(f)
-                except Exception:
-                    pass
-            
-            if data.get('api_key'):
-                existing_keys['OPENAI_API_KEY'] = data.get('api_key')
-                keys_config_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(keys_config_path, 'w', encoding='utf-8') as f:
-                    json.dump(existing_keys, f, ensure_ascii=False, indent=2)
-            
-            return jsonify({'success': True})
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/game/minecraft/start', methods=['POST'])
-def start_minecraft_game():
-    """启动 Minecraft 游戏"""
-    try:
-        bat_file = PROJECT_ROOT / 'live-2d' / 'GAME' / 'Minecraft' / '开启游戏终端.bat'
-        
-        if not bat_file.exists():
-            return jsonify({
-                'success': False,
-                'error': '启动脚本不存在：开启游戏终端.bat'
-            }), 404
-        
-        # 启动 bat 文件
-        game_dir = PROJECT_ROOT / 'live-2d' / 'GAME' / 'Minecraft'
-        subprocess.Popen(
-            ['cmd', '/c', 'start', 'cmd', '/k', str(bat_file)],
-            cwd=str(game_dir),
-            creationflags=subprocess.CREATE_NEW_CONSOLE
-        )
-        
-        return jsonify({'success': True, 'message': 'Minecraft 游戏已启动'})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
 @app.route('/api/logs/<log_type>')
 def get_logs(log_type):
-    """获取指定类型的日志"""
+    """获取指定类型的日志（优化版：只读取最后 50 行）"""
     try:
         log_file = PROJECT_ROOT / 'live-2d' / 'runtime.log'
         if not log_file.exists():
             return jsonify({'logs': [], 'error': '日志文件不存在'})
-        
-        # 读取最后 100 行日志
+
+        # 读取最后 50 行日志（减少行数以提高响应速度）
         try:
             with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = f.readlines()
-                last_lines = lines[-100:] if len(lines) > 100 else lines
-                
+                # 使用 deque 高效读取最后 N 行
+                from collections import deque
+                last_lines = deque(f, maxlen=100)
+
                 # 根据日志类型过滤
                 logs = []
                 for line in last_lines:
                     line = line.strip()
                     if line:
                         is_tool_log = '[TOOL]' in line
-                        # 如果是工具日志类型，只保留包含 [TOOL] 的行
-                        # 如果是桌宠日志类型，保留不包含 [TOOL] 的行
                         if log_type == 'tool' and is_tool_log:
                             logs.append(line)
                         elif log_type == 'pet' and not is_tool_log:
                             logs.append(line)
-                
+
                 return jsonify({'logs': logs})
         except Exception as e:
             return jsonify({'logs': [], 'error': str(e)})
@@ -1361,13 +1387,13 @@ def tail_logs(log_type):
         log_file = PROJECT_ROOT / 'live-2d' / 'runtime.log'
         if not log_file.exists():
             return jsonify({'logs': [], 'error': '日志文件不存在'})
-        
-        # 读取最后 10 行日志
+
+        # 读取最后 10 行日志（使用 deque 高效读取）
         try:
+            from collections import deque
             with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = f.readlines()
-                last_lines = lines[-10:] if len(lines) > 10 else lines
-                
+                last_lines = deque(f, maxlen=10)
+
                 # 根据日志类型过滤
                 logs = []
                 for line in last_lines:
@@ -1378,7 +1404,7 @@ def tail_logs(log_type):
                             logs.append(line)
                         elif log_type == 'pet' and not is_tool_log:
                             logs.append(line)
-                
+
                 return jsonify({'logs': logs})
         except Exception as e:
             return jsonify({'logs': [], 'error': str(e)})
@@ -1619,24 +1645,49 @@ def apply_prompt():
 
 @app.route('/api/market/tools/download', methods=['POST'])
 def download_tool():
-    """下载工具"""
+    """下载工具到 mcp/tools 目录"""
     try:
         data = request.get_json()
         tool_name = data.get('tool_name', '')
         tool_url = data.get('download_url', '')
-        
+
         if not tool_name or not tool_url:
             return jsonify({'success': False, 'error': '缺少参数'}), 400
-        
-        # 下载工具文件到 server-tools 目录
+
+        # 下载工具文件到 mcp/tools 目录
         import urllib.request
-        server_tools_path = PROJECT_ROOT / 'live-2d' / 'server-tools'
-        server_tools_path.mkdir(parents=True, exist_ok=True)
-        
-        file_path = server_tools_path / f'{tool_name}.js'
-        urllib.request.urlretrieve(tool_url, file_path)
-        
-        return jsonify({'success': True, 'message': f'工具 {tool_name} 已下载'})
+        import urllib.error
+
+        mcp_tools_path = PROJECT_ROOT / 'live-2d' / 'mcp' / 'tools'
+        mcp_tools_path.mkdir(parents=True, exist_ok=True)
+
+        file_path = mcp_tools_path / f'{tool_name}.js'
+
+        # 先检查 URL 是否可访问，并验证返回内容
+        req = urllib.request.Request(tool_url, headers={'User-Agent': 'Mozilla/5.0'})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                # 检查 Content-Type
+                content_type = response.headers.get('Content-Type', '')
+                if 'text/html' in content_type:
+                    return jsonify({'success': False, 'error': '下载链接返回 HTML 页面，请检查 URL 是否正确'}), 500
+
+                # 读取内容
+                content = response.read()
+
+                # 检查内容是否以 HTML 开头
+                if content.startswith(b'<!DOCTYPE') or content.startswith(b'<!doctype') or content.startswith(b'<html'):
+                    return jsonify({'success': False, 'error': '下载内容为 HTML 格式，请检查 URL 是否正确'}), 500
+
+                # 写入文件
+                with open(file_path, 'wb') as f:
+                    f.write(content)
+        except urllib.error.HTTPError as e:
+            return jsonify({'success': False, 'error': f'下载失败：HTTP {e.code} {e.reason}'}), 500
+        except urllib.error.URLError as e:
+            return jsonify({'success': False, 'error': f'下载失败：网络错误 - {e.reason}'}), 500
+
+        return jsonify({'success': True, 'message': f'工具 {tool_name} 已下载到 mcp/tools 目录'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -1648,18 +1699,43 @@ def download_fc_tool():
         data = request.get_json()
         tool_name = data.get('tool_name', '')
         tool_url = data.get('download_url', '')
-        
+
         if not tool_name or not tool_url:
             return jsonify({'success': False, 'error': '缺少参数'}), 400
-        
+
         # 下载工具文件到 server-tools 目录
         import urllib.request
+        import urllib.error
+        
         server_tools_path = PROJECT_ROOT / 'live-2d' / 'server-tools'
         server_tools_path.mkdir(parents=True, exist_ok=True)
-        
+
         file_path = server_tools_path / f'{tool_name}.js'
-        urllib.request.urlretrieve(tool_url, file_path)
         
+        # 先检查 URL 是否可访问，并验证返回内容
+        req = urllib.request.Request(tool_url, headers={'User-Agent': 'Mozilla/5.0'})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as response:
+                # 检查 Content-Type
+                content_type = response.headers.get('Content-Type', '')
+                if 'text/html' in content_type:
+                    return jsonify({'success': False, 'error': '下载链接返回 HTML 页面，请检查 URL 是否正确'}), 500
+                
+                # 读取内容
+                content = response.read()
+                
+                # 检查内容是否以 HTML 开头
+                if content.startswith(b'<!DOCTYPE') or content.startswith(b'<!doctype') or content.startswith(b'<html'):
+                    return jsonify({'success': False, 'error': '下载内容为 HTML 格式，请检查 URL 是否正确'}), 500
+                
+                # 写入文件
+                with open(file_path, 'wb') as f:
+                    f.write(content)
+        except urllib.error.HTTPError as e:
+            return jsonify({'success': False, 'error': f'下载失败：HTTP {e.code} {e.reason}'}), 500
+        except urllib.error.URLError as e:
+            return jsonify({'success': False, 'error': f'下载失败：网络错误 - {e.reason}'}), 500
+
         return jsonify({'success': True, 'message': f'FC 工具 {tool_name} 已下载'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

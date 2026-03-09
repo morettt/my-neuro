@@ -2,9 +2,37 @@
 
 > 本文档旨在帮助新加入的开发者（包括 AI 助手）快速了解 My Neuro WebUI 项目的结构、功能和开发进度。
 
-**文档版本**: v1.8.2
-**最后更新**: 2026-03-06
-**项目版本**: v1.8.2
+**文档版本**: v1.9.0  
+**最后更新**: 2026-03-09  
+**项目版本**: v1.9.0
+
+---
+
+## 最新更新 (v1.9.0 - 2026-03-09)
+
+### 重大变更
+
+**1. 工具屋完全重建**
+- 四列响应式布局
+- 工具状态内联显示在卡片右上角
+- 信息显示规则：卡片显示名称 + 简介，展开显示 `name: description`
+
+**2. 配置系统重构**
+- 简化 `loadConfigs()` 只保留 LLM 配置
+- 添加 `_setVal()` 和 `_setChk()` 安全函数
+- 实现 2 秒配置轮询（测试用）
+
+**3. 问题修复**
+- 删除未定义函数调用
+- DOM 元素 null 检查
+- 配置重复加载问题
+
+### 已知问题
+
+| 问题 | 状态 | 可能原因 |
+|------|------|----------|
+| 复选框反复跳动 | ⚠️ 调查中 | 配置轮询与用户操作冲突 |
+| 部分配置项无反应 | ⚠️ 调查中 | 前后端字段名不匹配 |
 
 ---
 
@@ -19,9 +47,10 @@
 7. [服务管理逻辑](#服务管理逻辑)
 8. [日志系统](#日志系统)
 9. [配置管理](#配置管理)
-10. [注意事项](#注意事项)
-11. [常见问题](#常见问题)
-12. [开发待办](#开发待办)
+10. [开发规范](#开发规范)
+11. [注意事项](#注意事项)
+12. [常见问题](#常见问题)
+13. [开发待办](#开发待办)
 
 ---
 
@@ -322,14 +351,41 @@ function startMoodPolling() {
 | `/api/settings/chat` | GET/POST | 对话设置 |
 | `/api/settings/voice` | GET/POST | 声音/云端配置 |
 | `/api/settings/bilibili` | GET/POST | 直播设置 |
-| `/api/settings/game` | GET/POST | 游戏设置 |
 | `/api/settings/ui` | GET/POST | UI 设置 |
 | `/api/settings/autochat` | GET/POST | 主动对话 |
 | `/api/settings/mood-chat` | GET/POST | 动态主动对话 |
 | `/api/settings/advanced` | GET/POST | 高级设置 |
 | `/api/settings/tools` | GET/POST | 工具设置 |
 | `/api/settings/current-model` | POST | 切换模型 |
-| `/api/settings/minecraft` | GET/POST | Minecraft 配置 |
+| `/api/settings/dialog` | GET/POST | 对话配置（新增） |
+
+### 插件管理（v1.6+ 更新）
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/plugins/list` | GET | 获取插件列表（自动扫描） |
+| `/api/plugins/<name>/toggle` | POST | 切换插件启用状态 |
+| `/api/plugins/<name>/open-config` | POST | 打开插件配置目录 |
+| `/api/market/plugins` | GET | 获取插件广场列表 |
+| `/api/market/plugins/download` | POST | 下载插件 |
+
+**插件启用逻辑变更** (v1.6+)：
+- 改用 `enabled_plugins.json` 管理启用状态
+- 格式：`{"plugins": ["built-in/auto-chat", "community/check-in"]}`
+- 不再使用 `config.json` 的 `plugins.{name}.enabled` 字段
+
+---
+
+### 已删除的 API（v1.6）
+
+以下 API 已删除，因为 Minecraft 已改为插件：
+
+| 端点 | 原功能 | 替代方案 |
+|------|--------|---------|
+| `/api/settings/game` | 游戏设置 | 通过 minecraft 插件管理 |
+| `/api/settings/minecraft` | Minecraft 配置 | 通过 minecraft 插件管理 |
+| `/api/game/minecraft/start` | 启动 Minecraft | 通过 minecraft 插件管理 |
+| `/api/game/minecraft/download` | 下载 Minecraft | 通过 minecraft 插件管理 | |
 
 ### 日志系统
 
@@ -467,6 +523,138 @@ service_pids = {}       # 状态标记 {service: True/False}
 
 ---
 
+## 配置项说明（v1.6 更新）
+
+### WebUI 中缺失的配置项
+
+以下配置项存在于 `config.json` 中，但 WebUI 暂无对应配置界面：
+
+| 配置路径 | 类型 | 默认值 | 作用说明 |
+|---------|------|--------|---------|
+| `tools.auto_reload` | boolean | `false` | 工具自动重载：启用后，工具文件变化时自动重新加载 |
+| `mcp.config_path` | string | `"./mcp/mcp_config.json"` | MCP 配置文件路径 |
+| `mcp.startup_timeout` | number | `30000` | MCP 服务器启动超时时间（毫秒） |
+| `mcp.auto_start_servers` | boolean | `true` | 是否自动启动 MCP 服务器 |
+| `subtitle_labels.enabled` | boolean | `true` | 是否启用字幕标签显示 |
+| `ui.auto_show_chat_on_text_mode` | boolean | `true` | 文字模式下自动显示聊天框 |
+| `ui.model_position` | object | `{x, y, remember_position}` | Live2D 模型位置记忆 |
+| `rag.enabled` | boolean | `true` | RAG 服务启用开关（服务卡片可控制） |
+| `rag.url` | string | `"http://127.0.0.1:8002/ask"` | RAG 服务地址 |
+| `bert.enabled` | boolean | `true` | BERT 服务启用开关（服务卡片可控制） |
+| `bert.url` | string | `"http://127.0.0.1:6007/classify"` | BERT 服务地址 |
+
+### 插件相关配置
+
+| 配置路径 | 类型 | 作用说明 |
+|---------|------|---------|
+| `plugins.auto_chat.enabled` | boolean | 自动对话插件启用状态（已迁移至 enabled_plugins.json） |
+| `plugins.diary.enabled` | boolean | AI 日记插件启用状态（已迁移至 enabled_plugins.json） |
+| `plugins.memos.enabled` | boolean | MemOS 插件启用状态（已迁移至 enabled_plugins.json） |
+| `plugins.mood_chat.enabled` | boolean | 心情对话插件启用状态（已迁移至 enabled_plugins.json） |
+| `plugins.context_compressor.enabled` | boolean | 上下文压缩插件启用状态 |
+| `plugins.translation.enabled` | boolean | 翻译功能插件启用状态 |
+
+**注意** (v1.6+)：插件启用状态已迁移到 `enabled_plugins.json`，格式为：
+```json
+{
+  "plugins": [
+    "built-in/auto-chat",
+    "built-in/minecraft",
+    "community/check-in"
+  ]
+}
+```
+
+---
+
+## 开发规范
+
+### 1. DOM 操作安全
+
+**必须使用安全函数**：
+```javascript
+// ✅ 正确
+_setVal('api-key', value);
+_setChk('tts-enabled', true);
+
+// ❌ 错误 - 可能导致 null 错误
+document.getElementById('api-key').value = value;
+```
+
+**安全函数定义**：
+```javascript
+// 安全设置元素值（仅在元素未聚焦时设置）
+function _setVal(id, value) { 
+    const el = document.getElementById(id); 
+    if (el && document.activeElement !== el) el.value = value; 
+}
+function _setChk(id, value) { 
+    const el = document.getElementById(id); 
+    if (el) el.checked = value; 
+}
+```
+
+### 2. 配置加载规范
+
+**每个配置项只能由一个函数加载**，避免重复：
+
+```javascript
+// ✅ 正确 - loadAllSettings 统一调度
+async function loadAllSettings() {
+    await loadConfigs();
+    await loadBasicConfig();
+    await loadDialogConfig();
+    await loadCloudSettings();
+    await loadUISettings();
+}
+
+// ❌ 错误 - loadConfigs 内部不应调用其他加载函数
+async function loadConfigs() {
+    await loadBasicConfig();  // 会导致重复加载！
+}
+```
+
+### 3. 配置项命名规范
+
+**前端 ID 与后端字段映射**：
+- 前端使用 kebab-case：`tts-enabled`, `show-chat-box`
+- 后端使用 snake_case：`tts_enabled`, `show_chat_box`
+
+**映射规则**：
+```javascript
+// 前端 → 后端
+'tts-enabled' → tts_enabled
+'show-chat-box' → show_chat_box
+
+// 后端 → 前端
+{ tts_enabled: true } → document.getElementById('tts-enabled').checked = true
+```
+
+### 4. 工具屋开发规范
+
+**工具文件结构**：
+```javascript
+/**
+ * 工具显示名称
+ */
+// 或
+module.exports = {
+    name: "tool_name",
+    description: "工具详细描述"
+};
+```
+
+**描述提取优先级**：
+1. 优先从 JS 代码中提取 `name:` 和 `description:` 字段
+2. 回退从 `/** ... */` 注释中提取第一行
+
+**前端显示规则**：
+- **卡片标题**：`tool.name`（如 `click_tool`）
+- **卡片简介**：`tool.short_desc`（注释第一行，如 `点击工具`）
+- **展开详情**：`tool.name + ': ' + tool.description`
+
+---
+
 ## 注意事项
 
 ### 1. 编码问题
@@ -534,54 +722,22 @@ def save_config(config):
 
 ---
 
-## 常见问题
-
-### Q1: 服务启动后显示"服务未运行"
-
-**原因**: `service_pids` 标记未正确设置
-
-**解决**: 检查 `start_service()` 中是否设置 `service_pids[service] = True`
-
-### Q2: 停止服务时报错"服务未运行"
-
-**原因**: `is_service_running()` 检测逻辑问题
-
-**解决**: 使用 `tasklist` 验证进程是否存在
-
-### Q3: 日志不同步
-
-**原因**: 前端添加了虚拟日志
-
-**解决**: 移除前端自动添加的日志，完全同步 `runtime.log`
-
-### Q4: 批处理文件乱码
-
-**原因**: UTF-8 编码与 cmd GBK 编码冲突
-
-**解决**: 使用英文或 ANSI 编码保存
-
-### Q5: Flask 路由重复
-
-**原因**: 同一个 `@app.route` 装饰器使用了多次
-
-**解决**: 确保每个端点只定义一次
-
----
-
 ## 开发待办
 
-### 高优先级
+### 高优先级（当前任务）
 
-- [x] **ASR/TTS 日志集成**: 已保留 API 接口，暂不需要集成进 WebUI
-- [x] **错误提示优化**: 已改进（显示详细错误信息和成功/失败统计）
-- [x] **进程自动清理**: 使用 PowerShell + taskkill /T 终止进程树
-- [ ] **配置备份/恢复**: 支持配置文件导出导入
+- [ ] **修复复选框跳动问题** - 配置轮询导致复选框自动切换状态
+- [ ] **验证所有配置项保存功能** - 确保每个复选框都能正常保存
+- [ ] **添加配置保存成功提示** - 用户操作反馈
+- [ ] **优化配置轮询间隔** - 从 2 秒调整为 5-10 秒
+- [ ] **清理未使用的 API 调用** - 减少不必要的网络请求
 
 ### 中优先级
 
 - [ ] **服务启动超时检测**: 检测服务启动失败的情况
 - [ ] **日志导出功能**: 支持下载日志文件
 - [ ] **动作管理拖拽**: 实现动作文件的拖拽排序（当前使用文件选择）
+- [ ] **配置备份/恢复**: 支持配置文件导出导入
 
 ### 低优先级
 
