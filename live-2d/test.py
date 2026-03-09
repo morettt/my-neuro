@@ -339,7 +339,7 @@ class CustomTitleBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedHeight(55)
+        self.setFixedHeight(65)
         self.setStyleSheet("""
            CustomTitleBar {
                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(235, 233, 225, 255), stop:1 rgba(230, 228, 220, 255));
@@ -359,7 +359,7 @@ class CustomTitleBar(QWidget):
         self.title_label.setStyleSheet("""
            QLabel {
                color: rgb(114, 95, 77);
-               font-size: 12px;
+               font-size: 24px;
                font-family: "Microsoft YaHei";
                font-weight: bold;
                background-color: transparent;
@@ -374,9 +374,9 @@ class CustomTitleBar(QWidget):
            QPushButton {
                background-color: transparent;
                border: none;
-               width: 45px;
-               height: 40px;
-               font-size: 14px;
+               width: 55px;
+               height: 50px;
+               font-size: 22px;
                font-weight: bold;
                color: rgb(114, 95, 77);
            }
@@ -391,9 +391,9 @@ class CustomTitleBar(QWidget):
            QPushButton {
                background-color: transparent;
                border: none;
-               width: 45px;
-               height: 40px;
-               font-size: 14px;
+               width: 55px;
+               height: 50px;
+               font-size: 22px;
                font-weight: bold;
                color: rgb(114, 95, 77);
            }
@@ -492,6 +492,14 @@ class set_pyqt(QWidget):
         self.resize_start_geometry = None
         self.edge_margin = 10
 
+        # 字体缩放相关
+        self._base_size = None
+        self._base_font_entries = []   # [(widget, base_point_size), ...]
+        self._current_scale = 1.0
+        self._resize_debounce = QTimer()
+        self._resize_debounce.setSingleShot(True)
+        self._resize_debounce.timeout.connect(self._apply_font_scale)
+
         # 新增分页变量
         self.current_page = 0
         self.items_per_page = 15
@@ -568,6 +576,8 @@ class set_pyqt(QWidget):
 
         # 添加自定义标题栏
         self.title_bar = CustomTitleBar(self)
+        version = self.config.get('version', '')
+        self.title_bar.title_label.setText(f'My-Neuro  {version}' if version else 'My-Neuro')
         container_layout.addWidget(self.title_bar)
 
         # 添加原始UI
@@ -631,6 +641,9 @@ class set_pyqt(QWidget):
 
         # 启动心情分定时器
         self.mood_timer.start()
+
+        # 延迟捕获基准字体（等待所有控件渲染完毕）
+        QTimer.singleShot(300, self._capture_base_fonts)
 
     def closeEvent(self, event):
         """处理窗口关闭事件"""
@@ -2532,6 +2545,17 @@ class set_pyqt(QWidget):
         # 这些方法保留，但主要逻辑在eventFilter中
         super().mouseReleaseEvent(event)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self._base_size:
+            self._resize_debounce.start(80)  # 80ms 防抖，避免拖拽时频繁刷新
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        # 最大化 ↔ 还原切换时 resizeEvent 在 Windows 上不总触发，这里兜底
+        if event.type() == QEvent.WindowStateChange and self._base_size:
+            self._resize_debounce.start(150)
+
     def do_resize(self, global_pos):
         """执行窗口调整大小"""
         if not self.resize_start_pos or not self.resize_start_geometry:
@@ -3481,10 +3505,36 @@ class set_pyqt(QWidget):
         self._detail_edits = {}
         self._detail_current_info = None
 
+    def _capture_base_fonts(self):
+        """记录当前所有子控件的字体大小，作为缩放基准"""
+        self._base_size = (self.width(), self.height())
+        self._base_font_entries = []
+        for w in self.findChildren(QWidget):
+            pt = w.font().pointSize()
+            if pt > 0:
+                self._base_font_entries.append((w, pt))
+
+    def _apply_font_scale(self):
+        """按当前窗口尺寸缩放所有已捕获控件的字体"""
+        if not self._base_size:
+            return
+        bw, bh = self._base_size
+        self._current_scale = min(self.width() / bw, self.height() / bh)
+        alive = []
+        for w, base_pt in self._base_font_entries:
+            try:
+                f = w.font()
+                f.setPointSize(max(7, round(base_pt * self._current_scale)))
+                w.setFont(f)
+                alive.append((w, base_pt))
+            except RuntimeError:
+                pass  # 控件已被销毁，跳过
+        self._base_font_entries = alive
+
     def _ui_font(self, size=10, bold=False):
         f = self.font()
         f.setFamily('微软雅黑')
-        f.setPointSize(size)
+        f.setPointSize(max(7, round(size * self._current_scale)))
         f.setBold(bold)
         return f
 
@@ -3761,22 +3811,17 @@ class set_pyqt(QWidget):
         container = QVBoxLayout()
         container.setSpacing(3)
 
-        row = QHBoxLayout()
-        row.setSpacing(10)
-
         lbl = QLabel(title + '：')
         lbl.setFont(self._ui_font(bold=True))
-        lbl.setFixedWidth(150)
         lbl.setStyleSheet('color: #2c3e50; border: none; background: transparent;')
-        row.addWidget(lbl)
+        lbl.setWordWrap(True)
+        container.addWidget(lbl)
 
         if field_type == 'bool':
             widget = QCheckBox()
             widget.setChecked(bool(current_value))
             self._detail_edits[edit_key] = widget
-            row.addWidget(widget)
-            row.addStretch()
-            container.addLayout(row)
+            container.addWidget(widget)
         elif field_type == 'text':
             widget = QTextEdit()
             widget.setFont(self._ui_font())
@@ -3784,14 +3829,12 @@ class set_pyqt(QWidget):
             widget.setMinimumHeight(80)
             widget.setMaximumHeight(120)
             self._detail_edits[edit_key] = widget
-            container.addLayout(row)
             container.addWidget(widget)
         else:
             widget = QLineEdit(str(current_value) if current_value is not None else '')
             widget.setFont(self._ui_font())
             self._detail_edits[edit_key] = widget
-            row.addWidget(widget)
-            container.addLayout(row)
+            container.addWidget(widget)
 
         if description:
             desc_lbl = QLabel(description)
@@ -5521,8 +5564,9 @@ class set_pyqt(QWidget):
             # API KEY输入框列表
             api_key_fields = [
                 self.ui.lineEdit,  # 主要LLM API KEY
-                self.ui.lineEdit_translation_api_key,  # 同传API KEY
             ]
+            if hasattr(self.ui, 'lineEdit_translation_api_key'):
+                api_key_fields.append(self.ui.lineEdit_translation_api_key)  # 同传API KEY
 
             for line_edit in api_key_fields:
                 if line_edit:
