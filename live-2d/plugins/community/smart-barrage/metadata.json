@@ -1,0 +1,10 @@
+{
+  "name": "smart-barrage",
+  "displayName": "智能弹幕过滤",
+  "version": "1.0.0",
+  "author": "community",
+  "description": "批量收集弹幕，由 LLM 自动挑选值得回复的内容；带 # 前缀的弹幕可立即点名回复",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

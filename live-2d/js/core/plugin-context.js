@@ -162,12 +162,16 @@ class PluginContext {
 
     /**
      * 让 AI 主动说一句话（走完整 TTS 流程）
-     * @param {string} text
+     * @param {string|Array} content - 纯文本字符串，或 OpenAI 多模态数组
+     *   多模态示例：[
+     *     { type: 'text', text: '你看到了什么？' },
+     *     { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,...', detail: 'low' } }
+     *   ]
      */
-    async sendMessage(text) {
+    async sendMessage(content) {
         const voiceChat = global.voiceChat;
         if (!voiceChat) return;
-        await voiceChat.sendToLLM(text);
+        await voiceChat.sendToLLM(content);
     }
 
     // ===== 配置 =====

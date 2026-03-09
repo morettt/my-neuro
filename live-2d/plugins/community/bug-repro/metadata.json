@@ -1,7 +1,0 @@
-{
-  "name": "bug-repro",
-  "version": "1.0.0",
-  "description": "复现 storage.get 带 default 参数的 bug",
-  "lang": "python",
-  "main": "index.py"
-}

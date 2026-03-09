@@ -92,9 +92,13 @@ class LLMHandler {
                 }
 
                 // 检查是否需要截图（只在第一次尝试且未重试过时）
+                // prompt 可能是 string 或多模态数组，取文本部分用于截图判断
+                const promptText = Array.isArray(prompt)
+                    ? (prompt.find(p => p.type === 'text')?.text ?? '')
+                    : prompt;
                 let screenshotBase64 = null;
                 if (isFirstAttempt && !hasRetriedWithoutImage) {
-                    const needScreenshot = await voiceChat.shouldTakeScreenshot(prompt);
+                    const needScreenshot = await voiceChat.shouldTakeScreenshot(promptText);
 
                     if (needScreenshot) {
                         try {
@@ -160,11 +164,15 @@ class LLMHandler {
                         }
 
                         if (lastUserMsgIndex !== -1) {
-                            console.log(`📸 将截图附加到消息索引 ${lastUserMsgIndex}，内容: ${prompt.substring(0, 50)}...`);
+                            console.log(`📸 将截图附加到消息索引 ${lastUserMsgIndex}，内容: ${promptText.substring(0, 50)}...`);
+                            // prompt 若已是多模态数组则直接追加图片，否则包装成数组
+                            const existingContent = Array.isArray(prompt)
+                                ? prompt
+                                : [{ 'type': 'text', 'text': prompt }];
                             messagesForAPI[lastUserMsgIndex] = {
                                 'role': 'user',
                                 'content': [
-                                    { 'type': 'text', 'text': prompt },
+                                    ...existingContent,
                                     { 'type': 'image_url', 'image_url': { 'url': `data:image/jpeg;base64,${screenshotBase64}` } }
                                 ]
                             };
