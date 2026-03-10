@@ -461,10 +461,20 @@
         <div id="ui-settings" class="tab-content">
             <h3>Live2D 设置</h3>
             
+            <!-- 唱歌控制（移动到分选项卡之上） -->
+            <div class="section" style="margin-bottom: 20px;">
+                <h4>🎵 唱歌控制</h4>
+                <div class="action-buttons" style="display: flex; gap: 15px;">
+                    <button onclick="startSinging()" class="btn-start">🎵 开始唱歌</button>
+                    <button onclick="stopSinging()" class="btn-stop">🛑 停止唱歌</button>
+                </div>
+            </div>
+            
             <!-- 子选项卡 -->
             <div class="sub-tabs">
                 <button class="sub-tab-button active" onclick="switchUISubTab('ui')">UI 设置</button>
                 <button class="sub-tab-button" onclick="switchUISubTab('motion')">动作</button>
+                <button class="sub-tab-button" onclick="switchUISubTab('expression')">表情</button>
             </div>
             
             <!-- UI 设置面板 -->
@@ -499,10 +509,7 @@
             <!-- 动作管理面板 -->
             <div id="motion-sub-panel" class="ui-sub-panel">
                 <div class="section">
-                    <h4>唱歌控制</h4>
                     <div class="action-buttons" style="display: flex; gap: 15px; margin-bottom: 20px;">
-                        <button onclick="startSinging()" class="btn-start">开始唱歌</button>
-                        <button onclick="stopSinging()" class="btn-stop">停止唱歌</button>
                         <button onclick="resetMotion()" class="btn-restart">一键复位</button>
                     </div>
                     
@@ -570,6 +577,76 @@
                     </div>
                     
                     <button onclick="saveMotionConfig()" class="btn-start" style="margin-top: 20px;">更新配置</button>
+                </div>
+            </div>
+            
+            <!-- 表情管理面板 -->
+            <div id="expression-sub-panel" class="ui-sub-panel">
+                <div class="section">
+                    <h4>😊 表情控制</h4>
+                    <div class="action-buttons" style="display: flex; gap: 15px; margin-bottom: 20px;">
+                        <button onclick="resetExpression()" class="btn-restart">🔄 一键还原表情</button>
+                    </div>
+                    
+                    <h4>情绪表情绑定区域</h4>
+                    <p style="font-size: 12px; color: #888; margin-bottom: 10px;">拖拽下方表情按钮到对应情绪区域进行绑定</p>
+                    <div class="expression-categories-grid" id="emotion-expressions-grid">
+                        <div class="emotion-category" data-emotion="开心">
+                            <div class="emotion-category-header">
+                                <span>😊 开心</span>
+                            </div>
+                            <div class="emotion-expression-actions" data-emotion="开心">
+                                <div class="empty-tip">拖拽表情到此绑定</div>
+                            </div>
+                        </div>
+                        <div class="emotion-category" data-emotion="生气">
+                            <div class="emotion-category-header">
+                                <span>😠 生气</span>
+                            </div>
+                            <div class="emotion-expression-actions" data-emotion="生气">
+                                <div class="empty-tip">拖拽表情到此绑定</div>
+                            </div>
+                        </div>
+                        <div class="emotion-category" data-emotion="难过">
+                            <div class="emotion-category-header">
+                                <span>😢 难过</span>
+                            </div>
+                            <div class="emotion-expression-actions" data-emotion="难过">
+                                <div class="empty-tip">拖拽表情到此绑定</div>
+                            </div>
+                        </div>
+                        <div class="emotion-category" data-emotion="惊讶">
+                            <div class="emotion-category-header">
+                                <span>😲 惊讶</span>
+                            </div>
+                            <div class="emotion-expression-actions" data-emotion="惊讶">
+                                <div class="empty-tip">拖拽表情到此绑定</div>
+                            </div>
+                        </div>
+                        <div class="emotion-category" data-emotion="害羞">
+                            <div class="emotion-category-header">
+                                <span>😳 害羞</span>
+                            </div>
+                            <div class="emotion-expression-actions" data-emotion="害羞">
+                                <div class="empty-tip">拖拽表情到此绑定</div>
+                            </div>
+                        </div>
+                        <div class="emotion-category" data-emotion="俏皮">
+                            <div class="emotion-category-header">
+                                <span>😜 俏皮</span>
+                            </div>
+                            <div class="emotion-expression-actions" data-emotion="俏皮">
+                                <div class="empty-tip">拖拽表情到此绑定</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h4 style="margin-top: 30px;">可用表情（点击预览，拖拽到上方情绪区域绑定）</h4>
+                    <div class="available-expressions" id="available-expressions">
+                        <div class="empty-tip">加载表情中...</div>
+                    </div>
+                    
+                    <button onclick="saveExpressionConfig()" class="btn-start" style="margin-top: 20px;">更新表情配置</button>
                 </div>
             </div>
         </div>

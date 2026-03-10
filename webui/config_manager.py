@@ -491,3 +491,316 @@ def reset_model_position():
         return jsonify({'error': '保存失败'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ============ Live2D 动作管理 API ============
+
+@config_bp.route('/api/live2d/motions/uncategorized', methods=['GET'])
+def get_uncategorized_motions():
+    """获取未分类的动作列表"""
+    try:
+        import os
+        import glob
+        
+        motions = []
+        live2d_path = PROJECT_ROOT / 'live-2d'
+        
+        # 获取当前角色
+        config = load_config()
+        current_model = '肥牛'  # 默认角色
+        
+        # 尝试从 main.js 获取当前角色
+        main_js_path = live2d_path / 'main.js'
+        if main_js_path.exists():
+            import re
+            content = main_js_path.read_text(encoding='utf-8')
+            match = re.search(r"const priorityFolders = \['([^']+)'", content)
+            if match:
+                current_model = match.group(1)
+        
+        # 扫描动作文件
+        motions_dir = live2d_path / '2D' / current_model / 'motions'
+        if motions_dir.exists():
+            motion_files = glob.glob(str(motions_dir / '*.motion3.json'))
+            motions = [os.path.basename(f) for f in motion_files]
+        
+        return jsonify({'success': True, 'motions': motions})
+    except Exception as e:
+        logger.error(f'获取动作列表失败：{str(e)}')
+        return jsonify({'success': True, 'motions': []})
+
+
+@config_bp.route('/api/live2d/motions/save', methods=['POST'])
+def save_motions_config():
+    """保存动作配置"""
+    try:
+        data = request.get_json()
+        categories = data.get('categories', [])
+        
+        # 读取现有配置
+        live2d_path = PROJECT_ROOT / 'live-2d'
+        config_path = live2d_path / 'emotion_actions.json'
+        
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        else:
+            config = {}
+        
+        # 更新配置（这里简化处理，实际需要更复杂的逻辑）
+        for category in categories:
+            emotion = category.get('emotion', '')
+            motions = category.get('motions', [])
+            if emotion:
+                if emotion not in config:
+                    config[emotion] = {'emotion_actions': {}}
+                config[emotion]['emotion_actions'][category.get('name', emotion)] = motions
+        
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        
+        return jsonify({'success': True, 'message': '动作配置已保存'})
+    except Exception as e:
+        logger.error(f'保存动作配置失败：{str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+
+@config_bp.route('/api/live2d/motion/reset', methods=['POST'])
+def reset_motion_config():
+    """重置动作配置"""
+    try:
+        # 重置到备份配置
+        live2d_path = PROJECT_ROOT / 'live-2d'
+        backup_path = live2d_path / 'character_backups.json'
+        config_path = live2d_path / 'emotion_actions.json'
+        
+        if backup_path.exists():
+            with open(backup_path, 'r', encoding='utf-8') as f:
+                backup = json.load(f)
+            
+            # 恢复配置
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(backup, f, ensure_ascii=False, indent=2)
+        
+        return jsonify({'success': True, 'message': '动作配置已重置'})
+    except Exception as e:
+        logger.error(f'重置动作配置失败：{str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+
+@config_bp.route('/api/live2d/motion/preview', methods=['POST'])
+def preview_motion():
+    """预览动作"""
+    try:
+        data = request.get_json()
+        motion = data.get('motion', '')
+        
+        # 通过 HTTP 请求发送到桌宠的控制接口
+        import requests
+        try:
+            response = requests.post(
+                'http://localhost:3002/control-motion',
+                json={'action': 'preview', 'motion': motion},
+                timeout=2
+            )
+            if response.status_code == 200:
+                return jsonify({'success': True, 'message': f'正在预览动作：{motion}'})
+        except:
+            pass
+        
+        return jsonify({'success': True, 'message': f'预览请求已发送：{motion}'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@config_bp.route('/api/live2d/singing/start', methods=['POST'])
+def start_singing():
+    """开始唱歌"""
+    try:
+        import requests
+        try:
+            response = requests.post(
+                'http://localhost:3002/control-motion',
+                json={'action': 'trigger_emotion', 'emotion_name': '唱歌'},
+                timeout=2
+            )
+            if response.status_code == 200:
+                return jsonify({'success': True, 'message': '已开始唱歌'})
+        except:
+            pass
+        
+        return jsonify({'success': True, 'message': '唱歌请求已发送'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@config_bp.route('/api/live2d/singing/stop', methods=['POST'])
+def stop_singing():
+    """停止唱歌"""
+    try:
+        import requests
+        try:
+            response = requests.post(
+                'http://localhost:3002/control-motion',
+                json={'action': 'trigger_emotion', 'emotion_name': '停止'},
+                timeout=2
+            )
+            if response.status_code == 200:
+                return jsonify({'success': True, 'message': '已停止唱歌'})
+        except:
+            pass
+        
+        return jsonify({'success': True, 'message': '停止请求已发送'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ============ Live2D 表情管理 API ============
+
+@config_bp.route('/api/live2d/expressions/config', methods=['GET'])
+def get_expression_config():
+    """获取表情配置"""
+    try:
+        import os
+        import glob
+        
+        live2d_path = PROJECT_ROOT / 'live-2d'
+        
+        # 获取当前角色
+        current_model = '肥牛'  # 默认角色
+        main_js_path = live2d_path / 'main.js'
+        if main_js_path.exists():
+            import re
+            content = main_js_path.read_text(encoding='utf-8')
+            match = re.search(r"const priorityFolders = \['([^']+)'", content)
+            if match:
+                current_model = match.group(1)
+        
+        # 读取表情配置
+        config_path = live2d_path / 'emotion_expressions.json'
+        expressions = {}
+        
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                expressions = config.get(current_model, {}).get('emotion_expressions', {})
+        
+        # 扫描可用表情文件
+        available = []
+        expressions_dir = live2d_path / '2D' / current_model / 'expressions'
+        if expressions_dir.exists():
+            expr_files = glob.glob(str(expressions_dir / '*.exp3.json'))
+            available = [os.path.basename(f).replace('.exp3.json', '') for f in expr_files]
+        
+        return jsonify({
+            'success': True,
+            'expressions': expressions,
+            'available_expressions': available
+        })
+    except Exception as e:
+        logger.error(f'获取表情配置失败：{str(e)}')
+        return jsonify({'success': True, 'expressions': {}, 'available_expressions': []})
+
+
+@config_bp.route('/api/live2d/expressions/save', methods=['POST'])
+def save_expressions_config():
+    """保存表情配置"""
+    try:
+        data = request.get_json()
+        expressions = data.get('expressions', {})
+        
+        live2d_path = PROJECT_ROOT / 'live-2d'
+        config_path = live2d_path / 'emotion_expressions.json'
+        
+        # 获取当前角色
+        current_model = '肥牛'
+        main_js_path = live2d_path / 'main.js'
+        if main_js_path.exists():
+            import re
+            content = main_js_path.read_text(encoding='utf-8')
+            match = re.search(r"const priorityFolders = \['([^']+)'", content)
+            if match:
+                current_model = match.group(1)
+        
+        # 读取现有配置
+        config = {}
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        
+        # 更新当前角色的表情配置
+        if current_model not in config:
+            config[current_model] = {}
+        config[current_model]['emotion_expressions'] = expressions
+        
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        
+        return jsonify({'success': True, 'message': '表情配置已保存'})
+    except Exception as e:
+        logger.error(f'保存表情配置失败：{str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+
+@config_bp.route('/api/live2d/expressions/reset', methods=['POST'])
+def reset_expressions_config():
+    """重置表情配置"""
+    try:
+        live2d_path = PROJECT_ROOT / 'live-2d'
+        backup_path = live2d_path / 'character_backups1.json'
+        config_path = live2d_path / 'emotion_expressions.json'
+        
+        # 获取当前角色
+        current_model = '肥牛'
+        main_js_path = live2d_path / 'main.js'
+        if main_js_path.exists():
+            import re
+            content = main_js_path.read_text(encoding='utf-8')
+            match = re.search(r"const priorityFolders = \['([^']+)'", content)
+            if match:
+                current_model = match.group(1)
+        
+        if backup_path.exists():
+            with open(backup_path, 'r', encoding='utf-8') as f:
+                backup = json.load(f)
+            
+            # 恢复当前角色的配置
+            if current_model in backup:
+                config = {}
+                if config_path.exists():
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        config = json.load(f)
+                
+                config[current_model] = backup[current_model]
+                
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    json.dump(config, f, ensure_ascii=False, indent=2)
+        
+        return jsonify({'success': True, 'message': '表情配置已重置'})
+    except Exception as e:
+        logger.error(f'重置表情配置失败：{str(e)}')
+        return jsonify({'error': str(e)}), 500
+
+
+@config_bp.route('/api/live2d/expression/preview', methods=['POST'])
+def preview_expression():
+    """预览表情"""
+    try:
+        data = request.get_json()
+        expression = data.get('expression', '')
+        
+        import requests
+        try:
+            response = requests.post(
+                'http://localhost:3002/control-expression',
+                json={'action': 'trigger_expression', 'expression_name': expression},
+                timeout=2
+            )
+            if response.status_code == 200:
+                return jsonify({'success': True, 'message': f'正在预览表情：{expression}'})
+        except:
+            pass
+        
+        return jsonify({'success': True, 'message': f'预览请求已发送：{expression}'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

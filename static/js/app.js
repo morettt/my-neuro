@@ -1735,6 +1735,15 @@ function switchUISubTab(tab) {
         panel.classList.remove('active');
     });
     document.getElementById(tab + '-sub-panel').classList.add('active');
+    
+    // 根据选项卡加载内容
+    if (tab === 'expression') {
+        // 切换到表情选项卡时加载表情配置
+        loadExpressionConfig();
+    } else if (tab === 'motion') {
+        // 切换到动作选项卡时加载所有动作（已分类 + 未分类）
+        loadAllMotions();
+    }
 }
 
 // 开始唱歌
@@ -1873,6 +1882,60 @@ async function loadUncategorizedMotions() {
     }
 }
 
+// 加载已分类动作到情绪分类区域
+async function loadCategorizedMotions() {
+    try {
+        const response = await fetch('/api/live2d/motions/categorized');
+        if (!response.ok) {
+            console.error('加载已分类动作失败:', response.status);
+            return;
+        }
+        
+        const data = await response.json();
+        
+        // 情绪名称映射（中文到英文）
+        const emotionMap = {
+            '开心': 'happy',
+            '生气': 'angry',
+            '难过': 'sad',
+            '惊讶': 'surprised',
+            '害羞': 'shy',
+            '俏皮': 'playful'
+        };
+        
+        // 遍历每个情绪分类
+        for (const [emotionName, motions] of Object.entries(data.categorized || {})) {
+            const englishEmotion = emotionMap[emotionName] || emotionName;
+            const container = document.querySelector(`.emotion-category-actions[data-emotion="${englishEmotion}"]`);
+            
+            if (container && motions && motions.length > 0) {
+                container.innerHTML = '';
+                motions.forEach(motion => {
+                    const motionItem = document.createElement('div');
+                    motionItem.className = 'motion-item';
+                    motionItem.innerHTML = `
+                        <span>${motion}</span>
+                        <div>
+                            <button onclick="previewMotionFromList('${motion}')" class="btn-sm">预览</button>
+                        </div>
+                    `;
+                    container.appendChild(motionItem);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('加载已分类动作失败:', error);
+    }
+}
+
+// 加载所有动作（已分类 + 未分类）
+async function loadAllMotions() {
+    await Promise.all([
+        loadCategorizedMotions(),
+        loadUncategorizedMotions()
+    ]);
+}
+
 // 预览列表中的动作
 async function previewMotionFromList(motionName) {
     try {
@@ -1920,6 +1983,248 @@ async function saveMotionConfig() {
         const result = await response.json();
         if (response.ok && result.success) {
             alert('动作配置已保存');
+        } else {
+            alert('保存失败：' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        alert('保存时出错：' + error.message);
+    }
+}
+
+// ============ Live2D 表情管理 ============
+
+// 表情配置缓存
+let expressionConfig = {};
+
+// 加载表情配置
+async function loadExpressionConfig() {
+    try {
+        const response = await fetch('/api/live2d/expressions/config');
+        if (response.ok) {
+            const data = await response.json();
+            expressionConfig = data.expressions || {};
+            renderExpressionConfig(expressionConfig);
+            renderAvailableExpressions(data.available_expressions || []);
+        }
+    } catch (error) {
+        console.error('加载表情配置失败:', error);
+        document.getElementById('available-expressions').innerHTML = 
+            '<div class="empty-tip">加载表情失败</div>';
+    }
+}
+
+// 渲染表情配置
+function renderExpressionConfig(config) {
+    const emotions = ['开心', '生气', '难过', '惊讶', '害羞', '俏皮'];
+    
+    emotions.forEach(emotion => {
+        const container = document.querySelector(`.emotion-expression-actions[data-emotion="${emotion}"]`);
+        if (!container) return;
+        
+        // 清空现有内容
+        container.innerHTML = '';
+        
+        const expressions = config[emotion] || [];
+        if (expressions.length > 0) {
+            expressions.forEach(expr => {
+                const item = createExpressionBindingItem(emotion, expr);
+                container.appendChild(item);
+            });
+        } else {
+            container.innerHTML = '<div class="empty-tip">拖拽表情到此绑定</div>';
+        }
+    });
+}
+
+// 创建表情绑定项
+function createExpressionBindingItem(emotion, expressionName) {
+    const item = document.createElement('div');
+    item.className = 'expression-binding-item';
+    item.innerHTML = `
+        <span>${expressionName}</span>
+        <button onclick="removeExpressionBinding('${emotion}', '${expressionName}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">删除</button>
+    `;
+    return item;
+}
+
+// 渲染可用表情列表
+function renderAvailableExpressions(expressions) {
+    const container = document.getElementById('available-expressions');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (expressions.length === 0) {
+        container.innerHTML = '<div class="empty-tip">暂无可用表情</div>';
+        return;
+    }
+    
+    expressions.forEach(expr => {
+        const btn = document.createElement('button');
+        btn.className = 'expression-button';
+        btn.textContent = expr;
+        btn.draggable = true;
+        btn.dataset.expression = expr;
+        
+        // 点击预览
+        btn.onclick = () => previewExpression(expr);
+        
+        // 拖拽开始
+        btn.ondragstart = (e) => {
+            e.dataTransfer.setData('text/plain', expr);
+            e.dataTransfer.setData('application/expression', expr);
+        };
+        
+        container.appendChild(btn);
+    });
+    
+    // 设置拖放区域
+    setupExpressionDropZones();
+}
+
+// 设置表情拖放区域
+function setupExpressionDropZones() {
+    const dropZones = document.querySelectorAll('.emotion-expression-actions');
+    
+    dropZones.forEach(zone => {
+        zone.ondragover = (e) => {
+            e.preventDefault();
+            zone.classList.add('drag-over');
+        };
+        
+        zone.ondragleave = () => {
+            zone.classList.remove('drag-over');
+        };
+        
+        zone.ondrop = (e) => {
+            e.preventDefault();
+            zone.classList.remove('drag-over');
+            
+            const expressionName = e.dataTransfer.getData('application/expression') || 
+                                   e.dataTransfer.getData('text/plain');
+            const emotion = zone.dataset.emotion;
+            
+            if (expressionName && emotion) {
+                bindExpressionToEmotion(emotion, expressionName);
+            }
+        };
+    });
+}
+
+// 绑定表情到情绪
+function bindExpressionToEmotion(emotion, expressionName) {
+    // 初始化该情绪的表情数组
+    if (!expressionConfig[emotion]) {
+        expressionConfig[emotion] = [];
+    }
+    
+    // 检查是否已存在
+    if (expressionConfig[emotion].includes(expressionName)) {
+        alert('该表情已绑定到此情绪');
+        return;
+    }
+    
+    // 添加表情
+    expressionConfig[emotion].push(expressionName);
+    
+    // 更新UI
+    const container = document.querySelector(`.emotion-expression-actions[data-emotion="${emotion}"]`);
+    if (container) {
+        const emptyTip = container.querySelector('.empty-tip');
+        if (emptyTip) {
+            emptyTip.remove();
+        }
+        
+        const item = createExpressionBindingItem(emotion, expressionName);
+        container.appendChild(item);
+    }
+    
+    addLog(`已将表情 "${expressionName}" 绑定到 ${emotion}`, 'success', 'system');
+}
+
+// 删除表情绑定
+function removeExpressionBinding(emotion, expressionName) {
+    if (expressionConfig[emotion]) {
+        const index = expressionConfig[emotion].indexOf(expressionName);
+        if (index > -1) {
+            expressionConfig[emotion].splice(index, 1);
+            
+            // 更新UI
+            const container = document.querySelector(`.emotion-expression-actions[data-emotion="${emotion}"]`);
+            if (container) {
+                const items = container.querySelectorAll('.expression-binding-item');
+                items.forEach(item => {
+                    if (item.querySelector('span').textContent === expressionName) {
+                        item.remove();
+                    }
+                });
+                
+                // 如果没有表情了，显示空提示
+                if (container.children.length === 0) {
+                    container.innerHTML = '<div class="empty-tip">拖拽表情到此绑定</div>';
+                }
+            }
+            
+            addLog(`已移除表情 "${expressionName}" 从 ${emotion}`, 'info', 'system');
+        }
+    }
+}
+
+// 预览表情
+async function previewExpression(expressionName) {
+    try {
+        const response = await fetch('/api/live2d/expression/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expression: expressionName })
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            addLog(`正在预览表情：${expressionName}`, 'success', 'system');
+        } else {
+            alert('预览失败：' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        alert('预览时出错：' + error.message);
+    }
+}
+
+// 一键还原表情
+async function resetExpression() {
+    if (!confirm('确定要还原表情配置吗？这将清除所有自定义绑定。')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/live2d/expressions/reset', {
+            method: 'POST'
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            addLog('表情配置已还原', 'success', 'system');
+            // 重新加载配置
+            await loadExpressionConfig();
+        } else {
+            alert('还原失败：' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        alert('还原时出错：' + error.message);
+    }
+}
+
+// 保存表情配置
+async function saveExpressionConfig() {
+    try {
+        const response = await fetch('/api/live2d/expressions/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expressions: expressionConfig })
+        });
+        
+        const result = await response.json();
+        if (response.ok && result.success) {
+            alert('表情配置已保存');
+            addLog('表情配置保存成功', 'success', 'system');
         } else {
             alert('保存失败：' + (result.error || '未知错误'));
         }

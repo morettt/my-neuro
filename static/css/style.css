@@ -715,3 +715,121 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
     display: block;
 }
 
+/* ============ 表情管理样式 ============ */
+
+.expression-categories-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+@media (max-width: 900px) {
+    .expression-categories-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .expression-categories-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.expression-category {
+    background: rgba(147, 112, 219, 0.1);
+    border-radius: 12px;
+    border: 2px solid rgba(147, 112, 219, 0.3);
+    padding: 15px;
+    min-height: 120px;
+}
+
+.expression-category-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: #9370DB;
+}
+
+.expression-category-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 60px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+}
+
+.expression-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, rgba(255, 218, 185, 0.3), rgba(255, 192, 203, 0.3));
+    border-radius: 6px;
+    font-size: 13px;
+    border: 1px solid rgba(255, 182, 193, 0.3);
+}
+
+.expression-item button {
+    margin-left: 8px;
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+.available-expressions {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+}
+
+.expression-btn {
+    padding: 10px 15px;
+    background: linear-gradient(135deg, rgba(255, 218, 185, 0.4), rgba(255, 192, 203, 0.4));
+    border: 1px solid rgba(255, 182, 193, 0.5);
+    border-radius: 8px;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.expression-btn:hover {
+    background: linear-gradient(135deg, rgba(255, 192, 203, 0.5), rgba(255, 182, 193, 0.5));
+    transform: translateY(-2px);
+}
+
+.singing-control {
+    background: rgba(102, 126, 234, 0.1);
+    border-radius: 12px;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.singing-buttons {
+    display: flex;
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.btn-singing {
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.btn-start-singing {
+    background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.btn-stop-singing {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
