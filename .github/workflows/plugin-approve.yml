@@ -144,17 +144,40 @@ jobs:
               ].join('\n')
             });
 
-            // ── 8. 在 issue 下评论 PR 链接 ───────────────────────────────
+            // ── 8. 自动合并 PR ───────────────────────────────────────────
+            try {
+              await github.rest.pulls.merge({
+                owner, repo,
+                pull_number: pr.number,
+                merge_method: 'squash',
+                commit_title: `feat: 收录插件 ${pluginJson.displayName || pluginJson.name} (#${pr.number})`,
+                commit_message: `From issue #${issue.number}`
+              });
+            } catch (mergeErr) {
+              // 合并失败时评论提示，不中断流程
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issue.number,
+                body: `## 🤖 PR 自动合并失败\n\n⚠️ PR 已创建但自动合并失败：${mergeErr.message}\n\n👉 ${pr.html_url}\n\n请手动合并。\n\n---\n*此评论由 Bot 自动生成。*`
+              });
+            }
+
+            // ── 9. 关闭 issue ────────────────────────────────────────────
+            await github.rest.issues.update({
+              owner, repo, issue_number: issue.number,
+              state: 'closed'
+            });
+
+            // ── 10. 在 issue 下评论 PR 链接 ──────────────────────────────
             await github.rest.issues.createComment({
               owner, repo, issue_number: issue.number,
               body: [
-                '## 🤖 插件收录 PR 已创建',
+                '## 🤖 插件收录完成',
                 '',
-                `✅ 已自动将插件 **${pluginJson.displayName || pluginJson.name}** 添加到 \`plugin_hub.json\`，PR 正在等待合并：`,
+                `✅ 插件 **${pluginJson.displayName || pluginJson.name}** 已自动合并到 \`plugin_hub.json\`。`,
                 '',
                 `👉 ${pr.html_url}`,
                 '',
-                '维护者审核通过后合并即可完成收录。',
+                '感谢你的贡献！此 Issue 已自动关闭。',
                 '',
                 '---',
                 '*此评论由 Bot 自动生成。*'

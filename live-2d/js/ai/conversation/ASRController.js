@@ -63,32 +63,32 @@ class ASRController {
      * 设置ASR语音识别回调
      */
     setupASRCallback() {
-        this.asrProcessor.setOnSpeechRecognized(async (text) => {
-            const showSubtitle = this.inputRouter.showSubtitle;
-            const hideSubtitle = this.inputRouter.hideSubtitle;
+        // 文本合并窗口状态
+        this._pendingText = '';
+        this._mergeTimer = null;
+        this._MERGE_WINDOW = this.config.asr?.merge_window_ms ?? 2000;
 
-            showSubtitle(`${this.config.subtitle_labels.user}: ${text}`, 3000);
-
-            // USER_INPUT_START 事件已由 llm-handler.js 发送，此处不再重复发送
-            // eventBus.emit(Events.USER_INPUT_START);
-
-            // 重置AI日记定时器（diary 插件存在时通过 global.diaryManager 访问）
-            const dm = this.diaryManager || global.diaryManager;
-            if (dm) {
-                dm.resetTimer();
+        const flush = async (showSubtitle) => {
+            // 如果用户还在说话或 ASR 还在处理，推迟 200ms 再检查
+            if (this.asrProcessor?.isRecording || this.asrProcessor?.asrLocked) {
+                this._mergeTimer = setTimeout(() => flush(showSubtitle), 200);
+                return;
             }
 
-            try {
-                // 通过输入路由处理语音输入
-                await this.inputRouter.handleVoiceInput(text);
+            const finalText = this._pendingText;
+            this._pendingText = '';
+            this._mergeTimer = null;
 
-                // 触发用户消息已接收事件（用于心情系统）
+            console.log(`语音合并完成，提交文本: "${finalText}"`);
+            showSubtitle(`${this.config.subtitle_labels.user}: ${finalText}`, 3000);
+
+            const dm = this.diaryManager || global.diaryManager;
+            if (dm) dm.resetTimer();
+
+            try {
+                await this.inputRouter.handleVoiceInput(finalText);
                 eventBus.emit(Events.USER_MESSAGE_RECEIVED);
             } finally {
-                // USER_INPUT_END 事件已由 llm-handler.js 的 finally 块发送，此处不再重复发送
-                // eventBus.emit(Events.USER_INPUT_END);
-
-                // 确保ASR在对话结束后能继续工作
                 if (this.asrProcessor) {
                     setTimeout(() => {
                         this.asrProcessor.resumeRecording();
@@ -96,6 +96,31 @@ class ASRController {
                     }, 100);
                 }
             }
+        };
+
+        this.asrProcessor.setOnSpeechRecognized(async (text) => {
+            const showSubtitle = this.inputRouter.showSubtitle;
+
+            // 拼接到待发送文本（卡壳续说场景）
+            this._pendingText = this._pendingText
+                ? this._pendingText + '，' + text
+                : text;
+
+            // 实时显示已累积的文本
+            showSubtitle(`${this.config.subtitle_labels.user}: ${this._pendingText}`, 0);
+
+            // 清掉上一个 timer，重新计时
+            if (this._mergeTimer) {
+                clearTimeout(this._mergeTimer);
+            }
+
+            // 解锁 ASR，让下一段能继续录入
+            if (this.asrProcessor) {
+                this.asrProcessor.resumeRecording();
+            }
+
+            // 等 merge window 后再 flush，期间若 asrLocked 会自动推迟
+            this._mergeTimer = setTimeout(() => flush(showSubtitle), this._MERGE_WINDOW);
         });
     }
 

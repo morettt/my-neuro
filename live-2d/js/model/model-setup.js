@@ -1,5 +1,6 @@
 // model-setup.js - 模型和PIXI设置模块
 const { EmotionMotionMapper } = require('../ui/emotion-motion-mapper.js');
+const { EmotionExpressionMapper } = require('../ui/emotion-expression-mapper.js'); // 使用新的  
 const { MusicPlayer } = require('../services/music-player.js');
 
 class ModelSetup {
@@ -18,7 +19,7 @@ class ModelSetup {
         app.stage.pivot.set(window.innerWidth / 2, window.innerHeight / 2);
 
         // 加载Live2D模型
-        const model = await PIXI.live2d.Live2DModel.from("2D/肥牛/hiyori_pro_mic.model3.json");
+        const model = await PIXI.live2d.Live2DModel.from("2D/肥牛/feiniu.model3.json");
         app.stage.addChild(model);
 
         // 根据配置控制模型显示/隐藏
@@ -32,22 +33,34 @@ class ModelSetup {
 
         // 创建情绪动作映射器
         const emotionMapper = new EmotionMotionMapper(model);
-        global.currentCharacterName = '肥牛';
+        global.currentCharacterName = await emotionMapper.getCurrentCharacterName();
         global.emotionMapper = emotionMapper;
+
+        // 创建新的表情映射器
+        const expressionMapper = new EmotionExpressionMapper(model);
+        global.currentCharacterName = await expressionMapper.getCurrentCharacterName();
+        global.expressionMapper = expressionMapper;
+
 
         // 将情绪映射器传递给TTS处理器
         if (ttsEnabled && ttsProcessor.setEmotionMapper) {
             ttsProcessor.setEmotionMapper(emotionMapper);
-        } else if (!ttsEnabled) {
-            // TTS禁用时，设置回调以确保ASR正常工作
-            ttsProcessor.onEndCallback = () => {
-                // 状态管理已通过事件系统自动处理
-                if (voiceChat && asrEnabled) {
-                    voiceChat.resumeRecording();
-                    console.log('TTS模拟结束，ASR已解锁');
-                }
-            };
-            ttsProcessor.setEmotionMapper(emotionMapper);
+        } 
+        // else if (!ttsEnabled) {
+        //     // TTS禁用时，设置回调以确保ASR正常工作
+        //     ttsProcessor.onEndCallback = () => {
+        //         // 状态管理已通过事件系统自动处理
+        //         if (voiceChat && asrEnabled) {
+        //             voiceChat.resumeRecording();
+        //             console.log('TTS模拟结束，ASR已解锁');
+        //         }
+        //     };
+        //     ttsProcessor.setEmotionMapper(emotionMapper);
+        // }
+
+        // 将表情映射器传递给TTS处理器
+        if (ttsEnabled && ttsProcessor.setExpressionMapper) {
+            ttsProcessor.setExpressionMapper(expressionMapper);
         }
 
         // 创建音乐播放器
@@ -62,7 +75,7 @@ class ModelSetup {
         // 设置模型碰撞检测
         ModelSetup.setupHitTest(model, modelController);
 
-        return { app, model, emotionMapper, musicPlayer };
+        return { app, model, emotionMapper, expressionMapper, musicPlayer };
     }
 
     // 设置模型碰撞检测

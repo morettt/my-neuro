@@ -37,13 +37,13 @@ scikit-learn
 # 向量数据库
 qdrant-client>=1.7.0
 
-# 图数据库（阶段二）
+# 图数据库（可选）
 neo4j>=5.0.0
 
-# 检索增强（阶段七）
+# 检索增强
 rank-bm25>=0.2.2
 
-# 文档处理（阶段九）
+# 文档处理
 pypdf>=3.0.0
 beautifulsoup4>=4.12.0
 
@@ -55,3 +55,5 @@ pyvis>=0.3.0
 
 # CLIP 图像理解（用于图片记忆的高级检索）
 transformers>=4.30.0
+
+markdown
