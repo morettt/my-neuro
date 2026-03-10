@@ -9,7 +9,7 @@ import datetime
 import threading
 import time
 import webbrowser
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, send_from_directory
 
 from .utils import PROJECT_ROOT, WEBUI_VERSION, logger, find_free_port, service_pids
 
@@ -45,7 +45,13 @@ def create_app():
         start_time_str = START_TIME.strftime('%Y-%m-%d %H:%M:%S')
         port = find_free_port()
         return render_template('index.html', port=port, start_time=start_time_str)
-    
+
+    # 提供 live-2d 目录的静态文件访问
+    @app.route('/live-2d/<path:filename>')
+    def serve_live2d_file(filename):
+        """提供 live-2d 目录的文件访问"""
+        return send_from_directory(PROJECT_ROOT / 'live-2d', filename)
+
     return app
 
 
