@@ -833,3 +833,84 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
     background: linear-gradient(135deg, #ef4444, #dc2626);
 }
 
+/* ============ 动作拖拽功能样式 ============ */
+
+/* 动作绑定项 */
+.motion-binding-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+/* 可用动作按钮 */
+.motion-button {
+    display: inline-block;
+    padding: 6px 12px;
+    margin: 4px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.motion-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+}
+
+/* 可用动作容器 */
+.available-motions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 15px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    min-height: 60px;
+}
+
+/* 拖拽高亮效果 */
+.emotion-category-actions.drag-over,
+.emotion-expression-actions.drag-over {
+    background: rgba(59, 130, 246, 0.2) !important;
+    border: 2px dashed #3b82f6 !important;
+}
+
+/* 表情绑定项 */
+.expression-binding-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+/* 表情按钮 */
+.expression-button {
+    display: inline-block;
+    padding: 6px 12px;
+    margin: 4px;
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.expression-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+}

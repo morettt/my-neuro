@@ -285,3 +285,217 @@ def list_models():
         return jsonify(models)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ============ Live2D 动作/表情管理 API ============
+
+def get_current_model():
+    """获取当前模型名称"""
+    try:
+        config_path = PROJECT_ROOT / 'live-2d' / 'config.json'
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                return config.get('current_model', '肥牛')
+    except Exception as e:
+        logger.warning(f'读取当前模型失败: {e}')
+    return '肥牛'
+
+
+@tool_bp.route('/api/live2d/motions/categorized')
+def get_categorized_motions():
+    """获取已分类的动作列表"""
+    try:
+        model_name = get_current_model()
+        actions_path = PROJECT_ROOT / 'live-2d' / 'emotion_actions.json'
+        
+        if not actions_path.exists():
+            return jsonify({'categorized': {}})
+        
+        with open(actions_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        model_data = data.get(model_name, {})
+        emotion_actions = model_data.get('emotion_actions', {})
+        
+        emotion_categories = ['开心', '生气', '难过', '惊讶', '害羞', '俏皮']
+        categorized = {}
+        
+        for emotion in emotion_categories:
+            motions = emotion_actions.get(emotion, [])
+            categorized[emotion] = motions
+        
+        return jsonify({'categorized': categorized})
+    except Exception as e:
+        logger.error(f'获取已分类动作失败: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@tool_bp.route('/api/live2d/motions/uncategorized')
+def get_uncategorized_motions():
+    """获取未分类的动作列表"""
+    try:
+        model_name = get_current_model()
+        actions_path = PROJECT_ROOT / 'live-2d' / 'emotion_actions.json'
+        
+        if not actions_path.exists():
+            return jsonify({'motions': []})
+        
+        with open(actions_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        model_data = data.get(model_name, {})
+        emotion_actions = model_data.get('emotion_actions', {})
+        
+        emotion_categories = ['开心', '生气', '难过', '惊讶', '害羞', '俏皮']
+        
+        categorized_motions = set()
+        for emotion in emotion_categories:
+            motions = emotion_actions.get(emotion, [])
+            categorized_motions.update(motions)
+        
+        uncategorized = []
+        for key, motions in emotion_actions.items():
+            if key not in emotion_categories:
+                for motion in motions:
+                    if motion not in categorized_motions:
+                        uncategorized.append(motion)
+        
+        return jsonify({'motions': uncategorized})
+    except Exception as e:
+        logger.error(f'获取未分类动作失败: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@tool_bp.route('/api/live2d/motions/save', methods=['POST'])
+def save_motions():
+    """保存动作配置"""
+    try:
+        data = request.get_json()
+        categories = data.get('categories', [])
+        
+        model_name = get_current_model()
+        actions_path = PROJECT_ROOT / 'live-2d' / 'emotion_actions.json'
+        
+        if actions_path.exists():
+            with open(actions_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        else:
+            config = {}
+        
+        if model_name not in config:
+            config[model_name] = {'emotion_actions': {}}
+        
+        emotion_categories = ['开心', '生气', '难过', '惊讶', '害羞', '俏皮']
+        for category in categories:
+            name = category.get('name')
+            motions = category.get('motions', [])
+            if name in emotion_categories:
+                config[model_name]['emotion_actions'][name] = motions
+        
+        with open(actions_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        
+        return jsonify({'success': True, 'message': '动作配置已保存'})
+    except Exception as e:
+        logger.error(f'保存动作配置失败: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@tool_bp.route('/api/live2d/expressions/config')
+def get_expression_config():
+    """获取表情配置"""
+    try:
+        model_name = get_current_model()
+        expressions_path = PROJECT_ROOT / 'live-2d' / 'emotion_expressions.json'
+        
+        if not expressions_path.exists():
+            return jsonify({'expressions': {}, 'available_expressions': []})
+        
+        with open(expressions_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        model_data = data.get(model_name, {})
+        emotion_expressions = model_data.get('emotion_expressions', {})
+        
+        emotion_categories = ['开心', '生气', '难过', '惊讶', '害羞', '俏皮']
+        expressions = {}
+        available_expressions = []
+        
+        for key, exprs in emotion_expressions.items():
+            if key in emotion_categories:
+                expressions[key] = exprs
+            else:
+                available_expressions.extend(exprs)
+        
+        available_expressions = list(set(available_expressions))
+        
+        return jsonify({
+            'expressions': expressions,
+            'available_expressions': available_expressions
+        })
+    except Exception as e:
+        logger.error(f'获取表情配置失败: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@tool_bp.route('/api/live2d/expressions/save', methods=['POST'])
+def save_expressions():
+    """保存表情配置"""
+    try:
+        data = request.get_json()
+        expressions = data.get('expressions', {})
+        
+        model_name = get_current_model()
+        expressions_path = PROJECT_ROOT / 'live-2d' / 'emotion_expressions.json'
+        
+        if expressions_path.exists():
+            with open(expressions_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        else:
+            config = {}
+        
+        if model_name not in config:
+            config[model_name] = {'emotion_expressions': {}}
+        
+        # 更新表情配置
+        for emotion, exprs in expressions.items():
+            config[model_name]['emotion_expressions'][emotion] = exprs
+        
+        with open(expressions_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        
+        return jsonify({'success': True, 'message': '表情配置已保存'})
+    except Exception as e:
+        logger.error(f'保存表情配置失败: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@tool_bp.route('/api/live2d/expressions/reset', methods=['POST'])
+def reset_expressions():
+    """重置表情配置"""
+    try:
+        model_name = get_current_model()
+        expressions_path = PROJECT_ROOT / 'live-2d' / 'emotion_expressions.json'
+        
+        if expressions_path.exists():
+            with open(expressions_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        else:
+            config = {}
+        
+        if model_name not in config:
+            config[model_name] = {'emotion_expressions': {}}
+        
+        # 清空情绪分类的表情
+        emotion_categories = ['开心', '生气', '难过', '惊讶', '害羞', '俏皮']
+        for emotion in emotion_categories:
+            config[model_name]['emotion_expressions'][emotion] = []
+        
+        with open(expressions_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        
+        return jsonify({'success': True, 'message': '表情配置已重置'})
+    except Exception as e:
+        logger.error(f'重置表情配置失败: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500

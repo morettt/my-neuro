@@ -1852,35 +1852,53 @@ function removeMotion(btn) {
     }
 }
 
-// 加载未分类动作
+// 加载未分类动作（可用动作列表）
 async function loadUncategorizedMotions() {
     try {
         const response = await fetch('/api/live2d/motions/uncategorized');
         if (response.ok) {
             const data = await response.json();
-            const container = document.getElementById('uncategorized-motions');
-            
-            if (data.motions && data.motions.length > 0) {
-                container.innerHTML = '';
-                data.motions.forEach(motion => {
-                    const motionItem = document.createElement('div');
-                    motionItem.className = 'motion-item';
-                    motionItem.innerHTML = `
-                        <span>${motion}</span>
-                        <div>
-                            <button onclick="previewMotionFromList('${motion}')" class="btn-sm">预览</button>
-                        </div>
-                    `;
-                    container.appendChild(motionItem);
-                });
-            } else {
-                container.innerHTML = '<div class="empty-tip">暂无未分类动作</div>';
-            }
+            renderAvailableMotions(data.motions || []);
         }
     } catch (error) {
         console.error('加载未分类动作失败:', error);
     }
 }
+
+// 渲染可用动作列表
+function renderAvailableMotions(motions) {
+    const container = document.getElementById('available-motions');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (motions.length === 0) {
+        container.innerHTML = '<div class="empty-tip">暂无可用动作</div>';
+        return;
+    }
+    
+    motions.forEach(motion => {
+        const btn = document.createElement('button');
+        btn.className = 'motion-button';
+        btn.textContent = motion;
+        btn.draggable = true;
+        btn.dataset.motion = motion;
+        
+        // 点击预览
+        btn.onclick = () => previewMotionFromList(motion);
+        
+        // 拖拽开始
+        btn.ondragstart = (e) => {
+            e.dataTransfer.setData('text/plain', motion);
+            e.dataTransfer.setData('application/motion', motion);
+        };
+        
+        container.appendChild(btn);
+    });
+}
+
+// 动作配置缓存
+let motionConfig = {};
 
 // 加载已分类动作到情绪分类区域
 async function loadCategorizedMotions() {
@@ -1892,6 +1910,7 @@ async function loadCategorizedMotions() {
         }
         
         const data = await response.json();
+        motionConfig = data.categorized || {};
         
         // 情绪名称映射（中文到英文）
         const emotionMap = {
@@ -1908,23 +1927,149 @@ async function loadCategorizedMotions() {
             const englishEmotion = emotionMap[emotionName] || emotionName;
             const container = document.querySelector(`.emotion-category-actions[data-emotion="${englishEmotion}"]`);
             
-            if (container && motions && motions.length > 0) {
+            if (container) {
                 container.innerHTML = '';
-                motions.forEach(motion => {
-                    const motionItem = document.createElement('div');
-                    motionItem.className = 'motion-item';
-                    motionItem.innerHTML = `
-                        <span>${motion}</span>
-                        <div>
-                            <button onclick="previewMotionFromList('${motion}')" class="btn-sm">预览</button>
-                        </div>
-                    `;
-                    container.appendChild(motionItem);
-                });
+                if (motions && motions.length > 0) {
+                    motions.forEach(motion => {
+                        const item = createMotionBindingItem(englishEmotion, motion);
+                        container.appendChild(item);
+                    });
+                } else {
+                    container.innerHTML = '<div class="empty-tip">拖拽动作到此绑定</div>';
+                }
             }
         }
+        
+        // 设置拖放区域
+        setupMotionDropZones();
     } catch (error) {
         console.error('加载已分类动作失败:', error);
+    }
+}
+
+// 创建动作绑定项
+function createMotionBindingItem(emotion, motionName) {
+    const item = document.createElement('div');
+    item.className = 'motion-binding-item';
+    item.innerHTML = `
+        <span>${motionName}</span>
+        <div>
+            <button onclick="previewMotionFromList('${motionName}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">预览</button>
+            <button onclick="removeMotionBinding('${emotion}', '${motionName}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">删除</button>
+        </div>
+    `;
+    return item;
+}
+
+// 设置动作拖放区域
+function setupMotionDropZones() {
+    const dropZones = document.querySelectorAll('.emotion-category-actions');
+    
+    dropZones.forEach(zone => {
+        zone.ondragover = (e) => {
+            e.preventDefault();
+            zone.classList.add('drag-over');
+        };
+        
+        zone.ondragleave = () => {
+            zone.classList.remove('drag-over');
+        };
+        
+        zone.ondrop = (e) => {
+            e.preventDefault();
+            zone.classList.remove('drag-over');
+            
+            const motionName = e.dataTransfer.getData('application/motion') || 
+                               e.dataTransfer.getData('text/plain');
+            const emotion = zone.dataset.emotion;
+            
+            if (motionName && emotion) {
+                bindMotionToEmotion(emotion, motionName);
+            }
+        };
+    });
+}
+
+// 绑定动作到情绪
+function bindMotionToEmotion(emotion, motionName) {
+    // 情绪名称映射（英文到中文）
+    const emotionMapReverse = {
+        'happy': '开心',
+        'angry': '生气',
+        'sad': '难过',
+        'surprised': '惊讶',
+        'shy': '害羞',
+        'playful': '俏皮'
+    };
+    
+    const chineseEmotion = emotionMapReverse[emotion] || emotion;
+    
+    // 初始化该情绪的动作数组
+    if (!motionConfig[chineseEmotion]) {
+        motionConfig[chineseEmotion] = [];
+    }
+    
+    // 检查是否已存在
+    if (motionConfig[chineseEmotion].includes(motionName)) {
+        alert('该动作已绑定到此情绪');
+        return;
+    }
+    
+    // 添加动作
+    motionConfig[chineseEmotion].push(motionName);
+    
+    // 更新UI
+    const container = document.querySelector(`.emotion-category-actions[data-emotion="${emotion}"]`);
+    if (container) {
+        const emptyTip = container.querySelector('.empty-tip');
+        if (emptyTip) {
+            emptyTip.remove();
+        }
+        
+        const item = createMotionBindingItem(emotion, motionName);
+        container.appendChild(item);
+    }
+    
+    addLog(`已将动作 "${motionName}" 绑定到 ${chineseEmotion}`, 'success', 'system');
+}
+
+// 删除动作绑定
+function removeMotionBinding(emotion, motionName) {
+    // 情绪名称映射（英文到中文）
+    const emotionMapReverse = {
+        'happy': '开心',
+        'angry': '生气',
+        'sad': '难过',
+        'surprised': '惊讶',
+        'shy': '害羞',
+        'playful': '俏皮'
+    };
+    
+    const chineseEmotion = emotionMapReverse[emotion] || emotion;
+    
+    if (motionConfig[chineseEmotion]) {
+        const index = motionConfig[chineseEmotion].indexOf(motionName);
+        if (index > -1) {
+            motionConfig[chineseEmotion].splice(index, 1);
+            
+            // 更新UI
+            const container = document.querySelector(`.emotion-category-actions[data-emotion="${emotion}"]`);
+            if (container) {
+                const items = container.querySelectorAll('.motion-binding-item');
+                items.forEach(item => {
+                    if (item.querySelector('span').textContent === motionName) {
+                        item.remove();
+                    }
+                });
+                
+                // 如果没有动作了，显示空提示
+                if (container.children.length === 0) {
+                    container.innerHTML = '<div class="empty-tip">拖拽动作到此绑定</div>';
+                }
+            }
+            
+            addLog(`已移除动作 "${motionName}" 从 ${chineseEmotion}`, 'info', 'system');
+        }
     }
 }
 

@@ -59,15 +59,15 @@ def run_app():
     print(f"{'='*50}")
     print(f"访问地址：http://localhost:{port}")
     print(f"{'='*50}\n")
-    
+    '''
     # 打印已注册的路由（调试用）
-    print("已注册的 API 路由:")
+    ##print("已注册的 API 路由:")
     for rule in app.url_map.iter_rules():
         if rule.endpoint != 'static':
             methods = ','.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))
             print(f"  {methods:10} {rule}")
     print()
-
+'''
     # 自动打开浏览器
     def open_browser():
         time.sleep(1.5)
