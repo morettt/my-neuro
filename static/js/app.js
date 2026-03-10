@@ -3,7 +3,6 @@
 const serviceStates = {};
 let currentLogTab = 'system-log';
 let logPollingInterval = null;
-let moodPollingInterval = null;
 let lastPetLogCount = 0;  // 记录上次桌宠日志数量
 let lastToolLogCount = 0; // 记录上次工具日志数量
 
@@ -146,54 +145,6 @@ function stopLogPolling() {
     if (logPollingInterval) {
         clearInterval(logPollingInterval);
         logPollingInterval = null;
-    }
-}
-
-// ============ 心情分系统 ============
-
-// 加载心情分
-async function loadMoodStatus() {
-    try {
-        const response = await fetch('/api/mood/status');
-        if (response.ok) {
-            const data = await response.json();
-            const scoreEl = document.getElementById('mood-score');
-            const statusEl = document.getElementById('mood-status');
-
-            if (scoreEl && statusEl) {
-                scoreEl.textContent = data.score || '--';
-                statusEl.textContent = data.status || '（未启动）';
-
-                // 根据心情分设置颜色
-                if (data.score >= 90) {
-                    scoreEl.style.color = '#4ade80';  // 绿色 - 兴奋
-                } else if (data.score >= 80) {
-                    scoreEl.style.color = '#60a5fa';  // 蓝色 - 正常
-                } else if (data.score >= 60) {
-                    scoreEl.style.color = '#fb923c';  // 橙色 - 低落
-                } else {
-                    scoreEl.style.color = '#f87171';  // 红色 - 沉默
-                }
-            }
-        }
-    } catch (error) {
-        console.error('加载心情分失败:', error);
-    }
-}
-
-// 启动心情分轮询
-function startMoodPolling() {
-    // 每 3 秒轮询一次心情分
-    moodPollingInterval = setInterval(() => {
-        loadMoodStatus();
-    }, 3000);
-}
-
-// 停止心情分轮询
-function stopMoodPolling() {
-    if (moodPollingInterval) {
-        clearInterval(moodPollingInterval);
-        moodPollingInterval = null;
     }
 }
 
@@ -681,14 +632,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // 加载插件列表
     loadPlugins();
 
-    // 启动心情分轮询
-    startMoodPolling();
-
     // 启动日志轮询
     startLogPolling();
-
-    // 加载心情分
-    loadMoodStatus();
 
     // 加载模型列表（使用 refreshModelList 函数）
     refreshModelList();
@@ -1599,8 +1544,8 @@ function createMarketToolCard(tool) {
     const toolId = tool.id || '';
     const fileName = tool.file_name || toolName + '.js';
 
-    // 使用 tool.id 拼接下载 URL（与 test.py 一致）
-    const downloadUrl = toolId ? `http://mynewbot.com/api/download-tool/${toolId}` : '';
+    // 优先使用后端返回的 download_url，如果没有则回退到用 id 构建
+    const downloadUrl = tool.download_url || (toolId ? `http://mynewbot.com/api/download-tool/${toolId}` : '');
 
     const html = `<div class="market-card-header">
         <h4 class="market-card-title">📦 ${toolName}</h4>

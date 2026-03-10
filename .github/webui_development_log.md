@@ -1,5 +1,26 @@
 # WebUI 开发日志
 
+### 历史版本
+
+| 版本 | 日期 | 主要变更 |
+|------|------|----------|
+| v1.10.0 | 2026-03-10 | WebUI 模块化重构、广场下载修复 |
+| v1.9.0 | 2026-03-09 | 工具屋重建、配置系统重构 |
+| v1.0 | 2026-03-04 | 代码分离（HTML/CSS/JS独立） |
+| v1.1 | 2026-03-04 | 多日志系统、API Key 切换 |
+| v1.2 | 2026-03-04 | Live2D 使用 go.bat、日志 API |
+| v1.3 | 2026-03-04 | 动态主动对话、心情分轮询 |
+| v1.4 | 2026-03-04 | 服务状态检测修复、日志清空 |
+| v1.4.1 | 2026-03-04 | 删除启动脚本重复 get_status 函数 |
+| v1.4.2 | 2026-03-04 | 启动脚本批处理编码问题修复 |
+| v1.4.3 | 2026-03-05 | 服务停止逻辑修复、增量日志加载、系统信息栏 |
+| v1.5 | 2026-03-05 | 服务状态检测简化、日志轮询优化 |
+| v1.6 | 2026-03-05 | 工具屋重构（分选项卡、外部 MCP 工具支持） |
+| v1.7 | 2026-03-06 | 插件系统自动扫描、配置优化 |
+| v1.8 | 2026-03-06 | 广场功能、Live2D 动作管理、游戏选项卡修正 |
+| v1.8.1 | 2026-03-06 | 云端配置重写（4 个分选项卡） |
+| v1.8.2 | 2026-03-06 | 声音克隆选项卡重做（拖拽上传、bat 生成） |
+
 ## 最新开发记录 (2026-03-10)
 
 ### v1.10.0 (2026-03-10) - 模块化重构与广场下载修复
@@ -71,13 +92,50 @@ def download_tool():
 
 ---
 
-**3. 删除独立测试服务器**
+**4. 广场下载使用 requests 库**
 
-**删除文件**：
-- `market_download_api.py` - 独立广场下载API测试服务器
-- `market_patch.js` - 浏览器控制台补丁脚本
+**问题描述**：
+- 原使用 `urllib.request` 下载工具，部分工具下载失败
 
-**原因**：主WebUI已完成模块化重构，不再需要独立测试服务器
+**解决方案**：
+- 改用 `requests` 库（与原始 test.py 实现一致）
+- 添加详细的错误日志记录
+- 支持 `file_name` 参数自定义保存文件名
+
+**关键代码**：
+```python
+@market_bp.route('/api/market/tools/download', methods=['POST'])
+def download_tool():
+    """下载工具到 mcp/tools 目录（参考 test.py 实现）"""
+    import requests
+    response = requests.get(tool_url, timeout=30)
+    response.raise_for_status()
+    
+    # 检查是否为 HTML 内容
+    content = response.content
+    if content.startswith(b'<!DOCTYPE'):
+        return jsonify({'success': False, 'error': '下载内容为 HTML 格式'}), 500
+    
+    with open(file_path, 'wb') as f:
+        f.write(content)
+```
+
+**前端参数传递**：
+```javascript
+// static/js/app.js
+async function downloadTool(toolName, downloadUrl, fileName) {
+    const result = await fetch('/api/market/tools/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            tool_name: toolName, 
+            download_url: downloadUrl,
+            file_name: fileName  // 自定义保存文件名
+        })
+    });
+}
+```
+
 
 ---
 

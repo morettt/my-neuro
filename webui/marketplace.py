@@ -12,6 +12,14 @@ from flask import Blueprint, request, jsonify
 
 from .utils import PROJECT_ROOT, logger
 
+# 尝试导入 requests 库，如果不可用则使用 urllib
+try:
+    import requests
+    HAS_REQUESTS = True
+except ImportError:
+    HAS_REQUESTS = False
+    logger.warning('requests 库未安装，将使用 urllib.request 进行下载（功能受限）')
+
 # 创建广场模块蓝图
 market_bp = Blueprint('market', __name__)
 
@@ -149,23 +157,18 @@ def get_tool_market():
             tools = data.get('tools', [])
             processed_tools = []
             for tool in tools:
-                # 如果没有download_url或为空，尝试构建
+                # 如果没有download_url或为空，尝试使用数字ID构建
                 download_url = tool.get('download_url')
                 if not download_url:  # 处理 None、空字符串、undefined
-                    # 优先使用 filename（服务器上的实际文件名），其次用 id 或 name
-                    filename = tool.get('filename')  # 服务器上的实际文件名
+                    # 服务器API期望 tool_id 是整数，只能使用数字ID构建URL
                     tool_id = tool.get('id')
-                    tool_name = tool.get('name') or tool.get('tool_name')
                     
-                    if filename:
-                        # 使用 filename 构建下载URL
-                        tool['download_url'] = f"http://mynewbot.com/api/download-tool/{filename}"
-                        logger.info(f'使用 filename 构建下载URL: {tool["download_url"]}')
-                    elif tool_id and tool_id > 0:
+                    # 允许 id = 0，只要是整数类型就有效
+                    if tool_id is not None and isinstance(tool_id, int):
                         tool['download_url'] = f"http://mynewbot.com/api/download-tool/{tool_id}"
                         logger.info(f'使用 id 构建下载URL: {tool["download_url"]}')
                     else:
-                        logger.warning(f'工具缺少 download_url、filename 和有效 id: {tool}')
+                        logger.warning(f'工具缺少有效的数字 id，无法构建下载URL: {tool.get("tool_name", "未知")}')
                 
                 processed_tools.append(tool)
             
@@ -188,45 +191,63 @@ def get_tool_market():
 
 @market_bp.route('/api/market/tools/download', methods=['POST'])
 def download_tool():
-    """下载工具到 mcp/tools 目录"""
+    """下载工具到 mcp/tools 目录（参考 test.py 实现）"""
     try:
         data = request.get_json()
         tool_name = data.get('tool_name', '')
-        # 兼容两种参数名：download_url 和 tool_url
         tool_url = data.get('download_url', '') or data.get('tool_url', '')
-        file_name = data.get('file_name', '')
+        file_name = data.get('file_name', '')  # 保存的文件名
 
-        if not tool_name or not tool_url:
-            logger.error(f'下载工具失败：缺少参数 - tool_name={tool_name}, tool_url={tool_url}')
-            return jsonify({'success': False, 'error': '缺少参数：tool_name 和 download_url'}), 400
+        logger.info(f'收到工具下载请求: tool_name={tool_name}, tool_url={tool_url}, file_name={file_name}')
 
+        if not tool_url:
+            logger.error(f'下载工具失败：缺少 download_url')
+            return jsonify({'success': False, 'error': '缺少下载URL'}), 400
+
+        # 使用 file_name 作为保存文件名，如果没有则使用 tool_name
+        save_filename = file_name if file_name else f'{tool_name}.js'
+        
         # 下载工具文件到 mcp/tools 目录
         mcp_tools_path = PROJECT_ROOT / 'live-2d' / 'mcp' / 'tools'
         mcp_tools_path.mkdir(parents=True, exist_ok=True)
 
-        file_path = mcp_tools_path / f'{tool_name}.js'
+        file_path = mcp_tools_path / save_filename
+        logger.info(f'准备下载到: {file_path}')
 
-        req = urllib.request.Request(tool_url, headers={'User-Agent': 'Mozilla/5.0'})
-        try:
-            with urllib.request.urlopen(req, timeout=30) as response:
-                content_type = response.headers.get('Content-Type', '')
-                if 'text/html' in content_type:
-                    return jsonify({'success': False, 'error': '下载链接返回 HTML 页面，请检查 URL 是否正确'}), 500
+        # 使用 requests 或 urllib 下载
+        if HAS_REQUESTS:
+            response = requests.get(tool_url, timeout=30)
+            response.raise_for_status()
+            content_type = response.headers.get('Content-Type', '')
+            content = response.content
+        else:
+            # 回退到 urllib
+            req = urllib.request.Request(tool_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                content_type = resp.headers.get('Content-Type', '')
+                content = resp.read()
 
-                content = response.read()
+        logger.info(f'远程服务器响应 Content-Type: {content_type}')
 
-                if content.startswith(b'<!DOCTYPE') or content.startswith(b'<!doctype') or content.startswith(b'<html'):
-                    return jsonify({'success': False, 'error': '下载内容为 HTML 格式，请检查 URL 是否正确'}), 500
+        # 检查是否为 HTML 内容
+        if content.startswith(b'<!DOCTYPE') or content.startswith(b'<!doctype') or content.startswith(b'<html'):
+            logger.error(f'下载内容为 HTML 格式，URL: {tool_url}')
+            return jsonify({'success': False, 'error': '下载内容为 HTML 格式，请检查 URL 是否正确'}), 500
 
-                with open(file_path, 'wb') as f:
-                    f.write(content)
-        except urllib.error.HTTPError as e:
-            return jsonify({'success': False, 'error': f'下载失败：HTTP {e.code} {e.reason}'}), 500
-        except urllib.error.URLError as e:
-            return jsonify({'success': False, 'error': f'下载失败：网络错误 - {e.reason}'}), 500
+        with open(file_path, 'wb') as f:
+            f.write(content)
+        
+        logger.info(f'工具 {save_filename} 已成功保存到 {file_path}')
+        return jsonify({'success': True, 'message': f'工具 {save_filename} 已下载到 mcp/tools 目录'})
 
-        return jsonify({'success': True, 'message': f'工具 {tool_name} 已下载到 mcp/tools 目录'})
+    except urllib.error.HTTPError as e:
+        logger.error(f'HTTP 错误: {e}, URL: {tool_url}')
+        return jsonify({'success': False, 'error': f'下载失败：HTTP {e.code}'}), 500
+    except urllib.error.URLError as e:
+        logger.error(f'网络错误: {e}, URL: {tool_url}')
+        return jsonify({'success': False, 'error': f'下载失败：网络错误 - {e.reason}'}), 500
     except Exception as e:
+        logger.error(f'下载工具时发生未捕获异常: {str(e)}', exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -245,14 +266,19 @@ def get_fc_market():
             fc_tools = data.get('fc_tools', [])
             processed_tools = []
             for tool in fc_tools:
-                # 如果没有download_url或为空，尝试从id构建
+                # 如果没有download_url或为空，尝试使用数字ID构建
                 download_url = tool.get('download_url')
                 if not download_url:  # 处理 None、空字符串、undefined
-                    tool_id = tool.get('id') or tool.get('tool_id') or tool.get('name')
-                    if tool_id:
+                    # 服务器API期望 tool_id 是整数，只能使用数字ID构建URL
+                    tool_id = tool.get('id')
+                    
+                    # 允许 id = 0，只要是整数类型就有效
+                    if tool_id is not None and isinstance(tool_id, int):
                         tool['download_url'] = f"http://mynewbot.com/api/download-fc-tool/{tool_id}"
+                        logger.info(f'FC工具使用 id 构建下载URL: {tool["download_url"]}')
                     else:
-                        logger.warning(f'FC工具缺少 download_url 和 id: {tool.get("name", "未知")}')
+                        logger.warning(f'FC工具缺少有效的数字 id，无法构建下载URL: {tool.get("tool_name", "未知")}')
+                
                 processed_tools.append(tool)
             
             return jsonify({
@@ -274,40 +300,61 @@ def get_fc_market():
 
 @market_bp.route('/api/market/fc-tools/download', methods=['POST'])
 def download_fc_tool():
-    """下载 FC 工具"""
+    """下载 FC 工具（参考 test.py 实现）"""
     try:
         data = request.get_json()
         tool_name = data.get('tool_name', '')
         tool_url = data.get('download_url', '')
+        file_name = data.get('file_name', '')  # 保存的文件名
 
-        if not tool_name or not tool_url:
-            return jsonify({'success': False, 'error': '缺少参数'}), 400
+        logger.info(f'收到FC工具下载请求: tool_name={tool_name}, tool_url={tool_url}, file_name={file_name}')
 
+        if not tool_url:
+            logger.error(f'FC工具下载失败：缺少 download_url')
+            return jsonify({'success': False, 'error': '缺少下载URL'}), 400
+
+        # 使用 file_name 作为保存文件名，如果没有则使用 tool_name
+        save_filename = file_name if file_name else f'{tool_name}.js'
+        
         # 下载工具文件到 server-tools 目录
         server_tools_path = PROJECT_ROOT / 'live-2d' / 'server-tools'
         server_tools_path.mkdir(parents=True, exist_ok=True)
 
-        file_path = server_tools_path / f'{tool_name}.js'
-        
-        req = urllib.request.Request(tool_url, headers={'User-Agent': 'Mozilla/5.0'})
-        try:
-            with urllib.request.urlopen(req, timeout=30) as response:
-                content_type = response.headers.get('Content-Type', '')
-                if 'text/html' in content_type:
-                    return jsonify({'success': False, 'error': '下载链接返回 HTML 页面，请检查 URL 是否正确'}), 500
-                
-                content = response.read()
-                
-                if content.startswith(b'<!DOCTYPE') or content.startswith(b'<!doctype') or content.startswith(b'<html'):
-                    return jsonify({'success': False, 'error': '下载内容为 HTML 格式，请检查 URL 是否正确'}), 500
-                
-                with open(file_path, 'wb') as f:
-                    f.write(content)
-        except urllib.error.HTTPError as e:
-            return jsonify({'success': False, 'error': f'下载失败：HTTP {e.code} {e.reason}'}), 500
-        except urllib.error.URLError as e:
-            return jsonify({'success': False, 'error': f'下载失败：网络错误 - {e.reason}'}), 500
+        file_path = server_tools_path / save_filename
+        logger.info(f'准备下载FC工具到: {file_path}')
 
-        return jsonify({'success': True, 'message': f'FC 工具 {tool_name} 已下载'})
+        # 使用 requests 或 urllib 下载
+        if HAS_REQUESTS:
+            response = requests.get(tool_url, timeout=30)
+            response.raise_for_status()
+            content_type = response.headers.get('Content-Type', '')
+            content = response.content
+        else:
+            # 回退到 urllib
+            req = urllib.request.Request(tool_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                content_type = resp.headers.get('Content-Type', '')
+                content = resp.read()
+
+        logger.info(f'FC工具远程服务器响应 Content-Type: {content_type}')
+
+        # 检查是否为 HTML 内容
+        if content.startswith(b'<!DOCTYPE') or content.startswith(b'<!doctype') or content.startswith(b'<html'):
+            logger.error(f'FC工具下载内容为 HTML 格式，URL: {tool_url}')
+            return jsonify({'success': False, 'error': '下载内容为 HTML 格式，请检查 URL 是否正确'}), 500
+
+        with open(file_path, 'wb') as f:
+            f.write(content)
+        
+        logger.info(f'FC工具 {save_filename} 已成功保存到 {file_path}')
+        return jsonify({'success': True, 'message': f'FC 工具 {save_filename} 已下载到 server-tools 目录'})
+
+    except urllib.error.HTTPError as e:
+        logger.error(f'FC工具HTTP错误: {e}, URL: {tool_url}')
+        return jsonify({'success': False, 'error': f'下载失败：HTTP {e.code}'}), 500
+    except urllib.error.URLError as e:
+        logger.error(f'FC工具网络错误: {e}, URL: {tool_url}')
+        return jsonify({'success': False, 'error': f'下载失败：网络错误 - {e.reason}'}), 500
     except Exception as e:
+        logger.error(f'下载FC工具时发生未捕获异常: {str(e)}', exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500

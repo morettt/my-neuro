@@ -77,50 +77,6 @@ def tail_logs(log_type):
         return jsonify({'logs': [], 'error': str(e)})
 
 
-# ============ 心情状态 API ============
-
-@log_bp.route('/api/mood/status')
-def get_mood_status():
-    """获取当前心情分状态"""
-    try:
-        mood_file = PROJECT_ROOT / 'AI 记录室' / 'mood_status.json'
-        if not mood_file.exists():
-            return jsonify({
-                'score': 0,
-                'interval': 0,
-                'waitingResponse': False,
-                'status': '未启动'
-            })
-        
-        with open(mood_file, 'r', encoding='utf-8') as f:
-            mood_data = json.load(f)
-        
-        score = mood_data.get('score', 0)
-        interval = mood_data.get('interval', 0)
-        waiting = mood_data.get('waitingResponse', False)
-        
-        if score >= 90:
-            status = '兴奋😄'
-        elif score >= 80:
-            status = '正常😊'
-        elif score >= 60:
-            status = '低落😐'
-        else:
-            status = '沉默😔'
-        
-        if waiting:
-            status += ' 等待回应...'
-        
-        return jsonify({
-            'score': score,
-            'interval': interval,
-            'waitingResponse': waiting,
-            'status': status
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
 # ============ Live2D 动作管理 API ============
 
 @log_bp.route('/api/live2d/singing/start', methods=['POST'])
