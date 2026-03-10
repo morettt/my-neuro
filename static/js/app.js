@@ -348,6 +348,23 @@ async function saveLLMConfig() {
     await saveConfig('/api/config/llm', config, 'LLM 配置保存成功');
 }
 
+// 加载 LLM 配置
+async function loadLLMConfig() {
+    try {
+        const response = await fetch('/api/config/llm');
+        if (response.ok) {
+            const data = await response.json();
+            _setVal('api-key', data.api_key || '');
+            _setVal('api-url', data.api_url || '');
+            _setVal('model', data.model || '');
+            _setVal('temperature', data.temperature || 0.9);
+            _setVal('system-prompt', data.system_prompt || '');
+        }
+    } catch (error) {
+        console.error('加载 LLM 配置失败:', error);
+    }
+}
+
 // 保存对话设置
 async function saveChatSettings() {
     const settings = {
@@ -1714,6 +1731,7 @@ async function downloadPlugin(pluginName, downloadUrl) {
 // 加载所有配置（页面启动时同步 config.json 状态）
 async function loadAllSettings() {
     try { await loadConfigs(); } catch (e) { console.error('loadConfigs 失败:', e); }
+    try { await loadLLMConfig(); } catch (e) { console.error('loadLLMConfig 失败:', e); }
     try { await loadBasicConfig(); } catch (e) { console.error('loadBasicConfig 失败:', e); }
     try { await loadDialogConfig(); } catch (e) { console.error('loadDialogConfig 失败:', e); }
     try { await loadCloudSettings(); } catch (e) { console.error('loadCloudSettings 失败:', e); }
