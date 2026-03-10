@@ -115,8 +115,8 @@ def handle_voice_settings():
     if request.method == 'GET':
         cloud_config = config.get('cloud', {})
         return jsonify({
-            'tts': config.get('tts', {}),
-            'asr': config.get('asr', {}),
+            'provider': cloud_config.get('provider', 'siliconflow'),
+            'api_key': cloud_config.get('api_key', ''),
             'cloud_tts': cloud_config.get('tts', {}),
             'aliyun_tts': cloud_config.get('aliyun_tts', {}),
             'baidu_asr': cloud_config.get('baidu_asr', {}),
@@ -125,18 +125,7 @@ def handle_voice_settings():
     elif request.method == 'POST':
         try:
             data = request.get_json()
-            if 'tts' in data:
-                config['tts'] = {
-                    'enabled': data['tts'].get('enabled', True),
-                    'url': data['tts'].get('url', ''),
-                    'language': data['tts'].get('language', 'zh')
-                }
-            if 'asr' in data:
-                config['asr'] = {
-                    'enabled': data['asr'].get('enabled', True),
-                    'vad_url': data['asr'].get('vad_url', ''),
-                    'voice_barge_in': data['asr'].get('voice_barge_in', True)
-                }
+            # 更新 cloud 配置
             if 'cloud' not in config:
                 config['cloud'] = {}
             if 'provider' in data:
@@ -148,22 +137,30 @@ def handle_voice_settings():
                     'enabled': data['cloud_tts'].get('enabled', False),
                     'url': data['cloud_tts'].get('url', 'https://api.siliconflow.cn/v1/audio/speech'),
                     'model': data['cloud_tts'].get('model', 'FunAudioLLM/CosyVoice2-0.5B'),
-                    'voice': data['cloud_tts'].get('voice', '')
+                    'voice': data['cloud_tts'].get('voice', ''),
+                    'response_format': data['cloud_tts'].get('response_format', 'wav'),
+                    'speed': data['cloud_tts'].get('speed', 1.0)
                 }
             if 'aliyun_tts' in data:
                 config['cloud']['aliyun_tts'] = {
                     'enabled': data['aliyun_tts'].get('enabled', False),
                     'api_key': data['aliyun_tts'].get('api_key', ''),
                     'model': data['aliyun_tts'].get('model', 'cosyvoice-v3-flash'),
-                    'voice': data['aliyun_tts'].get('voice', '')
+                    'voice': data['aliyun_tts'].get('voice', ''),
+                    'sample_rate': data['aliyun_tts'].get('sample_rate', 48000),
+                    'volume': data['aliyun_tts'].get('volume', 50),
+                    'rate': data['aliyun_tts'].get('rate', 1),
+                    'pitch': data['aliyun_tts'].get('pitch', 1)
                 }
             if 'baidu_asr' in data:
                 config['cloud']['baidu_asr'] = {
                     'enabled': data['baidu_asr'].get('enabled', False),
                     'url': data['baidu_asr'].get('url', 'ws://vop.baidu.com/realtime_asr'),
-                    'appid': data['baidu_asr'].get('appid', ''),
-                    'appkey': data['baidu_asr'].get('appkey', '')
+                    'appid': data['baidu_asr'].get('appid', 0),
+                    'appkey': data['baidu_asr'].get('appkey', ''),
+                    'dev_pid': data['baidu_asr'].get('dev_pid', 0)
                 }
+            # 更新 api_gateway 配置（独立顶层配置）
             if 'api_gateway' in data:
                 if 'api_gateway' not in config:
                     config['api_gateway'] = {}

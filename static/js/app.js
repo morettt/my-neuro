@@ -386,9 +386,9 @@ async function saveCloudSettings() {
         baidu_asr: {
             enabled: document.getElementById('baidu-asr-enabled').checked,
             url: document.getElementById('baidu-asr-url').value,
-            appid: document.getElementById('baidu-asr-appid').value,
+            appid: parseInt(document.getElementById('baidu-asr-appid').value) || 0,
             appkey: document.getElementById('baidu-asr-appkey').value,
-            dev_pid: document.getElementById('baidu-asr-devpid').value
+            dev_pid: parseInt(document.getElementById('baidu-asr-devpid').value) || 0
         },
         // 云端肥牛网关配置
         api_gateway: {
