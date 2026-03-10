@@ -1,6 +1,113 @@
 # WebUI 开发日志
 
-## 最新开发记录 (2026-03-09)
+## 最新开发记录 (2026-03-10)
+
+### v1.10.0 (2026-03-10) - 模块化重构与广场下载修复
+
+#### 重大变更
+
+**1. WebUI 模块化重构**
+- 将原来 730+ 行的 `webui_controller.py` 重构为 8 个独立模块
+- 采用 Flask Blueprint 架构，每个功能模块独立管理路由
+- 提高代码可维护性和可读性
+
+**模块结构**：
+```
+webui/
+├── __init__.py          # 模块入口，导出 create_app, run_app
+├── utils.py             # 共享工具函数（PROJECT_ROOT, logger, service_pids）
+├── main_app.py          # Flask 应用初始化、蓝图注册
+├── service_controller.py # 服务控制 API（启动/停止/状态）
+├── config_manager.py    # 配置管理 API（LLM/对话/UI/云端配置）
+├── plugin_manager.py    # 插件管理 API（扫描/启用/禁用）
+├── tool_manager.py      # 工具管理 API（FC/MCP工具列表）
+├── marketplace.py       # 广场与资源 API（下载提示词/工具/插件）
+└── log_monitor.py       # 日志监控 API（读取运行日志/心情分）
+```
+
+---
+
+**2. 广场下载功能修复**
+
+**问题描述**：
+- 工具广场中只有北京时间工具能下载，其他工具和FC广场工具显示"下载失败：缺少参数"
+
+**根本原因**：
+1. 参数命名不一致：前端传递 `download_url`，后端期望 `tool_url`
+2. 远程API返回的工具数据可能没有 `download_url` 字段，需要从 `id` 构建
+
+**解决方案**：
+1. 修改 `webui/marketplace.py` 中的下载函数，兼容两种参数名
+2. 在获取工具列表时，自动为缺少 `download_url` 的工具构建下载URL
+3. 添加详细的错误日志
+
+**修改文件**：`webui/marketplace.py`
+
+**关键代码**：
+```python
+@market_bp.route('/api/market/tools', methods=['GET'])
+def get_tool_market():
+    """获取工具广场列表（从远程服务器）"""
+    # ...
+    if data.get('success'):
+        tools = data.get('tools', [])
+        processed_tools = []
+        for tool in tools:
+            # 如果没有download_url，尝试从id构建
+            if not tool.get('download_url') and tool.get('id'):
+                tool['download_url'] = f"http://mynewbot.com/api/download-tool/{tool['id']}"
+            processed_tools.append(tool)
+        # ...
+
+@market_bp.route('/api/market/tools/download', methods=['POST'])
+def download_tool():
+    """下载工具到 mcp/tools 目录"""
+    data = request.get_json()
+    tool_name = data.get('tool_name', '')
+    # 兼容两种参数名：download_url 和 tool_url
+    tool_url = data.get('download_url', '') or data.get('tool_url', '')
+    # ...
+```
+
+---
+
+**3. 删除独立测试服务器**
+
+**删除文件**：
+- `market_download_api.py` - 独立广场下载API测试服务器
+- `market_patch.js` - 浏览器控制台补丁脚本
+
+**原因**：主WebUI已完成模块化重构，不再需要独立测试服务器
+
+---
+
+#### API 路由清单
+
+| 模块 | 路由 | 功能 |
+|------|------|------|
+| service_controller | `/api/start/<service>` | 启动服务 |
+| service_controller | `/api/stop/<service>` | 停止服务 |
+| service_controller | `/api/status` | 获取服务状态 |
+| config_manager | `/api/config/llm` | LLM配置管理 |
+| config_manager | `/api/settings/dialog` | 对话配置管理 |
+| config_manager | `/api/settings/ui` | UI配置管理 |
+| config_manager | `/api/settings/advanced` | 高级配置管理 |
+| config_manager | `/api/settings/voice` | 云端配置管理 |
+| plugin_manager | `/api/plugins/list` | 插件列表 |
+| plugin_manager | `/api/plugins/<name>/toggle` | 切换插件状态 |
+| tool_manager | `/api/tools/list/fc` | FC工具列表 |
+| tool_manager | `/api/tools/list/mcp` | MCP工具列表 |
+| tool_manager | `/api/tools/toggle` | 切换工具状态 |
+| marketplace | `/api/market/prompts` | 提示词广场 |
+| marketplace | `/api/market/tools` | 工具广场 |
+| marketplace | `/api/market/fc-tools` | FC工具广场 |
+| marketplace | `/api/market/plugins` | 插件广场 |
+| log_monitor | `/api/logs/<type>` | 日志读取 |
+| log_monitor | `/api/mood/status` | 心情分状态 |
+
+---
+
+## 历史记录 (2026-03-09)
 
 ### v1.9.1 (2026-03-09) - 配置加载修复
 
