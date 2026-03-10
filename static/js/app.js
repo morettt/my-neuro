@@ -648,6 +648,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 加载插件列表
     loadPlugins();
+    // 每 10 秒自动刷新插件列表（检测新安装的插件）
+    setInterval(loadPlugins, 10000);
 
     // 启动日志轮询
     startLogPolling();
@@ -1096,6 +1098,26 @@ function updateUptime() {
 
 // ============ 插件管理 ============
 
+// 刷新插件列表（手动触发）
+async function refreshPlugins() {
+    try {
+        const btn = event?.target;
+        if (btn) {
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '🔄 刷新中...';
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }, 2000);
+        }
+        await loadPlugins();
+        addLog('插件列表已刷新', 'success', 'system');
+    } catch (error) {
+        addLog('刷新插件列表失败：' + error.message, 'error', 'system');
+    }
+}
+
 // 切换插件子选项卡
 function switchPluginTab(tab) {
     // 更新选项卡按钮状态
@@ -1114,6 +1136,9 @@ function switchPluginTab(tab) {
     if (targetPanel) {
         targetPanel.classList.add('active');
     }
+    
+    // 切换时自动刷新插件列表
+    loadPlugins();
 }
 
 // 加载插件列表
@@ -1688,42 +1713,151 @@ async function refreshPluginMarket() {
 function createPluginMarketCard(plugin) {
     const card = document.createElement('div');
     card.className = 'market-card';
+    card.dataset.pluginName = plugin.name;  // 存储插件名用于后续更新
 
     const pluginName = plugin.name || plugin.display_name || '未命名插件';
     const displayName = plugin.display_name || pluginName;
-    const desc = plugin.desc || plugin.description || '无描述';
+    const desc = plugin.description || plugin.desc || '无描述';
     const author = plugin.author || '未知作者';
     const repo = plugin.repo || '';
     const downloadUrl = plugin.download_url || repo + '/archive/refs/heads/main.zip';
+    const installed = plugin.installed || false;
+    const installing = plugin.installing || false;
+
+    // 根据状态设置按钮文本和样式（installed 优先于 installing）
+    let btnText, btnDisabled;
+    if (installed) {
+        // 已安装状态优先
+        btnText = '✓ 已安装';
+        btnDisabled = 'disabled';
+    } else if (installing) {
+        // 正在安装
+        btnText = '⏳ 安装中...';
+        btnDisabled = 'disabled';
+    } else {
+        // 未安装
+        btnText = '⬇ 安装';
+        btnDisabled = '';
+    }
 
     const html = `<div class="market-card-header">
         <h4 class="market-card-title">🧩 ${displayName}</h4>
-        <p class="market-card-desc">${desc}</p>
-        <p class="market-card-meta">作者：${author}</p>
+        <p class="market-card-author">作者：${author}</p>
+        <p class="market-card-summary">${desc}</p>
+        <div class="install-progress" id="progress-${pluginName}" style="display: none;">
+            <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
+            <span class="progress-text">准备中...</span>
+        </div>
     </div>
-    <button onclick="downloadPlugin('${pluginName.replace(/'/g, "\\'")}', '${downloadUrl}')" class="btn-sm" style="margin-top: 10px;">⬇ 下载</button>`;
+    <button onclick="installPlugin('${pluginName.replace(/'/g, "\\'")}', '${downloadUrl.replace(/'/g, "\\'")}')" 
+        class="btn-sm" style="margin-top: 10px;" ${btnDisabled}>${btnText}</button>`;
 
     card.innerHTML = html;
     return card;
 }
 
-// 下载插件
-async function downloadPlugin(pluginName, downloadUrl) {
+// 安装插件
+async function installPlugin(pluginName, downloadUrl) {
     try {
+        // 更新按钮状态
+        const card = document.querySelector(`.market-card[data-plugin-name="${pluginName}"]`);
+        if (card) {
+            const btn = card.querySelector('button');
+            btn.disabled = true;
+            btn.textContent = '⏳ 安装中...';
+            btn.classList.add('btn-installing');
+            
+            // 显示进度条
+            const progressDiv = document.getElementById(`progress-${pluginName}`);
+            if (progressDiv) {
+                progressDiv.style.display = 'block';
+            }
+        }
+
         const result = await fetch('/api/market/plugins/download', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ plugin_name: pluginName, download_url: downloadUrl })
         });
         const res = await result.json();
+        
         if (res.success) {
-            alert(`插件 ${pluginName} 已下载！\\n请前往 插件管理 选项卡启用`);
+            // 开始轮询检测插件目录
+            pollPluginInstalled(pluginName);
         } else {
-            alert('下载失败：' + (res.error || '未知错误'));
+            alert('安装失败：' + (res.error || '未知错误'));
+            // 恢复按钮状态
+            restoreInstallButton(pluginName, '⬇ 安装');
         }
     } catch (error) {
-        alert('下载时出错：' + error.message);
+        alert('安装时出错：' + error.message);
+        restoreInstallButton(pluginName, '⬇ 安装');
     }
+}
+
+// 恢复安装按钮状态
+function restoreInstallButton(pluginName, text) {
+    const card = document.querySelector(`.market-card[data-plugin-name="${pluginName}"]`);
+    if (card) {
+        const btn = card.querySelector('button');
+        btn.disabled = false;
+        btn.textContent = text;
+        btn.classList.remove('btn-installing');
+    }
+    const progressDiv = document.getElementById(`progress-${pluginName}`);
+    if (progressDiv) progressDiv.style.display = 'none';
+}
+
+// 轮询检测插件是否已安装（检测目录存在）
+async function pollPluginInstalled(pluginName) {
+    const maxAttempts = 180;  // 最多轮询 180 次（约 3 分钟）
+    let attempts = 0;
+    
+    const poll = async () => {
+        try {
+            // 直接检查插件目录是否存在
+            const response = await fetch(`/api/market/plugins/check-installed/${pluginName}`);
+            const data = await response.json();
+            
+            const progressDiv = document.getElementById(`progress-${pluginName}`);
+            const progressFill = progressDiv ? progressDiv.querySelector('.progress-fill') : null;
+            const progressText = progressDiv ? progressDiv.querySelector('.progress-text') : null;
+            
+            if (data.installed) {
+                // 插件已安装，成功！
+                if (progressFill) progressFill.style.width = '100%';
+                if (progressText) progressText.textContent = '✓ 安装完成';
+                // 延迟刷新列表，让后端有时间清理任务状态
+                setTimeout(() => refreshPluginMarket(), 500);
+                return;
+            }
+            
+            // 还未安装，进度条动画
+            if (progressFill) {
+                const progress = (attempts % 50) * 2;  // 0-100 循环动画
+                progressFill.style.width = progress + '%';
+            }
+            
+            attempts++;
+            if (attempts < maxAttempts) {
+                setTimeout(poll, 1000);  // 每秒检查一次
+            } else {
+                // 超时
+                if (progressText) progressText.textContent = '安装超时，请重试';
+                restoreInstallButton(pluginName, '⬇ 安装');
+            }
+        } catch (error) {
+            console.error('轮询安装状态失败:', error);
+            attempts++;
+            if (attempts < maxAttempts) {
+                setTimeout(poll, 1000);
+            } else {
+                restoreInstallButton(pluginName, '⬇ 安装');
+            }
+        }
+    };
+    
+    poll();
 }
 
 // ============ 初始化 ============

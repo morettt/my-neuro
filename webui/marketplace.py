@@ -6,8 +6,15 @@ WebUI 模块化重构 - 广场与资源模块
 """
 
 import json
+import os
+import zipfile
+import subprocess
+import sys
+import threading
+import shutil
 import urllib.request
 import urllib.error
+from pathlib import Path
 from flask import Blueprint, request, jsonify
 
 from .utils import PROJECT_ROOT, logger
@@ -22,6 +29,9 @@ except ImportError:
 
 # 创建广场模块蓝图
 market_bp = Blueprint('market', __name__)
+
+# 存储正在进行的安装任务
+installing_tasks = {}
 
 
 # ============ 提示词广场 ============
@@ -79,28 +89,36 @@ def get_plugin_market():
     """获取插件广场列表（从本地 plugin_hub.json 文件）"""
     try:
         plugin_hub_path = PROJECT_ROOT / 'live-2d' / 'plugins' / 'plugin-house' / 'plugin_hub.json'
-        
+
         if not plugin_hub_path.exists():
             return jsonify({
                 'success': False,
                 'error': '插件商店数据文件不存在'
             }), 500
-        
+
         with open(plugin_hub_path, 'r', encoding='utf-8') as f:
             plugins_data = json.load(f)
-        
-        # 转换为列表格式
+
+        # 转换为列表格式，并检测安装状态
         plugins = []
+        community_path = PROJECT_ROOT / 'live-2d' / 'plugins' / 'community'
+        
         for key, value in plugins_data.items():
+            # 检测是否已安装
+            plugin_dir = community_path / key
+            is_installed = plugin_dir.exists() and any(plugin_dir.iterdir())
+            
             plugins.append({
                 'name': key,
                 'display_name': value.get('display_name', key),
                 'description': value.get('desc', '无描述'),
                 'author': value.get('author', '未知'),
                 'repo': value.get('repo', ''),
-                'download_url': value.get('repo', '') + '/archive/refs/heads/main.zip'
+                'download_url': value.get('repo', '') + '/archive/refs/heads/main.zip',
+                'installed': is_installed,
+                'installing': key in installing_tasks  # 是否正在安装中
             })
-        
+
         return jsonify({
             'success': True,
             'plugins': plugins
@@ -114,7 +132,7 @@ def get_plugin_market():
 
 @market_bp.route('/api/market/plugins/download', methods=['POST'])
 def download_plugin():
-    """下载插件"""
+    """下载插件（异步，自动解压和安装依赖）"""
     try:
         data = request.get_json()
         plugin_name = data.get('plugin_name', '')
@@ -123,23 +141,185 @@ def download_plugin():
         if not plugin_name or not plugin_url:
             return jsonify({'success': False, 'error': '缺少参数'}), 400
 
-        # 下载插件到 community 目录
-        plugins_base = PROJECT_ROOT / 'live-2d' / 'plugins' / 'community'
-        plugins_base.mkdir(parents=True, exist_ok=True)
+        # 检查是否正在安装中
+        if plugin_name in installing_tasks:
+            return jsonify({'success': False, 'error': '该插件正在安装中'}), 400
 
-        plugin_dir = plugins_base / plugin_name
+        # 检查是否已安装
+        community_path = PROJECT_ROOT / 'live-2d' / 'plugins' / 'community'
+        plugin_dir = community_path / plugin_name
+        if plugin_dir.exists() and any(plugin_dir.iterdir()):
+            return jsonify({'success': False, 'error': '插件已安装'}), 400
+
+        # 创建插件目录
+        community_path.mkdir(parents=True, exist_ok=True)
         plugin_dir.mkdir(parents=True, exist_ok=True)
 
-        # 下载插件文件（假设是 zip 格式）
-        zip_path = plugin_dir / f'{plugin_name}.zip'
-        urllib.request.urlretrieve(plugin_url, zip_path)
+        # 启动后台线程进行下载和安装
+        thread = threading.Thread(
+            target=_install_plugin_worker,
+            args=(plugin_name, plugin_url, plugin_dir),
+            daemon=True
+        )
+        thread.start()
 
         return jsonify({
             'success': True,
-            'message': f'插件 {plugin_name} 已下载，请解压后使用'
+            'message': f'插件 {plugin_name} 开始安装，请稍候...'
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _install_plugin_worker(plugin_name, plugin_url, plugin_dir):
+    """后台安装插件的工作线程"""
+    try:
+        installing_tasks[plugin_name] = {'status': 'downloading', 'progress': 0}
+        logger.info(f'开始下载插件：{plugin_name}')
+
+        # 下载 zip 文件
+        zip_path = plugin_dir / f'{plugin_name}.zip'
+        
+        if HAS_REQUESTS:
+            # 使用 requests 库（支持进度显示）
+            response = requests.get(plugin_url, stream=True, timeout=120)
+            response.raise_for_status()
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+            
+            with open(zip_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            installing_tasks[plugin_name]['progress'] = int(downloaded / total_size * 50)
+        else:
+            # 使用 urllib（无进度显示）
+            urllib.request.urlretrieve(plugin_url, zip_path)
+            installing_tasks[plugin_name]['progress'] = 50
+
+        logger.info(f'插件下载完成：{plugin_name}')
+        installing_tasks[plugin_name]['status'] = 'extracting'
+
+        # 解压 zip 文件
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            # 获取 zip 内所有文件的根目录名（通常是 repo-name-branch 格式）
+            zip_info_list = zip_ref.namelist()
+            if zip_info_list:
+                # 找到根目录
+                root_dir = zip_info_list[0].split('/')[0]
+                
+                # 解压所有文件到临时目录
+                temp_extract_dir = plugin_dir / 'temp_extract'
+                zip_ref.extractall(temp_extract_dir)
+                
+                # 将根目录内容移动到插件目录
+                source_dir = temp_extract_dir / root_dir
+                if source_dir.exists():
+                    for item in source_dir.iterdir():
+                        dest = plugin_dir / item.name
+                        if dest.exists():
+                            if dest.is_dir():
+                                shutil.rmtree(dest)
+                            else:
+                                dest.unlink()
+                        shutil.move(str(item), str(plugin_dir))
+                    
+                    # 清理临时目录
+                    shutil.rmtree(temp_extract_dir)
+
+        # 删除 zip 文件
+        zip_path.unlink()
+        logger.info(f'插件解压完成：{plugin_name}')
+        installing_tasks[plugin_name]['status'] = 'installing_deps'
+        installing_tasks[plugin_name]['progress'] = 75
+
+        # 检测并安装依赖
+        req_path = plugin_dir / 'requirements.txt'
+        if req_path.exists():
+            logger.info(f'正在安装插件依赖：{plugin_name}')
+            try:
+                result = subprocess.run(
+                    [sys.executable, '-m', 'pip', 'install', '-r', str(req_path)],
+                    capture_output=True,
+                    text=True,
+                    timeout=300
+                )
+                if result.returncode != 0:
+                    logger.warning(f'插件依赖安装失败：{plugin_name}, {result.stderr}')
+                    installing_tasks[plugin_name]['status'] = 'completed_with_warning'
+                else:
+                    logger.info(f'插件依赖安装完成：{plugin_name}')
+            except subprocess.TimeoutExpired:
+                logger.warning(f'插件依赖安装超时：{plugin_name}')
+                installing_tasks[plugin_name]['status'] = 'completed_with_warning'
+        else:
+            logger.info(f'插件无需安装依赖：{plugin_name}')
+
+        installing_tasks[plugin_name]['status'] = 'completed'
+        installing_tasks[plugin_name]['progress'] = 100
+        logger.info(f'插件安装完成：{plugin_name}')
+        
+        # 清理任务记录（让刷新列表时能正确显示已安装状态）
+        import time
+        time.sleep(0.3)  # 短暂等待，确保文件写入完成
+        if plugin_name in installing_tasks:
+            del installing_tasks[plugin_name]
+
+    except Exception as e:
+        logger.error(f'插件安装失败：{plugin_name}, {str(e)}')
+        installing_tasks[plugin_name]['status'] = 'failed'
+        installing_tasks[plugin_name]['error'] = str(e)
+        
+        # 失败时也清理任务记录
+        import time
+        time.sleep(0.3)
+        if plugin_name in installing_tasks:
+            del installing_tasks[plugin_name]
+    
+    finally:
+        # 确保任务被清理
+        pass
+
+
+@market_bp.route('/api/market/plugins/install-status/<plugin_name>', methods=['GET'])
+def get_install_status(plugin_name):
+    """获取插件安装状态"""
+    if plugin_name in installing_tasks:
+        task = installing_tasks[plugin_name]
+        return jsonify({
+            'success': True,
+            'installing': True,
+            'status': task.get('status', 'unknown'),
+            'progress': task.get('progress', 0),
+            'error': task.get('error', '')
+        })
+    else:
+        # 检查是否已安装完成
+        community_path = PROJECT_ROOT / 'live-2d' / 'plugins' / 'community'
+        plugin_dir = community_path / plugin_name
+        is_installed = plugin_dir.exists() and any(plugin_dir.iterdir())
+        
+        return jsonify({
+            'success': True,
+            'installing': False,
+            'installed': is_installed
+        })
+
+
+@market_bp.route('/api/market/plugins/check-installed/<plugin_name>', methods=['GET'])
+def check_plugin_installed(plugin_name):
+    """检查插件是否已安装（直接检测目录）"""
+    community_path = PROJECT_ROOT / 'live-2d' / 'plugins' / 'community'
+    plugin_dir = community_path / plugin_name
+    
+    is_installed = plugin_dir.exists() and any(plugin_dir.iterdir())
+    
+    return jsonify({
+        'success': True,
+        'installed': is_installed
+    })
 
 
 # ============ 工具广场 ============

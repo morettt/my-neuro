@@ -769,7 +769,12 @@
 
         <!-- 插件管理面板 -->
         <div id="plugins" class="tab-content">
-            <h3>插件管理</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">插件管理</h3>
+                <button onclick="refreshPlugins()" class="btn-start" style="padding: 8px 16px; font-size: 14px;">
+                    🔄 刷新插件列表
+                </button>
+            </div>
             <p style="opacity: 0.7; margin-bottom: 20px;">
                 管理所有已安装的插件，控制功能启用状态<br>
                 💡 提示：点击"打开配置"可打开插件目录或配置文件，在 plugin_config.json 中配置详细参数

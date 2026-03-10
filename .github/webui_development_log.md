@@ -4,9 +4,11 @@
 
 | 版本 | 日期 | 主要变更 |
 |------|------|----------|
+| v2.0.0 | 2026-03-10 | 插件安装系统完善、插件管理刷新、正式进入测试阶段 |
+| v1.11.0 | 2026-03-10 | 图标支持、云端配置修复、去硬编码化 |
 | v1.10.0 | 2026-03-10 | WebUI 模块化重构、广场下载修复 |
 | v1.9.0 | 2026-03-09 | 工具屋重建、配置系统重构 |
-| v1.0 | 2026-03-04 | 代码分离（HTML/CSS/JS独立） |
+| v1.0 | 2026-03-04 | 代码分离（HTML/CSS/JS 独立） |
 | v1.1 | 2026-03-04 | 多日志系统、API Key 切换 |
 | v1.2 | 2026-03-04 | Live2D 使用 go.bat、日志 API |
 | v1.3 | 2026-03-04 | 动态主动对话、心情分轮询 |
@@ -22,6 +24,481 @@
 | v1.8.2 | 2026-03-06 | 声音克隆选项卡重做（拖拽上传、bat 生成） |
 
 ## 最新开发记录 (2026-03-10)
+
+### v2.0.0 (2026-03-10) - 插件安装系统完善、插件管理刷新、正式进入测试阶段
+
+#### 重大变更
+
+**🎉 WebUI 正式进入测试阶段**
+
+所有核心功能已完善，包括：
+- ✅ 服务控制（启动/停止/重启/状态检测）
+- ✅ 配置管理（LLM/对话/云端/UI/高级配置）
+- ✅ 日志系统（系统/桌宠/工具三日志）
+- ✅ 声音克隆（模型上传、bat 生成）
+- ✅ 工具屋（Function Call / MCP Tools）
+- ✅ 广场（提示词/工具/FC/插件资源市场）
+- ✅ Live2D 动作管理（情绪分类、拖拽绑定）
+- ✅ 插件管理（自动扫描、启用/禁用）
+- ✅ 插件广场（异步安装、自动解压、依赖安装）
+
+---
+
+#### 新增功能
+
+**1. 插件广场安装系统完善**
+
+**问题描述**：
+- 原插件下载后需手动解压
+- 无依赖自动安装
+- 无安装进度反馈
+- 按钮会卡在"安装中"状态
+
+**解决方案**：
+1. 后端异步安装（后台线程）
+2. 自动解压 zip 文件
+3. 自动检测并安装 `requirements.txt`
+4. 前端轮询检测插件目录是否存在
+5. 安装完成自动更新按钮为"✓ 已安装"
+
+**修改文件**：
+- `webui/marketplace.py` - 重构下载逻辑，新增 `_install_plugin_worker()`
+- `webui/marketplace.py` - 新增 `check_plugin_installed()` API
+- `static/js/app.js` - 新增 `pollPluginInstalled()`、`restoreInstallButton()`
+- `static/css/style.css` - 新增进度条和按钮状态样式
+
+**后端安装流程**：
+```python
+def _install_plugin_worker(plugin_name, plugin_url, plugin_dir):
+    1. 下载 zip 文件（支持 requests 进度或 urllib）
+    2. 解压到临时目录
+    3. 移动文件到插件目录
+    4. 删除 zip 文件
+    5. 检测 requirements.txt 并安装
+    6. 清理 installing_tasks 记录
+```
+
+**前端轮询逻辑**：
+```javascript
+async function pollPluginInstalled(pluginName) {
+    // 每秒检查一次插件目录是否存在
+    const response = await fetch(`/api/market/plugins/check-installed/${pluginName}`);
+    if (data.installed) {
+        // 显示"✓ 安装完成"，刷新列表
+    }
+}
+```
+
+**状态优先级**：
+```javascript
+if (installed) {
+    btnText = '✓ 已安装';  // 最高优先级
+} else if (installing) {
+    btnText = '⏳ 安装中...';
+} else {
+    btnText = '⬇ 安装';
+}
+```
+
+---
+
+**2. 插件管理刷新机制**
+
+**问题描述**：
+- 安装插件后需手动刷新页面才能看到新插件
+- 切换选项卡后插件状态可能不同步
+
+**解决方案**：
+1. 添加"🔄 刷新插件列表"按钮
+2. 每 10 秒自动刷新插件列表
+3. 切换子选项卡时自动刷新
+4. 页面重新可见时自动刷新
+
+**修改文件**：
+- `templates/index.html` - 添加刷新按钮
+- `static/js/app.js` - 新增 `refreshPlugins()` 函数
+- `static/js/app.js` - `DOMContentLoaded` 添加定时刷新
+- `static/js/app.js` - `switchPluginTab()` 添加刷新调用
+
+**自动刷新策略**：
+```javascript
+// 页面加载时
+loadPlugins();
+setInterval(loadPlugins, 10000);  // 每 10 秒自动刷新
+
+// 切换选项卡时
+switchPluginTab(tab) {
+    loadPlugins();  // 自动刷新
+}
+
+// 页面重新可见时
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) loadPlugins();
+});
+```
+
+---
+
+**3. 插件广场 UI 优化**
+
+**问题描述**：
+- 插件卡片信息并列显示，不够直观
+- 简介过长时无法查看完整内容
+- 按钮文字"下载"不够准确
+
+**解决方案**：
+1. 改为垂直布局：标题 → 作者 → 介绍
+2. 简介超过 4 行自动显示滚动条
+3. 按钮文字改为"⬇ 安装"
+
+**修改文件**：
+- `static/css/style.css` - `.market-card-header` 改为 column 布局
+- `static/css/style.css` - `.market-card-summary` 添加滚动条
+- `static/js/app.js` - `createPluginMarketCard()` 修改布局
+
+**CSS 布局**：
+```css
+.market-card-header {
+    display: flex;
+    flex-direction: column;  /* 垂直布局 */
+    gap: 8px;
+}
+
+.market-card-summary {
+    max-height: 80px;  /* 约 4 行 */
+    overflow-y: auto;  /* 超出滚动 */
+}
+```
+
+---
+
+#### 问题修复
+
+**1. 按钮卡在"安装中"修复**
+
+**问题原因**：
+- 轮询依赖后端 `installing` 状态
+- 后端任务完成后状态未清理
+- 刷新列表时 `installing=true` 覆盖 `installed=true`
+
+**解决方案**：
+1. 直接检测插件目录是否存在（不依赖后端状态）
+2. 安装完成后立即清理 `installing_tasks`
+3. `installed` 状态优先级高于 `installing`
+
+**修改文件**：
+- `webui/marketplace.py` - 安装完成后删除任务记录
+- `static/js/app.js` - 简化轮询逻辑，只检测目录
+
+---
+
+**2. 插件列表同步修复**
+
+**问题**：安装完成后列表不更新
+
+**解决**：
+- 安装完成后延迟 500ms 刷新列表
+- 确保后端文件写入完成且任务清理
+
+---
+
+#### 技术总结
+
+1. **异步安装设计**：
+   - 后台线程执行，不阻塞请求
+   - 支持超时控制（3 分钟）
+   - 自动清理临时文件
+
+2. **状态管理最佳实践**：
+   - 文件系统为真相源（检测目录存在）
+   - 不依赖中间状态
+   - 状态优先级明确
+
+3. **用户体验优化**：
+   - 实时进度反馈
+   - 自动刷新机制
+   - 状态同步保证
+
+---
+
+## 历史记录 (2026-03-10)
+
+### v1.11.0 (2026-03-10) - 图标支持、云端配置修复、去硬编码化
+
+#### 新增功能
+
+**1. 网页图标支持**
+
+**问题描述**：
+- 网页标签页没有 favicon 图标
+- 主标题左侧缺少视觉标识
+
+**解决方案**：
+1. 在 HTML `<head>` 中添加 favicon 链接
+2. 在主标题 `<h1>` 中添加圆形图标
+3. 在后端添加 `/live-2d/` 目录的静态文件访问路由
+
+**修改文件**：
+- `templates/index.html` - 添加 favicon 和标题图标
+- `static/css/style.css` - 添加 `.header-logo` 样式
+- `webui/main_app.py` - 添加 `/live-2d/<path:filename>` 路由
+
+**关键代码**：
+```html
+<!-- templates/index.html -->
+<head>
+    <link rel="icon" href="/live-2d/fake_neuro.ico" type="image/x-icon">
+</head>
+<body>
+    <header>
+        <h1>
+            <img src="/live-2d/fake_neuro.ico" alt="Logo" class="header-logo">
+            My Neuro - 控制中心
+        </h1>
+    </header>
+</body>
+```
+
+```css
+/* static/css/style.css */
+h1 { 
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+}
+.header-logo {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 0 15px rgba(102, 126, 234, 0.5);
+}
+```
+
+```python
+# webui/main_app.py
+from flask import send_from_directory
+
+@app.route('/live-2d/<path:filename>')
+def serve_live2d_file(filename):
+    """提供 live-2d 目录的文件访问"""
+    return send_from_directory(PROJECT_ROOT / 'live-2d', filename)
+```
+
+---
+
+#### 问题修复
+
+**2. 云端配置保存功能修复**
+
+**问题描述**：
+- 前端输入框与 `config.json` 中的 `cloud` 配置结构不匹配
+- 百度 ASR 的 `appid` 和 `dev_pid` 应为数字类型，但前端使用 `type="text"`
+- 阿里云 TTS 缺少 `sample_rate`、`volume`、`rate`、`pitch` 字段
+
+**解决方案**：
+1. 前端 HTML：将 `appid` 和 `dev_pid` 输入框改为 `type="number"`
+2. 前端 JS：在 `saveCloudSettings()` 中使用 `parseInt()` 转换数字
+3. 后端 Python：在 `handle_voice_settings()` 中正确处理数据结构
+
+**修改文件**：
+- `templates/index.html` - 修改输入框类型
+- `static/js/app.js` - 修改保存和加载函数
+- `webui/config_manager.py` - 修改 GET/POST 处理逻辑
+
+**数据结构对照**：
+```json
+{
+  "cloud": {
+    "provider": "siliconflow",
+    "api_key": "",
+    "tts": {
+      "enabled": false,
+      "url": "...",
+      "model": "...",
+      "voice": "...",
+      "response_format": "wav",
+      "speed": 1.0
+    },
+    "aliyun_tts": {
+      "enabled": false,
+      "api_key": "...",
+      "model": "cosyvoice-v3-flash",
+      "voice": "...",
+      "sample_rate": 48000,
+      "volume": 50,
+      "rate": 1,
+      "pitch": 1
+    },
+    "baidu_asr": {
+      "enabled": false,
+      "url": "ws://vop.baidu.com/realtime_asr",
+      "appid": 121933442,
+      "appkey": "...",
+      "dev_pid": 15372
+    }
+  },
+  "api_gateway": {
+    "use_gateway": false,
+    "base_url": "...",
+    "api_key": ""
+  }
+}
+```
+
+**关键代码**：
+```javascript
+// static/js/app.js - saveCloudSettings()
+baidu_asr: {
+    enabled: document.getElementById('baidu-asr-enabled').checked,
+    url: document.getElementById('baidu-asr-url').value,
+    appid: parseInt(document.getElementById('baidu-asr-appid').value) || 0,
+    appkey: document.getElementById('baidu-asr-appkey').value,
+    dev_pid: parseInt(document.getElementById('baidu-asr-devpid').value) || 0
+}
+```
+
+```python
+# webui/config_manager.py - handle_voice_settings()
+if 'baidu_asr' in data:
+    config['cloud']['baidu_asr'] = {
+        'enabled': data['baidu_asr'].get('enabled', False),
+        'url': data['baidu_asr'].get('url', 'ws://vop.baidu.com/realtime_asr'),
+        'appid': data['baidu_asr'].get('appid', 0),
+        'appkey': data['baidu_asr'].get('appkey', ''),
+        'dev_pid': data['baidu_asr'].get('dev_pid', 0)
+    }
+```
+
+---
+
+#### 配置优化
+
+**3. 去除所有硬编码配置值**
+
+**问题描述**：
+- HTML 中多处输入框使用 `value="..."` 硬编码默认值
+- 页面加载时不显示实际配置，而是显示硬编码值
+- 用户误以为硬编码值是当前配置
+
+**硬编码位置**：
+| 位置 | 字段 | 硬编码值 | config.json 路径 |
+|------|------|---------|-----------------|
+| `index.html:162` | Temperature | `0.9` | `llm.temperature` |
+| `index.html:265` | cloud-tts-format | `mp3` | `cloud.tts.response_format` |
+| `index.html:493` | model-scale | `2.3` | `ui.model_scale` |
+| `index.html:750` | max-messages | `30` | `context.max_messages` |
+
+**解决方案**：
+1. HTML：移除所有 `value="..."` 属性，改为 `placeholder="..."`
+2. HTML：将 `cloud-tts-format` 默认选中项改为 `wav`（与 config.json 一致）
+3. JS：新增 `loadLLMConfig()` 函数
+4. JS：在 `loadAllSettings()` 中调用 `loadLLMConfig()`
+
+**修改文件**：
+- `templates/index.html` - 移除硬编码 value 属性
+- `static/js/app.js` - 新增加载函数
+
+**修改前后对比**：
+```html
+<!-- 修改前 -->
+<input type="number" id="temperature" value="0.9">
+<input type="number" id="model-scale" value="2.3">
+<input type="number" id="max-messages" value="30">
+<select id="cloud-tts-format">
+    <option value="mp3">MP3</option>  <!-- 默认选中 -->
+</select>
+
+<!-- 修改后 -->
+<input type="number" id="temperature" placeholder="0.9">
+<input type="number" id="model-scale" placeholder="2.3">
+<input type="number" id="max-messages" placeholder="30">
+<select id="cloud-tts-format">
+    <option value="wav">WAV</option>  <!-- 默认选中 -->
+</select>
+```
+
+```javascript
+// static/js/app.js - 新增函数
+async function loadLLMConfig() {
+    try {
+        const response = await fetch('/api/config/llm');
+        if (response.ok) {
+            const data = await response.json();
+            _setVal('api-key', data.api_key || '');
+            _setVal('api-url', data.api_url || '');
+            _setVal('model', data.model || '');
+            _setVal('temperature', data.temperature || 0.9);
+            _setVal('system-prompt', data.system_prompt || '');
+        }
+    } catch (error) {
+        console.error('加载 LLM 配置失败:', error);
+    }
+}
+
+// 修改 loadAllSettings()
+async function loadAllSettings() {
+    try { await loadConfigs(); } catch (e) { console.error('loadConfigs 失败:', e); }
+    try { await loadLLMConfig(); } catch (e) { console.error('loadLLMConfig 失败:', e); }  // 新增
+    try { await loadBasicConfig(); } catch (e) { console.error('loadBasicConfig 失败:', e); }
+    try { await loadDialogConfig(); } catch (e) { console.error('loadDialogConfig 失败:', e); }
+    try { await loadCloudSettings(); } catch (e) { console.error('loadCloudSettings 失败:', e); }
+    try { await loadUISettings(); } catch (e) { console.error('loadUISettings 失败:', e); }
+}
+```
+
+---
+
+#### 配置加载流程（最终版）
+
+```
+页面加载 → loadAllSettings()
+           │
+           ├──→ loadConfigs()       → /api/configs          → tools, mcp, plugins
+           ├──→ loadLLMConfig()     → /api/config/llm       → llm.*
+           ├──→ loadBasicConfig()   → /api/settings/advanced → vision, ui, tools, mcp
+           ├──→ loadDialogConfig()  → /api/settings/dialog  → ui.intro_text, context, tts, asr
+           ├──→ loadCloudSettings() → /api/settings/voice   → cloud.*, api_gateway.*
+           └──→ loadUISettings()    → /api/settings/ui      → ui.*, subtitle_labels.*
+           
+所有配置 → 从后端 API 读取 → 后端从 config.json 读取 → 无硬编码
+```
+
+---
+
+#### 技术总结
+
+1. **静态文件服务**：
+   - Flask 的 `send_from_directory()` 提供安全文件访问
+   - 支持 `live-2d` 目录下的所有文件（图标、音频等）
+
+2. **配置系统设计原则**：
+   - 所有默认值从 `config.json` 读取
+   - HTML 只使用 `placeholder` 提示格式
+   - 页面加载时异步获取并填充配置
+
+3. **数据类型处理**：
+   - 数字类型输入框使用 `type="number"`
+   - JS 保存时使用 `parseInt()` / `parseFloat()` 转换
+   - 后端设置合理的默认值
+
+4. **用户体验优化**：
+   - 标题图标增加视觉识别度
+   - 圆形图标带光晕效果
+   - 配置值实时同步，避免误导用户
+
+---
+
+#### 待办事项
+
+- [ ] 验证所有配置项保存功能
+- [ ] 添加配置保存成功提示
+- [ ] 清理未使用的 API 调用
+
+---
+
+## 历史记录 (2026-03-10)
 
 ### v1.10.0 (2026-03-10) - 模块化重构与广场下载修复
 
@@ -41,7 +518,7 @@ webui/
 ├── service_controller.py # 服务控制 API（启动/停止/状态）
 ├── config_manager.py    # 配置管理 API（LLM/对话/UI/云端配置）
 ├── plugin_manager.py    # 插件管理 API（扫描/启用/禁用）
-├── tool_manager.py      # 工具管理 API（FC/MCP工具列表）
+├── tool_manager.py      # 工具管理 API（FC/MCP 工具列表）
 ├── marketplace.py       # 广场与资源 API（下载提示词/工具/插件）
 └── log_monitor.py       # 日志监控 API（读取运行日志/心情分）
 ```
@@ -51,15 +528,15 @@ webui/
 **2. 广场下载功能修复**
 
 **问题描述**：
-- 工具广场中只有北京时间工具能下载，其他工具和FC广场工具显示"下载失败：缺少参数"
+- 工具广场中只有北京时间工具能下载，其他工具和 FC 广场工具显示"下载失败：缺少参数"
 
 **根本原因**：
 1. 参数命名不一致：前端传递 `download_url`，后端期望 `tool_url`
-2. 远程API返回的工具数据可能没有 `download_url` 字段，需要从 `id` 构建
+2. 远程 API 返回的工具数据可能没有 `download_url` 字段，需要从 `id` 构建
 
 **解决方案**：
 1. 修改 `webui/marketplace.py` 中的下载函数，兼容两种参数名
-2. 在获取工具列表时，自动为缺少 `download_url` 的工具构建下载URL
+2. 在获取工具列表时，自动为缺少 `download_url` 的工具构建下载 URL
 3. 添加详细的错误日志
 
 **修改文件**：`webui/marketplace.py`
@@ -74,7 +551,7 @@ def get_tool_market():
         tools = data.get('tools', [])
         processed_tools = []
         for tool in tools:
-            # 如果没有download_url，尝试从id构建
+            # 如果没有 download_url，尝试从 id 构建
             if not tool.get('download_url') and tool.get('id'):
                 tool['download_url'] = f"http://mynewbot.com/api/download-tool/{tool['id']}"
             processed_tools.append(tool)
@@ -110,12 +587,12 @@ def download_tool():
     import requests
     response = requests.get(tool_url, timeout=30)
     response.raise_for_status()
-    
+
     # 检查是否为 HTML 内容
     content = response.content
     if content.startswith(b'<!DOCTYPE'):
         return jsonify({'success': False, 'error': '下载内容为 HTML 格式'}), 500
-    
+
     with open(file_path, 'wb') as f:
         f.write(content)
 ```
@@ -127,8 +604,8 @@ async function downloadTool(toolName, downloadUrl, fileName) {
     const result = await fetch('/api/market/tools/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            tool_name: toolName, 
+        body: JSON.stringify({
+            tool_name: toolName,
             download_url: downloadUrl,
             file_name: fileName  // 自定义保存文件名
         })
@@ -146,19 +623,19 @@ async function downloadTool(toolName, downloadUrl, fileName) {
 | service_controller | `/api/start/<service>` | 启动服务 |
 | service_controller | `/api/stop/<service>` | 停止服务 |
 | service_controller | `/api/status` | 获取服务状态 |
-| config_manager | `/api/config/llm` | LLM配置管理 |
+| config_manager | `/api/config/llm` | LLM 配置管理 |
 | config_manager | `/api/settings/dialog` | 对话配置管理 |
-| config_manager | `/api/settings/ui` | UI配置管理 |
+| config_manager | `/api/settings/ui` | UI 配置管理 |
 | config_manager | `/api/settings/advanced` | 高级配置管理 |
 | config_manager | `/api/settings/voice` | 云端配置管理 |
 | plugin_manager | `/api/plugins/list` | 插件列表 |
 | plugin_manager | `/api/plugins/<name>/toggle` | 切换插件状态 |
-| tool_manager | `/api/tools/list/fc` | FC工具列表 |
-| tool_manager | `/api/tools/list/mcp` | MCP工具列表 |
+| tool_manager | `/api/tools/list/fc` | FC 工具列表 |
+| tool_manager | `/api/tools/list/mcp` | MCP 工具列表 |
 | tool_manager | `/api/tools/toggle` | 切换工具状态 |
 | marketplace | `/api/market/prompts` | 提示词广场 |
 | marketplace | `/api/market/tools` | 工具广场 |
-| marketplace | `/api/market/fc-tools` | FC工具广场 |
+| marketplace | `/api/market/fc-tools` | FC 工具广场 |
 | marketplace | `/api/market/plugins` | 插件广场 |
 | log_monitor | `/api/logs/<type>` | 日志读取 |
 | log_monitor | `/api/mood/status` | 心情分状态 |
@@ -184,7 +661,7 @@ async function downloadTool(toolName, downloadUrl, fileName) {
   ```javascript
   // ❌ 错误 - 当值为 false 时会被默认值覆盖
   document.getElementById('tts-enabled').checked = config.tts_enabled || true;
-  
+
   // ✅ 正确 - 只有当值明确为 true 时才选中
   document.getElementById('tts-enabled').checked = config.tts_enabled === true;
   ```
@@ -216,7 +693,7 @@ async function downloadTool(toolName, downloadUrl, fileName) {
   ```javascript
   // ❌ 错误 - 期望 cloud.tts 但后端返回 cloud_tts
   const cloud_tts = cloud.tts || {};
-  
+
   // ✅ 正确 - 直接读取顶层字段
   const cloud_tts = data.cloud_tts || {};
   ```
@@ -720,24 +1197,24 @@ def scan_plugins_directory():
     """自动扫描插件目录（built-in 和 community）"""
     plugins = []
     plugins_base = PROJECT_ROOT / 'live-2d' / 'plugins'
-    
+
     for category in ['built-in', 'community']:
         category_path = plugins_base / category
         if not category_path.exists():
             continue
-        
+
         for plugin_dir in category_path.iterdir():
             metadata_path = plugin_dir / 'metadata.json'
             if not metadata_path.exists():
                 continue
-            
+
             with open(metadata_path, 'r', encoding='utf-8') as f:
                 metadata = json.load(f)
-            
+
             # 获取插件配置状态
             plugin_config_key = metadata['name'].replace('-', '_')
             plugin_enabled = plugins_config.get(plugin_config_key, {}).get('enabled', False)
-            
+
             plugins.append({
                 'name': metadata['name'],
                 'display_name': metadata.get('displayName', ''),
@@ -853,7 +1330,7 @@ def scan_plugins_directory():
 
 **选项卡结构调整**：
 ```
-[服务控制] [基础配置] [对话配置] [LLM 配置] [云端配置] 
+[服务控制] [基础配置] [对话配置] [LLM 配置] [云端配置]
 [游戏] [模型管理] [工具屋] [UI 设置] [插件管理]
 ```
 
