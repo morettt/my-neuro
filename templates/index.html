@@ -711,6 +711,41 @@
         </div>
     </div>
 
-    <script src="static/js/app.js?v=20260309p"></script>
+    <script src="static/js/app.js?v=20260309r"></script>
+    
+    <!-- 调试脚本：广场下载问题排查 -->
+    <script>
+        // 覆盖 downloadTool 函数添加调试日志
+        const _originalDownloadTool = window.downloadTool;
+        window.downloadTool = async function(toolName, downloadUrl, fileName) {
+            console.log('=== 工具广场下载调试 ===');
+            console.log('工具名称:', toolName);
+            console.log('下载 URL:', downloadUrl);
+            console.log('文件名:', fileName);
+            console.log('调用堆栈:', new Error().stack);
+            try {
+                await _originalDownloadTool(toolName, downloadUrl, fileName);
+            } catch (error) {
+                console.error('下载失败:', error);
+                throw error;
+            }
+        };
+        
+        // 覆盖 applyPrompt 函数添加调试日志
+        const _originalApplyPrompt = window.applyPrompt;
+        window.applyPrompt = async function(title) {
+            console.log('=== 提示词应用调试 ===');
+            console.log('提示词标题:', title);
+            console.log('调用堆栈:', new Error().stack);
+            try {
+                await _originalApplyPrompt(title);
+            } catch (error) {
+                console.error('应用失败:', error);
+                throw error;
+            }
+        };
+        
+        console.log('✅ 调试脚本已加载');
+    </script>
 </body>
 </html>

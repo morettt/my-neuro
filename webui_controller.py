@@ -1505,121 +1505,6 @@ def run_app():
     threading.Thread(target=open_browser, daemon=True).start()
     
     # 使用安静的日志级别运行
-    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
-
-
-if __name__ == '__main__':
-    print("启动 My Neuro 服务控制中心...")
-    print("正在初始化 WebUI 控制面板...")
-    run_app()
-
-
-# ============ Live2D 动作管理 API ============
-
-@app.route('/api/live2d/singing/start', methods=['POST'])
-def start_singing():
-    """开始唱歌"""
-    try:
-        # 调用 Live2D 唱歌 API（需要根据实际实现调整）
-        live2d_api_url = 'http://127.0.0.1:3000/api/singing/start'
-        import urllib.request
-        req = urllib.request.Request(live2d_api_url, method='POST')
-        with urllib.request.urlopen(req, timeout=5) as response:
-            pass
-        return jsonify({'success': True, 'message': '已开始唱歌'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': f'启动失败：{str(e)}'}), 500
-
-
-@app.route('/api/live2d/singing/stop', methods=['POST'])
-def stop_singing():
-    """停止唱歌"""
-    try:
-        live2d_api_url = 'http://127.0.0.1:3000/api/singing/stop'
-        import urllib.request
-        req = urllib.request.Request(live2d_api_url, method='POST')
-        with urllib.request.urlopen(req, timeout=5) as response:
-            pass
-        return jsonify({'success': True, 'message': '已停止唱歌'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': f'停止失败：{str(e)}'}), 500
-
-
-@app.route('/api/live2d/motion/reset', methods=['POST'])
-def reset_motion():
-    """复位动作"""
-    try:
-        live2d_api_url = 'http://127.0.0.1:3000/api/motion/reset'
-        import urllib.request
-        req = urllib.request.Request(live2d_api_url, method='POST')
-        with urllib.request.urlopen(req, timeout=5) as response:
-            pass
-        return jsonify({'success': True, 'message': '已复位动作'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': f'复位失败：{str(e)}'}), 500
-
-
-@app.route('/api/live2d/motion/preview', methods=['POST'])
-def preview_motion():
-    """预览动作"""
-    try:
-        data = request.get_json()
-        motion_name = data.get('motion', '')
-        
-        # 调用 Live2D API 预览动作
-        live2d_api_url = 'http://127.0.0.1:3000/api/motion/preview'
-        import urllib.request
-        import json as json_module
-        json_data = json_module.dumps({'motion': motion_name}).encode('utf-8')
-        req = urllib.request.Request(live2d_api_url, data=json_data, method='POST')
-        req.add_header('Content-Type', 'application/json')
-        with urllib.request.urlopen(req, timeout=5) as response:
-            pass
-        return jsonify({'success': True, 'message': f'正在预览动作：{motion_name}'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': f'预览失败：{str(e)}'}), 500
-
-
-@app.route('/api/live2d/motions/uncategorized', methods=['GET'])
-def get_uncategorized_motions():
-    """获取未分类动作列表"""
-    try:
-        # 从 live-2d 目录扫描未分类的动作文件
-        motions_dir = PROJECT_ROOT / 'live-2d' / 'motions'
-        if not motions_dir.exists():
-            return jsonify({'motions': []})
-        
-        motions = []
-        for file_path in motions_dir.iterdir():
-            if file_path.suffix == '.json' and 'motion' in file_path.name.lower():
-                motions.append(file_path.name)
-        
-        return jsonify({'motions': motions})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/live2d/motions/save', methods=['POST'])
-def save_motions():
-    """保存动作配置"""
-    try:
-        data = request.get_json()
-        categories = data.get('categories', [])
-        
-        # 保存动作配置到文件
-        motion_config_path = PROJECT_ROOT / 'live-2d' / 'motion_config.json'
-        config = {
-            'categories': categories,
-            'updated_at': datetime.datetime.now().isoformat()
-        }
-        
-        with open(motion_config_path, 'w', encoding='utf-8') as f:
-            json.dump(config, f, ensure_ascii=False, indent=2)
-        
-        return jsonify({'success': True, 'message': '动作配置已保存'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
 
 # ============ 广场下载 API ============
 
@@ -1737,6 +1622,123 @@ def download_fc_tool():
             return jsonify({'success': False, 'error': f'下载失败：网络错误 - {e.reason}'}), 500
 
         return jsonify({'success': True, 'message': f'FC 工具 {tool_name} 已下载'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+
+if __name__ == '__main__':
+    print("启动 My Neuro 服务控制中心...")
+    print("正在初始化 WebUI 控制面板...")
+    run_app()
+
+
+# ============ Live2D 动作管理 API ============
+
+@app.route('/api/live2d/singing/start', methods=['POST'])
+def start_singing():
+    """开始唱歌"""
+    try:
+        # 调用 Live2D 唱歌 API（需要根据实际实现调整）
+        live2d_api_url = 'http://127.0.0.1:3000/api/singing/start'
+        import urllib.request
+        req = urllib.request.Request(live2d_api_url, method='POST')
+        with urllib.request.urlopen(req, timeout=5) as response:
+            pass
+        return jsonify({'success': True, 'message': '已开始唱歌'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'启动失败：{str(e)}'}), 500
+
+
+@app.route('/api/live2d/singing/stop', methods=['POST'])
+def stop_singing():
+    """停止唱歌"""
+    try:
+        live2d_api_url = 'http://127.0.0.1:3000/api/singing/stop'
+        import urllib.request
+        req = urllib.request.Request(live2d_api_url, method='POST')
+        with urllib.request.urlopen(req, timeout=5) as response:
+            pass
+        return jsonify({'success': True, 'message': '已停止唱歌'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'停止失败：{str(e)}'}), 500
+
+
+@app.route('/api/live2d/motion/reset', methods=['POST'])
+def reset_motion():
+    """复位动作"""
+    try:
+        live2d_api_url = 'http://127.0.0.1:3000/api/motion/reset'
+        import urllib.request
+        req = urllib.request.Request(live2d_api_url, method='POST')
+        with urllib.request.urlopen(req, timeout=5) as response:
+            pass
+        return jsonify({'success': True, 'message': '已复位动作'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'复位失败：{str(e)}'}), 500
+
+
+@app.route('/api/live2d/motion/preview', methods=['POST'])
+def preview_motion():
+    """预览动作"""
+    try:
+        data = request.get_json()
+        motion_name = data.get('motion', '')
+        
+        # 调用 Live2D API 预览动作
+        live2d_api_url = 'http://127.0.0.1:3000/api/motion/preview'
+        import urllib.request
+        import json as json_module
+        json_data = json_module.dumps({'motion': motion_name}).encode('utf-8')
+        req = urllib.request.Request(live2d_api_url, data=json_data, method='POST')
+        req.add_header('Content-Type', 'application/json')
+        with urllib.request.urlopen(req, timeout=5) as response:
+            pass
+        return jsonify({'success': True, 'message': f'正在预览动作：{motion_name}'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'预览失败：{str(e)}'}), 500
+
+
+@app.route('/api/live2d/motions/uncategorized', methods=['GET'])
+def get_uncategorized_motions():
+    """获取未分类动作列表"""
+    try:
+        # 从 live-2d 目录扫描未分类的动作文件
+        motions_dir = PROJECT_ROOT / 'live-2d' / 'motions'
+        if not motions_dir.exists():
+            return jsonify({'motions': []})
+        
+        motions = []
+        for file_path in motions_dir.iterdir():
+            if file_path.suffix == '.json' and 'motion' in file_path.name.lower():
+                motions.append(file_path.name)
+        
+        return jsonify({'motions': motions})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/live2d/motions/save', methods=['POST'])
+def save_motions():
+    """保存动作配置"""
+    try:
+        data = request.get_json()
+        categories = data.get('categories', [])
+        
+        # 保存动作配置到文件
+        motion_config_path = PROJECT_ROOT / 'live-2d' / 'motion_config.json'
+        config = {
+            'categories': categories,
+            'updated_at': datetime.datetime.now().isoformat()
+        }
+        
+        with open(motion_config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        
+        return jsonify({'success': True, 'message': '动作配置已保存'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

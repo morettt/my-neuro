@@ -1596,24 +1596,32 @@ function createMarketToolCard(tool) {
     card.className = 'market-card';
 
     const toolName = tool.tool_name || tool.name || '未命名工具';
-    const downloadUrl = tool.download_url || '';
+    const toolId = tool.id || '';
+    const fileName = tool.file_name || toolName + '.js';
+
+    // 使用 tool.id 拼接下载 URL（与 test.py 一致）
+    const downloadUrl = toolId ? `http://mynewbot.com/api/download-tool/${toolId}` : '';
 
     const html = `<div class="market-card-header">
         <h4 class="market-card-title">📦 ${toolName}</h4>
     </div>
-    <button onclick="downloadTool('${toolName.replace(/'/g, "\\'")}', '${downloadUrl}')" class="btn-sm" style="margin-top: 10px;">⬇ 下载</button>`;
+    <button onclick="downloadTool('${toolName.replace(/'/g, "\\'")}', '${downloadUrl}', '${fileName}')" class="btn-sm" style="margin-top: 10px;">⬇ 下载</button>`;
 
     card.innerHTML = html;
     return card;
 }
 
 // 下载工具
-async function downloadTool(toolName, downloadUrl) {
+async function downloadTool(toolName, downloadUrl, fileName) {
     try {
         const result = await fetch('/api/market/tools/download', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tool_name: toolName, download_url: downloadUrl })
+            body: JSON.stringify({ 
+                tool_name: toolName, 
+                download_url: downloadUrl,
+                file_name: fileName
+            })
         });
         const res = await result.json();
         if (res.success) {
