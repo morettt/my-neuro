@@ -11,6 +11,12 @@
 - MemCube 容器
 """
 
+import sys
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -1269,8 +1275,15 @@ async def search_memory(request: SearchMemoryRequest):
             if enable_bm25:
                 vector_score = scores.get('vector', 0)
                 bm25_score = scores.get('bm25', 0)
-                # 混合得分 = 向量权重 * 向量得分 + BM25权重 * BM25得分
-                mixed_similarity = vector_weight * vector_score + bm25_weight * bm25_score
+                if vector_score > 0 and bm25_score > 0:
+                    # 两者都有：向量为主，BM25 加分
+                    mixed_similarity = vector_score + bm25_weight * bm25_score
+                elif vector_score > 0:
+                    # 仅向量命中：直接用向量得分，不稀释
+                    mixed_similarity = vector_score
+                else:
+                    # 仅 BM25 命中：按 bm25_weight 缩放，防止归一化分数虚高
+                    mixed_similarity = bm25_weight * bm25_score
                 result['similarity'] = mixed_similarity
                 result['vector_score'] = vector_score
                 result['bm25_score'] = bm25_score
@@ -1390,12 +1403,13 @@ async def search_memory(request: SearchMemoryRequest):
         # 排序
         results.sort(key=lambda x: x.get('final_score', 0), reverse=True)
         
-        # 对最终混合得分也应用相似度阈值过滤（防止纯 BM25 低分结果绕过阈值）
+        # 基于原始相似度（混合后）过滤，而非 final_score
+        # 这样阈值的含义始终是"语义相关度门槛"，不会被重要度/类型权重干扰
         threshold = request.similarity_threshold
         before_filter = len(results)
-        results = [r for r in results if r.get('final_score', 0) >= threshold]
+        results = [r for r in results if r.get('similarity', 0) >= threshold]
         if before_filter > len(results):
-            print(f"   🔻 阈值过滤: {before_filter} → {len(results)} 条 (阈值={threshold})")
+            print(f"   🔻 阈值过滤: {before_filter} → {len(results)} 条 (阈值={threshold}, 基于相似度)")
         
         results = results[:request.top_k]
         
