@@ -6,6 +6,7 @@ WebUI 模块化重构 - 配置管理模块
 """
 
 import json
+import urllib.request
 from flask import Blueprint, request, jsonify
 
 from .utils import PROJECT_ROOT, logger
@@ -591,20 +592,18 @@ def preview_motion():
     try:
         data = request.get_json()
         motion = data.get('motion', '')
-        
+
         # 通过 HTTP 请求发送到桌宠的控制接口
-        import requests
         try:
-            response = requests.post(
-                'http://localhost:3002/control-motion',
-                json={'action': 'preview', 'motion': motion},
-                timeout=2
-            )
-            if response.status_code == 200:
-                return jsonify({'success': True, 'message': f'正在预览动作：{motion}'})
-        except:
+            json_data = json.dumps({'action': 'preview', 'motion': motion}).encode('utf-8')
+            req = urllib.request.Request('http://localhost:3002/control-motion', data=json_data, method='POST')
+            req.add_header('Content-Type', 'application/json')
+            with urllib.request.urlopen(req, timeout=2) as response:
+                if response.status == 200:
+                    return jsonify({'success': True, 'message': f'正在预览动作：{motion}'})
+        except Exception:
             pass
-        
+
         return jsonify({'success': True, 'message': f'预览请求已发送：{motion}'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -614,18 +613,16 @@ def preview_motion():
 def start_singing():
     """开始唱歌"""
     try:
-        import requests
         try:
-            response = requests.post(
-                'http://localhost:3002/control-motion',
-                json={'action': 'trigger_emotion', 'emotion_name': '唱歌'},
-                timeout=2
-            )
-            if response.status_code == 200:
-                return jsonify({'success': True, 'message': '已开始唱歌'})
-        except:
+            json_data = json.dumps({'action': 'trigger_emotion', 'emotion_name': '唱歌'}).encode('utf-8')
+            req = urllib.request.Request('http://localhost:3002/control-motion', data=json_data, method='POST')
+            req.add_header('Content-Type', 'application/json')
+            with urllib.request.urlopen(req, timeout=2) as response:
+                if response.status == 200:
+                    return jsonify({'success': True, 'message': '已开始唱歌'})
+        except Exception:
             pass
-        
+
         return jsonify({'success': True, 'message': '唱歌请求已发送'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -635,18 +632,16 @@ def start_singing():
 def stop_singing():
     """停止唱歌"""
     try:
-        import requests
         try:
-            response = requests.post(
-                'http://localhost:3002/control-motion',
-                json={'action': 'trigger_emotion', 'emotion_name': '停止'},
-                timeout=2
-            )
-            if response.status_code == 200:
-                return jsonify({'success': True, 'message': '已停止唱歌'})
-        except:
+            json_data = json.dumps({'action': 'trigger_emotion', 'emotion_name': '停止'}).encode('utf-8')
+            req = urllib.request.Request('http://localhost:3002/control-motion', data=json_data, method='POST')
+            req.add_header('Content-Type', 'application/json')
+            with urllib.request.urlopen(req, timeout=2) as response:
+                if response.status == 200:
+                    return jsonify({'success': True, 'message': '已停止唱歌'})
+        except Exception:
             pass
-        
+
         return jsonify({'success': True, 'message': '停止请求已发送'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -785,19 +780,17 @@ def preview_expression():
     try:
         data = request.get_json()
         expression = data.get('expression', '')
-        
-        import requests
+
         try:
-            response = requests.post(
-                'http://localhost:3002/control-expression',
-                json={'action': 'trigger_expression', 'expression_name': expression},
-                timeout=2
-            )
-            if response.status_code == 200:
-                return jsonify({'success': True, 'message': f'正在预览表情：{expression}'})
-        except:
+            json_data = json.dumps({'action': 'trigger_expression', 'expression_name': expression}).encode('utf-8')
+            req = urllib.request.Request('http://localhost:3002/control-expression', data=json_data, method='POST')
+            req.add_header('Content-Type', 'application/json')
+            with urllib.request.urlopen(req, timeout=2) as response:
+                if response.status == 200:
+                    return jsonify({'success': True, 'message': f'正在预览表情：{expression}'})
+        except Exception:
             pass
-        
+
         return jsonify({'success': True, 'message': f'预览请求已发送：{expression}'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500

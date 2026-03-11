@@ -64,8 +64,8 @@ def scan_plugins_directory():
                 with open(metadata_path, 'r', encoding='utf-8') as f:
                     metadata = json.load(f)
 
-                # 检查插件是否在 enabled_plugins.json 中
-                plugin_path = f"{category}/{metadata.get('name', plugin_dir.name)}"
+                # 使用目录名作为插件路径（与 live-2d 保持一致）
+                plugin_path = f"{category}/{plugin_dir.name}"
                 plugin_enabled = plugin_path in enabled_plugins
 
                 plugins.append({
@@ -100,26 +100,23 @@ def list_plugins():
 def toggle_plugin(plugin_name):
     """切换插件启用状态（使用 enabled_plugins.json）"""
     enabled_plugins = load_enabled_plugins()
-    
+
     # 查找插件的完整路径（built-in/xxx 或 community/xxx）
+    # 使用目录名作为插件路径（与 live-2d 保持一致）
     plugin_path = None
     for category in ['built-in', 'community']:
-        test_path = f"{category}/{plugin_name}"
         plugins_base = PROJECT_ROOT / 'live-2d' / 'plugins'
-        category_path = plugins_base / category / plugin_name.replace('_', '-')
-        if not category_path.exists():
-            category_path = plugins_base / category / plugin_name
-        if category_path.exists():
-            # 从 metadata.json 获取正确的插件名
-            metadata_path = category_path / 'metadata.json'
-            if metadata_path.exists():
-                with open(metadata_path, 'r', encoding='utf-8') as f:
-                    metadata = json.load(f)
-                actual_name = metadata.get('name', plugin_name)
-                plugin_path = f"{category}/{actual_name}"
+        # 尝试两种目录名格式（下划线和连字符）
+        for dir_name in [plugin_name.replace('_', '-'), plugin_name]:
+            category_path = plugins_base / category / dir_name
+            if category_path.exists():
+                plugin_path = f"{category}/{dir_name}"
                 break
-    
+        if plugin_path:
+            break
+
     if not plugin_path:
+        logger.error(f'插件不存在：{plugin_name}')
         return jsonify({'success': False, 'error': f'插件不存在：{plugin_name}'}), 404
     
     # 切换状态

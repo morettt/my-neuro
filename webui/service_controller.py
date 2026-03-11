@@ -87,9 +87,9 @@ def start_service(service):
                 'log_file': PROJECT_ROOT / 'logs' / 'bert.log'
             },
             'memos': {
-                'script': str(PROJECT_ROOT / 'MEMOS-API.bat'),
-                'args': ['cmd', '/c', 'start', 'cmd', '/k', str(PROJECT_ROOT / 'MEMOS-API.bat')],
-                'cwd': str(PROJECT_ROOT),
+                'script': str(PROJECT_ROOT / 'memos_system' / 'start_memos.bat'),
+                'args': ['cmd', '/c', 'start', 'cmd', '/k', 'cd /d ' + str(PROJECT_ROOT / 'memos_system') + ' && start_memos.bat'],
+                'cwd': str(PROJECT_ROOT / 'memos_system'),
                 'is_python': False,
                 'log_file': PROJECT_ROOT / 'logs' / 'memos.log'
             },
@@ -140,22 +140,18 @@ def start_service(service):
 def stop_service(service):
     """停止指定服务"""
     try:
-        # 检查服务是否运行
-        if not is_service_running(service):
-            return jsonify({'success': False, 'error': '服务未运行'})
-
         # 使用 PowerShell 根据命令行参数查找 PID，然后用 taskkill /T 终止进程树
         if sys.platform.startswith('win'):
             # 构建 bat 文件名
             if service == 'live2d':
                 bat_name = 'go.bat'
             elif service == 'memos':
-                bat_name = 'MEMOS-API.bat'
+                bat_name = 'start_memos.bat'
             elif service == 'rag':
                 bat_name = 'RAG.bat'
             else:
                 bat_name = f'{service}.bat'
-            
+
             # 使用 PowerShell 查找包含 bat 文件名的进程 PID
             ps_script = f"""
             $ErrorActionPreference = 'SilentlyContinue'
@@ -164,24 +160,24 @@ def stop_service(service):
                 Write-Output $proc.ProcessId
             }}
             """
-            
+
             result = subprocess.run(
                 ['powershell', '-Command', ps_script],
                 capture_output=True, text=True, timeout=10
             )
-            
+
             # 解析输出的 PID 列表
             pids = [line.strip() for line in result.stdout.split('\n') if line.strip().isdigit()]
-            
-            # 如果没有找到进程，返回错误
+
+            # 如果没有找到进程，说明服务已停止，直接重置状态
             if not pids:
-                logger.error(f'停止 {service} 服务失败：未找到相关进程（可能已意外终止）')
-                # 清除标记（即使没有找到进程）
+                logger.info(f'{service} 服务已停止（进程不存在）')
+                # 清除标记（确保按钮复位）
                 service_pids[service] = False
                 if service in service_processes:
                     del service_processes[service]
-                return jsonify({'success': False, 'error': f'未找到 {service} 服务进程，可能已意外终止'})
-            
+                return jsonify({'success': True, 'message': '服务已停止'})
+
             # 对每个 PID 使用 taskkill /T 终止进程树
             killed_count = 0
             failed_pids = []
@@ -190,25 +186,34 @@ def stop_service(service):
                     ['taskkill', '/F', '/T', '/PID', pid],
                     capture_output=True, text=True, timeout=10
                 )
-                if '成功' in kill_result.stdout or '成功' in kill_result.stderr:
+                # taskkill 成功时输出 "SUCCESS: ... has been terminated."（英文系统）或 "成功"（中文系统）
+                output = kill_result.stdout + kill_result.stderr
+                if 'SUCCESS' in output or '成功' in output or 'terminated' in output:
                     killed_count += 1
                     logger.debug(f'已终止进程树 PID: {pid}')
                 else:
-                    failed_pids.append(pid)
-                    logger.warning(f'终止进程 PID {pid} 失败：{kill_result.stderr or kill_result.stdout}')
-            
-            # 检查是否有终止失败的进程
-            if failed_pids and killed_count == 0:
-                logger.error(f'停止 {service} 服务失败：所有进程终止失败')
-                return jsonify({'success': False, 'error': f'停止服务失败：无法终止进程 (PID: {", ".join(failed_pids)})'})
-            
-            # 清除服务标记
+                    # 只有在返回码非 0 时才认为是失败（有时输出为空但实际成功了）
+                    if kill_result.returncode != 0:
+                        failed_pids.append(pid)
+                        logger.warning(f'终止进程 PID {pid} 失败：{output or f"返回码={kill_result.returncode}"}')
+                    else:
+                        # 返回码为 0 视为成功
+                        killed_count += 1
+                        logger.debug(f'已终止进程树 PID: {pid} (返回码=0)')
+
+            # 清除服务标记（无论成功与否都重置按钮）
             service_pids[service] = False
             if service in service_processes:
                 del service_processes[service]
 
-            logger.warning(f'{service} 服务已停止（终止了 {killed_count} 个进程树）')
-            return jsonify({'success': True, 'message': f'成功终止 {killed_count} 个进程'})
+            if killed_count > 0:
+                logger.info(f'{service} 服务已停止（终止了 {killed_count} 个进程树）')
+                return jsonify({'success': True, 'message': f'成功终止 {killed_count} 个进程'})
+            elif failed_pids:
+                logger.warning(f'{service} 服务停止：所有进程终止失败，但已重置状态')
+                return jsonify({'success': True, 'warning': '进程可能已自行关闭'})
+            else:
+                return jsonify({'success': True, 'message': '服务已停止'})
         else:
             return jsonify({'success': False, 'error': '仅支持 Windows 系统'})
     except subprocess.TimeoutExpired:
@@ -218,4 +223,6 @@ def stop_service(service):
         return jsonify({'success': True, 'warning': '停止命令已发送，但可能未完全终止'})
     except Exception as e:
         logger.error(f'停止 {service} 服务失败：{str(e)}')
-        return jsonify({'success': False, 'error': str(e)})
+        # 异常时也清除标记
+        service_pids[service] = False
+        return jsonify({'success': True, 'warning': f'停止服务时出错：{str(e)}'})
