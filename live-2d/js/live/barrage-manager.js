@@ -5,6 +5,7 @@ const { Events } = require('../core/events.js');
 const { appState } = require('../core/app-state.js');
 const { LLMClient } = require('../ai/llm-client.js');
 const { toolExecutor } = require('../ai/tool-executor.js');
+const { llmProviderManager } = require('../core/llm-provider.js');
 
 class BarrageManager {
     constructor(config) {
@@ -13,7 +14,16 @@ class BarrageManager {
         this.priorityQueue = [];    // 优先队列（保留，暂未使用）
         this.isProcessing = false;
         this.interruptFlag = false; // 打断标志
-        this.llmClient = new LLMClient(config);
+        // 弹幕总结/回复也应复用统一的 provider/model 选择，
+        // 否则这条链路会继续停留在旧 config.llm 直连模式。
+        const resolvedProvider = llmProviderManager.resolveProvider(
+            config.llm?.provider_id || null,
+            config.llm || null,
+            config.llm?.model_id || config.llm?.model || null
+        );
+        this.llmClient = (resolvedProvider && resolvedProvider.id !== '_empty' && resolvedProvider.api_key)
+            ? LLMClient.fromProviderConfig(resolvedProvider)
+            : new LLMClient(config);
 
         // 依赖的外部服务
         this.voiceChat = null;

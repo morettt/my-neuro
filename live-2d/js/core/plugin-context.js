@@ -106,9 +106,15 @@ class PluginContext {
     async callLLM(prompt, options = {}) {
         let apiUrl, apiKey, model;
 
-        // 优先通过 provider_id 获取 LLM 配置
+        // 优先通过 provider_id 解析。
+        // 这里显式传入 options.model，可以确保插件调用也走统一的 provider/model 注册表，
+        // 而不是只拿到 provider 的默认模型。
         if (options.provider_id) {
-            const provider = llmProviderManager.resolveProvider(options.provider_id);
+            const provider = llmProviderManager.resolveProvider(
+                options.provider_id,
+                this._config?.llm || null,
+                options.model || null
+            );
             if (provider && provider.api_key) {
                 apiUrl = provider.api_url;
                 apiKey = provider.api_key;

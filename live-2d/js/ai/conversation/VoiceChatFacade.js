@@ -21,21 +21,17 @@ class VoiceChatFacade {
         this.hideSubtitle = hideSubtitle;
 
         // LLM配置（暴露给外部使用）
-        // 优先从 provider 获取，降级到 config.llm 直接值
-        const defaultProvider = llmProviderManager.getDefaultProvider();
-        if (defaultProvider && defaultProvider.api_key) {
-            this.API_KEY = defaultProvider.api_key;
-            this.API_URL = defaultProvider.api_url;
-            // 从 models 数组中获取当前活跃模型，或回退到第一个启用模型
-            const activeModelId = llmProviderManager.getActiveModelId();
-            if (activeModelId) {
-                this.MODEL = activeModelId;
-            } else if (defaultProvider.models && defaultProvider.models.length > 0) {
-                const enabledModel = defaultProvider.models.find(m => m.enabled !== false);
-                this.MODEL = enabledModel ? enabledModel.model_id : defaultProvider.models[0].model_id;
-            } else {
-                this.MODEL = '';
-            }
+        // 这里必须优先解析 config.llm.provider_id + config.llm.model_id，
+        // 否则外部模块拿到的 API_KEY / API_URL / MODEL 可能与 UI 当前选择不一致。
+        const resolvedProvider = llmProviderManager.resolveProvider(
+            config.llm?.provider_id || null,
+            config.llm || null,
+            config.llm?.model_id || config.llm?.model || null
+        );
+        if (resolvedProvider && resolvedProvider.id !== '_empty' && resolvedProvider.api_key) {
+            this.API_KEY = resolvedProvider.api_key;
+            this.API_URL = resolvedProvider.api_url;
+            this.MODEL = resolvedProvider.model || '';
         } else {
             this.API_KEY = config.llm.api_key;
             this.API_URL = config.llm.api_url;

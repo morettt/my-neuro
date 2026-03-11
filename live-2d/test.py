@@ -2660,9 +2660,13 @@ class set_pyqt(QWidget):
         self.ui.pushButton_del_provider.clicked.connect(self._del_provider)
         self.ui.pushButton_fetch_models.clicked.connect(self._fetch_models)
         self.ui.pushButton_add_model.clicked.connect(self._add_model)
-        self.ui.pushButton_del_model.clicked.connect(self._del_model)
-        self.ui.listWidget_models.itemClicked.connect(self._on_model_item_clicked)
-        self.ui.listWidget_models.itemDoubleClicked.connect(self._on_model_item_double_clicked)
+        self.ui.tableWidget_models.itemSelectionChanged.connect(self._on_model_table_selection_changed)
+        self.ui.tableWidget_models.cellDoubleClicked.connect(self._on_model_table_double_clicked)
+        self.ui.tableWidget_models.verticalHeader().setVisible(False)
+        self.ui.tableWidget_models.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.ui.tableWidget_models.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.ui.tableWidget_models.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.ui.tableWidget_models.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.ui.comboBox_llm_provider.currentIndexChanged.connect(self._on_llm_model_combo_changed)
         self.ui.comboBox_vision_provider.currentIndexChanged.connect(self._on_vision_model_combo_changed)
         # 新增按钮绑定
@@ -3195,11 +3199,32 @@ class set_pyqt(QWidget):
         # LLM 提供商列表
         self._init_provider_list()
         self._populate_model_combos()
-        self.ui.lineEdit.setText(self.config['llm']['api_key'])
-        self.ui.lineEdit_2.setText(self.config['llm']['api_url'])
-        self.ui.lineEdit_3.setText(self.config['llm']['model'])
-        self.ui.textEdit_3.setPlainText(self.config['llm']['system_prompt'])
-        self.ui.doubleSpinBox_temperature.setValue(self.config['llm'].get('temperature', 1.0))
+        llm_config = self.config.get('llm', {})
+        active_provider = None
+        active_provider_id = llm_config.get('provider_id', '')
+        if active_provider_id:
+            active_provider = next(
+                (p for p in getattr(self, '_providers', []) if p.get('id') == active_provider_id),
+                None
+            )
+        if active_provider is None and getattr(self, '_providers', []):
+            row = self.ui.listWidget_providers.currentRow()
+            if 0 <= row < len(self._providers):
+                active_provider = self._providers[row]
+            else:
+                active_provider = self._providers[0]
+
+        self.ui.lineEdit.setText(
+            llm_config.get('api_key', (active_provider or {}).get('api_key', ''))
+        )
+        self.ui.lineEdit_2.setText(
+            llm_config.get('api_url', (active_provider or {}).get('api_url', ''))
+        )
+        self.ui.lineEdit_3.setText(llm_config.get('model', llm_config.get('model_id', '')))
+        self.ui.textEdit_3.setPlainText(llm_config.get('system_prompt', ''))
+        self.ui.doubleSpinBox_temperature.setValue(
+            llm_config.get('temperature', (active_provider or {}).get('temperature', 1.0))
+        )
         self.ui.lineEdit_4.setText(self.config['ui']['intro_text'])
         self.ui.lineEdit_5.setText(str(self.config['context']['max_messages']))
         self.ui.checkBox_mcp.setChecked(self.config.get('tools', {}).get('enabled', True))
@@ -3758,6 +3783,7 @@ class set_pyqt(QWidget):
     def _open_plugin_detail(self, info):
         """切换到详情页并刷新内容（支持 schema 格式）"""
         self._detail_current_info = info
+        self._detail_edit_meta = {}
         meta = info['meta']
         cfg  = info['cfg']
 
@@ -3783,7 +3809,7 @@ class set_pyqt(QWidget):
 
         for key, field_def in cfg.items():
             if not isinstance(field_def, dict) or 'type' not in field_def:
-                self._add_detail_field(key, key, '', 'string', field_def)
+                self._add_detail_field(key, key, '', 'string', field_def, {})
                 continue
 
             field_type = field_def.get('type', 'string')
@@ -3807,20 +3833,141 @@ class set_pyqt(QWidget):
                                            sub_def.get('title', sub_key),
                                            sub_def.get('description', ''),
                                            sub_def.get('type', 'string'),
-                                           cur_val)
+                                           cur_val,
+                                           sub_def)
             else:
                 cur_val = field_def.get('value', field_def.get('default'))
                 self._add_detail_field(key,
                                        field_def.get('title', key),
                                        field_def.get('description', ''),
                                        field_type,
-                                       cur_val)
+                                       cur_val,
+                                       field_def)
 
         self._detail_form_layout.addStretch()
         self._detail_form_scroll.setWidget(form_widget)
+        self._refresh_plugin_llm_detail_combos()
         self.ui.stackedWidget.setCurrentIndex(self._plugins_detail_index)
 
-    def _add_detail_field(self, edit_key, title, description, field_type, current_value):
+    def _plugin_detail_widget_value(self, widget):
+        """Read a plugin detail widget value while preserving combo-box item data."""
+        if isinstance(widget, QCheckBox):
+            return widget.isChecked()
+        if isinstance(widget, QTextEdit):
+            return widget.toPlainText()
+        if isinstance(widget, QComboBox):
+            data = widget.currentData()
+            return data if data is not None else widget.currentText()
+        return widget.text()
+
+    def _plugin_llm_provider_options(self):
+        """Return enabled LLM providers for plugin config dropdowns."""
+        options = []
+        for provider in getattr(self, '_providers', []):
+            if not isinstance(provider, dict) or provider.get('enabled', True) is False:
+                continue
+            provider_id = provider.get('id', '')
+            if not provider_id:
+                continue
+            options.append((provider.get('name') or provider_id, provider_id))
+        return options
+
+    def _plugin_llm_model_options(self, provider_id):
+        """Return enabled models under the selected provider for plugin config dropdowns."""
+        provider = next(
+            (p for p in getattr(self, '_providers', []) if isinstance(p, dict) and p.get('id') == provider_id),
+            None
+        )
+        if not provider:
+            return []
+        options = []
+        for model in provider.get('models', []):
+            if not isinstance(model, dict) or model.get('enabled', True) is False:
+                continue
+            model_id = model.get('model_id', '')
+            if not model_id:
+                continue
+            options.append((self._format_provider_model_display(provider, model_id), model_id))
+        return options
+
+    def _plugin_llm_provider_field_key(self, edit_key, field_def):
+        """Resolve which provider field drives a llm_model field."""
+        provider_field = (field_def or {}).get('provider_field', '').strip()
+        if provider_field:
+            return provider_field
+        if edit_key.endswith('.model_id'):
+            return f"{edit_key.rsplit('.', 1)[0]}.provider_id"
+        return 'provider_id'
+
+    def _set_combo_value(self, combo, value):
+        value = '' if value is None else str(value)
+        index = combo.findData(value)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+            return
+        if value:
+            combo.addItem(f'{value}（当前配置）', value)
+            combo.setCurrentIndex(combo.count() - 1)
+            return
+        if combo.count() > 0:
+            combo.setCurrentIndex(0)
+
+    def _refresh_plugin_llm_detail_combos(self):
+        """Refresh plugin-config LLM dropdowns from the unified provider/model registry."""
+        if not hasattr(self, '_detail_edits') or not hasattr(self, '_detail_edit_meta'):
+            return
+
+        for edit_key, widget in self._detail_edits.items():
+            meta = self._detail_edit_meta.get(edit_key, {})
+            if meta.get('type') != 'llm_provider' or not isinstance(widget, QComboBox):
+                continue
+            current_value = meta.get('current_value', '')
+            widget.blockSignals(True)
+            widget.clear()
+            widget.addItem('（跟随当前全局模型）', '')
+            for display, provider_id in self._plugin_llm_provider_options():
+                widget.addItem(display, provider_id)
+            self._set_combo_value(widget, current_value)
+            widget.blockSignals(False)
+            meta['current_value'] = self._plugin_detail_widget_value(widget)
+
+        for edit_key, widget in self._detail_edits.items():
+            meta = self._detail_edit_meta.get(edit_key, {})
+            if meta.get('type') != 'llm_model' or not isinstance(widget, QComboBox):
+                continue
+            provider_key = self._plugin_llm_provider_field_key(edit_key, meta.get('field_def', {}))
+            provider_widget = self._detail_edits.get(provider_key)
+            provider_id = self._plugin_detail_widget_value(provider_widget) if provider_widget else ''
+            current_value = meta.get('current_value', '')
+            widget.blockSignals(True)
+            widget.clear()
+            if provider_id:
+                widget.setEnabled(True)
+                widget.addItem('（使用提供商默认模型）', '')
+                for display, model_id in self._plugin_llm_model_options(provider_id):
+                    widget.addItem(display, model_id)
+            else:
+                widget.setEnabled(False)
+                widget.addItem('（先选择提供商）', '')
+            self._set_combo_value(widget, current_value)
+            widget.blockSignals(False)
+            meta['current_value'] = self._plugin_detail_widget_value(widget)
+
+    def _on_plugin_llm_provider_combo_changed(self, provider_key):
+        """Keep dependent llm_model dropdowns in sync when the provider changes."""
+        if not hasattr(self, '_detail_edit_meta'):
+            return
+        provider_widget = self._detail_edits.get(provider_key)
+        if provider_widget is not None:
+            self._detail_edit_meta[provider_key]['current_value'] = self._plugin_detail_widget_value(provider_widget)
+        for edit_key, meta in self._detail_edit_meta.items():
+            if meta.get('type') != 'llm_model':
+                continue
+            if self._plugin_llm_provider_field_key(edit_key, meta.get('field_def', {})) == provider_key:
+                meta['current_value'] = ''
+        self._refresh_plugin_llm_detail_combos()
+
+    def _add_detail_field(self, edit_key, title, description, field_type, current_value, field_def=None):
         """在详情页添加一个配置字段"""
         container = QVBoxLayout()
         container.setSpacing(3)
@@ -3834,7 +3981,17 @@ class set_pyqt(QWidget):
         if field_type == 'bool':
             widget = QCheckBox()
             widget.setChecked(bool(current_value))
-            self._detail_edits[edit_key] = widget
+            container.addWidget(widget)
+        elif field_type == 'llm_provider':
+            widget = QComboBox()
+            widget.setFont(self._ui_font())
+            widget.currentIndexChanged.connect(
+                lambda _=0, provider_key=edit_key: self._on_plugin_llm_provider_combo_changed(provider_key)
+            )
+            container.addWidget(widget)
+        elif field_type == 'llm_model':
+            widget = QComboBox()
+            widget.setFont(self._ui_font())
             container.addWidget(widget)
         elif field_type == 'text':
             widget = QTextEdit()
@@ -3842,13 +3999,18 @@ class set_pyqt(QWidget):
             widget.setPlainText(str(current_value) if current_value is not None else '')
             widget.setMinimumHeight(80)
             widget.setMaximumHeight(120)
-            self._detail_edits[edit_key] = widget
             container.addWidget(widget)
         else:
             widget = QLineEdit(str(current_value) if current_value is not None else '')
             widget.setFont(self._ui_font())
-            self._detail_edits[edit_key] = widget
             container.addWidget(widget)
+
+        self._detail_edits[edit_key] = widget
+        self._detail_edit_meta[edit_key] = {
+            'type': field_type,
+            'field_def': field_def or {},
+            'current_value': current_value,
+        }
 
         if description:
             desc_lbl = QLabel(description)
@@ -3866,12 +4028,7 @@ class set_pyqt(QWidget):
         cfg_path = self._detail_current_info['cfg_path']
 
         for edit_key, widget in self._detail_edits.items():
-            if isinstance(widget, QCheckBox):
-                value = widget.isChecked()
-            elif isinstance(widget, QTextEdit):
-                value = widget.toPlainText()
-            else:
-                value = widget.text()
+            value = self._plugin_detail_widget_value(widget)
 
             if '.' in edit_key:
                 parent_key, child_key = edit_key.split('.', 1)
@@ -4302,16 +4459,115 @@ class set_pyqt(QWidget):
 
     # ===== LLM 提供商管理 =====
 
+    def _get_provider_model_prefix(self, provider):
+        """返回 provider 对应的模型前缀。"""
+        if not isinstance(provider, dict):
+            return ''
+        prefix = (provider.get('name') or provider.get('id') or '').strip()
+        return prefix.strip('/')
+
+    def _normalize_model_id_for_provider(self, provider, model_id):
+        """将模型 ID 规范化为 provider/model 形式。"""
+        model_id = (model_id or '').strip()
+        if not model_id:
+            return ''
+        if '/' in model_id:
+            return model_id
+        prefix = self._get_provider_model_prefix(provider)
+        return f'{prefix}/{model_id}' if prefix else model_id
+
+    def _normalize_model_entry(self, provider, model_entry):
+        """兼容旧配置里只保存裸模型名的情况。"""
+        if not isinstance(model_entry, dict):
+            return {'model_id': self._normalize_model_id_for_provider(provider, str(model_entry))}
+
+        normalized = dict(model_entry)
+        raw_model_id = normalized.get('model_id') or normalized.get('id') or normalized.get('name') or ''
+        normalized_model_id = self._normalize_model_id_for_provider(provider, raw_model_id)
+        normalized['model_id'] = normalized_model_id
+
+        current_name = normalized.get('name', '')
+        if not current_name or current_name == raw_model_id:
+            normalized['name'] = normalized_model_id
+        return normalized
+
+    def _format_provider_model_display(self, provider, model_id):
+        """统一显示为 提供商/模型ID。"""
+        prefix = self._get_provider_model_prefix(provider)
+        model_id = (model_id or '').strip()
+        if not prefix or not model_id:
+            return model_id
+        if model_id == prefix or model_id.startswith(f'{prefix}/'):
+            return model_id
+        return f'{prefix}/{model_id}'
+
+    def _normalize_selected_model_refs(self):
+        """同步 llm/vision 当前选中的模型 ID 到规范化后的路径。"""
+        llm_cfg = self.config.setdefault('llm', {})
+        vision_cfg = self.config.setdefault('vision', {})
+
+        provider_by_id = {
+            p.get('id', ''): p for p in getattr(self, '_providers', []) if isinstance(p, dict)
+        }
+
+        llm_provider = provider_by_id.get(llm_cfg.get('provider_id', ''))
+        llm_cfg['model_id'] = self._normalize_model_id_for_provider(
+            llm_provider, llm_cfg.get('model_id', llm_cfg.get('model', ''))
+        )
+
+        vision_provider = provider_by_id.get(vision_cfg.get('provider_id', ''))
+        vision_cfg['model_id'] = self._normalize_model_id_for_provider(
+            vision_provider,
+            vision_cfg.get('model_id', vision_cfg.get('vision_model', {}).get('model', ''))
+        )
+
+    def _iter_enabled_models(self, providers):
+        """遍历所有启用 provider 下启用的模型。"""
+        for p in providers:
+            if not p.get('enabled', True):
+                continue
+            p_id = p.get('id', '')
+            for m in p.get('models', []):
+                if not m.get('enabled', True):
+                    continue
+                yield p, p_id, m
+
+    def _ensure_valid_selected_model_refs(self):
+        """如果当前选中的模型已被禁用或删除，则回退到首个可用模型。"""
+        providers = getattr(self, '_providers', [])
+        enabled_pairs = [(p_id, m.get('model_id', '')) for _, p_id, m in self._iter_enabled_models(providers)]
+
+        llm_cfg = self.config.setdefault('llm', {})
+        current_llm_pair = (llm_cfg.get('provider_id', ''), llm_cfg.get('model_id', ''))
+        if current_llm_pair not in enabled_pairs:
+            if enabled_pairs:
+                llm_cfg['provider_id'], llm_cfg['model_id'] = enabled_pairs[0]
+                llm_cfg['model'] = llm_cfg['model_id']
+            else:
+                llm_cfg['provider_id'] = ''
+                llm_cfg['model_id'] = ''
+                llm_cfg['model'] = ''
+
+        vision_cfg = self.config.setdefault('vision', {})
+        current_vision_pair = (vision_cfg.get('provider_id', ''), vision_cfg.get('model_id', ''))
+        if current_vision_pair not in enabled_pairs:
+            vision_cfg['provider_id'] = ''
+            vision_cfg['model_id'] = ''
+
     def _normalize_provider_models(self, p):
         '''确保 provider 有 models 数组（兼容旧格式 model 字符串）'''
         if 'models' not in p or not isinstance(p.get('models'), list):
             old_model = p.get('model', '')
             if old_model:
                 p['models'] = [
-                    {'model_id': old_model, 'name': old_model, 'enabled': True}
+                    self._normalize_model_entry(
+                        p, {'model_id': old_model, 'name': old_model, 'enabled': True}
+                    )
                 ]
             else:
                 p['models'] = []
+        else:
+            p['models'] = [self._normalize_model_entry(p, m) for m in p.get('models', [])]
         return p
 
     def _init_provider_list(self):
@@ -4334,15 +4590,19 @@ class set_pyqt(QWidget):
                         'name': '主模型',
                         'api_key': llm.get('api_key', ''),
                         'api_url': llm.get('api_url', ''),
-                        'models': [
-                            {'model_id': old_model, 'name': old_model, 'enabled': True}
-                        ]
-                        if old_model
-                        else [],
+                        'models': (
+                            [self._normalize_model_entry(
+                                {'id': 'main', 'name': '主模型'},
+                                {'model_id': old_model, 'name': old_model, 'enabled': True}
+                            )]
+                            if old_model else []
+                        ),
                         'temperature': llm.get('temperature', 1.0),
                         'enabled': True,
                     }
                 ]
+
+        self._normalize_selected_model_refs()
 
         self.ui.listWidget_providers.blockSignals(True)
         self.ui.listWidget_providers.clear()
@@ -4370,8 +4630,10 @@ class set_pyqt(QWidget):
         self.ui.lineEdit_3.setText('')
         self.ui.doubleSpinBox_temperature.setValue(1.0)
         self.ui.checkBox_provider_enabled.setChecked(True)
-        self.ui.listWidget_models.clear()
+        self.ui.tableWidget_models.clearContents()
+        self.ui.tableWidget_models.setRowCount(0)
         self.ui.comboBox_models.clearEditText()
+        self._update_model_action_buttons(None)
         try:
             self.ui.label_active_model.setText('')
         except Exception:
@@ -4402,7 +4664,7 @@ class set_pyqt(QWidget):
         p['temperature'] = self.ui.doubleSpinBox_temperature.value()
         p['enabled'] = self.ui.checkBox_provider_enabled.isChecked()
         tag = '' if p['enabled'] else '  [已禁用]'
-        self.ui.listWidget_providers.item(row).setText(f'{p['name']}{tag}')
+        self.ui.listWidget_providers.item(row).setText(f"{p['name']}{tag}")
         self._populate_model_combos()
 
     def _add_provider(self):
@@ -4491,42 +4753,152 @@ class set_pyqt(QWidget):
         if model_ids is None:
             self.toast.show_message('获取模型列表失败，请检查 API URL / KEY', 3000)
             return
-        current = self.ui.comboBox_models.currentText()
+        row = self.ui.listWidget_providers.currentRow()
+        provider = self._providers[row] if 0 <= row < len(getattr(self, '_providers', [])) else {}
+        normalized_model_ids = [
+            self._normalize_model_id_for_provider(provider, model_id) for model_id in model_ids
+        ]
+        current = self._normalize_model_id_for_provider(provider, self.ui.comboBox_models.currentText())
         self.ui.comboBox_models.blockSignals(True)
         self.ui.comboBox_models.clear()
-        self.ui.comboBox_models.addItems(model_ids)
+        self.ui.comboBox_models.addItems(normalized_model_ids)
         idx = self.ui.comboBox_models.findText(current)
         if idx >= 0:
             self.ui.comboBox_models.setCurrentIndex(idx)
         else:
             self.ui.comboBox_models.setCurrentText(current)
         self.ui.comboBox_models.blockSignals(False)
-        self.toast.show_message(f'已获取 {len(model_ids)} 个模型', 2000)
+        self.toast.show_message(f'已获取 {len(normalized_model_ids)} 个模型', 2000)
 
-    def _refresh_model_list(self, models):
-        '''用 models 数组重新填充 listWidget_models，高亮当前激活模型'''
+    def _get_selected_model_id(self):
+        table = self.ui.tableWidget_models
+        row = table.currentRow()
+        if row < 0:
+            return ''
+        item = table.item(row, 0)
+        if item is None:
+            return ''
+        return item.data(Qt.UserRole) or ''
+
+    def _find_provider_model(self, provider, model_id):
+        if not isinstance(provider, dict) or not model_id:
+            return None
+        return next((m for m in provider.get('models', []) if m.get('model_id') == model_id), None)
+
+    def _create_model_table_button(self, text, style, handler, tooltip=''):
+        btn = QPushButton(text)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setStyleSheet(style)
+        btn.setMinimumSize(36, 30)
+        btn.setMaximumWidth(40)
+        # Use an emoji-capable font so icon-style button labels render reliably on Windows.
+        btn.setFont(QFont('Segoe UI Emoji', 12))
+        if tooltip:
+            btn.setToolTip(tooltip)
+        btn.clicked.connect(handler)
+        return btn
+
+    def _select_model_table_row(self, model_id):
+        table = self.ui.tableWidget_models
+        if not model_id:
+            table.clearSelection()
+            table.setCurrentCell(-1, -1)
+            return
+        for row in range(table.rowCount()):
+            item = table.item(row, 0)
+            if item and item.data(Qt.UserRole) == model_id:
+                table.selectRow(row)
+                table.setCurrentCell(row, 0)
+                return
+
+    def _refresh_model_list(self, models, selected_model_id=None):
+        """用表格刷新当前提供商的模型列表。"""
         active_model_id = self.config.get('llm', {}).get('model_id', '')
-        self.ui.listWidget_models.blockSignals(True)
-        self.ui.listWidget_models.clear()
+        table = self.ui.tableWidget_models
+        table.blockSignals(True)
+        table.clearContents()
+        table.setRowCount(0)
+        self._updating_model_list = True
+        row = self.ui.listWidget_providers.currentRow()
+        provider = self._providers[row] if 0 <= row < len(getattr(self, '_providers', [])) else {}
+
+        table.setColumnWidth(0, 440)
+        table.setColumnWidth(1, 72)
+        table.setColumnWidth(2, 72)
+        table.setColumnWidth(3, 72)
+
         for m in models:
             mid = m.get('model_id', '')
             enabled = m.get('enabled', True)
-            if enabled:
-                display = f'● {mid}'
-            else:
-                display = f'○ {mid}  [禁用]'
-            item = QListWidgetItem(display)
-            item.setData(Qt.UserRole, mid)
+            row_index = table.rowCount()
+            table.insertRow(row_index)
+            table.setRowHeight(row_index, 46)
+
+            display = self._format_provider_model_display(provider, mid)
+            model_item = QTableWidgetItem(display)
+            model_item.setData(Qt.UserRole, mid)
+            model_item.setData(Qt.UserRole + 1, enabled)
+            model_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            if not enabled:
+                model_item.setForeground(QColor(130, 130, 130))
             if mid == active_model_id:
-                font = item.font()
+                font = model_item.font()
                 font.setBold(True)
-                item.setFont(font)
-                item.setForeground(QColor(0, 100, 200))
-            self.ui.listWidget_models.addItem(item)
-        self.ui.listWidget_models.blockSignals(False)
+                model_item.setFont(font)
+                model_item.setForeground(QColor(0, 100, 200))
+            table.setItem(row_index, 0, model_item)
+
+            status_btn = self._create_model_table_button(
+                '✓' if enabled else '✕',
+                (
+                    'QPushButton { background-color: #8e44ad; color: white; border: none; border-radius: 4px; padding: 4px 10px; }'
+                    'QPushButton:hover { background-color: #6c3483; }'
+                )
+                if enabled
+                else (
+                    'QPushButton { background-color: #b0bec5; color: #37474f; border: none; border-radius: 4px; padding: 4px 10px; }'
+                    'QPushButton:hover { background-color: #90a4ae; }'
+                ),
+                lambda _=False, model_id=mid: self._toggle_selected_model_enabled(model_id),
+                '点击切换启用状态',
+            )
+            table.setCellWidget(row_index, 1, status_btn)
+
+            test_btn = self._create_model_table_button(
+                '🔌',
+                'QPushButton { background-color: #455a64; color: white; border: none; border-radius: 4px; padding: 4px 10px; }'
+                'QPushButton:hover { background-color: #37474f; }',
+                lambda _=False, model_id=mid: self._test_selected_model(model_id),
+                '测活',
+            )
+            table.setCellWidget(row_index, 2, test_btn)
+
+            del_btn = self._create_model_table_button(
+                '🗑',
+                'QPushButton { background-color: #f44336; color: white; border: none; border-radius: 4px; padding: 4px 10px; }'
+                'QPushButton:hover { background-color: #c62828; }',
+                lambda _=False, model_id=mid: self._del_model(model_id),
+                '删除模型',
+            )
+            table.setCellWidget(row_index, 3, del_btn)
+
+        self._updating_model_list = False
+        table.blockSignals(False)
+
+        selection_target = selected_model_id or active_model_id
+        self._select_model_table_row(selection_target)
+        self._update_model_action_buttons(selection_target)
         try:
             if active_model_id:
-                self.ui.label_active_model.setText(f'当前模型：{active_model_id}')
+                active_provider = provider
+                active_provider_id = self.config.get('llm', {}).get('provider_id', '')
+                for candidate in getattr(self, '_providers', []):
+                    if candidate.get('id', '') == active_provider_id:
+                        active_provider = candidate
+                        break
+                self.ui.label_active_model.setText(
+                    f'当前模型: {self._format_provider_model_display(active_provider, active_model_id)}'
+                )
                 self.ui.label_active_model.setStyleSheet('color: rgb(0, 100, 200);')
             else:
                 self.ui.label_active_model.setText('')
@@ -4538,11 +4910,12 @@ class set_pyqt(QWidget):
         row = self.ui.listWidget_providers.currentRow()
         if row < 0 or row >= len(self._providers):
             return
-        model_id = self.ui.comboBox_models.currentText().strip()
-        if not model_id:
+        model_input = self.ui.comboBox_models.currentText().strip()
+        if not model_input:
             self.toast.show_message('请先选择或输入模型 ID', 2000)
             return
         p = self._providers[row]
+        model_id = self._normalize_model_id_for_provider(p, model_input)
         models = p.setdefault('models', [])
         for m in models:
             if m.get('model_id') == model_id:
@@ -4550,53 +4923,173 @@ class set_pyqt(QWidget):
                 return
         models.append({'model_id': model_id, 'name': model_id, 'enabled': True})
         self._refresh_model_list(models)
+        self._ensure_valid_selected_model_refs()
+        self._populate_model_combos()
+        self.ui.comboBox_models.setCurrentText(model_id)
         self.toast.show_message(f'已添加模型：{model_id}', 2000)
 
-    def _del_model(self):
-        '''删除 listWidget_models 中选中的模型'''
+    def _del_model(self, model_id=None):
+        """删除当前提供商下的模型。"""
         row = self.ui.listWidget_providers.currentRow()
         if row < 0 or row >= len(self._providers):
             return
-        model_row = self.ui.listWidget_models.currentRow()
-        if model_row < 0:
+        model_id = model_id or self._get_selected_model_id()
+        if not model_id:
             return
         p = self._providers[row]
         models = p.get('models', [])
-        if model_row >= len(models):
+        removed = next((m for m in models if m.get('model_id') == model_id), None)
+        if removed is None:
             return
-        removed = models.pop(model_row)
+        models.remove(removed)
         if removed.get('model_id') == self.config.get('llm', {}).get('model_id', ''):
             self.config.setdefault('llm', {})['model_id'] = ''
+            self.config.setdefault('llm', {})['model'] = ''
+        self._ensure_valid_selected_model_refs()
+        self._populate_model_combos()
         self._refresh_model_list(models)
+        self.toast.show_message(f'已删除模型: {self._format_provider_model_display(p, model_id)}', 2000)
 
-    def _on_model_item_clicked(self, item):
-        '''单击模型行 → 设为当前激活模型'''
-        model_id = item.data(Qt.UserRole)
-        if not model_id:
-            return
-        self.config.setdefault('llm', {})['model_id'] = model_id
-        row = self.ui.listWidget_providers.currentRow()
-        if 0 <= row < len(self._providers):
-            self._refresh_model_list(self._providers[row].get('models', []))
+    def _update_model_action_buttons(self, model_id=None):
+        """保留接口，避免影响旧调用链。"""
+        return
 
-    def _on_model_item_double_clicked(self, item):
-        '''双击模型行 → 切换 enabled'''
-        model_id = item.data(Qt.UserRole)
+    def _toggle_selected_model_enabled(self, model_id=None):
+        """切换当前模型的启用状态。"""
+        model_id = model_id or self._get_selected_model_id()
         if not model_id:
+            self.toast.show_message('请先选中一个模型', 2000)
             return
         row = self.ui.listWidget_providers.currentRow()
         if row < 0 or row >= len(self._providers):
             return
         p = self._providers[row]
+        enabled = None
         for m in p.get('models', []):
             if m.get('model_id') == model_id:
                 m['enabled'] = not m.get('enabled', True)
+                enabled = m['enabled']
                 break
-        self._refresh_model_list(p.get('models', []))
+        self._ensure_valid_selected_model_refs()
+        self._populate_model_combos()
+        self._refresh_model_list(p.get('models', []), selected_model_id=model_id)
+        if enabled is not None:
+            action = '已启用' if enabled else '已禁用'
+            self.toast.show_message(f'{action}: {self._format_provider_model_display(p, model_id)}', 2000)
+
+    def _test_selected_model(self, model_id=None):
+        """对模型做一次最小可用性检测。"""
+        row = self.ui.listWidget_providers.currentRow()
+        if row < 0 or row >= len(self._providers):
+            return
+        model_id = model_id or self._get_selected_model_id()
+        if not model_id:
+            self.toast.show_message('请先选中一个模型', 2000)
+            return
+
+        provider = self._providers[row]
+        display = self._format_provider_model_display(provider, model_id)
+        api_key = (provider.get('api_key') or '').strip()
+        api_url = (provider.get('api_url') or '').strip().rstrip('/')
+        if not api_key or not api_url or not model_id:
+            self.toast.show_message('请先配置提供商的 API URL、API Key 和模型', 2500)
+            return
+
+        import threading
+
+        def do_test():
+            ok = False
+            summary = ''
+            detail = ''
+            try:
+                resp = requests.post(
+                    f'{api_url}/chat/completions',
+                    headers={
+                        'Content-Type': 'application/json',
+                        'Authorization': f'Bearer {api_key}',
+                    },
+                    json={
+                        'model': model_id,
+                        'messages': [{'role': 'user', 'content': 'ping'}],
+                        'max_tokens': 1,
+                        'temperature': 0,
+                        'stream': False,
+                    },
+                    timeout=20,
+                )
+                ok = resp.ok
+                if ok:
+                    summary = '测活成功'
+                    detail = '接口已正常响应。'
+                else:
+                    summary = '测活失败'
+                    detail = f'HTTP {resp.status_code}'
+            except Exception as e:
+                summary = '测活失败'
+                detail = str(e)
+            from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
+            QMetaObject.invokeMethod(
+                self,
+                '_on_model_test_finished',
+                Qt.QueuedConnection,
+                Q_ARG(bool, ok),
+                Q_ARG(str, summary),
+                Q_ARG(str, provider.get("name", provider.get("id", ""))),
+                Q_ARG(str, display),
+                Q_ARG(str, detail),
+            )
+
+        threading.Thread(target=do_test, daemon=True).start()
+
+    def _on_model_table_selection_changed(self):
+        if getattr(self, '_updating_model_list', False):
+            return
+        model_id = self._get_selected_model_id()
+        if model_id:
+            self.ui.comboBox_models.setCurrentText(model_id)
+        self._update_model_action_buttons(model_id)
+
+    @pyqtSlot(bool, str, str, str, str)
+    def _on_model_test_finished(self, ok, summary, provider_name, display, detail):
+        self._update_model_action_buttons()
+        toast_message = f'{summary}: {display}'
+        self.toast.show_message(toast_message, 2500 if ok else 3500)
+
+        status_color = '#2e7d32' if ok else '#c62828'
+        status_bg = '#e8f5e9' if ok else '#ffebee'
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle('模型测活')
+        dialog.setIcon(QMessageBox.Information if ok else QMessageBox.Warning)
+        dialog.setStandardButtons(QMessageBox.Ok)
+        dialog.setTextFormat(Qt.RichText)
+        dialog.setText(
+            f"""
+            <div style="min-width: 360px;">
+              <div style="display:inline-block; padding:4px 10px; border-radius:999px; background:{status_bg}; color:{status_color}; font-weight:600;">
+                {summary}
+              </div>
+              <div style="margin-top:12px; line-height:1.7;">
+                <div><span style="color:#666;">提供商：</span><b>{provider_name}</b></div>
+                <div><span style="color:#666;">模型：</span><b>{display}</b></div>
+                <div><span style="color:#666;">结果：</span>{detail}</div>
+              </div>
+            </div>
+            """
+        )
+        dialog.exec_()
+
+    def _on_model_table_double_clicked(self, row, column):
+        if row < 0:
+            return
+        item = self.ui.tableWidget_models.item(row, 0)
+        if item is None:
+            return
+        self._toggle_selected_model_enabled(item.data(Qt.UserRole))
 
     def _populate_model_combos(self):
         '''将所有 providers 下的模型同步到「对话设置」页的下拉框'''
         providers = getattr(self, '_providers', [])
+        self._ensure_valid_selected_model_refs()
         llm_provider_id = self.config.get('llm', {}).get('provider_id', '')
         llm_model_id = self.config.get('llm', {}).get('model_id', '')
         vision_provider_id = self.config.get('vision', {}).get('provider_id', '')
@@ -4606,21 +5099,17 @@ class set_pyqt(QWidget):
         self.ui.comboBox_llm_provider.clear()
         llm_sel = 0
         idx = 0
-        for p in providers:
-            p_name = p.get('name') or p.get('id', '')
-            p_id = p.get('id', '')
-            for m in p.get('models', []):
-                if not m.get('enabled', True):
-                    continue
-                m_id = m.get('model_id', '')
-                display = f'{p_name}/{m_id}'
-                self.ui.comboBox_llm_provider.addItem(
-                    display, userData=f'{p_id}|{m_id}'
-                )
-                if p_id == llm_provider_id and m_id == llm_model_id:
-                    llm_sel = idx
-                idx += 1
-        self.ui.comboBox_llm_provider.setCurrentIndex(llm_sel)
+        for p, p_id, m in self._iter_enabled_models(providers):
+            m_id = m.get('model_id', '')
+            display = self._format_provider_model_display(p, m_id)
+            self.ui.comboBox_llm_provider.addItem(
+                display, userData=f'{p_id}|{m_id}'
+            )
+            if p_id == llm_provider_id and m_id == llm_model_id:
+                llm_sel = idx
+            idx += 1
+        if self.ui.comboBox_llm_provider.count() > 0:
+            self.ui.comboBox_llm_provider.setCurrentIndex(min(llm_sel, self.ui.comboBox_llm_provider.count() - 1))
         self.ui.comboBox_llm_provider.blockSignals(False)
 
         self.ui.comboBox_vision_provider.blockSignals(True)
@@ -4628,20 +5117,15 @@ class set_pyqt(QWidget):
         self.ui.comboBox_vision_provider.addItem('（不使用）', userData='')
         vis_sel = 0
         idx = 1
-        for p in providers:
-            p_name = p.get('name') or p.get('id', '')
-            p_id = p.get('id', '')
-            for m in p.get('models', []):
-                if not m.get('enabled', True):
-                    continue
-                m_id = m.get('model_id', '')
-                display = f'{p_name}/{m_id}'
-                self.ui.comboBox_vision_provider.addItem(
-                    display, userData=f"{p_id}|{m_id}"
-                )
-                if p_id == vision_provider_id and m_id == vision_model_id:
-                    vis_sel = idx
-                idx += 1
+        for p, p_id, m in self._iter_enabled_models(providers):
+            m_id = m.get('model_id', '')
+            display = self._format_provider_model_display(p, m_id)
+            self.ui.comboBox_vision_provider.addItem(
+                display, userData=f"{p_id}|{m_id}"
+            )
+            if p_id == vision_provider_id and m_id == vision_model_id:
+                vis_sel = idx
+            idx += 1
         self.ui.comboBox_vision_provider.setCurrentIndex(vis_sel)
         self.ui.comboBox_vision_provider.blockSignals(False)
 
@@ -4654,6 +5138,8 @@ class set_pyqt(QWidget):
         llm_cfg = self.config.setdefault("llm", {})
         llm_cfg["provider_id"] = provider_id
         llm_cfg["model_id"] = model_id
+        llm_cfg["model"] = model_id
+        self.ui.lineEdit_3.setText(model_id)
 
     def _on_vision_model_combo_changed(self, index):
         ""'用户在「默认图片转述模型」下拉框切换模型时触发'""
@@ -4688,6 +5174,7 @@ class set_pyqt(QWidget):
             llm_provider_id, llm_model_id = '', ''
         current_config.setdefault('llm', {})['provider_id'] = llm_provider_id
         current_config['llm']['model_id'] = llm_model_id
+        current_config['llm']['model'] = llm_model_id
         current_config['llm']['system_prompt'] = self.ui.textEdit_3.toPlainText()
 
         current_config["ui"]["intro_text"] = self.ui.lineEdit_4.text()

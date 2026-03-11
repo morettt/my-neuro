@@ -58,9 +58,15 @@ class ConfigLoader {
     ensureLLMCompat() {
         if (!this.config.llm) this.config.llm = {};
 
-        // 如果 llm 中有 provider_id 但没有 api_key，从 provider 回填
+        // 如果 llm 中有 provider_id 但没有 api_key，从 provider 回填。
+        // 这里同时带上 llm.model_id，确保旧代码读取到的 config.llm.model
+        // 与新 provider 注册表里当前选中的模型一致。
         if (this.config.llm.provider_id && !this.config.llm.api_key) {
-            const provider = llmProviderManager.resolveProvider(this.config.llm.provider_id);
+            const provider = llmProviderManager.resolveProvider(
+                this.config.llm.provider_id,
+                this.config.llm,
+                this.config.llm.model_id || this.config.llm.model || null
+            );
             if (provider) {
                 this.config.llm.api_key = provider.api_key;
                 this.config.llm.api_url = provider.api_url;
@@ -71,9 +77,14 @@ class ConfigLoader {
             }
         }
 
-        // 如果 vision 中有 provider_id，回填 vision_model
+        // 如果 vision 中有 provider_id，回填 vision_model。
+        // 这里显式使用 vision.model_id，避免视觉链路总是回退到 provider 的第一个模型。
         if (this.config.vision && this.config.vision.provider_id) {
-            const visionProvider = llmProviderManager.resolveProvider(this.config.vision.provider_id);
+            const visionProvider = llmProviderManager.resolveProvider(
+                this.config.vision.provider_id,
+                this.config.vision.vision_model || null,
+                this.config.vision.model_id || this.config.vision.vision_model?.model || null
+            );
             if (visionProvider && visionProvider.id !== '_empty') {
                 if (!this.config.vision.vision_model) {
                     this.config.vision.vision_model = {};

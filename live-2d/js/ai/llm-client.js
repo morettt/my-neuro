@@ -13,7 +13,9 @@ const { llmProviderManager } = require('../core/llm-provider.js');
  */
 class LLMClient {
     constructor(config) {
-        // 兼容旧方式：从 config.llm 中读取
+        // 兼容旧方式：从 config.llm 中读取。
+        // 新代码应尽量通过 fromProvider()/fromProviderConfig() 进入，
+        // 这样 provider_id + model_id 的选择不会在这里丢失。
         this.apiKey = config.llm.api_key;
         this.apiUrl = config.llm.api_url;
         this.model = config.llm.model;
@@ -25,8 +27,9 @@ class LLMClient {
      * @param {string} providerId - 提供商 ID
      * @returns {LLMClient}
      */
-    static fromProvider(providerId) {
-        const provider = llmProviderManager.resolveProvider(providerId);
+    static fromProvider(providerId, modelId = null) {
+        // 显式传 modelId，避免 provider 存在多个模型时退回到错误模型。
+        const provider = llmProviderManager.resolveProvider(providerId, null, modelId);
         return LLMClient.fromProviderConfig(provider);
     }
 
@@ -497,9 +500,14 @@ class LLMClient {
      */
     updateConfig(newConfig) {
         if (newConfig.llm) {
-            // 优先通过 provider_id 更新
+            // 优先通过 provider_id + model_id 更新。
+            // 这是新 provider 管理模式的主路径；旧的 api_key/api_url/model 仅作为兼容回退。
             if (newConfig.llm.provider_id) {
-                const provider = llmProviderManager.resolveProvider(newConfig.llm.provider_id);
+                const provider = llmProviderManager.resolveProvider(
+                    newConfig.llm.provider_id,
+                    newConfig.llm,
+                    newConfig.llm.model_id || newConfig.llm.model || null
+                );
                 if (provider && provider.id !== '_empty') {
                     this.apiKey = provider.api_key;
                     this.apiUrl = provider.api_url;

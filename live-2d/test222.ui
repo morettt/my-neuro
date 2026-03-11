@@ -1435,31 +1435,10 @@ QPushButton:hover { background-color: #c62828; }</string>
                           </property>
                          </spacer>
                         </item>
-                        <item>
-                         <widget class="QPushButton" name="pushButton_del_model">
-                          <property name="font">
-                           <font>
-                            <family>微软雅黑</family>
-                            <pointsize>9</pointsize>
-                           </font>
-                          </property>
-                          <property name="cursor">
-                           <cursorShape>PointingHandCursor</cursorShape>
-                          </property>
-                          <property name="styleSheet">
-                           <string notr="true">QPushButton { background-color: #f44336; color: white; border: none; border-radius: 4px; padding: 3px 8px; }
-QPushButton:hover { background-color: #c62828; }
-QPushButton:disabled { background-color: #bdbdbd; }</string>
-                          </property>
-                          <property name="text">
-                           <string>删除选中</string>
-                          </property>
-                         </widget>
-                        </item>
                        </layout>
                       </item>
                       <item>
-                       <widget class="QListWidget" name="listWidget_models">
+                       <widget class="QTableWidget" name="tableWidget_models">
                         <property name="font">
                          <font>
                           <family>微软雅黑</family>
@@ -1469,20 +1448,59 @@ QPushButton:disabled { background-color: #bdbdbd; }</string>
                         <property name="minimumSize">
                          <size>
                           <width>0</width>
-                          <height>90</height>
-                         </size>
-                        </property>
-                        <property name="maximumSize">
-                         <size>
-                          <width>16777215</width>
-                          <height>140</height>
+                          <height>220</height>
                          </size>
                         </property>
                         <property name="styleSheet">
-                         <string notr="true">QListWidget { border: 1px solid #ddd; border-radius: 5px; }
-QListWidget::item { padding: 5px 6px; border-bottom: 1px solid #f0f0f0; }
-QListWidget::item:selected { background-color: #e3f2fd; color: #1565c0; }</string>
+                         <string notr="true">QTableWidget { border: 1px solid #ddd; border-radius: 6px; gridline-color: #efefef; selection-background-color: #e3f2fd; selection-color: #1565c0; background: #ffffff; alternate-background-color: #fafafa; }
+QHeaderView::section { background: #f7f7f7; border: none; border-bottom: 1px solid #e6e6e6; padding: 10px 12px; font-weight: bold; color: #555; }
+QTableWidget::item { padding: 10px 12px; }</string>
                         </property>
+                        <property name="editTriggers">
+                         <set>QAbstractItemView::NoEditTriggers</set>
+                        </property>
+                        <property name="selectionMode">
+                         <enum>QAbstractItemView::SingleSelection</enum>
+                        </property>
+                        <property name="selectionBehavior">
+                         <enum>QAbstractItemView::SelectRows</enum>
+                        </property>
+                        <property name="showGrid">
+                         <bool>false</bool>
+                        </property>
+                        <property name="alternatingRowColors">
+                         <bool>true</bool>
+                        </property>
+                        <attribute name="horizontalHeaderStretchLastSection">
+                         <bool>false</bool>
+                        </attribute>
+                        <attribute name="verticalHeaderVisible">
+                         <bool>false</bool>
+                        </attribute>
+                        <property name="columnCount">
+                         <number>4</number>
+                        </property>
+                        <row/>
+                        <column>
+                         <property name="text">
+                          <string>模型</string>
+                         </property>
+                        </column>
+                        <column>
+                         <property name="text">
+                          <string>状态</string>
+                         </property>
+                        </column>
+                        <column>
+                         <property name="text">
+                          <string>测活</string>
+                         </property>
+                        </column>
+                        <column>
+                         <property name="text">
+                          <string>删除</string>
+                         </property>
+                        </column>
                        </widget>
                       </item>
                       <item>
@@ -2363,6 +2381,39 @@ QComboBox::drop-down { border: none; width: 20px; }</string>
                 </item>
                </layout>
               </widget>
+             <widget class="QWidget" name="tab_persona">
+              <attribute name="title">
+               <string>人格设置</string>
+              </attribute>
+              <layout class="QVBoxLayout" name="verticalLayout_persona">
+               <property name="spacing">
+                <number>8</number>
+               </property>
+               <item>
+                <widget class="QLabel" name="label_6">
+                 <property name="font">
+                  <font>
+                   <family>寰蒋闆呴粦</family>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="text">
+                  <string>人格设置（System Prompt）：</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QTextEdit" name="textEdit_3">
+                 <property name="font">
+                  <font>
+                   <family>寰蒋闆呴粦</family>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
             </widget>
            </item>
           </layout>
@@ -5044,39 +5095,6 @@ QTextEdit:focus {
              </property>
             </widget>
            </item>
-               </layout>
-              </widget>
-              <widget class="QWidget" name="tab_persona">
-               <attribute name="title">
-                <string>AI 人设</string>
-               </attribute>
-               <layout class="QVBoxLayout" name="verticalLayout_persona">
-                <property name="spacing">
-                 <number>8</number>
-                </property>
-                <item>
-                 <widget class="QLabel" name="label_6">
-                  <property name="font">
-                   <font>
-                    <family>微软雅黑</family>
-                    <pointsize>10</pointsize>
-                   </font>
-                  </property>
-                  <property name="text">
-                   <string>AI 人设（系统提示词）：</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QTextEdit" name="textEdit_3">
-                  <property name="font">
-                   <font>
-                    <family>微软雅黑</family>
-                    <pointsize>10</pointsize>
-                   </font>
-                  </property>
-                 </widget>
-                </item>
                </layout>
               </widget>
              </widget>

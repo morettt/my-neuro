@@ -10,15 +10,26 @@ const { llmProviderManager } = require('../core/llm-provider.js');
 class LLMHandler {
     // 创建增强的sendToLLM方法
     static createEnhancedSendToLLM(voiceChat, ttsProcessor, asrEnabled, config) {
-        // 创建LLM客户端实例
-        const llmClient = new LLMClient(config);
+        // 优先走统一 provider/model 注册表，兼容旧格式 config.llm
+        const resolvedLlmProvider = llmProviderManager.resolveProvider(
+            config.llm?.provider_id || null,
+            config.llm || null,
+            config.llm?.model_id || config.llm?.model || null
+        );
+        const llmClient = (resolvedLlmProvider && resolvedLlmProvider.id !== '_empty' && resolvedLlmProvider.api_key)
+            ? LLMClient.fromProviderConfig(resolvedLlmProvider)
+            : new LLMClient(config);
 
         // 创建视觉模型客户端（如果启用）
         let visionClient = null;
         if (config.vision && config.vision.use_vision_model) {
             // 优先通过 provider_id 创建视觉模型客户端
             if (config.vision.provider_id) {
-                const visionProvider = llmProviderManager.resolveProvider(config.vision.provider_id);
+                const visionProvider = llmProviderManager.resolveProvider(
+                    config.vision.provider_id,
+                    config.vision.vision_model || null,
+                    config.vision.model_id || config.vision.vision_model?.model || null
+                );
                 if (visionProvider && visionProvider.id !== '_empty' && visionProvider.api_key) {
                     visionClient = LLMClient.fromProviderConfig(visionProvider);
                     console.log('✅ 视觉模型已启用（provider）:', visionProvider.model);
