@@ -1,0 +1,30 @@
+{
+  "captureInterval": {
+    "title": "截图间隔（毫秒）",
+    "description": "多少毫秒截一次图",
+    "type": "int",
+    "default": 2000,
+    "value": 2000
+  },
+  "maxFrames": {
+    "title": "保留帧数",
+    "description": "最多保留几张截图作为上下文记忆",
+    "type": "int",
+    "default": 5,
+    "value": 5
+  },
+  "passiveMode": {
+    "title": "被动模式",
+    "description": "用户说话时自动把最新截图带入 LLM",
+    "type": "bool",
+    "default": true,
+    "value": true
+  },
+  "activeMode": {
+    "title": "主动模式",
+    "description": "每次截图后立刻判断有没有值得说的",
+    "type": "bool",
+    "default": true,
+    "value": true
+  }
+}

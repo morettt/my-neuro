@@ -84,8 +84,8 @@
     "text_only_mode": false,
     "auto_show_chat_on_text_mode": true,
     "model_position": {
-      "x": 1.2759382152557373,
-      "y": -0.0013367164840950149,
+      "x": 1.2134382152557373,
+      "y": 1.184663283515905,
       "remember_position": true
     }
   },
@@ -113,5 +113,5 @@
   "auto_close_services": {
     "enabled": false
   },
-  "version": "v6.3"
+  "version": "v6.3.1"
 }
