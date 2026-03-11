@@ -1,0 +1,9 @@
+[tool.black]
+quote-style = "single"
+
+[tool.ruff]
+lint.select = ["E", "F"]
+format.quote-style = "single"
+
+[tool.autopep8]
+aggressive = 1
