@@ -7,6 +7,7 @@ const { DiaryManager } = require('../DiaryManager.js');
 const { ScreenshotManager } = require('../ScreenshotManager.js');
 const { ContextManager } = require('../ContextManager.js');
 const { MemosClient } = require('../memos-client.js');
+const { llmProviderManager } = require('../../core/llm-provider.js');
 
 /**
  * VoiceChatFacade - 统一对外接口
@@ -20,9 +21,26 @@ class VoiceChatFacade {
         this.hideSubtitle = hideSubtitle;
 
         // LLM配置（暴露给外部使用）
-        this.API_KEY = config.llm.api_key;
-        this.API_URL = config.llm.api_url;
-        this.MODEL = config.llm.model;
+        // 优先从 provider 获取，降级到 config.llm 直接值
+        const defaultProvider = llmProviderManager.getDefaultProvider();
+        if (defaultProvider && defaultProvider.api_key) {
+            this.API_KEY = defaultProvider.api_key;
+            this.API_URL = defaultProvider.api_url;
+            // 从 models 数组中获取当前活跃模型，或回退到第一个启用模型
+            const activeModelId = llmProviderManager.getActiveModelId();
+            if (activeModelId) {
+                this.MODEL = activeModelId;
+            } else if (defaultProvider.models && defaultProvider.models.length > 0) {
+                const enabledModel = defaultProvider.models.find(m => m.enabled !== false);
+                this.MODEL = enabledModel ? enabledModel.model_id : defaultProvider.models[0].model_id;
+            } else {
+                this.MODEL = '';
+            }
+        } else {
+            this.API_KEY = config.llm.api_key;
+            this.API_URL = config.llm.api_url;
+            this.MODEL = config.llm.model;
+        }
 
         // ASR相关属性（暴露给外部使用）
         // ASR启用：本地ASR或百度流式ASR任一启用即可

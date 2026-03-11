@@ -1,16 +1,51 @@
 // llm-client.js - 统一的LLM API客户端
 const { logToTerminal, handleAPIError } = require('../api-utils.js');
+const { llmProviderManager } = require('../core/llm-provider.js');
 
 /**
  * 统一的LLM客户端
  * 封装所有LLM API调用逻辑,消除重复代码
+ * 
+ * 支持两种创建方式：
+ *   1. new LLMClient(config)          - 旧方式，从 config.llm 读取
+ *   2. LLMClient.fromProvider(id)     - 新方式，从 provider 注册表读取
+ *   3. LLMClient.fromProviderConfig(providerObj) - 直接传入 provider 对象
  */
 class LLMClient {
     constructor(config) {
+        // 兼容旧方式：从 config.llm 中读取
         this.apiKey = config.llm.api_key;
         this.apiUrl = config.llm.api_url;
         this.model = config.llm.model;
         this.temperature = config.llm.temperature || 1.0;  // 🔥 读取temperature配置，默认1.0
+    }
+
+    /**
+     * 从 provider_id 创建 LLMClient 实例
+     * @param {string} providerId - 提供商 ID
+     * @returns {LLMClient}
+     */
+    static fromProvider(providerId) {
+        const provider = llmProviderManager.resolveProvider(providerId);
+        return LLMClient.fromProviderConfig(provider);
+    }
+
+    /**
+     * 从 provider 配置对象直接创建 LLMClient 实例
+     * @param {object} provider - { api_key, api_url, model, temperature }
+     * @returns {LLMClient}
+     */
+    static fromProviderConfig(provider) {
+        // 构造一个兼容旧构造函数的 config 对象
+        const fakeConfig = {
+            llm: {
+                api_key: provider.api_key,
+                api_url: provider.api_url,
+                model: provider.model,
+                temperature: provider.temperature
+            }
+        };
+        return new LLMClient(fakeConfig);
     }
 
     /**
@@ -462,6 +497,21 @@ class LLMClient {
      */
     updateConfig(newConfig) {
         if (newConfig.llm) {
+            // 优先通过 provider_id 更新
+            if (newConfig.llm.provider_id) {
+                const provider = llmProviderManager.resolveProvider(newConfig.llm.provider_id);
+                if (provider && provider.id !== '_empty') {
+                    this.apiKey = provider.api_key;
+                    this.apiUrl = provider.api_url;
+                    this.model = provider.model;
+                    if (provider.temperature !== undefined) {
+                        this.temperature = provider.temperature;
+                    }
+                    logToTerminal('info', `LLM客户端已切换到提供商: ${provider.name || provider.id}`);
+                    return;
+                }
+            }
+            // 降级：直接从 config.llm 中读取
             this.apiKey = newConfig.llm.api_key || this.apiKey;
             this.apiUrl = newConfig.llm.api_url || this.apiUrl;
             this.model = newConfig.llm.model || this.model;

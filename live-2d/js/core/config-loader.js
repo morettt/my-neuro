@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { llmProviderManager } = require('./llm-provider.js');
 
 class ConfigLoader {
     constructor() {
@@ -27,11 +28,70 @@ class ConfigLoader {
             
             // 处理特殊路径，例如 ~ 表示用户主目录
             this.processSpecialPaths();
+
+            // 初始化 LLM 提供商管理器（支持新旧两种配置格式）
+            this.initLLMProviders();
+
+            // 兼容层：确保 config.llm 中始终有 api_key/api_url/model 字段
+            // 这样旧代码（直接读取 config.llm.api_key 的地方）不会报错
+            this.ensureLLMCompat();
             
             return this.config;
         } catch (error) {
             console.error('配置文件读取失败:', error);
             throw error; // 直接抛出错误，不提供默认配置
+        }
+    }
+
+    /**
+     * 初始化 LLM 提供商管理器
+     * 从 config.llm_providers 或旧格式 config.llm 中加载提供商
+     */
+    initLLMProviders() {
+        llmProviderManager.init(this.config);
+    }
+
+    /**
+     * 兼容层：将 provider 配置回填到 config.llm 中
+     * 确保旧代码（config.llm.api_key 等）仍能正常工作
+     */
+    ensureLLMCompat() {
+        if (!this.config.llm) this.config.llm = {};
+
+        // 如果 llm 中有 provider_id 但没有 api_key，从 provider 回填
+        if (this.config.llm.provider_id && !this.config.llm.api_key) {
+            const provider = llmProviderManager.resolveProvider(this.config.llm.provider_id);
+            if (provider) {
+                this.config.llm.api_key = provider.api_key;
+                this.config.llm.api_url = provider.api_url;
+                this.config.llm.model = provider.model;
+                if (provider.temperature !== undefined && this.config.llm.temperature === undefined) {
+                    this.config.llm.temperature = provider.temperature;
+                }
+            }
+        }
+
+        // 如果 vision 中有 provider_id，回填 vision_model
+        if (this.config.vision && this.config.vision.provider_id) {
+            const visionProvider = llmProviderManager.resolveProvider(this.config.vision.provider_id);
+            if (visionProvider && visionProvider.id !== '_empty') {
+                if (!this.config.vision.vision_model) {
+                    this.config.vision.vision_model = {};
+                }
+                // 只有 provider_id 指定了有效的提供商时才回填
+                this.config.vision.vision_model.api_key = visionProvider.api_key;
+                this.config.vision.vision_model.api_url = visionProvider.api_url;
+                // 优先使用 vision.model_id，回退到 provider 的第一个启用模型
+                const visionModelId = this.config.vision.model_id;
+                if (visionModelId) {
+                    this.config.vision.vision_model.model = visionModelId;
+                } else if (visionProvider.models && visionProvider.models.length > 0) {
+                    const enabledModel = visionProvider.models.find(m => m.enabled !== false);
+                    this.config.vision.vision_model.model = enabledModel ? enabledModel.model_id : visionProvider.models[0].model_id;
+                } else {
+                    this.config.vision.vision_model.model = visionProvider.model || '';
+                }
+            }
         }
     }
     

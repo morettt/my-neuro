@@ -5,6 +5,7 @@ const { Events } = require('../core/events.js');
 const { appState } = require('../core/app-state.js');
 const { LLMClient } = require('./llm-client.js');
 const { toolExecutor } = require('./tool-executor.js');
+const { llmProviderManager } = require('../core/llm-provider.js');
 
 class LLMHandler {
     // 创建增强的sendToLLM方法
@@ -14,17 +15,29 @@ class LLMHandler {
 
         // 创建视觉模型客户端（如果启用）
         let visionClient = null;
-        if (config.vision && config.vision.use_vision_model && config.vision.vision_model) {
-            const visionConfig = {
-                llm: {
-                    api_key: config.vision.vision_model.api_key,
-                    api_url: config.vision.vision_model.api_url,
-                    model: config.vision.vision_model.model
+        if (config.vision && config.vision.use_vision_model) {
+            // 优先通过 provider_id 创建视觉模型客户端
+            if (config.vision.provider_id) {
+                const visionProvider = llmProviderManager.resolveProvider(config.vision.provider_id);
+                if (visionProvider && visionProvider.id !== '_empty' && visionProvider.api_key) {
+                    visionClient = LLMClient.fromProviderConfig(visionProvider);
+                    console.log('✅ 视觉模型已启用（provider）:', visionProvider.model);
+                    logToTerminal('info', `✅ 视觉模型已启用（provider: ${visionProvider.id}）: ${visionProvider.model}`);
                 }
-            };
-            visionClient = new LLMClient(visionConfig);
-            console.log('✅ 视觉模型已启用:', config.vision.vision_model.model);
-            logToTerminal('info', `✅ 视觉模型已启用: ${config.vision.vision_model.model}`);
+            }
+            // 降级：从旧格式 vision_model 创建
+            if (!visionClient && config.vision.vision_model && config.vision.vision_model.api_key) {
+                const visionConfig = {
+                    llm: {
+                        api_key: config.vision.vision_model.api_key,
+                        api_url: config.vision.vision_model.api_url,
+                        model: config.vision.vision_model.model
+                    }
+                };
+                visionClient = new LLMClient(visionConfig);
+                console.log('✅ 视觉模型已启用:', config.vision.vision_model.model);
+                logToTerminal('info', `✅ 视觉模型已启用: ${config.vision.vision_model.model}`);
+            }
         }
 
         // 辅助函数：清理消息中的所有图片内容

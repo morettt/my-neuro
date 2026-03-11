@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const { eventBus } = require('./event-bus.js');
+const { llmProviderManager } = require('./llm-provider.js');
 
 class PluginStorage {
     constructor(pluginName) {
@@ -98,21 +99,40 @@ class PluginContext {
     /**
      * 插件自己调用 LLM（独立请求，不进入对话历史）
      * @param {string} prompt
-     * @param {object} options - { model, temperature, ... }
+     * @param {object} options - { model, temperature, provider_id, ... }
+     *   provider_id: 指定使用哪个 LLM 提供商（在 config.json 的 llm_providers 中定义）
      * @returns {Promise<string>}
      */
     async callLLM(prompt, options = {}) {
-        const voiceChat = global.voiceChat;
-        if (!voiceChat) throw new Error('LLM not available');
+        let apiUrl, apiKey, model;
 
-        const response = await fetch(`${voiceChat.API_URL}/chat/completions`, {
+        // 优先通过 provider_id 获取 LLM 配置
+        if (options.provider_id) {
+            const provider = llmProviderManager.resolveProvider(options.provider_id);
+            if (provider && provider.api_key) {
+                apiUrl = provider.api_url;
+                apiKey = provider.api_key;
+                model = options.model || provider.model;
+            }
+        }
+
+        // 降级到 voiceChat 中的全局配置
+        if (!apiKey) {
+            const voiceChat = global.voiceChat;
+            if (!voiceChat) throw new Error('LLM not available');
+            apiUrl = apiUrl || voiceChat.API_URL;
+            apiKey = apiKey || voiceChat.API_KEY;
+            model = model || voiceChat.MODEL;
+        }
+
+        const response = await fetch(`${apiUrl}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${voiceChat.API_KEY}`
+                'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                model: options.model || voiceChat.MODEL,
+                model: options.model || model,
                 messages: [{ role: 'user', content: prompt }],
                 stream: false,
                 temperature: options.temperature || 1.0,
