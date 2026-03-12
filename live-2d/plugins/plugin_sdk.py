@@ -41,6 +41,37 @@ class PluginContext:
         self._config = config or {}
         self._plugin_file_config = {}
         self.storage = _Storage()
+        self._req_id = 0
+        self._pending_requests = {}  # reqId -> asyncio.Future
+
+    # ===== 内部：请求/响应机制 =====
+
+    def _handle_response(self, msg):
+        """主循环收到 JS 响应时调用，resolve 对应 Future"""
+        req_id = msg.get('reqId')
+        if req_id and req_id in self._pending_requests:
+            future = self._pending_requests.pop(req_id)
+            if not future.done():
+                if 'error' in msg:
+                    future.set_exception(Exception(msg['error']))
+                else:
+                    future.set_result(msg.get('result'))
+
+    async def _request(self, method, data=None):
+        """向 JS 主进程发请求并等待响应（10s 超时）"""
+        self._req_id += 1
+        req_id = f'py-{self._req_id}'
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        self._pending_requests[req_id] = future
+        self._send({'type': 'request', 'reqId': req_id, 'method': method, 'data': data or {}})
+        try:
+            return await asyncio.wait_for(future, timeout=10.0)
+        except asyncio.TimeoutError:
+            self._pending_requests.pop(req_id, None)
+            raise TimeoutError(f'JS 请求超时: {method}')
+
+    # ===== 日志 / 消息 =====
 
     def log(self, level, message):
         self._send({'type': 'log', 'level': level, 'message': message})
@@ -49,12 +80,50 @@ class PluginContext:
         """让 AI 主动说一句话（走完整 LLM + TTS 流程）"""
         self._send({'type': 'sendMessage', 'text': text})
 
+    # ===== 配置 =====
+
     def get_config(self):
         return self._config
 
     def get_plugin_config(self):
         """获取插件自身的 plugin_config.json 内容"""
         return self._plugin_file_config
+
+    # ===== 对话 =====
+
+    async def get_messages(self):
+        """获取当前对话历史"""
+        return await self._request('getMessages')
+
+    def add_system_prompt_patch(self, patch_id, text):
+        """往系统提示词里注入内容（直到 remove）"""
+        self._send({'type': 'addSystemPromptPatch', 'id': patch_id, 'text': text})
+
+    def remove_system_prompt_patch(self, patch_id):
+        """移除已注入的系统提示词片段"""
+        self._send({'type': 'removeSystemPromptPatch', 'id': patch_id})
+
+    # ===== LLM =====
+
+    async def call_llm(self, prompt, options=None):
+        """插件自己偷偷问 AI（不进入对话历史）"""
+        return await self._request('callLLM', {'prompt': prompt, 'options': options or {}})
+
+    # ===== UI =====
+
+    def show_subtitle(self, text, duration=3000):
+        """在屏幕上显示字幕"""
+        self._send({'type': 'showSubtitle', 'text': text, 'duration': duration})
+
+    def trigger_emotion(self, emotion):
+        """触发 Live2D 表情"""
+        self._send({'type': 'triggerEmotion', 'emotion': emotion})
+
+    # ===== 工具 =====
+
+    def register_tool(self, tool_def):
+        """运行时动态注册工具（OpenAI function calling 格式）"""
+        self._send({'type': 'registerTool', 'toolDef': tool_def})
 
 
 # ===== 事件对象 =====
@@ -192,8 +261,17 @@ def run(plugin_class):
     plugin = plugin_class()
     plugin.context = PluginContext(_send)
 
+    async def _handle_message(msg):
+        try:
+            response = await _dispatch(plugin, msg)
+            if response:
+                _send(response)
+        except Exception as e:
+            sys.stderr.write(f'Dispatch error: {e}\n')
+            sys.stderr.flush()
+
     async def main():
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
         while True:
@@ -205,9 +283,16 @@ def run(plugin_class):
                 if not line:
                     continue
                 msg = json.loads(line)
-                response = await _dispatch(plugin, msg)
-                if response:
-                    _send(response)
+
+                # JS 响应 Python 的请求（get_messages / call_llm 等）
+                if msg.get('type') == 'response':
+                    plugin.context._handle_response(msg)
+                    continue
+
+                # 钩子调用作为独立 Task，主循环继续读 stdin
+                # 这样 get_messages/call_llm 向 JS 请求时不会死锁
+                asyncio.create_task(_handle_message(msg))
+
             except Exception as e:
                 sys.stderr.write(f'SDK Error: {e}\n')
                 sys.stderr.flush()

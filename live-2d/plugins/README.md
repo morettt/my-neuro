@@ -18,7 +18,8 @@
 ```
 plugins/community/my-plugin/
 ├── index.js
-└── metadata.json
+├── metadata.json
+└── plugin_config.json   # 可选，插件自己的配置项
 ```
 
 **metadata.json**
@@ -37,13 +38,15 @@ plugins/community/my-plugin/
 
 `repo` 是插件的 GitHub 地址，方便用户找到来源和提 issue。不填也行，但社区插件建议填上。
 
-在 `config.json` 里控制开关（不写默认启用）：
+**启用插件**，在 `plugins/enabled_plugins.json` 里加上插件路径：
 
 ```json
-{ "plugins": { "my_plugin": { "enabled": true } } }
+{
+  "plugins": [
+    "community/my-plugin"
+  ]
+}
 ```
-
-config 的 key 自动由 `name` 转换：连字符换成下划线（`my-plugin` → `my_plugin`）。
 
 **index.js**
 
@@ -165,7 +168,7 @@ this.context.log('warn', '警告');
 
 // 读配置
 this.context.getConfig()           // 整个 config.json
-this.context.getPluginConfig()     // 只读本插件那块（config.plugins.my_plugin）
+this.context.getPluginConfig()     // 插件自己的 plugin_config.json
 
 // 临时存数据（重启清空）
 this.context.storage.set('key', value);
@@ -188,8 +191,16 @@ const result = await this.context.callLLM('帮我总结一下');
 this.context.showSubtitle('在屏幕上显示字幕', 3000);  // 持续3秒
 this.context.triggerEmotion('happy');                  // 触发 Live2D 表情
 
+// 运行时动态注册工具
+this.context.registerTool({ name: 'my_tool', ... });
+
 // 获取另一个插件的实例（插件间通信）
 const other = this.context.getPlugin('other-plugin-name');
+
+// 事件总线（跨插件松耦合通信）
+this.context.on('my-event', handler);
+this.context.emit('my-event', data);
+this.context.off('my-event', handler);
 ```
 
 ---
@@ -254,12 +265,37 @@ if __name__ == '__main__':
 **Python context 可用方法：**
 
 ```python
+# 日志
 self.context.log('info', '消息')
-self.context.send_message('让 AI 主动说这句话')  # 走完整 LLM + TTS
+self.context.log('warn', '警告')
+
+# 让 AI 主动说一句话（走完整 LLM + TTS 流程）
+self.context.send_message('提示词')
+
+# 读配置
 self.context.get_config()           # 整个 config.json
-self.context.get_plugin_config()    # 本插件的 config 块
+self.context.get_plugin_config()    # 插件自己的 plugin_config.json
+
+# 临时存数据（重启清空）
 self.context.storage.get('key')
 self.context.storage.set('key', value)
+
+# 获取当前对话历史
+messages = await self.context.get_messages()
+
+# 往系统提示词里注入内容（直到 remove）
+self.context.add_system_prompt_patch('patch-id', '你记住这件事')
+self.context.remove_system_prompt_patch('patch-id')
+
+# 插件自己偷偷问 AI（不进入对话历史）
+result = await self.context.call_llm('帮我总结一下')
+
+# UI 操作
+self.context.show_subtitle('在屏幕上显示字幕', 3000)  # 持续3秒
+self.context.trigger_emotion('happy')                  # 触发 Live2D 表情
+
+# 运行时动态注册工具
+self.context.register_tool({'name': 'my_tool', ...})
 ```
 
 **Python 的 on_user_input：**

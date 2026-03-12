@@ -72,16 +72,44 @@ class PythonPluginBridge extends Plugin {
     _handleLine(line) {
         try {
             const msg = JSON.parse(line);
-            // 日志通知（无 id）
+
+            // 日志
             if (msg.type === 'log') {
                 logToTerminal(msg.level || 'info', `[Python:${this.metadata.name}] ${msg.message}`);
                 return;
             }
-            // Python 主动触发 sendMessage（无 id，fire-and-forget）
+            // Python 主动让 AI 说话
             if (msg.type === 'sendMessage') {
                 this.context?.sendMessage(msg.text).catch(() => {});
                 return;
             }
+            // Python 请求 JS 执行某个操作（get_messages / call_llm）
+            if (msg.type === 'request') {
+                this._handlePythonRequest(msg).catch(() => {});
+                return;
+            }
+            // fire-and-forget：UI / 系统提示词 / 工具注册
+            if (msg.type === 'showSubtitle') {
+                this.context?.showSubtitle(msg.text, msg.duration);
+                return;
+            }
+            if (msg.type === 'triggerEmotion') {
+                this.context?.triggerEmotion(msg.emotion);
+                return;
+            }
+            if (msg.type === 'addSystemPromptPatch') {
+                this.context?.addSystemPromptPatch(msg.id, msg.text);
+                return;
+            }
+            if (msg.type === 'removeSystemPromptPatch') {
+                this.context?.removeSystemPromptPatch(msg.id);
+                return;
+            }
+            if (msg.type === 'registerTool') {
+                this.context?.registerTool(msg.toolDef);
+                return;
+            }
+            // JS→Python 钩子调用的响应
             const pending = this._pending.get(msg.id);
             if (pending) {
                 this._pending.delete(msg.id);
@@ -92,13 +120,19 @@ class PythonPluginBridge extends Plugin {
         }
     }
 
+    _write(msg) {
+        if (this._process?.stdin?.writable) {
+            this._process.stdin.write(JSON.stringify(msg) + '\n');
+        }
+    }
+
     async _call(event, data) {
         if (!this._process || this._process.exitCode !== null) return null;
 
         return new Promise((resolve, reject) => {
             const id = ++this._reqId;
             this._pending.set(id, { resolve, reject });
-            this._process.stdin.write(JSON.stringify({ id, event, data }) + '\n');
+            this._write({ id, event, data });
 
             setTimeout(() => {
                 if (this._pending.has(id)) {
@@ -107,6 +141,23 @@ class PythonPluginBridge extends Plugin {
                 }
             }, this._timeout);
         });
+    }
+
+    async _handlePythonRequest(msg) {
+        const { reqId, method, data } = msg;
+        try {
+            let result;
+            if (method === 'getMessages') {
+                result = this.context?.getMessages() || [];
+            } else if (method === 'callLLM') {
+                result = await this.context?.callLLM(data.prompt, data.options);
+            } else {
+                throw new Error(`未知方法: ${method}`);
+            }
+            this._write({ type: 'response', reqId, result });
+        } catch (e) {
+            this._write({ type: 'response', reqId, error: e.message });
+        }
     }
 
     // ===== 生命周期 =====
