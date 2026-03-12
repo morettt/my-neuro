@@ -2110,73 +2110,7 @@ QComboBox::drop-down { border: none; width: 20px; }</string>
                    </item>
                   </layout>
                  </item>
-                 <item>
-                  <layout class="QHBoxLayout" name="horizontalLayout_temperature">
-                   <item>
-                    <widget class="QLabel" name="label_temperature">
-                     <property name="font">
-                      <font>
-                       <family>微软雅黑</family>
-                       <pointsize>10</pointsize>
-                      </font>
-                     </property>
-                     <property name="text">
-                      <string>温度：</string>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QDoubleSpinBox" name="doubleSpinBox_temperature">
-                     <property name="minimumSize">
-                      <size>
-                       <width>100</width>
-                       <height>35</height>
-                      </size>
-                     </property>
-                     <property name="maximumSize">
-                      <size>
-                       <width>120</width>
-                       <height>16777215</height>
-                      </size>
-                     </property>
-                     <property name="font">
-                      <font>
-                       <family>微软雅黑</family>
-                       <pointsize>10</pointsize>
-                      </font>
-                     </property>
-                     <property name="buttonSymbols">
-                      <enum>QAbstractSpinBox::UpDownArrows</enum>
-                     </property>
-                     <property name="minimum">
-                      <double>0.100000000000000</double>
-                     </property>
-                     <property name="maximum">
-                      <double>2.000000000000000</double>
-                     </property>
-                     <property name="singleStep">
-                      <double>0.100000000000000</double>
-                     </property>
-                     <property name="value">
-                      <double>1.000000000000000</double>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <spacer name="horizontalSpacer_temperature">
-                     <property name="orientation">
-                      <enum>Qt::Horizontal</enum>
-                     </property>
-                     <property name="sizeHint" stdset="0">
-                      <size>
-                       <width>40</width>
-                       <height>20</height>
-                      </size>
-                     </property>
-                    </spacer>
-                   </item>
-                  </layout>
-                 </item>
+                 
                  <item>
                   <widget class="QPushButton" name="pushButton_reset_model_position">
                    <property name="sizePolicy">
