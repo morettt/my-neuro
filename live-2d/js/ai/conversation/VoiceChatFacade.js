@@ -9,6 +9,7 @@ const { ContextManager } = require('../ContextManager.js');
 const { llmProviderManager } = require('../../core/llm-provider.js');
 
 let MemosClient = null;
+let MemosClient;
 try {
     ({ MemosClient } = require('../memos-client.js'));
 } catch (_) {
@@ -88,6 +89,7 @@ class VoiceChatFacade {
         this.diaryManager = new DiaryManager(this);
         this.screenshotManager = new ScreenshotManager(this);
         // MemOS 客户端是可选依赖，缺失时保持为 null。
+        // 创建MemOS客户端
         this.memosClient = MemosClient ? new MemosClient(this.config) : null;
 
         // 创建输入路由
