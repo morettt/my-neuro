@@ -6,8 +6,14 @@ const { InputRouter } = require('./InputRouter.js');
 const { DiaryManager } = require('../DiaryManager.js');
 const { ScreenshotManager } = require('../ScreenshotManager.js');
 const { ContextManager } = require('../ContextManager.js');
-const { MemosClient } = require('../memos-client.js');
 const { llmProviderManager } = require('../../core/llm-provider.js');
+
+let MemosClient = null;
+try {
+    ({ MemosClient } = require('../memos-client.js'));
+} catch (_) {
+    MemosClient = null;
+}
 
 /**
  * VoiceChatFacade - 统一对外接口
@@ -81,8 +87,8 @@ class VoiceChatFacade {
         // 创建子模块
         this.diaryManager = new DiaryManager(this);
         this.screenshotManager = new ScreenshotManager(this);
-        // 创建MemOS客户端
-        this.memosClient = new MemosClient(this.config);
+        // MemOS 客户端是可选依赖，缺失时保持为 null。
+        this.memosClient = MemosClient ? new MemosClient(this.config) : null;
 
         // 创建输入路由
         this.inputRouter = new InputRouter(
