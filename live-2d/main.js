@@ -47,6 +47,14 @@ function createWindow () {
     win.setAlwaysOnTop(true, 'screen-saver')
     win.setIgnoreMouseEvents(true, { forward: true });
     win.setMenu(null)
+    try {
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        if (config.ui?.hide_from_screenshot !== false) {
+            win.setContentProtection(true);
+        }
+    } catch (e) {
+        win.setContentProtection(true);  // 读取失败默认隐藏
+    }
     win.setPosition(0, 0)
     win.loadFile('index.html')
     win.on('minimize', (event) => {
