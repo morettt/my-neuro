@@ -16,12 +16,12 @@ class BarrageManager {
         this.interruptFlag = false; // 打断标志
         // 弹幕总结/回复也应复用统一的 provider/model 选择，
         // 否则这条链路会继续停留在旧 config.llm 直连模式。
-        const resolvedProvider = llmProviderManager.resolveProvider(
+        const resolvedProvider = llmProviderManager.resolveProviderOrFallback(
             config.llm?.provider_id || null,
             config.llm || null,
             config.llm?.model_id || config.llm?.model || null
         );
-        this.llmClient = (resolvedProvider && resolvedProvider.id !== '_empty' && resolvedProvider.api_key)
+        this.llmClient = resolvedProvider
             ? LLMClient.fromProviderConfig(resolvedProvider)
             : new LLMClient(config);
 

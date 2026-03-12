@@ -5,47 +5,22 @@
  * 工作流程：
  * 1. 主LLM调用此工具，传入搜索主题和关键词
  * 2. 将关键词拆分，并发调用 Tavily 搜索
- * 3. 调用下级智能体对每组搜索结果进行语义提炼
+ * 3. 调用下级智能体（DeepSeek-V3.2）对每组搜索结果进行语义提炼
  * 4. 汇总所有提炼结果，返回结构化的搜索报告
  * 
- * 版本：1.1.0 - 支持 LLM Provider 统一配置
+ * 版本：1.0.0
  */
 
 const axios = require('axios');
-const { llmProviderManager } = require('../js/core/llm-provider.js');
 
 // ==================== 配置 ====================
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || "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";
 const TAVILY_API_URL = "https://api.tavily.com/search";
 
-// 下级智能体配置：优先从 llm_providers 中查找 "search" 提供商
-// 降级到硬编码值（旧行为）
-function getAgentConfig() {
-    const provider = llmProviderManager.getProvider('search');
-    if (provider && provider.api_key) {
-        return {
-            apiUrl: `${provider.api_url}/chat/completions`,
-            apiKey: provider.api_key,
-            model: provider.model
-        };
-    }
-    // 降级到默认提供商
-    const defaultProvider = llmProviderManager.getDefaultProvider();
-    if (defaultProvider && defaultProvider.api_key) {
-        return {
-            apiUrl: `${defaultProvider.api_url}/chat/completions`,
-            apiKey: defaultProvider.api_key,
-            model: defaultProvider.model
-        };
-    }
-    // 最终降级：使用环境变量或空值（会报错提示用户配置）
-    return {
-        apiUrl: process.env.SEARCH_AGENT_API_URL || '',
-        apiKey: process.env.SEARCH_AGENT_API_KEY || '',
-        model: process.env.SEARCH_AGENT_MODEL || ''
-    };
-}
+const SILICONFLOW_API_URL = 'https://www.dmxapi.cn/v1/chat/completions';
+const SILICONFLOW_API_KEY = 'sk-t95DArKVeBgoxBITRaRb0J3NROfaGUNmTkdV5R0AgDUHdL2d';
+const AGENT_MODEL = 'GLM-4.7-Flash';
 
 const MAX_CONCURRENT = 4;
 const MAX_RETRIES = 2;
@@ -150,12 +125,8 @@ ${rawSearchData}
 
     try {
         return await withRetry(async () => {
-            const agentConfig = getAgentConfig();
-            if (!agentConfig.apiKey) {
-                throw new Error('搜索整合智能体未配置：请在 config.json 的 llm_providers 中添加 id 为 "search" 的提供商，或配置默认提供商');
-            }
-            const response = await axios.post(agentConfig.apiUrl, {
-                model: agentConfig.model,
+            const response = await axios.post(SILICONFLOW_API_URL, {
+                model: AGENT_MODEL,
                 messages: [
                     { role: "system", content: systemPrompt },
                     { role: "user", content: userMessage }
@@ -164,13 +135,13 @@ ${rawSearchData}
                 max_tokens: 2000
             }, {
                 headers: {
-                    'Authorization': `Bearer ${agentConfig.apiKey}`,
+                    'Authorization': `Bearer ${SILICONFLOW_API_KEY}`,
                     'Content-Type': 'application/json'
                 },
                 timeout: 60000
             });
             return response.data.choices[0].message.content;
-        }, `整合·${keyword}`);
+        }, `DeepSeek整合·${keyword}`);
     } catch (error) {
         console.error(`[VSearch] 整合 "${keyword}" 最终失败:`, error.message);
         return `[整合失败] ${keyword}: ${error.message}`;

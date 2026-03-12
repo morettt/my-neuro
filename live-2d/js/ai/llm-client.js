@@ -16,10 +16,11 @@ class LLMClient {
         // 兼容旧方式：从 config.llm 中读取。
         // 新代码应尽量通过 fromProvider()/fromProviderConfig() 进入，
         // 这样 provider_id + model_id 的选择不会在这里丢失。
-        this.apiKey = config.llm.api_key;
-        this.apiUrl = config.llm.api_url;
-        this.model = config.llm.model;
-        this.temperature = config.llm.temperature || 1.0;  // 🔥 读取temperature配置，默认1.0
+        const llmConfig = config.llm || config;
+        this.apiKey = llmConfig.api_key;
+        this.apiUrl = llmConfig.api_url;
+        this.model = llmConfig.model;
+        this.temperature = llmConfig.temperature || 1.0;  //🔥 读取temperature配置，默认1.0
     }
 
     /**
@@ -39,16 +40,7 @@ class LLMClient {
      * @returns {LLMClient}
      */
     static fromProviderConfig(provider) {
-        // 构造一个兼容旧构造函数的 config 对象
-        const fakeConfig = {
-            llm: {
-                api_key: provider.api_key,
-                api_url: provider.api_url,
-                model: provider.model,
-                temperature: provider.temperature
-            }
-        };
-        return new LLMClient(fakeConfig);
+        return new LLMClient(provider);
     }
 
     /**
@@ -500,15 +492,14 @@ class LLMClient {
      */
     updateConfig(newConfig) {
         if (newConfig.llm) {
-            // 优先通过 provider_id + model_id 更新。
-            // 这是新 provider 管理模式的主路径；旧的 api_key/api_url/model 仅作为兼容回退。
+            // 优先通过 provider 注册表解析；旧的扁平 llm 配置仅作为兼容回退。
             if (newConfig.llm.provider_id) {
-                const provider = llmProviderManager.resolveProvider(
+                const provider = llmProviderManager.resolveProviderOrFallback(
                     newConfig.llm.provider_id,
                     newConfig.llm,
                     newConfig.llm.model_id || newConfig.llm.model || null
                 );
-                if (provider && provider.id !== '_empty') {
+                if (provider) {
                     this.apiKey = provider.api_key;
                     this.apiUrl = provider.api_url;
                     this.model = provider.model;

@@ -30,12 +30,12 @@ class VoiceChatFacade {
         // LLM配置（暴露给外部使用）
         // 这里必须优先解析 config.llm.provider_id + config.llm.model_id，
         // 否则外部模块拿到的 API_KEY / API_URL / MODEL 可能与 UI 当前选择不一致。
-        const resolvedProvider = llmProviderManager.resolveProvider(
+        const resolvedProvider = llmProviderManager.resolveProviderOrFallback(
             config.llm?.provider_id || null,
             config.llm || null,
             config.llm?.model_id || config.llm?.model || null
         );
-        if (resolvedProvider && resolvedProvider.id !== '_empty' && resolvedProvider.api_key) {
+        if (resolvedProvider) {
             this.API_KEY = resolvedProvider.api_key;
             this.API_URL = resolvedProvider.api_url;
             this.MODEL = resolvedProvider.model || '';

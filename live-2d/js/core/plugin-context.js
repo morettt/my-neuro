@@ -110,12 +110,12 @@ class PluginContext {
         // 这里显式传入 options.model，可以确保插件调用也走统一的 provider/model 注册表，
         // 而不是只拿到 provider 的默认模型。
         if (options.provider_id) {
-            const provider = llmProviderManager.resolveProvider(
+            const provider = llmProviderManager.resolveProviderOrFallback(
                 options.provider_id,
                 this._config?.llm || null,
                 options.model || null
             );
-            if (provider && provider.api_key) {
+            if (provider) {
                 apiUrl = provider.api_url;
                 apiKey = provider.api_key;
                 model = options.model || provider.model;

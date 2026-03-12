@@ -2327,7 +2327,7 @@ QComboBox::drop-down { border: none; width: 20px; }</string>
                 <widget class="QLabel" name="label_6">
                  <property name="font">
                   <font>
-                   <family>寰蒋闆呴粦</family>
+                   <family>微软雅黑</family>
                    <pointsize>10</pointsize>
                   </font>
                  </property>
@@ -2340,7 +2340,7 @@ QComboBox::drop-down { border: none; width: 20px; }</string>
                 <widget class="QTextEdit" name="textEdit_3">
                  <property name="font">
                   <font>
-                   <family>寰蒋闆呴粦</family>
+                   <family>微软雅黑</family>
                    <pointsize>10</pointsize>
                   </font>
                  </property>

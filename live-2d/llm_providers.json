@@ -1,0 +1,19 @@
+{
+  "providers": [
+    {
+      "id": "main",
+      "name": "主模型",
+      "api_key": "123",
+      "api_url": "123",
+      "models": [
+        {
+          "model_id": "主模型/123",
+          "name": "主模型/123",
+          "enabled": true
+        }
+      ],
+      "enabled": true,
+      "temperature": 0.9
+    }
+  ]
+}

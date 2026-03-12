@@ -29,11 +29,10 @@ class LLMProviderManager {
     }
 
     /**
-     * 从 config.json 初始化提供商列表
-     * 支持两种格式：
-     *   1. 新格式：config.llm_providers 数组（每个 provider 有 models 数组）
-     *   2. 旧格式：config.llm 中直接写 api_key/api_url/model（自动迁移）
-     *   3. 半新格式：provider 只有 model 字符串，自动转为 models 数组
+     * 从运行时配置初始化提供商列表
+     * 输入应当是已经过加载层规范化的运行时配置：
+     *   1. config.llm_providers 数组（通常由 llm_providers.json 注入）
+     *   2. provider 只有 model 字符串时，自动转为 models 数组
      * 
      * @param {object} config - 完整的 config.json 对象
      */
@@ -62,52 +61,21 @@ class LLMProviderManager {
             logToTerminal('info', `✅ 已加载 ${this._providers.size} 个 LLM 提供商`);
         }
 
-        // 旧格式兼容：如果 config.llm 中直接有 api_key，自动创建 "main" provider
-        if (config.llm && config.llm.api_key && !config.llm.provider_id) {
-            if (!this._providers.has('main')) {
-                const models = config.llm.model
-                    ? [{ model_id: config.llm.model, name: config.llm.model, enabled: true }]
-                    : [];
-                this._providers.set('main', {
-                    id: 'main',
-                    name: '主模型（自动迁移）',
-                    api_key: config.llm.api_key,
-                    api_url: config.llm.api_url || '',
-                    models,
-                    temperature: config.llm.temperature,
-                    enabled: true
-                });
-                logToTerminal('info', '📦 从旧格式 llm 配置自动创建 main 提供商');
-            }
-        }
-
-        // 旧格式兼容：如果 config.vision.vision_model 中有独立配置，自动创建 "vision" provider
-        if (config.vision && config.vision.vision_model && config.vision.vision_model.api_key) {
-            if (!config.vision.provider_id && !this._providers.has('vision')) {
-                const vModel = config.vision.vision_model.model;
-                const models = vModel
-                    ? [{ model_id: vModel, name: vModel, enabled: true }]
-                    : [];
-                this._providers.set('vision', {
-                    id: 'vision',
-                    name: '视觉模型（自动迁移）',
-                    api_key: config.vision.vision_model.api_key,
-                    api_url: config.vision.vision_model.api_url || '',
-                    models,
-                    enabled: true
-                });
-                logToTerminal('info', '📦 从旧格式 vision 配置自动创建 vision 提供商');
-            }
-        }
-
         // 确定默认提供商：优先使用 config.llm.provider_id，否则用 "main"
-        if (config.llm && config.llm.provider_id) {
-            this._defaultId = config.llm.provider_id;
-        } else if (this._providers.has('main')) {
+        const requestedDefaultId = config.llm && config.llm.provider_id ? config.llm.provider_id : null;
+        const mainProvider = this._providers.get('main');
+        const firstEnabledProvider = Array.from(this._providers.values()).find(provider => provider.enabled !== false);
+
+        if (requestedDefaultId && this._isProviderEnabled(this._providers.get(requestedDefaultId))) {
+            this._defaultId = requestedDefaultId;
+        } else if (this._isProviderEnabled(mainProvider)) {
             this._defaultId = 'main';
+        } else if (firstEnabledProvider) {
+            this._defaultId = firstEnabledProvider.id;
         } else if (this._providers.size > 0) {
-            // 使用第一个提供商作为默认
             this._defaultId = this._providers.keys().next().value;
+        } else {
+            this._defaultId = null;
         }
 
         // 记录当前活跃模型 id
@@ -160,7 +128,11 @@ class LLMProviderManager {
      */
     getDefaultProvider() {
         if (!this._defaultId) return null;
-        return this.getProvider(this._defaultId);
+        const provider = this.getProvider(this._defaultId);
+        if (this._isProviderEnabled(provider)) {
+            return provider;
+        }
+        return this.getAllProviders().find(candidate => this._isProviderEnabled(candidate)) || null;
     }
 
     /**
@@ -223,6 +195,10 @@ class LLMProviderManager {
         return provider.model || '';
     }
 
+    _isProviderEnabled(provider) {
+        return !!provider && provider.enabled !== false;
+    }
+
     /**
      * 解析提供商引用：给定一个 provider_id（或为空），返回实际的 LLM 配置
      * 同时解析出当前模型 ID
@@ -237,12 +213,15 @@ class LLMProviderManager {
         // 1. 尝试通过 provider_id 查找
         if (providerId) {
             const provider = this.getProvider(providerId);
-            if (provider) {
+            if (this._isProviderEnabled(provider)) {
                 const resolvedModelId = this.resolveModelId(provider, modelId);
                 return {
                     ...provider,
                     model: resolvedModelId  // 保持 model 字段兼容性
                 };
+            }
+            if (provider && provider.enabled === false) {
+                logToTerminal('warn', `⚠️ 提供商 "${providerId}" 已禁用，尝试降级`);
             }
             logToTerminal('warn', `⚠️ 未找到提供商 "${providerId}"，尝试降级`);
         }
@@ -285,6 +264,23 @@ class LLMProviderManager {
             models: [],
             enabled: true
         };
+    }
+
+    /**
+     * 解析提供商并仅在可直接使用时返回。
+     * 将查找逻辑与可用性判断收敛到一处，避免重复判断。
+     *
+     * @param {string|null|undefined} providerId
+     * @param {object} [fallbackConfig]
+     * @param {string|null} [modelId]
+     * @returns {object|null}
+     */
+    resolveProviderOrFallback(providerId, fallbackConfig = null, modelId = null) {
+        const provider = this.resolveProvider(providerId, fallbackConfig, modelId);
+        if (!provider || provider.id === '_empty') {
+            return null;
+        }
+        return provider;
     }
 
     /**

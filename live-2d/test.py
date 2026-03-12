@@ -11,7 +11,7 @@ import os
 import urllib.request
 import urllib.error
 import ctypes
-from PyQt5.QtCore import QMimeData
+from PyQt5.QtCore import QMimeData, pyqtSlot
 from PyQt5.QtGui import QDrag
 import shutil
 import re
@@ -468,6 +468,7 @@ class set_pyqt(QWidget):
         self.selected_model_path = None  # 选择的模型文件路径
         self.selected_audio_path = None  # 选择的音频文件路径
         self.config_path = 'config.json'
+        self.providers_path = 'llm_providers.json'
         self.config = self.load_config()
 
         # 日志读取相关
@@ -3214,13 +3215,14 @@ class set_pyqt(QWidget):
             else:
                 active_provider = self._providers[0]
 
-        self.ui.lineEdit.setText(
-            llm_config.get('api_key', (active_provider or {}).get('api_key', ''))
-        )
-        self.ui.lineEdit_2.setText(
-            llm_config.get('api_url', (active_provider or {}).get('api_url', ''))
-        )
-        self.ui.lineEdit_3.setText(llm_config.get('model', llm_config.get('model_id', '')))
+        if active_provider is not None:
+            self.ui.lineEdit.setText(active_provider.get('api_key', ''))
+            self.ui.lineEdit_2.setText(active_provider.get('api_url', ''))
+            self.ui.lineEdit_3.setText(llm_config.get('model_id', llm_config.get('model', '')))
+        else:
+            self.ui.lineEdit.setText(llm_config.get('api_key', ''))
+            self.ui.lineEdit_2.setText(llm_config.get('api_url', ''))
+            self.ui.lineEdit_3.setText(llm_config.get('model', llm_config.get('model_id', '')))
         self.ui.textEdit_3.setPlainText(llm_config.get('system_prompt', ''))
         self.ui.doubleSpinBox_temperature.setValue(
             llm_config.get('temperature', (active_provider or {}).get('temperature', 1.0))
@@ -3304,10 +3306,22 @@ class set_pyqt(QWidget):
         # 新增：设置辅助视觉模型配置
         vision_config = self.config.get('vision', {})
         self.ui.checkBox_use_vision_model.setChecked(vision_config.get('use_vision_model', True))
+        vision_provider = None
+        vision_provider_id = vision_config.get('provider_id', '')
+        if vision_provider_id:
+            vision_provider = next(
+                (p for p in getattr(self, '_providers', []) if p.get('id') == vision_provider_id),
+                None
+            )
         vision_model_config = vision_config.get('vision_model', {})
-        self.ui.lineEdit_vision_api_key.setText(vision_model_config.get('api_key', ''))
-        self.ui.lineEdit_vision_api_url.setText(vision_model_config.get('api_url', ''))
-        self.ui.lineEdit_vision_model.setText(vision_model_config.get('model', ''))
+        if vision_provider is not None:
+            self.ui.lineEdit_vision_api_key.setText(vision_provider.get('api_key', ''))
+            self.ui.lineEdit_vision_api_url.setText(vision_provider.get('api_url', ''))
+            self.ui.lineEdit_vision_model.setText(vision_config.get('model_id', vision_model_config.get('model', '')))
+        else:
+            self.ui.lineEdit_vision_api_key.setText(vision_model_config.get('api_key', ''))
+            self.ui.lineEdit_vision_api_url.setText(vision_model_config.get('api_url', ''))
+            self.ui.lineEdit_vision_model.setText(vision_model_config.get('model', ''))
 
 
 
@@ -4455,7 +4469,110 @@ class set_pyqt(QWidget):
 
     def load_config(self):
         with open(self.config_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            config = json.load(f)
+
+        providers, should_save = self._load_provider_store(config)
+        config['llm_providers'] = providers
+        self._apply_legacy_provider_selection(config, providers)
+        if should_save and providers:
+            self._save_provider_store(providers)
+            config_to_save = json.loads(json.dumps(config, ensure_ascii=False))
+            config_to_save.pop('llm_providers', None)
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(config_to_save, f, ensure_ascii=False, indent=2)
+        return config
+
+    def _has_legacy_provider_data(self, source):
+        if not isinstance(source, dict):
+            return False
+        return any(isinstance(source.get(key), str) and source.get(key).strip() for key in ('api_key', 'api_url', 'model'))
+
+    def _build_provider_from_legacy(self, source, provider_id, name, temperature=None):
+        model_id = (source.get('model') or '').strip()
+        provider = {
+            'id': provider_id,
+            'name': name,
+            'api_key': source.get('api_key', ''),
+            'api_url': source.get('api_url', ''),
+            'models': ([{'model_id': model_id, 'name': model_id, 'enabled': True}] if model_id else []),
+            'enabled': True,
+        }
+        if temperature is not None:
+            provider['temperature'] = temperature
+        return provider
+
+    def _build_legacy_providers(self, config):
+        providers = []
+        llm_cfg = config.get('llm', {})
+        vision_cfg = config.get('vision', {}).get('vision_model', {})
+
+        if self._has_legacy_provider_data(llm_cfg):
+            providers.append(self._build_provider_from_legacy(llm_cfg, 'main', '主模型', llm_cfg.get('temperature', 1.0)))
+        if self._has_legacy_provider_data(vision_cfg):
+            providers.append(self._build_provider_from_legacy(vision_cfg, 'vision', '视觉模型'))
+
+        return providers
+
+    def _load_provider_store(self, config):
+        should_save = False
+        inline_providers = config.get('llm_providers', [])
+        if isinstance(inline_providers, list) and inline_providers:
+            return inline_providers, True
+
+        if os.path.exists(self.providers_path):
+            try:
+                with open(self.providers_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    providers = data.get('providers', [])
+                else:
+                    providers = data
+                if isinstance(providers, list):
+                    merged = list(providers)
+                    provider_ids = {
+                        p.get('id', '') for p in merged if isinstance(p, dict) and p.get('id', '')
+                    }
+                    for legacy_provider in self._build_legacy_providers(config):
+                        legacy_id = legacy_provider.get('id', '')
+                        if legacy_id and legacy_id not in provider_ids:
+                            merged.append(legacy_provider)
+                            provider_ids.add(legacy_id)
+                            should_save = True
+                    return merged, should_save
+            except Exception:
+                pass
+
+        legacy_providers = self._build_legacy_providers(config)
+        return legacy_providers, bool(legacy_providers)
+
+    def _apply_legacy_provider_selection(self, config, providers):
+        provider_by_id = {p.get('id', ''): p for p in providers if isinstance(p, dict)}
+
+        llm_cfg = config.setdefault('llm', {})
+        if not llm_cfg.get('provider_id') and 'main' in provider_by_id:
+            llm_cfg['provider_id'] = 'main'
+            llm_cfg['model_id'] = llm_cfg.get('model_id') or llm_cfg.get('model') or next(
+                (m.get('model_id', '') for m in provider_by_id['main'].get('models', []) if m.get('model_id')),
+                ''
+            )
+
+        vision_cfg = config.setdefault('vision', {})
+        legacy_vision = vision_cfg.get('vision_model', {})
+        if (
+            not vision_cfg.get('provider_id')
+            and 'vision' in provider_by_id
+            and self._has_legacy_provider_data(legacy_vision)
+        ):
+            vision_cfg['provider_id'] = 'vision'
+            vision_cfg['model_id'] = vision_cfg.get('model_id') or legacy_vision.get('model') or next(
+                (m.get('model_id', '') for m in provider_by_id['vision'].get('models', []) if m.get('model_id')),
+                ''
+            )
+
+    def _save_provider_store(self, providers):
+        payload = {'providers': providers if isinstance(providers, list) else []}
+        with open(self.providers_path, 'w', encoding='utf-8') as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
 
     # ===== LLM 提供商管理 =====
 
@@ -4579,29 +4696,6 @@ class set_pyqt(QWidget):
             self._normalize_provider_models(p_copy)
             self._providers.append(p_copy)
 
-        # 兼容旧格式：若没有 llm_providers 但有 config.llm.api_key，自动创建一个
-        if not self._providers:
-            llm = self.config.get('llm', {})
-            if llm.get('api_key'):
-                old_model = llm.get('model', '')
-                self._providers = [
-                    {
-                        'id': 'main',
-                        'name': '主模型',
-                        'api_key': llm.get('api_key', ''),
-                        'api_url': llm.get('api_url', ''),
-                        'models': (
-                            [self._normalize_model_entry(
-                                {'id': 'main', 'name': '主模型'},
-                                {'model_id': old_model, 'name': old_model, 'enabled': True}
-                            )]
-                            if old_model else []
-                        ),
-                        'temperature': llm.get('temperature', 1.0),
-                        'enabled': True,
-                    }
-                ]
-
         self._normalize_selected_model_refs()
 
         self.ui.listWidget_providers.blockSignals(True)
@@ -4700,7 +4794,7 @@ class set_pyqt(QWidget):
 
     def _fetch_models(self):
         '''调用 /v1/models 接口获取模型列表，填入 comboBox_models'''
-        import threading, urllib.request, json as _json
+        import threading
 
         self._sync_current_provider()
         api_key = self.ui.lineEdit.text().strip()
@@ -4713,12 +4807,13 @@ class set_pyqt(QWidget):
 
         def do_fetch():
             try:
-                req = urllib.request.Request(
+                resp = requests.get(
                     f'{api_url}/models',
                     headers={'Authorization': f'Bearer {api_key}'},
+                    timeout=10,
                 )
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    data = _json.loads(resp.read())
+                resp.raise_for_status()
+                data = resp.json()
                 model_ids = sorted(
                     [m['id'] for m in data.get('data', []) if m.get('id')],
                     key=lambda x: x.lower(),
@@ -4743,8 +4838,6 @@ class set_pyqt(QWidget):
                 print(f'获取模型列表失败: {e}')
 
         threading.Thread(target=do_fetch, daemon=True).start()
-
-    from PyQt5.QtCore import pyqtSlot
 
     @pyqtSlot(object)
     def _on_models_fetched(self, model_ids):
@@ -5130,7 +5223,7 @@ class set_pyqt(QWidget):
         self.ui.comboBox_vision_provider.blockSignals(False)
 
     def _on_llm_model_combo_changed(self, index):
-        ""'用户在「默认对话模型」下拉框切换模型时触发'""
+        """用户在“默认对话模型”下拉框切换模型时触发。"""
         data = self.ui.comboBox_llm_provider.itemData(index) or ''
         if "|" not in data:
             return
@@ -5142,7 +5235,7 @@ class set_pyqt(QWidget):
         self.ui.lineEdit_3.setText(model_id)
 
     def _on_vision_model_combo_changed(self, index):
-        ""'用户在「默认图片转述模型」下拉框切换模型时触发'""
+        """用户在“默认图片转述模型”下拉框切换模型时触发。"""
         data = self.ui.comboBox_vision_provider.itemData(index) or ''
         vision_cfg = self.config.setdefault("vision", {})
         if "|" not in data:
@@ -5160,11 +5253,10 @@ class set_pyqt(QWidget):
             return
 
         current_config = self.load_config()
-
-        # 保存 LLM 提供商列表
+        providers_to_save = []
         if hasattr(self, '_providers'):
             self._sync_current_provider()
-            current_config['llm_providers'] = self._providers
+            providers_to_save = json.loads(json.dumps(self._providers, ensure_ascii=False))
 
         # 从 comboBox 读取 provider_id / model_id
         llm_data = self.ui.comboBox_llm_provider.currentData() or ''
@@ -5338,11 +5430,12 @@ class set_pyqt(QWidget):
             except Exception as e:
                 print(f"应用Live2D模型失败: {str(e)}")
 
+        prepared_config = json.loads(json.dumps(current_config, ensure_ascii=False))
+        self._save_provider_store(providers_to_save)
+        prepared_config.pop('llm_providers', None)
         with open(self.config_path, 'w', encoding='utf-8') as f:
-            json.dump(current_config, f, ensure_ascii=False, indent=2)
-
-        # 重新加载配置到内存，确保立即生效
-        self.config = current_config
+            json.dump(prepared_config, f, ensure_ascii=False, indent=2)
+        self.config = self.load_config()
 
         # 使用Toast提示替代QMessageBox
         self.toast.show_message("配置已保存，模型选择已应用", 1500)
