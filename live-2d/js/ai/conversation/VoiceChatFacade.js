@@ -9,7 +9,6 @@ const { ContextManager } = require('../ContextManager.js');
 const { llmProviderManager } = require('../../core/llm-provider.js');
 
 let MemosClient = null;
-let MemosClient;
 try {
     ({ MemosClient } = require('../memos-client.js'));
 } catch (_) {
