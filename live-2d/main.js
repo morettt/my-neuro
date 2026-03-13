@@ -4,7 +4,7 @@ const fs = require('fs')
 const { HttpServer } = require('./js/services/http-server')
 const { ModelPathUpdater } = require('./js/model/model-path-updater')
 const { ShortcutManager } = require('./js/shortcut-manager')
-const { getProviderStorePath, resolveProvidersForConfig, saveProviders } = require('./js/core/llm-provider-store')
+const { ensureProviderStore, saveProviders } = require('./js/core/llm-provider-store')
 const screenshot = require('screenshot-desktop');
 
 // 添加配置文件路径
@@ -143,15 +143,8 @@ ipcMain.handle('save-config', async (event, configData) => {
 
         // 保存新配置
         const preparedConfig = JSON.parse(JSON.stringify(configData));
-        const hasInlineProviders = Object.prototype.hasOwnProperty.call(preparedConfig, 'llm_providers');
-        const providerStorePath = getProviderStorePath(baseDir);
-        const { providers } = hasInlineProviders
-            ? { providers: Array.isArray(preparedConfig.llm_providers) ? preparedConfig.llm_providers : [] }
-            : resolveProvidersForConfig(baseDir, preparedConfig);
-        if (hasInlineProviders || fs.existsSync(providerStorePath)) {
-            saveProviders(baseDir, providers);
-        }
-        delete preparedConfig.llm_providers;
+        const { providers } = ensureProviderStore(baseDir, preparedConfig);
+        saveProviders(baseDir, providers);
         fs.writeFileSync(configPath, JSON.stringify(preparedConfig, null, 2), 'utf8');
 
         // 通知用户需要重启应用
@@ -181,7 +174,14 @@ ipcMain.handle('save-config', async (event, configData) => {
 ipcMain.handle('get-config', async (event) => {
     try {
         const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        resolveProvidersForConfig(baseDir, configData);
+        const { providers, storeChanged, configChanged } = ensureProviderStore(baseDir, configData);
+        if (storeChanged) {
+            saveProviders(baseDir, providers);
+        }
+        if (storeChanged || configChanged) {
+            fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+        }
+        configData.llm_providers = providers;
         return { success: true, config: configData };
     } catch (error) {
         console.error('获取配置失败:', error);

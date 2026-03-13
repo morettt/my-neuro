@@ -4474,7 +4474,8 @@ class set_pyqt(QWidget):
         providers, should_save = self._load_provider_store(config)
         config['llm_providers'] = providers
         self._apply_legacy_provider_selection(config, providers)
-        if should_save and providers:
+        config_changed = self._scrub_legacy_provider_fields(config)
+        if (should_save and providers) or config_changed:
             self._save_provider_store(providers)
             config_to_save = json.loads(json.dumps(config, ensure_ascii=False))
             config_to_save.pop('llm_providers', None)
@@ -4485,7 +4486,7 @@ class set_pyqt(QWidget):
     def _has_legacy_provider_data(self, source):
         if not isinstance(source, dict):
             return False
-        return any(isinstance(source.get(key), str) and source.get(key).strip() for key in ('api_key', 'api_url', 'model'))
+        return any(isinstance(source.get(key), str) and source.get(key).strip() for key in ('api_key', 'api_url'))
 
     def _build_provider_from_legacy(self, source, provider_id, name, temperature=None):
         model_id = (source.get('model') or '').strip()
@@ -4571,6 +4572,36 @@ class set_pyqt(QWidget):
                 (m.get('model_id', '') for m in provider_by_id['vision'].get('models', []) if m.get('model_id')),
                 ''
             )
+
+    def _scrub_legacy_provider_fields(self, config):
+        changed = False
+
+        llm_cfg = config.setdefault('llm', {})
+        llm_model_id = llm_cfg.get('model_id') or llm_cfg.get('model') or ''
+        if llm_cfg.get('model') != llm_model_id:
+            llm_cfg['model'] = llm_model_id
+            changed = True
+        if llm_cfg.get('api_key'):
+            llm_cfg['api_key'] = ''
+            changed = True
+        if llm_cfg.get('api_url'):
+            llm_cfg['api_url'] = ''
+            changed = True
+
+        vision_cfg = config.setdefault('vision', {})
+        legacy_vision = vision_cfg.get('vision_model', {})
+        if not vision_cfg.get('model_id') and isinstance(legacy_vision, dict) and legacy_vision.get('model'):
+            vision_cfg['model_id'] = legacy_vision.get('model', '')
+            changed = True
+        if legacy_vision:
+            vision_cfg['vision_model'] = {}
+            changed = True
+
+        if 'llm_providers' in config:
+            del config['llm_providers']
+            changed = True
+
+        return changed
 
     def _save_provider_store(self, providers):
         payload = {'providers': providers if isinstance(providers, list) else []}
@@ -5270,6 +5301,8 @@ class set_pyqt(QWidget):
         current_config.setdefault('llm', {})['provider_id'] = llm_provider_id
         current_config['llm']['model_id'] = llm_model_id
         current_config['llm']['model'] = llm_model_id
+        current_config['llm']['api_key'] = ''
+        current_config['llm']['api_url'] = ''
         current_config['llm']['system_prompt'] = self.ui.textEdit_3.toPlainText()
 
         current_config["ui"]["intro_text"] = self.ui.lineEdit_4.text()
@@ -5293,15 +5326,7 @@ class set_pyqt(QWidget):
             vision_provider_id, vision_model_id = '', ''
         current_config['vision']['provider_id'] = vision_provider_id
         current_config['vision']['model_id'] = vision_model_id
-        # 回填 vision_model 兼容旧代码
-        vis_p = next((p for p in getattr(self, '_providers', []) if p.get('id') == vision_provider_id), None)
-        if vis_p:
-            current_config['vision'].setdefault('vision_model', {})
-            current_config['vision']['vision_model']['api_key'] = vis_p.get('api_key', '')
-            current_config['vision']['vision_model']['api_url'] = vis_p.get('api_url', '')
-            current_config['vision']['vision_model']['model'] = vision_model_id
-        else:
-            current_config['vision']['vision_model'] = {}
+        current_config['vision']['vision_model'] = {}
 
         current_config['ui']['show_chat_box'] = self.ui.checkBox_3.isChecked()
         current_config['context']['enable_limit'] = self.ui.checkBox_4.isChecked()

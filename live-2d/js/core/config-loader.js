@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { llmProviderManager } = require('./llm-provider.js');
-const { resolveProvidersForConfig } = require('./llm-provider-store.js');
+const { ensureProviderStore, saveProviders } = require('./llm-provider-store.js');
 
 class ConfigLoader {
     constructor() {
@@ -23,11 +23,16 @@ class ConfigLoader {
             }
 
             console.log('配置文件加载成功');
-            resolveProvidersForConfig(this.baseDir, this.config);
+            const { providers, storeChanged, configChanged } = ensureProviderStore(this.baseDir, this.config);
+            if (storeChanged) {
+                saveProviders(this.baseDir, providers);
+            }
+            if (storeChanged || configChanged) {
+                fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2), 'utf8');
+            }
 
             this.processSpecialPaths();
             this.initLLMProviders();
-            this.normalizeLegacyConfigShape();
 
             return this.config;
         } catch (error) {
@@ -38,15 +43,6 @@ class ConfigLoader {
 
     initLLMProviders() {
         llmProviderManager.init(this.config);
-    }
-
-    normalizeLegacyConfigShape() {
-        if (!this.config.llm) this.config.llm = {};
-
-        // 仅保留旧字段结构，不再把 provider 解析结果回写到主配置。
-        if (this.config.vision && this.config.vision.provider_id && !this.config.vision.vision_model) {
-            this.config.vision.vision_model = {};
-        }
     }
 
     processSpecialPaths() {
