@@ -220,14 +220,5 @@ function persistProviderStore(baseDir, configPath, config) {
 }
 
 module.exports = {
-    applyLegacyProviderSelection,
-    buildLegacyProviders,
-    ensureProviderStore,
-    getProviderStorePath,
-    hasLegacyProviderData,
-    loadProvidersFromStore,
-    normalizeProvidersData,
-    persistProviderStore,
-    scrubLegacyProviderConfig,
-    saveProviders
+    persistProviderStore
 };
