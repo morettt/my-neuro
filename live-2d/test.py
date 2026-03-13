@@ -4504,11 +4504,14 @@ class set_pyqt(QWidget):
     def _build_legacy_providers(self, config):
         providers = []
         llm_cfg = config.get('llm', {})
-        vision_cfg = config.get('vision', {}).get('vision_model', {})
+        llm_provider_id = (llm_cfg.get('provider_id') or '').strip()
+        vision_root = config.get('vision', {})
+        vision_cfg = vision_root.get('vision_model', {})
+        vision_provider_id = (vision_root.get('provider_id') or '').strip()
 
-        if self._has_legacy_provider_data(llm_cfg):
+        if llm_provider_id in ('', 'main') and self._has_legacy_provider_data(llm_cfg):
             providers.append(self._build_provider_from_legacy(llm_cfg, 'main', '主模型', llm_cfg.get('temperature', 1.0)))
-        if self._has_legacy_provider_data(vision_cfg):
+        if vision_provider_id in ('', 'vision') and self._has_legacy_provider_data(vision_cfg):
             providers.append(self._build_provider_from_legacy(vision_cfg, 'vision', '视觉模型'))
 
         return providers
