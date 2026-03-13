@@ -92,7 +92,7 @@ class InputRouter {
         // 处理插件追加的上下文
         const contextAdditions = event.getContextAdditions();
         const promptWithContext = contextAdditions.length > 0
-            ? finalText + '\n\n[额外上下文]\n' + contextAdditions.join('\n')
+            ? finalText + '\n\n' + contextAdditions.join('\n')
             : finalText;
 
         // 发送到LLM
@@ -124,7 +124,7 @@ class InputRouter {
         // 处理插件追加的上下文
         const contextAdditions = event.getContextAdditions();
         const promptWithContext = contextAdditions.length > 0
-            ? finalText + '\n\n[额外上下文]\n' + contextAdditions.join('\n')
+            ? finalText + '\n\n' + contextAdditions.join('\n')
             : finalText;
 
         // 发送到LLM
