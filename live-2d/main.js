@@ -172,8 +172,7 @@ ipcMain.handle('save-config', async (event, configData) => {
 ipcMain.handle('get-config', async (event) => {
     try {
         const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        const { providers } = persistProviderStore(baseDir, configPath, configData);
-        configData.llm_providers = providers;
+        persistProviderStore(baseDir, configPath, configData);
         return { success: true, config: configData };
     } catch (error) {
         console.error('获取配置失败:', error);

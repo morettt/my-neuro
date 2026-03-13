@@ -29,17 +29,16 @@ class VoiceChatFacade {
         // 先解析一次，确保对外暴露的字段与当前选中的模型保持一致。
         const resolvedProvider = llmProviderManager.resolveProviderOrFallback(
             config.llm?.provider_id || null,
-            config.llm || null,
-            config.llm?.model_id || config.llm?.model || null
+            config.llm?.model_id || null
         );
         if (resolvedProvider) {
             this.API_KEY = resolvedProvider.api_key;
             this.API_URL = resolvedProvider.api_url;
             this.MODEL = resolvedProvider.model || '';
         } else {
-            this.API_KEY = config.llm.api_key;
-            this.API_URL = config.llm.api_url;
-            this.MODEL = config.llm.model;
+            this.API_KEY = '';
+            this.API_URL = '';
+            this.MODEL = '';
         }
 
         // ASR相关属性（暴露给外部使用）

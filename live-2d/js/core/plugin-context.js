@@ -110,7 +110,6 @@ class PluginContext {
         if (options.provider_id) {
             const provider = llmProviderManager.resolveProviderOrFallback(
                 options.provider_id,
-                this._config?.llm || null,
                 options.model || null
             );
             if (provider) {

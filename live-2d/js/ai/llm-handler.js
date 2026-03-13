@@ -13,12 +13,11 @@ class LLMHandler {
         // 优先走 provider 注册表，旧配置只作为回退。
         const resolvedLlmProvider = llmProviderManager.resolveProviderOrFallback(
             config.llm?.provider_id || null,
-            config.llm || null,
-            config.llm?.model_id || config.llm?.model || null
+            config.llm?.model_id || null
         );
         const llmClient = resolvedLlmProvider
             ? LLMClient.fromProviderConfig(resolvedLlmProvider)
-            : new LLMClient(config);
+            : null;
 
         // 仅在启用视觉功能时创建视觉模型客户端。
         let visionClient = null;
@@ -27,27 +26,13 @@ class LLMHandler {
             if (config.vision.provider_id) {
                 const visionProvider = llmProviderManager.resolveProviderOrFallback(
                     config.vision.provider_id,
-                    config.vision.vision_model || null,
-                    config.vision.model_id || config.vision.vision_model?.model || null
+                    config.vision.model_id || null
                 );
                 if (visionProvider) {
                     visionClient = LLMClient.fromProviderConfig(visionProvider);
                     console.log('✅ 视觉模型已启用（provider）:', visionProvider.model);
                     logToTerminal('info', `✅ 视觉模型已启用（provider: ${visionProvider.id}）: ${visionProvider.model}`);
                 }
-            }
-            // 存在旧的 vision_model 配置时再回退。
-            if (!visionClient && config.vision.vision_model && config.vision.vision_model.api_key) {
-                const visionConfig = {
-                    llm: {
-                        api_key: config.vision.vision_model.api_key,
-                        api_url: config.vision.vision_model.api_url,
-                        model: config.vision.vision_model.model
-                    }
-                };
-                visionClient = new LLMClient(visionConfig);
-                console.log('✅ 视觉模型已启用:', config.vision.vision_model.model);
-                logToTerminal('info', `✅ 视觉模型已启用: ${config.vision.vision_model.model}`);
             }
         }
 
@@ -74,6 +59,9 @@ class LLMHandler {
         };
 
         return async function(prompt) {
+            if (!llmClient) {
+                throw new Error('未找到可用的 LLM 提供商配置');
+            }
             let hasRetriedWithoutImage = false; // 标志：是否已经重试过（避免无限循环）
             let isFirstAttempt = true; // 标志：是否是第一次尝试
 

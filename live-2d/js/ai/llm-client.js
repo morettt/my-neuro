@@ -29,7 +29,7 @@ class LLMClient {
      */
     static fromProvider(providerId, modelId = null) {
         // 显式传入 modelId，避免多模型 provider 选错模型。
-        const provider = llmProviderManager.resolveProvider(providerId, null, modelId);
+        const provider = llmProviderManager.resolveProvider(providerId, modelId);
         return LLMClient.fromProviderConfig(provider);
     }
 
@@ -495,8 +495,7 @@ class LLMClient {
             if (newConfig.llm.provider_id) {
                 const provider = llmProviderManager.resolveProviderOrFallback(
                     newConfig.llm.provider_id,
-                    newConfig.llm,
-                    newConfig.llm.model_id || newConfig.llm.model || null
+                    newConfig.llm.model_id || null
                 );
                 if (provider) {
                     this.apiKey = provider.api_key;
@@ -510,9 +509,6 @@ class LLMClient {
                 }
             }
             // 必要时回退到显式的 llm 字段。
-            this.apiKey = newConfig.llm.api_key || this.apiKey;
-            this.apiUrl = newConfig.llm.api_url || this.apiUrl;
-            this.model = newConfig.llm.model || this.model;
             this.temperature = newConfig.llm.temperature !== undefined ? newConfig.llm.temperature : this.temperature;  // 🔥 支持temperature更新
             logToTerminal('info', 'LLM客户端配置已更新');
         }

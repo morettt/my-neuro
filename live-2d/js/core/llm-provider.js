@@ -97,16 +97,47 @@ class LLMProviderManager {
     _normalizeModels(provider) {
         if (Array.isArray(provider.models)) {
             return provider.models.map(m => ({
-                model_id: m.model_id || m.id || '',
-                name: m.name || m.model_id || m.id || '',
+                model_id: this._normalizeModelId(provider, m.model_id || m.id || ''),
+                name: this._normalizeModelId(provider, m.name || m.model_id || m.id || ''),
                 enabled: m.enabled !== false
             }));
         }
-        // 旧格式兼容：单个 model 字符串
+        // 迁移旧数据时兼容单个 model 字符串
         if (typeof provider.model === 'string' && provider.model) {
-            return [{ model_id: provider.model, name: provider.model, enabled: true }];
+            const modelId = this._normalizeModelId(provider, provider.model);
+            return [{ model_id: modelId, name: modelId, enabled: true }];
         }
         return [];
+    }
+
+    _normalizeModelId(provider, modelId) {
+        const rawModelId = (modelId || '').trim();
+        if (!rawModelId) {
+            return '';
+        }
+
+        const prefixes = [];
+        const providerName = (provider?.name || '').trim().replace(/\/+$/g, '');
+        const providerId = (provider?.id || '').trim().replace(/\/+$/g, '');
+        if (providerName) {
+            prefixes.push(providerName);
+        }
+        if (providerId && !prefixes.includes(providerId)) {
+            prefixes.push(providerId);
+        }
+
+        for (const prefix of prefixes) {
+            if (rawModelId.startsWith(`${prefix}/`)) {
+                return rawModelId.slice(prefix.length + 1);
+            }
+        }
+
+        const apiUrl = (provider?.api_url || '').trim().toLowerCase();
+        if (apiUrl.includes('dashscope.aliyuncs.com/compatible-mode') && rawModelId.split('/').length === 2) {
+            return rawModelId.split('/', 2)[1];
+        }
+
+        return rawModelId;
     }
 
     /**
@@ -191,8 +222,7 @@ class LLMProviderManager {
         if (firstEnabled) return firstEnabled.model_id;
         // 4. 第一个
         if (models.length > 0) return models[0].model_id;
-        // 5. 兼容旧格式 provider.model 字符串
-        return provider.model || '';
+        return '';
     }
 
     _isProviderEnabled(provider) {
@@ -205,11 +235,10 @@ class LLMProviderManager {
      * 如果 provider_id 为空或找不到对应提供商，返回默认提供商
      * 
      * @param {string|null|undefined} providerId - 提供商 ID
-     * @param {object} [fallbackConfig] - 降级配置（旧格式的 api_key/api_url/model）
      * @param {string|null} [modelId] - 指定模型 ID（可选）
      * @returns {object} { api_key, api_url, model, models, temperature }
      */
-    resolveProvider(providerId, fallbackConfig = null, modelId = null) {
+    resolveProvider(providerId, modelId = null) {
         // 1. 尝试通过 provider_id 查找
         if (providerId) {
             const provider = this.getProvider(providerId);
@@ -226,24 +255,7 @@ class LLMProviderManager {
             logToTerminal('warn', `⚠️ 未找到提供商 "${providerId}"，尝试降级`);
         }
 
-        // 2. 尝试使用降级配置（旧格式的独立 LLM 配置）
-        if (fallbackConfig && fallbackConfig.api_key) {
-            const models = fallbackConfig.model
-                ? [{ model_id: fallbackConfig.model, name: fallbackConfig.model, enabled: true }]
-                : [];
-            return {
-                id: '_fallback',
-                name: '降级配置',
-                api_key: fallbackConfig.api_key,
-                api_url: fallbackConfig.api_url || fallbackConfig.base_url || '',
-                model: fallbackConfig.model || '',
-                models,
-                temperature: fallbackConfig.temperature,
-                enabled: true
-            };
-        }
-
-        // 3. 使用默认提供商
+        // 2. 使用默认提供商
         const defaultProvider = this.getDefaultProvider();
         if (defaultProvider) {
             const resolvedModelId = this.resolveModelId(defaultProvider, modelId);
@@ -253,7 +265,7 @@ class LLMProviderManager {
             };
         }
 
-        // 4. 实在没有，返回空配置
+        // 3. 实在没有，返回空配置
         logToTerminal('error', '❌ 没有可用的 LLM 提供商配置');
         return {
             id: '_empty',
@@ -271,12 +283,11 @@ class LLMProviderManager {
      * 将查找逻辑与可用性判断收敛到一处，避免重复判断。
      *
      * @param {string|null|undefined} providerId
-     * @param {object} [fallbackConfig]
      * @param {string|null} [modelId]
      * @returns {object|null}
      */
-    resolveProviderOrFallback(providerId, fallbackConfig = null, modelId = null) {
-        const provider = this.resolveProvider(providerId, fallbackConfig, modelId);
+    resolveProviderOrFallback(providerId, modelId = null) {
+        const provider = this.resolveProvider(providerId, modelId);
         if (!provider || provider.id === '_empty') {
             return null;
         }
@@ -313,18 +324,6 @@ class LLMProviderManager {
      * 将当前提供商列表导出为可保存到 config.json 的格式
      * @returns {Array<object>}
      */
-    exportForConfig() {
-        return this.getAllProviders().map(p => ({
-            id: p.id,
-            name: p.name,
-            api_key: p.api_key,
-            api_url: p.api_url,
-            models: p.models || [],
-            ...(p.temperature !== undefined ? { temperature: p.temperature } : {}),
-            enabled: p.enabled !== false
-        }));
-    }
-
     /**
      * 检查是否已初始化
      * @returns {boolean}

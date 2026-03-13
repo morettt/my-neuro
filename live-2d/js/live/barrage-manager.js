@@ -17,12 +17,11 @@ class BarrageManager {
         // 弹幕回复也复用同一套 provider/model 解析逻辑。
         const resolvedProvider = llmProviderManager.resolveProviderOrFallback(
             config.llm?.provider_id || null,
-            config.llm || null,
-            config.llm?.model_id || config.llm?.model || null
+            config.llm?.model_id || null
         );
         this.llmClient = resolvedProvider
             ? LLMClient.fromProviderConfig(resolvedProvider)
-            : new LLMClient(config);
+            : null;
 
         // 依赖的外部服务
         this.voiceChat = null;
@@ -133,6 +132,9 @@ class BarrageManager {
 
     // 执行弹幕处理
     async executeBarrage(nickname, text) {
+        if (!this.llmClient) {
+            throw new Error('未找到可用的 LLM 提供商配置');
+        }
         if (!this.voiceChat) {
             throw new Error('VoiceChat未初始化');
         }

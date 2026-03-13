@@ -9,16 +9,80 @@ function clone(value) {
     return JSON.parse(JSON.stringify(value));
 }
 
+function getProviderPrefixes(provider) {
+    const prefixes = [];
+    const providerId = (provider?.id || '').trim().replace(/\/+$/g, '');
+    const providerName = (provider?.name || '').trim().replace(/\/+$/g, '');
+    if (providerId) {
+        prefixes.push(providerId);
+    }
+    if (providerName && !prefixes.includes(providerName)) {
+        prefixes.push(providerName);
+    }
+    return prefixes;
+}
+
+function normalizeModelIdForProvider(provider, modelId) {
+    const rawModelId = (modelId || '').trim();
+    if (!rawModelId) {
+        return '';
+    }
+
+    for (const prefix of getProviderPrefixes(provider)) {
+        if (rawModelId.startsWith(`${prefix}/`)) {
+            return rawModelId.slice(prefix.length + 1);
+        }
+    }
+
+    const apiUrl = (provider?.api_url || '').trim().toLowerCase();
+    if (apiUrl.includes('dashscope.aliyuncs.com/compatible-mode') && rawModelId.split('/').length === 2) {
+        return rawModelId.split('/', 2)[1];
+    }
+
+    return rawModelId;
+}
+
 function readJsonFile(filePath) {
     return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
 function normalizeProvidersData(rawValue) {
+    const normalizeProvider = (provider) => {
+        if (!provider || typeof provider !== 'object') {
+            return provider;
+        }
+
+        const normalized = clone(provider);
+        const models = Array.isArray(normalized.models) ? normalized.models : [];
+        normalized.models = models.map((model) => {
+            if (!model || typeof model !== 'object') {
+                const normalizedModelId = normalizeModelIdForProvider(normalized, String(model || ''));
+                return { model_id: normalizedModelId, name: normalizedModelId, enabled: true };
+            }
+
+            const normalizedModelId = normalizeModelIdForProvider(
+                normalized,
+                model.model_id || model.id || model.name || ''
+            );
+            return {
+                ...model,
+                model_id: normalizedModelId,
+                name: (!model.name || model.name === model.model_id || model.name === model.id)
+                    ? normalizedModelId
+                    : model.name
+            };
+        });
+        if (typeof normalized.model === 'string' && normalized.model) {
+            normalized.model = normalizeModelIdForProvider(normalized, normalized.model);
+        }
+        return normalized;
+    };
+
     if (Array.isArray(rawValue)) {
-        return clone(rawValue);
+        return rawValue.map(normalizeProvider);
     }
     if (rawValue && Array.isArray(rawValue.providers)) {
-        return clone(rawValue.providers);
+        return rawValue.providers.map(normalizeProvider);
     }
     return [];
 }
@@ -30,14 +94,22 @@ function getFirstModelId(provider) {
 function loadProvidersFromStore(baseDir) {
     const providersPath = getProviderStorePath(baseDir);
     if (!fs.existsSync(providersPath)) {
-        return [];
+        return { providers: [], normalizedChanged: false };
     }
 
     try {
-        return normalizeProvidersData(readJsonFile(providersPath));
+        const rawData = readJsonFile(providersPath);
+        const providers = normalizeProvidersData(rawData);
+        const rawProviders = Array.isArray(rawData)
+            ? rawData
+            : (rawData && Array.isArray(rawData.providers) ? rawData.providers : []);
+        return {
+            providers,
+            normalizedChanged: JSON.stringify(rawProviders) !== JSON.stringify(providers)
+        };
     } catch (error) {
         console.warn(`读取 LLM 提供商文件失败: ${error.message}`);
-        return [];
+        return { providers: [], normalizedChanged: false };
     }
 }
 
@@ -49,7 +121,7 @@ function hasLegacyProviderData(source) {
 }
 
 function buildProviderFromLegacy(source, providerId, name, temperature) {
-    const modelId = (source.model || '').trim();
+    const modelId = (source.model_id || source.model || '').trim();
     const provider = {
         id: providerId,
         name,
@@ -95,10 +167,9 @@ function applyLegacyProviderSelection(config, providers) {
 
     if (!config.llm.provider_id && providerById.has('main')) {
         const provider = providerById.get('main');
-        const selectedModelId = config.llm.model_id || config.llm.model || getFirstModelId(provider);
+        const selectedModelId = config.llm.model_id || getFirstModelId(provider);
         config.llm.provider_id = 'main';
         config.llm.model_id = selectedModelId;
-        config.llm.model = selectedModelId;
     }
 
     if (!config.vision) {
@@ -108,7 +179,7 @@ function applyLegacyProviderSelection(config, providers) {
     const legacyVision = config.vision.vision_model || {};
     if (!config.vision.provider_id && providerById.has('vision') && hasLegacyProviderData(legacyVision)) {
         const provider = providerById.get('vision');
-        const selectedModelId = config.vision.model_id || legacyVision.model || getFirstModelId(provider);
+        const selectedModelId = config.vision.model_id || getFirstModelId(provider);
         config.vision.provider_id = 'vision';
         config.vision.model_id = selectedModelId;
     }
@@ -122,9 +193,20 @@ function scrubLegacyProviderConfig(config) {
         changed = true;
     }
 
-    const llmModelId = config.llm.model_id || config.llm.model || '';
-    if (config.llm.model !== llmModelId) {
-        config.llm.model = llmModelId;
+    const providerById = new Map(
+        normalizeProvidersData(config.llm_providers)
+            .filter(provider => provider && provider.id)
+            .map(provider => [provider.id, provider])
+    );
+
+    const selectedLlmProvider = providerById.get(config.llm.provider_id || '');
+    const llmModelId = normalizeModelIdForProvider(selectedLlmProvider, config.llm.model_id || '');
+    if (config.llm.model_id !== llmModelId) {
+        config.llm.model_id = llmModelId;
+        changed = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(config.llm, 'model')) {
+        delete config.llm.model;
         changed = true;
     }
     if (config.llm.api_key) {
@@ -142,8 +224,13 @@ function scrubLegacyProviderConfig(config) {
     }
 
     const legacyVision = config.vision.vision_model || {};
-    if (!config.vision.model_id && legacyVision.model) {
-        config.vision.model_id = legacyVision.model;
+    const selectedVisionProvider = providerById.get(config.vision.provider_id || '');
+    const normalizedVisionModelId = normalizeModelIdForProvider(
+        selectedVisionProvider,
+        config.vision.model_id || ''
+    );
+    if (config.vision.model_id !== normalizedVisionModelId) {
+        config.vision.model_id = normalizedVisionModelId;
         changed = true;
     }
     if (Object.keys(legacyVision).length > 0) {
@@ -151,17 +238,13 @@ function scrubLegacyProviderConfig(config) {
         changed = true;
     }
 
-    if (Object.prototype.hasOwnProperty.call(config, 'llm_providers')) {
-        delete config.llm_providers;
-        changed = true;
-    }
-
     return changed;
 }
 
 function ensureProviderStore(baseDir, config) {
-    let providers = loadProvidersFromStore(baseDir);
-    let storeChanged = false;
+    const storeState = loadProvidersFromStore(baseDir);
+    let providers = storeState.providers;
+    let storeChanged = storeState.normalizedChanged;
 
     const inlineProviders = normalizeProvidersData(config.llm_providers);
     if (providers.length === 0 && inlineProviders.length > 0) {
@@ -169,34 +252,20 @@ function ensureProviderStore(baseDir, config) {
         storeChanged = true;
     }
 
-    const shouldImportLegacyProviders = (
-        providers.length === 0
-        || (config.llm && (config.llm.provider_id || '').trim() === 'main')
-        || (config.vision && (config.vision.provider_id || '').trim() === 'vision')
-    );
-
-    const providerIds = new Set(
-        providers
-            .filter(provider => provider && provider.id)
-            .map(provider => provider.id)
-    );
-
-    if (shouldImportLegacyProviders) {
-        for (const legacyProvider of buildLegacyProviders(config)) {
-            if (!providerIds.has(legacyProvider.id)) {
-                providers.push(legacyProvider);
-                providerIds.add(legacyProvider.id);
-                storeChanged = true;
-            }
+    if (providers.length === 0) {
+        providers = buildLegacyProviders(config);
+        if (providers.length > 0) {
+            storeChanged = true;
         }
     }
 
+    const normalizedProviders = normalizeProvidersData(providers);
     applyLegacyProviderSelection(config, providers);
-    config.llm_providers = normalizeProvidersData(providers);
+    config.llm_providers = normalizedProviders;
     const configChanged = scrubLegacyProviderConfig(config);
 
     return {
-        providers: normalizeProvidersData(providers),
+        providers: normalizedProviders,
         storeChanged,
         configChanged
     };
@@ -214,7 +283,9 @@ function persistProviderStore(baseDir, configPath, config) {
         saveProviders(baseDir, result.providers);
     }
     if (configPath && (result.storeChanged || result.configChanged)) {
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+        const persistableConfig = clone(config);
+        delete persistableConfig.llm_providers;
+        fs.writeFileSync(configPath, JSON.stringify(persistableConfig, null, 2), 'utf8');
     }
     return result;
 }

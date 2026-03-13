@@ -192,8 +192,7 @@ ${conversationText}
 
             const resolvedProvider = llmProviderManager.resolveProviderOrFallback(
                 this.config.llm?.provider_id || null,
-                this.config.llm || null,
-                this.config.llm?.model_id || this.config.llm?.model || null
+                this.config.llm?.model_id || null
             );
             if (!resolvedProvider) {
                 throw new Error('No LLM provider available for context compression');
