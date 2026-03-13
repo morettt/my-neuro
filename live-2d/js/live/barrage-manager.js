@@ -14,8 +14,7 @@ class BarrageManager {
         this.priorityQueue = [];    // 优先队列（保留，暂未使用）
         this.isProcessing = false;
         this.interruptFlag = false; // 打断标志
-        // 弹幕总结/回复也应复用统一的 provider/model 选择，
-        // 否则这条链路会继续停留在旧 config.llm 直连模式。
+        // 弹幕回复也复用同一套 provider/model 解析逻辑。
         const resolvedProvider = llmProviderManager.resolveProviderOrFallback(
             config.llm?.provider_id || null,
             config.llm || null,

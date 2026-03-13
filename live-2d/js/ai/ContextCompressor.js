@@ -1,5 +1,6 @@
 // ContextCompressor.js - 异步上下文压缩模块
 const { logToTerminal } = require('../api-utils.js');
+const { llmProviderManager } = require('../core/llm-provider.js');
 
 class ContextCompressor {
     constructor(voiceChatInterface, config) {
@@ -189,15 +190,23 @@ ${conversationText}
 
             console.log('🤖 调用LLM进行上下文压缩...');
 
-            // 调用LLM API
-            const response = await fetch(`${this.config.llm.api_url}/chat/completions`, {
+            const resolvedProvider = llmProviderManager.resolveProviderOrFallback(
+                this.config.llm?.provider_id || null,
+                this.config.llm || null,
+                this.config.llm?.model_id || this.config.llm?.model || null
+            );
+            if (!resolvedProvider) {
+                throw new Error('No LLM provider available for context compression');
+            }
+
+            const response = await fetch(`${resolvedProvider.api_url}/chat/completions`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.config.llm.api_key}`
+                    'Authorization': `Bearer ${resolvedProvider.api_key}`
                 },
                 body: JSON.stringify({
-                    model: this.config.llm.model,
+                    model: resolvedProvider.model,
                     messages: [{
                         role: 'user',
                         content: compressPrompt

@@ -106,9 +106,7 @@ class PluginContext {
     async callLLM(prompt, options = {}) {
         let apiUrl, apiKey, model;
 
-        // 优先通过 provider_id 解析。
-        // 这里显式传入 options.model，可以确保插件调用也走统一的 provider/model 注册表，
-        // 而不是只拿到 provider 的默认模型。
+        // 先尊重插件显式传入的 provider/model，再回退到全局配置。
         if (options.provider_id) {
             const provider = llmProviderManager.resolveProviderOrFallback(
                 options.provider_id,
@@ -122,7 +120,7 @@ class PluginContext {
             }
         }
 
-        // 降级到 voiceChat 中的全局配置
+        // 未指定 provider 时回退到当前对话使用的模型。
         if (!apiKey) {
             const voiceChat = global.voiceChat;
             if (!voiceChat) throw new Error('LLM not available');

@@ -27,7 +27,7 @@ class ConfigLoader {
 
             this.processSpecialPaths();
             this.initLLMProviders();
-            this.ensureLLMCompat();
+            this.normalizeLegacyConfigShape();
 
             return this.config;
         } catch (error) {
@@ -40,48 +40,12 @@ class ConfigLoader {
         llmProviderManager.init(this.config);
     }
 
-    ensureLLMCompat() {
+    normalizeLegacyConfigShape() {
         if (!this.config.llm) this.config.llm = {};
 
-        if (this.config.llm.provider_id && !this.config.llm.api_key) {
-            const provider = llmProviderManager.resolveProviderOrFallback(
-                this.config.llm.provider_id,
-                this.config.llm,
-                this.config.llm.model_id || this.config.llm.model || null
-            );
-            if (provider) {
-                this.config.llm.api_key = provider.api_key;
-                this.config.llm.api_url = provider.api_url;
-                this.config.llm.model = provider.model;
-                if (provider.temperature !== undefined && this.config.llm.temperature === undefined) {
-                    this.config.llm.temperature = provider.temperature;
-                }
-            }
-        }
-
-        if (this.config.vision && this.config.vision.provider_id) {
-            const visionProvider = llmProviderManager.resolveProviderOrFallback(
-                this.config.vision.provider_id,
-                this.config.vision.vision_model || null,
-                this.config.vision.model_id || this.config.vision.vision_model?.model || null
-            );
-            if (visionProvider) {
-                if (!this.config.vision.vision_model) {
-                    this.config.vision.vision_model = {};
-                }
-                this.config.vision.vision_model.api_key = visionProvider.api_key;
-                this.config.vision.vision_model.api_url = visionProvider.api_url;
-
-                const visionModelId = this.config.vision.model_id;
-                if (visionModelId) {
-                    this.config.vision.vision_model.model = visionModelId;
-                } else if (visionProvider.models && visionProvider.models.length > 0) {
-                    const enabledModel = visionProvider.models.find(m => m.enabled !== false);
-                    this.config.vision.vision_model.model = enabledModel ? enabledModel.model_id : visionProvider.models[0].model_id;
-                } else {
-                    this.config.vision.vision_model.model = visionProvider.model || '';
-                }
-            }
+        // 仅保留旧字段结构，不再把 provider 解析结果回写到主配置。
+        if (this.config.vision && this.config.vision.provider_id && !this.config.vision.vision_model) {
+            this.config.vision.vision_model = {};
         }
     }
 

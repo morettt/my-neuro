@@ -10,7 +10,7 @@ const { llmProviderManager } = require('../core/llm-provider.js');
 class LLMHandler {
     // 创建增强的sendToLLM方法
     static createEnhancedSendToLLM(voiceChat, ttsProcessor, asrEnabled, config) {
-        // 优先走统一 provider/model 注册表，兼容旧格式 config.llm
+        // 优先走 provider 注册表，旧配置只作为回退。
         const resolvedLlmProvider = llmProviderManager.resolveProviderOrFallback(
             config.llm?.provider_id || null,
             config.llm || null,
@@ -20,10 +20,10 @@ class LLMHandler {
             ? LLMClient.fromProviderConfig(resolvedLlmProvider)
             : new LLMClient(config);
 
-        // 创建视觉模型客户端（如果启用）
+        // 仅在启用视觉功能时创建视觉模型客户端。
         let visionClient = null;
         if (config.vision && config.vision.use_vision_model) {
-            // 优先通过 provider_id 创建视觉模型客户端
+            // 视觉请求也优先走 provider 注册表。
             if (config.vision.provider_id) {
                 const visionProvider = llmProviderManager.resolveProviderOrFallback(
                     config.vision.provider_id,
@@ -36,7 +36,7 @@ class LLMHandler {
                     logToTerminal('info', `✅ 视觉模型已启用（provider: ${visionProvider.id}）: ${visionProvider.model}`);
                 }
             }
-            // 降级：从旧格式 vision_model 创建
+            // 存在旧的 vision_model 配置时再回退。
             if (!visionClient && config.vision.vision_model && config.vision.vision_model.api_key) {
                 const visionConfig = {
                     llm: {
@@ -51,7 +51,7 @@ class LLMHandler {
             }
         }
 
-        // 辅助函数：清理消息中的所有图片内容
+        // 纯文本重试前先移除消息里的图片内容。
         const removeImagesFromMessages = (messages) => {
             return messages.map(msg => {
                 if (msg.role === 'user' && Array.isArray(msg.content)) {

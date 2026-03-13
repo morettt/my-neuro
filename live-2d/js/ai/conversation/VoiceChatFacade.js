@@ -26,9 +26,7 @@ class VoiceChatFacade {
         this.showSubtitle = showSubtitle;
         this.hideSubtitle = hideSubtitle;
 
-        // LLM配置（暴露给外部使用）
-        // 这里必须优先解析 config.llm.provider_id + config.llm.model_id，
-        // 否则外部模块拿到的 API_KEY / API_URL / MODEL 可能与 UI 当前选择不一致。
+        // 先解析一次，确保对外暴露的字段与当前选中的模型保持一致。
         const resolvedProvider = llmProviderManager.resolveProviderOrFallback(
             config.llm?.provider_id || null,
             config.llm || null,

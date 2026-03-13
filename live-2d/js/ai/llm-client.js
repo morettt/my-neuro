@@ -14,8 +14,7 @@ const { llmProviderManager } = require('../core/llm-provider.js');
 class LLMClient {
     constructor(config) {
         // 兼容旧方式：从 config.llm 中读取。
-        // 新代码应尽量通过 fromProvider()/fromProviderConfig() 进入，
-        // 这样 provider_id + model_id 的选择不会在这里丢失。
+        // 新代码尽量通过 provider 感知的构造入口创建客户端。
         const llmConfig = config.llm || config;
         this.apiKey = llmConfig.api_key;
         this.apiUrl = llmConfig.api_url;
@@ -29,7 +28,7 @@ class LLMClient {
      * @returns {LLMClient}
      */
     static fromProvider(providerId, modelId = null) {
-        // 显式传 modelId，避免 provider 存在多个模型时退回到错误模型。
+        // 显式传入 modelId，避免多模型 provider 选错模型。
         const provider = llmProviderManager.resolveProvider(providerId, null, modelId);
         return LLMClient.fromProviderConfig(provider);
     }
@@ -492,7 +491,7 @@ class LLMClient {
      */
     updateConfig(newConfig) {
         if (newConfig.llm) {
-            // 优先通过 provider 注册表解析；旧的扁平 llm 配置仅作为兼容回退。
+            // 优先通过 provider 注册表解析，扁平 llm 字段只作回退。
             if (newConfig.llm.provider_id) {
                 const provider = llmProviderManager.resolveProviderOrFallback(
                     newConfig.llm.provider_id,
@@ -510,7 +509,7 @@ class LLMClient {
                     return;
                 }
             }
-            // 降级：直接从 config.llm 中读取
+            // 必要时回退到显式的 llm 字段。
             this.apiKey = newConfig.llm.api_key || this.apiKey;
             this.apiUrl = newConfig.llm.api_url || this.apiUrl;
             this.model = newConfig.llm.model || this.model;
