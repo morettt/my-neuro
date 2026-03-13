@@ -4,7 +4,7 @@ const fs = require('fs')
 const { HttpServer } = require('./js/services/http-server')
 const { ModelPathUpdater } = require('./js/model/model-path-updater')
 const { ShortcutManager } = require('./js/shortcut-manager')
-const { ensureProviderStore, saveProviders } = require('./js/core/llm-provider-store')
+const { persistProviderStore } = require('./js/core/llm-provider-store')
 const screenshot = require('screenshot-desktop');
 
 // 添加配置文件路径
@@ -143,9 +143,7 @@ ipcMain.handle('save-config', async (event, configData) => {
 
         // 保存新配置
         const preparedConfig = JSON.parse(JSON.stringify(configData));
-        const { providers } = ensureProviderStore(baseDir, preparedConfig);
-        saveProviders(baseDir, providers);
-        fs.writeFileSync(configPath, JSON.stringify(preparedConfig, null, 2), 'utf8');
+        persistProviderStore(baseDir, configPath, preparedConfig);
 
         // 通知用户需要重启应用
         const result = await dialog.showMessageBox({
@@ -174,13 +172,7 @@ ipcMain.handle('save-config', async (event, configData) => {
 ipcMain.handle('get-config', async (event) => {
     try {
         const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        const { providers, storeChanged, configChanged } = ensureProviderStore(baseDir, configData);
-        if (storeChanged) {
-            saveProviders(baseDir, providers);
-        }
-        if (storeChanged || configChanged) {
-            fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
-        }
+        const { providers } = persistProviderStore(baseDir, configPath, configData);
         configData.llm_providers = providers;
         return { success: true, config: configData };
     } catch (error) {

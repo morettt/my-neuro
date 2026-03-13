@@ -23,6 +23,24 @@ function normalizeProvidersData(rawValue) {
     return [];
 }
 
+function getFirstModelId(provider) {
+    return ((provider?.models || []).find(model => model && model.model_id)?.model_id || '');
+}
+
+function loadProvidersFromStore(baseDir) {
+    const providersPath = getProviderStorePath(baseDir);
+    if (!fs.existsSync(providersPath)) {
+        return [];
+    }
+
+    try {
+        return normalizeProvidersData(readJsonFile(providersPath));
+    } catch (error) {
+        console.warn(`读取 LLM 提供商文件失败: ${error.message}`);
+        return [];
+    }
+}
+
 function hasLegacyProviderData(source) {
     if (!source || typeof source !== 'object') {
         return false;
@@ -77,9 +95,7 @@ function applyLegacyProviderSelection(config, providers) {
 
     if (!config.llm.provider_id && providerById.has('main')) {
         const provider = providerById.get('main');
-        const selectedModelId = config.llm.model_id
-            || config.llm.model
-            || ((provider.models || []).find(model => model && model.model_id)?.model_id || '');
+        const selectedModelId = config.llm.model_id || config.llm.model || getFirstModelId(provider);
         config.llm.provider_id = 'main';
         config.llm.model_id = selectedModelId;
         config.llm.model = selectedModelId;
@@ -92,9 +108,7 @@ function applyLegacyProviderSelection(config, providers) {
     const legacyVision = config.vision.vision_model || {};
     if (!config.vision.provider_id && providerById.has('vision') && hasLegacyProviderData(legacyVision)) {
         const provider = providerById.get('vision');
-        const selectedModelId = config.vision.model_id
-            || legacyVision.model
-            || ((provider.models || []).find(model => model && model.model_id)?.model_id || '');
+        const selectedModelId = config.vision.model_id || legacyVision.model || getFirstModelId(provider);
         config.vision.provider_id = 'vision';
         config.vision.model_id = selectedModelId;
     }
@@ -127,15 +141,11 @@ function scrubLegacyProviderConfig(config) {
         changed = true;
     }
 
-    if (!config.vision.model_id) {
-        const legacyModelId = config.vision.vision_model?.model || '';
-        if (legacyModelId) {
-            config.vision.model_id = legacyModelId;
-            changed = true;
-        }
-    }
-
     const legacyVision = config.vision.vision_model || {};
+    if (!config.vision.model_id && legacyVision.model) {
+        config.vision.model_id = legacyVision.model;
+        changed = true;
+    }
     if (Object.keys(legacyVision).length > 0) {
         config.vision.vision_model = {};
         changed = true;
@@ -149,38 +159,9 @@ function scrubLegacyProviderConfig(config) {
     return changed;
 }
 
-function resolveProvidersForConfig(baseDir, config) {
-    const providersPath = getProviderStorePath(baseDir);
-    let providers = [];
-
-    if (fs.existsSync(providersPath)) {
-        try {
-            providers = normalizeProvidersData(readJsonFile(providersPath));
-        } catch (error) {
-            console.warn(`读取 LLM 提供商文件失败: ${error.message}`);
-        }
-    }
-
-    if (providers.length === 0) {
-        providers = normalizeProvidersData(config.llm_providers);
-    }
-
-    config.llm_providers = providers;
-    return { providers };
-}
-
 function ensureProviderStore(baseDir, config) {
-    const providersPath = getProviderStorePath(baseDir);
-    let providers = [];
+    let providers = loadProvidersFromStore(baseDir);
     let storeChanged = false;
-
-    if (fs.existsSync(providersPath)) {
-        try {
-            providers = normalizeProvidersData(readJsonFile(providersPath));
-        } catch (error) {
-            console.warn(`读取 LLM 提供商文件失败: ${error.message}`);
-        }
-    }
 
     const inlineProviders = normalizeProvidersData(config.llm_providers);
     if (providers.length === 0 && inlineProviders.length > 0) {
@@ -219,14 +200,26 @@ function saveProviders(baseDir, providers) {
     fs.writeFileSync(providersPath, JSON.stringify(payload, null, 2), 'utf8');
 }
 
+function persistProviderStore(baseDir, configPath, config) {
+    const result = ensureProviderStore(baseDir, config);
+    if (result.storeChanged) {
+        saveProviders(baseDir, result.providers);
+    }
+    if (configPath && (result.storeChanged || result.configChanged)) {
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+    }
+    return result;
+}
+
 module.exports = {
     applyLegacyProviderSelection,
     buildLegacyProviders,
     ensureProviderStore,
     getProviderStorePath,
     hasLegacyProviderData,
+    loadProvidersFromStore,
     normalizeProvidersData,
-    resolveProvidersForConfig,
+    persistProviderStore,
     scrubLegacyProviderConfig,
     saveProviders
 };

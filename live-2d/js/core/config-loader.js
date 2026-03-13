@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { llmProviderManager } = require('./llm-provider.js');
-const { ensureProviderStore, saveProviders } = require('./llm-provider-store.js');
+const { persistProviderStore } = require('./llm-provider-store.js');
 
 class ConfigLoader {
     constructor() {
@@ -23,13 +23,7 @@ class ConfigLoader {
             }
 
             console.log('配置文件加载成功');
-            const { providers, storeChanged, configChanged } = ensureProviderStore(this.baseDir, this.config);
-            if (storeChanged) {
-                saveProviders(this.baseDir, providers);
-            }
-            if (storeChanged || configChanged) {
-                fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2), 'utf8');
-            }
+            persistProviderStore(this.baseDir, this.configPath, this.config);
 
             this.processSpecialPaths();
             this.initLLMProviders();
