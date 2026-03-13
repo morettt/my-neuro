@@ -17,16 +17,21 @@
             <p class="subtitle">管理肥牛各项服务与配置</p>
         </header>
 
+        <!-- 保存按钮栏 - 位于服务控制和基础配置选项卡之间 -->
+        <div class="config-save-bar">
+            <div class="config-save-buttons" id="configSaveButtons"></div>
+        </div>
+
         <div class="tabs">
             <button class="tab-button active" onclick="switchTab('dashboard')">服务控制</button>
             <button class="tab-button" onclick="switchTab('basic-config')">基础配置</button>
             <button class="tab-button" onclick="switchTab('dialog-config')">对话配置</button>
             <button class="tab-button" onclick="switchTab('llm-config')">LLM 配置</button>
             <button class="tab-button" onclick="switchTab('voice-settings')">云端配置</button>
+            <button class="tab-button" onclick="switchTab('ui-settings')">Live2D设置</button>
             <button class="tab-button" onclick="switchTab('model-manager')">声音克隆</button>
             <button class="tab-button" onclick="switchTab('market')">广场</button>
             <button class="tab-button" onclick="switchTab('tools')">工具屋</button>
-            <button class="tab-button" onclick="switchTab('ui-settings')">Live2D设置</button>
             <button class="tab-button" onclick="switchTab('plugins')">插件管理</button>
         </div>
 
@@ -102,36 +107,85 @@
 
             <!-- 多日志系统 -->
             <div class="log-section">
-                <div class="log-tabs">
-                    <button class="log-tab active" onclick="switchLogTab('system-log')">系统日志</button>
-                    <button class="log-tab" onclick="switchLogTab('pet-log')">桌宠日志</button>
-                    <button class="log-tab" onclick="switchLogTab('tool-log')">工具日志</button>
-                    <button class="log-tab" onclick="clearCurrentLog()">清空日志</button>
+                <!-- 拆分按钮栏 -->
+                <div class="log-split-bar">
+                    <button class="split-log-button" onclick="toggleLogSplit()" id="splitLogButton">拆分</button>
                 </div>
 
-                <div id="system-log" class="log-panel active">
-                    <div class="log-container">
-                        <div id="system-log-output">
-                            <div class="log-entry log-info">系统控制台已启动，等待服务操作...</div>
+                <div class="log-wrapper" id="logWrapper">
+                    <!-- 第一个日志面板容器 -->
+                    <div class="log-panel-container" id="logPanelContainer1">
+                        <!-- 头部：选项卡 -->
+                        <div class="log-header">
+                            <div class="log-tabs-main">
+                                <button class="log-tab active" onclick="switchLogTab('system-log')">系统日志</button>
+                                <button class="log-tab" onclick="switchLogTab('pet-log')">桌宠日志</button>
+                                <button class="log-tab" onclick="switchLogTab('tool-log')">工具日志</button>
+                                <button class="clear-log-button" onclick="clearCurrentLog()">清空日志</button>
+                            </div>
+                        </div>
+
+                        <!-- 日志内容 -->
+                        <div id="system-log" class="log-panel active">
+                            <div class="log-container" data-log-type="main">
+                                <div id="system-log-output">
+                                    <div class="log-entry log-info">系统控制台已启动，等待服务操作...</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="pet-log" class="log-panel">
+                            <div class="log-container" data-log-type="main">
+                                <div id="pet-log-output">
+                                    <div class="log-entry log-info">等待桌宠服务启动...</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="tool-log" class="log-panel">
+                            <div class="log-container" data-log-type="main">
+                                <div id="tool-log-output">
+                                    <div class="log-entry log-info">等待工具调用...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 第二个日志面板容器（拆分时显示） -->
+                    <div class="log-panel-container" id="logPanelContainer2" style="display: none;">
+                        <!-- 头部：选项卡 -->
+                        <div class="log-header">
+                            <div class="log-tabs-main">
+                                <button class="log-tab active" onclick="switchLogTab2('system-log2')">系统日志</button>
+                                <button class="log-tab" onclick="switchLogTab2('pet-log2')">桌宠日志</button>
+                                <button class="log-tab" onclick="switchLogTab2('tool-log2')">工具日志</button>
+                                <button class="clear-log-button" onclick="clearCurrentLog2()">清空日志</button>
+                            </div>
+                        </div>
+
+                        <!-- 日志内容 -->
+                        <div id="system-log2" class="log-panel active">
+                            <div class="log-container" data-log-type="second">
+                                <div id="system-log-output2"></div>
+                            </div>
+                        </div>
+
+                        <div id="pet-log2" class="log-panel">
+                            <div class="log-container" data-log-type="second">
+                                <div id="pet-log-output2"></div>
+                            </div>
+                        </div>
+
+                        <div id="tool-log2" class="log-panel">
+                            <div class="log-container" data-log-type="second">
+                                <div id="tool-log-output2"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div id="pet-log" class="log-panel">
-                    <div class="log-container">
-                        <div id="pet-log-output">
-                            <div class="log-entry log-info">等待桌宠服务启动...</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="tool-log" class="log-panel">
-                    <div class="log-container">
-                        <div id="tool-log-output">
-                            <div class="log-entry log-info">等待工具调用...</div>
-                        </div>
-                    </div>
-                </div>
+                <!-- 高度调整手柄 -->
+                <div class="log-resizer" id="logResizer"></div>
             </div>
         </div>
 
@@ -164,9 +218,8 @@
                 </div>
                 <div class="form-group">
                     <label for="system-prompt">AI 人设</label>
-                    <textarea id="system-prompt" placeholder="在这里输入 AI 人设..."></textarea>
+                    <textarea id="system-prompt" class="system-prompt-textarea" placeholder="在这里输入 AI 人设..."></textarea>
                 </div>
-                <button onclick="saveLLMConfig()" class="btn-start">保存配置</button>
             </div>
         </div>
 
@@ -313,7 +366,6 @@
                 </div>
             </div>
             
-            <button onclick="saveCloudSettings()" class="btn-start">保存云端配置</button>
         </div>
 
         <!-- 声音克隆 -->
@@ -484,9 +536,23 @@
             <!-- UI 设置面板 -->
             <div id="ui-sub-panel" class="ui-sub-panel active">
                 <div class="section">
+                    <h4>Live2D 模型选择</h4>
+                    <div class="form-group">
+                        <label for="live2d-model-select">选择模型：</label>
+                        <select id="live2d-model-select" style="width: 100%; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.3); color: white;">
+                        </select>
+                    </div>
+                    <button onclick="saveLive2DModel()" class="btn-start" style="margin-top: 10px;">应用模型</button>
+                    <button onclick="resetModelPosition()" class="btn-start" style="margin-top: 10px; background: linear-gradient(135deg, #f59e0b, #d97706);">复位皮套位置</button>
+                </div>
+                <div class="section">
                     <div class="checkbox-group">
                         <input type="checkbox" id="subtitle-enabled">
                         <label for="subtitle-enabled">启用字幕显示</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="hide-model">
+                        <label for="hide-model">隐藏皮套</label>
                     </div>
                     <div class="form-group">
                         <label for="model-scale">模型缩放比例</label>
@@ -502,11 +568,6 @@
                             <input type="text" id="subtitle-ai" placeholder="AI 名称">
                         </div>
                     </div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="hide-model">
-                        <label for="hide-model">隐藏皮套</label>
-                    </div>
-                    <button onclick="saveUISettings()" class="btn-start">保存设置</button>
                 </div>
             </div>
             
@@ -514,10 +575,10 @@
             <div id="motion-sub-panel" class="ui-sub-panel">
                 <div class="section">
                     <div class="action-buttons" style="display: flex; gap: 15px; margin-bottom: 20px;">
-                        <button onclick="resetMotion()" class="btn-restart">一键复位</button>
+                        <button onclick="resetMotion()" class="btn-restart">🔄 一键还原动作</button>
                     </div>
                     
-                    <h4>情绪分类区域</h4>
+                    <h4>动作绑定区域</h4>
                     <div class="emotion-categories-grid" id="emotion-categories-grid">
                         <div class="emotion-category">
                             <div class="emotion-category-header">
@@ -575,26 +636,21 @@
                         </div>
                     </div>
                     
-                    <h4 style="margin-top: 30px;">可用动作列表</h4>
-                    <p style="font-size: 12px; color: #888; margin-bottom: 10px;">拖拽下方动作按钮到对应情绪区域进行绑定，或点击"+ 添加动作"按钮添加新动作</p>
+                    <h4 style="margin-top: 30px;">可用动作（点击预览，拖拽到上方动作区域绑定）</h4>
                     <div class="available-motions" id="available-motions">
                         <div class="empty-tip">加载动作中...</div>
                     </div>
-                    
-                    <button onclick="saveMotionConfig()" class="btn-start" style="margin-top: 20px;">更新配置</button>
                 </div>
             </div>
             
             <!-- 表情管理面板 -->
             <div id="expression-sub-panel" class="ui-sub-panel">
                 <div class="section">
-                    <h4>😊 表情控制</h4>
                     <div class="action-buttons" style="display: flex; gap: 15px; margin-bottom: 20px;">
                         <button onclick="resetExpression()" class="btn-restart">🔄 一键还原表情</button>
                     </div>
                     
-                    <h4>情绪表情绑定区域</h4>
-                    <p style="font-size: 12px; color: #888; margin-bottom: 10px;">拖拽下方表情按钮到对应情绪区域进行绑定</p>
+                    <h4>表情绑定区域</h4>
                     <div class="expression-categories-grid" id="emotion-expressions-grid">
                         <div class="emotion-category" data-emotion="开心">
                             <div class="emotion-category-header">
@@ -650,8 +706,6 @@
                     <div class="available-expressions" id="available-expressions">
                         <div class="empty-tip">加载表情中...</div>
                     </div>
-                    
-                    <button onclick="saveExpressionConfig()" class="btn-start" style="margin-top: 20px;">更新表情配置</button>
                 </div>
             </div>
         </div>
@@ -691,19 +745,6 @@
                 </div>
             </div>
             
-            <!-- Live2D 模型选择 -->
-            <div class="section">
-                <h4>Live2D 模型选择</h4>
-                <div class="form-group">
-                    <label for="live2d-model-select">选择模型：</label>
-                    <select id="live2d-model-select" style="width: 100%; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.3); color: white;">
-                        <option value="fake-neuro">肥牛</option>
-                    </select>
-                </div>
-                <button onclick="saveLive2DModel()" class="btn-start" style="margin-top: 10px;">应用模型</button>
-                <button onclick="resetModelPosition()" class="btn-start" style="margin-top: 10px; background: linear-gradient(135deg, #f59e0b, #d97706);">复位皮套位置</button>
-            </div>
-            
             <!-- 工具开关 -->
             <div class="section">
                 <h4>工具配置</h4>
@@ -717,7 +758,6 @@
                 </div>
             </div>
 
-            <button onclick="saveBasicSettings()" class="btn-start">保存基础配置</button>
         </div>
 
         <!-- 对话配置面板 -->
@@ -727,7 +767,7 @@
                 <h4>基础设置</h4>
                 <div class="form-group">
                     <label for="intro-text">开场白:</label>
-                    <textarea id="intro-text" placeholder="你好啊" rows="3"></textarea>
+                    <textarea id="intro-text" placeholder="你好啊" rows="1"></textarea>
                 </div>
                 <div class="form-group">
                     <label for="max-messages">最大消息数:</label>
@@ -764,7 +804,6 @@
                 </div>
             </div>
             
-            <button onclick="saveDialogSettings()" class="btn-start">保存对话配置</button>
         </div>
 
         <!-- 插件管理面板 -->
@@ -796,6 +835,41 @@
                 <div id="community-plugins-list" class="plugins-container"></div>
             </div>
         </div>
+
+        <!-- 插件配置模态框 -->
+        <div id="pluginConfigModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>
+                        <i class="icon-gear"></i>
+                        <span id="pluginConfigModalTitle">插件配置</span>
+                    </h3>
+                    <button type="button" class="btn-close" onclick="closePluginConfigModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="pluginConfigLoading" class="text-center" style="display: none;">
+                        <div class="spinner"></div>
+                        <p class="text-muted">正在加载配置...</p>
+                    </div>
+                    <div id="pluginConfigError" class="alert alert-danger" style="display: none;">
+                        <span id="pluginConfigErrorText"></span>
+                    </div>
+                    <form id="pluginConfigForm">
+                        <div id="pluginConfigFields"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closePluginConfigModal()">取消</button>
+                    <button type="button" class="btn btn-warning" id="resetConfigBtn" onclick="resetPluginConfig()">
+                        <i class="icon-undo"></i>重置默认值
+                    </button>
+                    <button type="button" class="btn btn-primary" id="saveConfigBtn" onclick="savePluginConfig()">
+                        <i class="icon-save"></i>保存配置
+                    </button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script src="static/js/app.js?v=20260309r"></script>

@@ -30,6 +30,9 @@ function addLog(message, level = 'info', logType = 'system') {
     logEntry.textContent = '[' + timestamp + '] ' + message;
     logOutput.appendChild(logEntry);
     logOutput.scrollTop = logOutput.scrollHeight;
+    
+    // 同步到第二个面板
+    syncLogToPanel2();
 }
 
 // 增量加载日志（只添加新日志，避免回弹）
@@ -53,16 +56,52 @@ function appendNewLogs(logType, newLogs) {
     if (isAtBottom) {
         logOutput.scrollTop = logOutput.scrollHeight;
     }
+    
+    // 同步到第二个面板
+    syncLogToPanel2();
 }
 
 // 切换日志标签页
 function switchLogTab(tabId) {
-    document.querySelectorAll('.log-panel').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.log-tab').forEach(t => t.classList.remove('active'));
-    
+    // 只操作第一个面板的 log-panel
+    document.querySelectorAll('#logPanelContainer1 .log-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('#logPanelContainer1 .log-tab').forEach(t => t.classList.remove('active'));
+
     document.getElementById(tabId).classList.add('active');
     event.target.classList.add('active');
     currentLogTab = tabId;
+    
+    // 不再同步第二个面板，两个面板的选项卡独立操作，方便对照不同日志
+}
+
+// 同步选项卡状态到第二个面板
+function syncLogTabToPanel2(tabId) {
+    const container2 = document.getElementById('logPanelContainer2');
+    if (container2.style.display === 'none' || container2.style.display === '') return;
+    
+    // 映射到第二个面板的 tabId
+    const tabIdMap = {
+        'system-log': 'system-log2',
+        'pet-log': 'pet-log2',
+        'tool-log': 'tool-log2'
+    };
+    const tabId2 = tabIdMap[tabId];
+    
+    if (tabId2) {
+        // 切换第二个面板的选项卡
+        document.querySelectorAll('#logPanelContainer2 .log-panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('#logPanelContainer2 .log-tab').forEach(t => t.classList.remove('active'));
+        
+        document.getElementById(tabId2).classList.add('active');
+        // 找到对应的按钮并添加 active
+        const buttonText = tabId === 'system-log' ? '系统日志' : tabId === 'pet-log' ? '桌宠日志' : '工具日志';
+        const buttons = document.querySelectorAll('#logPanelContainer2 .log-tab');
+        buttons.forEach(btn => {
+            if (btn.textContent === buttonText) {
+                btn.classList.add('active');
+            }
+        });
+    }
 }
 
 // 清空当前日志
@@ -80,6 +119,85 @@ function clearCurrentLog() {
     }
     const logOutput = document.getElementById(outputId);
     logOutput.innerHTML = '<div class="log-entry log-info">日志已清空</div>';
+}
+
+// 拆分/合并日志窗口
+function toggleLogSplit() {
+    const wrapper = document.getElementById('logWrapper');
+    const container2 = document.getElementById('logPanelContainer2');
+    const button = document.getElementById('splitLogButton');
+    
+    if (wrapper.classList.contains('split')) {
+        // 合并
+        wrapper.classList.remove('split');
+        container2.style.display = 'none';
+        button.classList.remove('active');
+        button.textContent = '拆分';
+    } else {
+        // 拆分
+        wrapper.classList.add('split');
+        container2.style.display = 'flex';
+        button.classList.add('active');
+        button.textContent = '合并';
+        // 同步当前日志到第二个面板
+        syncLogToPanel2();
+    }
+}
+
+// 切换第二个日志面板的标签页
+function switchLogTab2(tabId) {
+    document.querySelectorAll('#logPanelContainer2 .log-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('#logPanelContainer2 .log-tab').forEach(t => t.classList.remove('active'));
+
+    document.getElementById(tabId).classList.add('active');
+    event.target.classList.add('active');
+}
+
+// 清空第二个面板的当前日志
+function clearCurrentLog2() {
+    // 获取第一个面板当前的 tab 状态
+    let outputId;
+    const activeTab = document.querySelector('#logPanelContainer1 .log-tab.active');
+    const tabName = activeTab ? activeTab.textContent : '系统日志';
+    
+    if (tabName === '桌宠日志') {
+        outputId = 'pet-log-output2';
+    } else if (tabName === '工具日志') {
+        outputId = 'tool-log-output2';
+    } else {
+        outputId = 'system-log-output2';
+    }
+    
+    const logOutput = document.getElementById(outputId);
+    logOutput.innerHTML = '<div class="log-entry log-info">日志已清空</div>';
+}
+
+// 同步日志到第二个面板
+function syncLogToPanel2() {
+    const container2 = document.getElementById('logPanelContainer2');
+    if (container2.style.display === 'none' || container2.style.display === '') return;
+    
+    // 同步系统日志
+    const systemLog1 = document.getElementById('system-log-output');
+    const systemLog2 = document.getElementById('system-log-output2');
+    systemLog2.innerHTML = systemLog1.innerHTML;
+    
+    // 同步桌宠日志
+    const petLog1 = document.getElementById('pet-log-output');
+    const petLog2 = document.getElementById('pet-log-output2');
+    petLog2.innerHTML = petLog1.innerHTML;
+    
+    // 同步工具日志
+    const toolLog1 = document.getElementById('tool-log-output');
+    const toolLog2 = document.getElementById('tool-log-output2');
+    toolLog2.innerHTML = toolLog1.innerHTML;
+    
+    // 同步滚动位置
+    const activePanel1 = document.querySelector('#logPanelContainer1 .log-panel.active .log-container');
+    const activePanel2 = document.querySelector('#logPanelContainer2 .log-panel.active .log-container');
+    if (activePanel1 && activePanel2) {
+        activePanel2.scrollTop = activePanel1.scrollTop;
+    }
 }
 
 // 加载日志（增量更新）
@@ -312,7 +430,40 @@ function switchTab(tabName) {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
     document.getElementById(tabName).classList.add('active');
-    event.target.classList.add('active');
+    
+    // 查找对应的按钮并添加 active 状态（兼容 event 不存在的情况）
+    const targetButton = document.querySelector(`.tab-button[onclick="switchTab('${tabName}')"]`);
+    if (targetButton) {
+        targetButton.classList.add('active');
+    }
+
+    // 控制选项卡栏中保存按钮的显示/隐藏 - 只显示当前页面对应的按钮
+    const configSaveButtons = document.getElementById('configSaveButtons');
+    if (configSaveButtons) {
+        let buttonHTML = '';
+        switch(tabName) {
+            case 'basic-config':
+                buttonHTML = '<button class="config-save-button save-basic" onclick="saveBasicSettings()">保存基础配置</button>';
+                break;
+            case 'dialog-config':
+                buttonHTML = '<button class="config-save-button save-dialog" onclick="saveDialogSettings()">保存对话配置</button>';
+                break;
+            case 'llm-config':
+                buttonHTML = '<button class="config-save-button save-llm" onclick="saveLLMConfig()">保存LLM配置</button>';
+                break;
+            case 'voice-settings':
+                buttonHTML = '<button class="config-save-button save-cloud" onclick="saveCloudSettings()">保存云端配置</button>';
+                break;
+            case 'ui-settings':
+                buttonHTML = '<button class="config-save-button save-ui" onclick="saveUISettings()">保存UI设置</button>';
+                break;
+            default:
+                // 无保存按钮的页面显示空占位，保持布局稳定
+                buttonHTML = '<div class="config-save-placeholder"></div>';
+                break;
+        }
+        configSaveButtons.innerHTML = buttonHTML;
+    }
 }
 
 // ============ 配置保存 ============
@@ -633,6 +784,9 @@ async function generateTTSBat() {
 
 // 页面加载完成后初始化（主初始化入口）
 document.addEventListener('DOMContentLoaded', function() {
+    // 初始化保存按钮状态（防止页面跳动）
+    switchTab('dashboard');
+
     // 检查服务状态
     checkServiceStatus();
     // 每 5 秒检查一次状态
@@ -673,7 +827,60 @@ document.addEventListener('DOMContentLoaded', function() {
     addLog('WebUI 控制面板已就绪', 'success', 'system');
 
     console.log('My Neuro WebUI 初始化完成');
+
+    // 初始化日志高度调整手柄
+    initLogResizer();
 });
+
+// 初始化日志高度调整手柄
+function initLogResizer() {
+    const resizer = document.getElementById('logResizer');
+    
+    let isResizing = false;
+    let startY;
+    let startHeight = 0;
+    
+    resizer.addEventListener('mousedown', function(e) {
+        isResizing = true;
+        startY = e.clientY;
+        
+        // 获取当前主面板中活动日志容器的高度作为基准
+        const activeMainContainer = document.querySelector('#logPanelContainer1 .log-panel.active .log-container');
+        if (activeMainContainer) {
+            startHeight = activeMainContainer.offsetHeight;
+        }
+        
+        document.body.style.cursor = 'ns-resize';
+        document.body.style.userSelect = 'none';
+    });
+    
+    document.addEventListener('mousemove', function(e) {
+        if (!isResizing) return;
+        
+        const deltaY = e.clientY - startY;
+        const newHeight = Math.max(100, Math.min(800, startHeight + deltaY));
+        
+        // 统一所有主面板日志容器的高度
+        const mainContainers = document.querySelectorAll('.log-container[data-log-type="main"]');
+        mainContainers.forEach(container => {
+            container.style.height = newHeight + 'px';
+        });
+        
+        // 同步调整第二个面板的日志容器高度
+        const secondContainers = document.querySelectorAll('.log-container[data-log-type="second"]');
+        secondContainers.forEach(container => {
+            container.style.height = newHeight + 'px';
+        });
+    });
+    
+    document.addEventListener('mouseup', function() {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        }
+    });
+}
 
 // 保存直播设置
 async function saveBilibiliSettings() {
@@ -696,11 +903,13 @@ async function saveCurrentModel() {
 async function saveUISettings() {
     const settings = {
         show_chat_box: document.getElementById('show-chat-box').checked,
-        show_model: document.getElementById('show-model').checked,
+        show_model: !document.getElementById('hide-model').checked,  // 勾选表示隐藏，所以取反
         model_scale: parseFloat(document.getElementById('model-scale').value),
-        subtitle_user: document.getElementById('subtitle-user').value,
-        subtitle_ai: document.getElementById('subtitle-ai').value,
-        subtitle_enabled: document.getElementById('subtitle-enabled').checked  // 添加字幕启用状态
+        subtitle_labels: {
+            enabled: document.getElementById('subtitle-enabled').checked,
+            user: document.getElementById('subtitle-user').value,
+            ai: document.getElementById('subtitle-ai').value
+        }
     };
     await saveConfig('/api/settings/ui', settings, 'UI 设置保存成功');
 }
@@ -959,28 +1168,37 @@ async function toggleTool(event, toolName, toolType) {
 async function refreshModelList() {
     try {
         const response = await fetch('/api/models/list');
+        
         if (response.ok) {
             const models = await response.json();
             const modelSelect = document.getElementById('live2d-model-select');
-            
+
             // 如果元素不存在，跳过
             if (!modelSelect) {
                 return;
             }
-            
-            modelSelect.innerHTML = '<option value="fake-neuro">肥牛</option>';
 
+            // 清空选项
+            modelSelect.innerHTML = '';
+            
+            // 添加模型到下拉框
             models.forEach(model => {
-                if (model !== 'fake-neuro') {
-                    const option = document.createElement('option');
-                    option.value = model;
-                    option.textContent = model;
-                    modelSelect.appendChild(option);
-                }
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model;
+                modelSelect.appendChild(option);
             });
+            
+            // 读取当前模型并选中
+            const currentResponse = await fetch('/api/settings/current-model');
+            if (currentResponse.ok) {
+                const currentData = await currentResponse.json();
+                if (currentData.success && currentData.model) {
+                    modelSelect.value = currentData.model;
+                }
+            }
         }
     } catch (error) {
-        // 静默失败，不显示错误（因为模型列表可能为空）
         console.error('获取模型列表时出错:', error);
     }
 }
@@ -1017,8 +1235,8 @@ function addToolLog(toolName, result) {
 
 // ============ 配置加载 ============
 
-// 安全设置元素值（仅在元素未聚焦时设置）
-function _setVal(id, value) { const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = value; }
+// 安全设置元素值（强制设置，不考虑焦点状态）
+function _setVal(id, value) { const el = document.getElementById(id); if (el) el.value = value; }
 function _setChk(id, value) { const el = document.getElementById(id); if (el) el.checked = value; }
 
 // 加载 LLM 基础配置（仅供内部使用）
@@ -1246,20 +1464,318 @@ async function togglePlugin(pluginName) {
 // 打开插件配置
 async function openPluginConfig(pluginName) {
     try {
-        const response = await fetch(`/api/plugins/${pluginName}/open-config`, { method: 'POST' });
-        const result = await response.json();
-        
-        if (response.ok && result.success) {
-            addLog(result.message, 'success', 'system');
-        } else {
-            addLog('打开配置失败：' + (result.error || '未知错误'), 'error', 'system');
-            if (result.config_path) {
-                addLog(`配置路径：${result.config_path}`, 'info', 'system');
-            }
+        // 首先检查插件是否有配置文件
+        const pluginsResponse = await fetch('/api/plugins/list');
+        if (!pluginsResponse.ok) {
+            throw new Error('无法获取插件列表');
         }
+        
+        const plugins = await pluginsResponse.json();
+        const plugin = plugins.find(p => p.name === pluginName);
+        
+        if (!plugin || !plugin.has_own_config) {
+            // 如果没有配置文件，使用原来的打开目录逻辑
+            const response = await fetch(`/api/plugins/${pluginName}/open-config`, { method: 'POST' });
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                addLog(result.message, 'success', 'system');
+            } else {
+                addLog('打开配置失败：' + (result.error || '未知错误'), 'error', 'system');
+                if (result.config_path) {
+                    addLog(`配置路径：${result.config_path}`, 'info', 'system');
+                }
+            }
+            return;
+        }
+        
+        // 如果有配置文件，打开配置模态框
+        openPluginConfigModal(pluginName);
     } catch (error) {
         addLog('打开配置时出错：' + error.message, 'error', 'system');
     }
+}
+
+// 打开插件配置模态框
+function openPluginConfigModal(pluginName) {
+    // 设置模态框标题
+    document.getElementById('pluginConfigModalTitle').textContent = `插件配置 - ${pluginName}`;
+    
+    // 显示加载状态
+    document.getElementById('pluginConfigLoading').style.display = 'block';
+    document.getElementById('pluginConfigError').style.display = 'none';
+    document.getElementById('pluginConfigForm').style.display = 'none';
+    
+    // 显示模态框
+    document.getElementById('pluginConfigModal').style.display = 'block';
+    
+    // 加载配置数据
+    loadPluginConfig(pluginName);
+}
+
+// 关闭插件配置模态框
+function closePluginConfigModal() {
+    document.getElementById('pluginConfigModal').style.display = 'none';
+}
+
+// 加载插件配置
+async function loadPluginConfig(pluginName) {
+    try {
+        const response = await fetch(`/api/plugins/${pluginName}/config`);
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            // 隐藏加载状态，显示表单
+            document.getElementById('pluginConfigLoading').style.display = 'none';
+            document.getElementById('pluginConfigForm').style.display = 'block';
+            
+            // 渲染配置表单
+            renderPluginConfigForm(result.config, pluginName);
+        } else {
+            // 显示错误
+            document.getElementById('pluginConfigLoading').style.display = 'none';
+            document.getElementById('pluginConfigError').style.display = 'block';
+            document.getElementById('pluginConfigErrorText').textContent = result.error || '加载配置失败';
+        }
+    } catch (error) {
+        document.getElementById('pluginConfigLoading').style.display = 'none';
+        document.getElementById('pluginConfigError').style.display = 'block';
+        document.getElementById('pluginConfigErrorText').textContent = '加载配置时出错：' + error.message;
+    }
+}
+
+// 渲染插件配置表单
+function renderPluginConfigForm(config, pluginName) {
+    const fieldsContainer = document.getElementById('pluginConfigFields');
+    fieldsContainer.innerHTML = '';
+    
+    // 保存原始配置用于重置
+    window.currentPluginConfig = JSON.parse(JSON.stringify(config));
+    window.currentPluginName = pluginName;
+    
+    // 遍历所有配置字段
+    for (const [key, field] of Object.entries(config)) {
+        const fieldElement = createConfigField(key, field, pluginName);
+        fieldsContainer.appendChild(fieldElement);
+    }
+}
+
+// 创建配置字段元素
+function createConfigField(key, field, pluginName) {
+    const fieldDiv = document.createElement('div');
+    fieldDiv.className = 'config-field';
+    fieldDiv.dataset.fieldKey = key;
+    
+    let inputElement;
+    
+    // 根据字段类型创建不同的输入元素
+    switch (field.type) {
+        case 'string':
+        case 'text':
+            inputElement = document.createElement('input');
+            inputElement.type = field.type === 'text' ? 'textarea' : 'text';
+            if (field.type === 'text') {
+                inputElement = document.createElement('textarea');
+                inputElement.rows = 3;
+            } else {
+                inputElement = document.createElement('input');
+                inputElement.type = 'text';
+            }
+            inputElement.value = field.value !== undefined ? field.value : field.default;
+            break;
+            
+        case 'int':
+        case 'float':
+            inputElement = document.createElement('input');
+            inputElement.type = 'number';
+            inputElement.step = field.type === 'float' ? '0.1' : '1';
+            inputElement.value = field.value !== undefined ? field.value : field.default;
+            break;
+            
+        case 'bool':
+            inputElement = document.createElement('input');
+            inputElement.type = 'checkbox';
+            inputElement.checked = field.value !== undefined ? field.value : field.default;
+            break;
+            
+        case 'object':
+            // 处理嵌套对象
+            fieldDiv.innerHTML = `
+                <h4>${field.title || key}</h4>
+                <div class="field-description">${field.description || ''}</div>
+                <div class="nested-config" id="nested-${key}"></div>
+            `;
+            
+            const nestedContainer = fieldDiv.querySelector(`#nested-${key}`);
+            for (const [nestedKey, nestedField] of Object.entries(field.fields || {})) {
+                const nestedFieldElement = createConfigField(nestedKey, nestedField, pluginName);
+                nestedContainer.appendChild(nestedFieldElement);
+            }
+            return fieldDiv;
+            
+        default:
+            inputElement = document.createElement('input');
+            inputElement.type = 'text';
+            inputElement.value = field.value !== undefined ? field.value : field.default;
+    }
+    
+    inputElement.id = `config-${key}`;
+    inputElement.name = key;
+    
+    fieldDiv.innerHTML = `
+        <h4>${field.title || key}</h4>
+        <div class="field-description">${field.description || ''}</div>
+    `;
+    
+    fieldDiv.appendChild(inputElement);
+    
+    return fieldDiv;
+}
+
+// 重置插件配置为默认值
+function resetPluginConfig() {
+    if (!window.currentPluginConfig || !window.currentPluginName) {
+        return;
+    }
+    
+    const config = JSON.parse(JSON.stringify(window.currentPluginConfig));
+    
+    // 遍历所有字段，重置为默认值
+    for (const [key, field] of Object.entries(config)) {
+        resetFieldToDefault(key, field);
+    }
+    
+    addLog('配置已重置为默认值', 'info', 'system');
+}
+
+// 重置单个字段为默认值
+function resetFieldToDefault(key, field) {
+    const input = document.getElementById(`config-${key}`);
+    if (!input) return;
+    
+    if (field.type === 'object') {
+        // 递归处理嵌套字段
+        for (const [nestedKey, nestedField] of Object.entries(field.fields || {})) {
+            resetFieldToDefault(nestedKey, nestedField);
+        }
+    } else if (field.type === 'bool') {
+        input.checked = field.default;
+    } else {
+        input.value = field.default;
+    }
+}
+
+// 保存插件配置
+async function savePluginConfig() {
+    if (!window.currentPluginConfig || !window.currentPluginName) {
+        return;
+    }
+    
+    try {
+        // 收集表单数据
+        const updatedConfig = collectConfigFormData(window.currentPluginConfig);
+        
+        // 发送保存请求
+        const response = await fetch(`/api/plugins/${window.currentPluginName}/config`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(updatedConfig)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            addLog('插件配置保存成功', 'success', 'system');
+            closePluginConfigModal();
+            // 重新加载插件列表以更新状态
+            loadPlugins();
+        } else {
+            addLog('保存配置失败：' + (result.error || '未知错误'), 'error', 'system');
+        }
+    } catch (error) {
+        addLog('保存配置时出错：' + error.message, 'error', 'system');
+    }
+}
+
+// 收集表单数据
+function collectConfigFormData(originalConfig) {
+    const updatedConfig = JSON.parse(JSON.stringify(originalConfig));
+    
+    for (const [key, field] of Object.entries(updatedConfig)) {
+        updateFieldFromForm(key, field);
+    }
+    
+    return updatedConfig;
+}
+
+// 从表单更新字段值
+function updateFieldFromForm(key, field) {
+    const input = document.getElementById(`config-${key}`);
+    if (!input) return;
+    
+    if (field.type === 'object') {
+        // 递归处理嵌套字段
+        for (const [nestedKey, nestedField] of Object.entries(field.fields || {})) {
+            updateFieldFromForm(nestedKey, nestedField);
+        }
+    } else if (field.type === 'bool') {
+        field.value = input.checked;
+    } else if (field.type === 'int') {
+        field.value = parseInt(input.value) || 0;
+    } else if (field.type === 'float') {
+        field.value = parseFloat(input.value) || 0.0;
+    } else {
+        field.value = input.value;
+    }
+}
+
+// 更新插件卡片按钮状态
+function updatePluginCardButtons(plugins) {
+    plugins.forEach(plugin => {
+        const card = document.querySelector(`.plugin-card[data-plugin-name="${plugin.name}"]`);
+        if (card) {
+            const configBtn = card.querySelector('.btn-open-config');
+            if (configBtn) {
+                if (plugin.has_own_config) {
+                    configBtn.textContent = '配置';
+                    configBtn.disabled = false;
+                    configBtn.style.background = 'linear-gradient(135deg, #8b5cf6, #7c3aed)';
+                } else {
+                    configBtn.textContent = '无配置';
+                    configBtn.disabled = true;
+                    configBtn.style.background = 'linear-gradient(135deg, #6b7280, #4b5563)';
+                }
+            }
+        }
+    });
+}
+
+// 重写 renderPlugins 函数以包含按钮状态更新
+function renderPlugins(plugins) {
+    const builtinContainer = document.getElementById('builtin-plugins-list');
+    const communityContainer = document.getElementById('community-plugins-list');
+
+    if (!builtinContainer || !communityContainer) {
+        console.error('插件容器未找到');
+        return;
+    }
+
+    builtinContainer.innerHTML = '';
+    communityContainer.innerHTML = '';
+
+    plugins.forEach(plugin => {
+        const card = createPluginCard(plugin);
+        if (plugin.category === 'built-in') {
+            builtinContainer.appendChild(card);
+        } else {
+            communityContainer.appendChild(card);
+        }
+    });
+    
+    // 更新按钮状态
+    updatePluginCardButtons(plugins);
 }
 
 // 保存基础配置
@@ -1385,13 +1901,41 @@ async function loadUISettings() {
         const response = await fetch('/api/settings/ui');
         if (response.ok) {
             const data = await response.json();
+            console.log('loadUISettings API response:', data);
+            
             _setChk('show-chat-box', data.show_chat_box === true);
-            _setChk('subtitle-enabled', data.subtitle_enabled === true);
             _setVal('model-scale', data.model_scale || 2.3);
-            _setVal('subtitle-user', data.subtitle_user || '用户');
-            _setVal('subtitle-ai', data.subtitle_ai || 'AI');
             // hide-model: 勾选表示隐藏，所以取反
             _setChk('hide-model', data.show_model !== true);
+            
+            // 处理 subtitle_labels 对象 - 支持多种数据结构
+            let subtitleLabels = {};
+            if (data.subtitle_labels) {
+                // 直接包含 subtitle_labels 字段
+                subtitleLabels = data.subtitle_labels;
+                console.log('Found subtitle_labels in root:', subtitleLabels);
+            } else if (data.ui && data.ui.subtitle_labels) {
+                // 包含在 ui 对象中的 subtitle_labels 字段
+                subtitleLabels = data.ui.subtitle_labels;
+                console.log('Found subtitle_labels in ui object:', subtitleLabels);
+            } else {
+                // 尝试从根级别获取 user 和 ai 字段
+                subtitleLabels = {
+                    enabled: data.subtitle_enabled || data['subtitle-labels-enabled'] || false,
+                    user: data.subtitle_user || data['subtitle-user'] || '',
+                    ai: data.subtitle_ai || data['subtitle-ai'] || ''
+                };
+                console.log('Using fallback subtitle fields:', subtitleLabels);
+            }
+            
+            _setChk('subtitle-enabled', subtitleLabels.enabled === true);
+            // 强制设置值，即使为空字符串
+            _setVal('subtitle-user', subtitleLabels.user || '');
+            _setVal('subtitle-ai', subtitleLabels.ai || '');
+            
+            console.log('UI settings loaded successfully');
+        } else {
+            console.error('loadUISettings API returned non-ok status:', response.status);
         }
     } catch (error) {
         console.error('加载 UI 设置失败:', error);
@@ -1413,6 +1957,12 @@ async function saveLive2DModel() {
 
         if (response.ok && result.success) {
             addLog(`Live2D 模型已切换为：${modelName}`, 'success', 'system');
+            
+            // 自动刷新动作和表情配置
+            await loadExpressionConfig();
+            await loadAllMotions();
+            
+            addLog('已重新加载动作和表情配置', 'info', 'system');
         } else {
             addLog('切换模型失败：' + (result.error || '未知错误'), 'error', 'system');
         }
@@ -1540,7 +2090,12 @@ async function applyPrompt(title) {
                 });
                 const res = await result.json();
                 if (res.success) {
-                    alert('提示词已应用到 AI 人设！');
+                    // 设置到 AI 人设输入框
+                    const promptInput = document.getElementById('system-prompt');
+                    if (promptInput) {
+                        promptInput.value = res.content;
+                    }
+                    alert('请在 LLM 配置中保存');
                 } else {
                     alert('应用失败：' + (res.error || '未知错误'));
                 }
@@ -1887,9 +2442,12 @@ function switchUISubTab(tab) {
         panel.classList.remove('active');
     });
     document.getElementById(tab + '-sub-panel').classList.add('active');
-    
+
     // 根据选项卡加载内容
-    if (tab === 'expression') {
+    if (tab === 'ui') {
+        // 切换到 UI 设置时加载模型列表
+        refreshModelList();
+    } else if (tab === 'expression') {
         // 切换到表情选项卡时加载表情配置
         loadExpressionConfig();
     } else if (tab === 'motion') {
@@ -1903,9 +2461,7 @@ async function startSinging() {
     try {
         const response = await fetch('/api/live2d/singing/start', { method: 'POST' });
         const result = await response.json();
-        if (response.ok && result.success) {
-            alert('已开始唱歌');
-        } else {
+        if (!(response.ok && result.success)) {
             alert('启动失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
@@ -1918,9 +2474,7 @@ async function stopSinging() {
     try {
         const response = await fetch('/api/live2d/singing/stop', { method: 'POST' });
         const result = await response.json();
-        if (response.ok && result.success) {
-            alert('已停止唱歌');
-        } else {
+        if (!(response.ok && result.success)) {
             alert('停止失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
@@ -1932,9 +2486,20 @@ async function stopSinging() {
 async function resetMotion() {
     try {
         const response = await fetch('/api/live2d/motion/reset', { method: 'POST' });
+        
+        // 检查响应类型
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            // 返回的不是 JSON，可能是 HTML 错误页面
+            const text = await response.text();
+            throw new Error('服务器返回了非 JSON 响应，可能是路由冲突或服务器错误');
+        }
+        
         const result = await response.json();
         if (response.ok && result.success) {
-            alert('已复位动作');
+            alert('动作配置已还原');
+            // 重新加载配置
+            await loadAllMotions();
         } else {
             alert('复位失败：' + (result.error || '未知错误'));
         }
@@ -1983,9 +2548,7 @@ async function previewMotion(btn) {
             body: JSON.stringify({ motion: motionName })
         });
         const result = await response.json();
-        if (response.ok && result.success) {
-            alert('正在预览动作：' + motionName);
-        } else {
+        if (!(response.ok && result.success)) {
             alert('预览失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
@@ -2004,55 +2567,65 @@ function removeMotion(btn) {
     }
 }
 
-// 加载未分类动作（可用动作列表）
+// 加载未分类动作（可用动作列表）- 从 emotion_actions.json 读取
 async function loadUncategorizedMotions() {
     try {
         const response = await fetch('/api/live2d/motions/uncategorized');
         if (response.ok) {
             const data = await response.json();
-            renderAvailableMotions(data.motions || []);
+            // data.motions 现在是映射对象：{"动作 1": "motions/xxx.json", ...}
+            renderAvailableMotions(data.motions || {});
         }
     } catch (error) {
         console.error('加载未分类动作失败:', error);
     }
 }
 
-// 渲染可用动作列表
-function renderAvailableMotions(motions) {
+// 渲染可用动作列表 - 显示键名，拖拽时传输文件路径
+function renderAvailableMotions(motionMap) {
     const container = document.getElementById('available-motions');
     if (!container) return;
-    
+
     container.innerHTML = '';
-    
-    if (motions.length === 0) {
+
+    const motionKeys = Object.keys(motionMap);
+    if (motionKeys.length === 0) {
         container.innerHTML = '<div class="empty-tip">暂无可用动作</div>';
         return;
     }
-    
-    motions.forEach(motion => {
+
+    motionKeys.forEach(motionKey => {
+        const filePath = motionMap[motionKey];  // 获取文件路径
         const btn = document.createElement('button');
         btn.className = 'motion-button';
-        btn.textContent = motion;
+        btn.textContent = motionKey;  // 显示键名（如"动作 1"）
         btn.draggable = true;
-        btn.dataset.motion = motion;
-        
-        // 点击预览
-        btn.onclick = () => previewMotionFromList(motion);
-        
-        // 拖拽开始
+        btn.dataset.motionKey = motionKey;  // 存储键名
+        btn.dataset.filePath = filePath;    // 存储文件路径
+
+        // 点击预览 - 使用文件路径预览
+        btn.onclick = () => previewMotionFromList(motionKey);
+
+        // 拖拽开始 - 传输文件路径（用于绑定）
         btn.ondragstart = (e) => {
-            e.dataTransfer.setData('text/plain', motion);
-            e.dataTransfer.setData('application/motion', motion);
+            e.dataTransfer.setData('text/plain', motionKey);
+            e.dataTransfer.setData('application/motion', motionKey);
+            e.dataTransfer.setData('application/motion-path', filePath);
         };
-        
+
         container.appendChild(btn);
     });
 }
 
-// 动作配置缓存
+// 动作配置缓存（存储键名到文件路径的映射）
+let motionKeyToPath = {};
+let motionPathToKey = {};
+// 动作配置（存储情绪分类的动作列表）
 let motionConfig = {};
+// 情绪分类列表
+const EMOTION_CATEGORIES = ['开心', '生气', '难过', '惊讶', '害羞', '俏皮'];
 
-// 加载已分类动作到情绪分类区域
+// 加载已分类动作到情绪分类区域 - 显示键名而不是文件路径
 async function loadCategorizedMotions() {
     try {
         const response = await fetch('/api/live2d/motions/categorized');
@@ -2060,10 +2633,46 @@ async function loadCategorizedMotions() {
             console.error('加载已分类动作失败:', response.status);
             return;
         }
-        
+
         const data = await response.json();
-        motionConfig = data.categorized || {};
-        
+        const categorized = data.categorized || {};
+
+        // 初始化 motionConfig（用于保存）
+        motionConfig = {};
+        for (const [emotion, files] of Object.entries(categorized)) {
+            motionConfig[emotion] = Array.isArray(files) ? files : [];
+        }
+
+        // 构建键名到文件路径的映射
+        motionKeyToPath = {};
+        motionPathToKey = {};
+
+        // 1. 先从已分类动作中构建情绪分类的映射（用于显示）
+        for (const [emotion, files] of Object.entries(categorized)) {
+            if (Array.isArray(files)) {
+                for (const filePath of files) {
+                    // 情绪分类也加入映射，但不作为自定义键名
+                    motionPathToKey[filePath] = emotion;
+                }
+            }
+        }
+
+        // 2. 从未分类动作中获取自定义键名映射（关键修复）
+        try {
+            const uncategorizedResp = await fetch('/api/live2d/motions/uncategorized');
+            if (uncategorizedResp.ok) {
+                const uncategorizedData = await uncategorizedResp.json();
+                const motionMap = uncategorizedData.motions || {};
+                // motionMap 格式：{"动作 1": "motions/xxx.json", "动作 2": "motions/yyy.json"}
+                for (const [key, filePath] of Object.entries(motionMap)) {
+                    motionKeyToPath[key] = filePath;
+                    motionPathToKey[filePath] = key;  // 覆盖情绪分类的映射
+                }
+            }
+        } catch (e) {
+            console.warn('加载未分类动作失败，仅使用已分类映射:', e);
+        }
+
         // 情绪名称映射（中文到英文）
         const emotionMap = {
             '开心': 'happy',
@@ -2073,17 +2682,26 @@ async function loadCategorizedMotions() {
             '害羞': 'shy',
             '俏皮': 'playful'
         };
-        
+
         // 遍历每个情绪分类
-        for (const [emotionName, motions] of Object.entries(data.categorized || {})) {
+        for (const [emotionName, motionFiles] of Object.entries(categorized)) {
             const englishEmotion = emotionMap[emotionName] || emotionName;
             const container = document.querySelector(`.emotion-category-actions[data-emotion="${englishEmotion}"]`);
-            
+
             if (container) {
                 container.innerHTML = '';
-                if (motions && motions.length > 0) {
-                    motions.forEach(motion => {
-                        const item = createMotionBindingItem(englishEmotion, motion);
+                if (motionFiles && motionFiles.length > 0) {
+                    motionFiles.forEach(motionFile => {
+                        // 查找文件路径对应的键名
+                        const motionKey = motionPathToKey[motionFile];
+                        // 如果键名是情绪分类名或不存在，使用文件名的友好显示
+                        let displayName;
+                        if (!motionKey || EMOTION_CATEGORIES.includes(motionKey)) {
+                            displayName = getMotionDisplayName(motionFile);
+                        } else {
+                            displayName = motionKey;  // 使用自定义键名（如"动作 1"）
+                        }
+                        const item = createMotionBindingItem(englishEmotion, motionFile, displayName);
                         container.appendChild(item);
                     });
                 } else {
@@ -2091,7 +2709,7 @@ async function loadCategorizedMotions() {
                 }
             }
         }
-        
+
         // 设置拖放区域
         setupMotionDropZones();
     } catch (error) {
@@ -2099,15 +2717,38 @@ async function loadCategorizedMotions() {
     }
 }
 
-// 创建动作绑定项
-function createMotionBindingItem(emotion, motionName) {
+// 根据文件路径查找对应的动作键名
+function findMotionKeyByFile(filePath) {
+    // 直接从映射中查找
+    return motionPathToKey[filePath] || null;
+}
+
+// 从文件路径获取显示名称
+function getMotionDisplayName(filePath) {
+    let name = filePath;
+    if (name.includes('/')) {
+        name = name.split('/').pop();
+    }
+    if (name.endsWith('.motion3.json')) {
+        name = name.replace('.motion3.json', '');
+    }
+    return name;
+}
+
+// 创建动作绑定项 - 显示键名
+function createMotionBindingItem(emotion, filePath, displayName) {
     const item = document.createElement('div');
     item.className = 'motion-binding-item';
+
+    // 使用完整路径进行预览和删除
+    const escapedFilePath = filePath.replace(/'/g, "\\'");
+    const escapedEmotion = emotion.replace(/'/g, "\\'");
+
     item.innerHTML = `
-        <span>${motionName}</span>
+        <span data-file-path="${escapedFilePath}">${displayName}</span>
         <div>
-            <button onclick="previewMotionFromList('${motionName}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">预览</button>
-            <button onclick="removeMotionBinding('${emotion}', '${motionName}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">删除</button>
+            <button onclick="previewMotionByPath('${escapedFilePath}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">预览</button>
+            <button onclick="removeMotionBinding('${escapedEmotion}', '${escapedFilePath}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">删除</button>
         </div>
     `;
     return item;
@@ -2116,34 +2757,45 @@ function createMotionBindingItem(emotion, motionName) {
 // 设置动作拖放区域
 function setupMotionDropZones() {
     const dropZones = document.querySelectorAll('.emotion-category-actions');
-    
+
     dropZones.forEach(zone => {
         zone.ondragover = (e) => {
             e.preventDefault();
             zone.classList.add('drag-over');
         };
-        
+
         zone.ondragleave = () => {
             zone.classList.remove('drag-over');
         };
-        
+
         zone.ondrop = (e) => {
             e.preventDefault();
             zone.classList.remove('drag-over');
-            
-            const motionName = e.dataTransfer.getData('application/motion') || 
-                               e.dataTransfer.getData('text/plain');
+
+            // 优先获取文件路径，如果没有则使用键名
+            const filePath = e.dataTransfer.getData('application/motion-path');
+            const motionKey = e.dataTransfer.getData('application/motion') ||
+                              e.dataTransfer.getData('text/plain');
             const emotion = zone.dataset.emotion;
-            
-            if (motionName && emotion) {
-                bindMotionToEmotion(emotion, motionName);
+
+            if (emotion) {
+                // 传递文件路径和键名
+                bindMotionToEmotion(emotion, motionKey, filePath);
             }
         };
     });
 }
 
-// 绑定动作到情绪
-function bindMotionToEmotion(emotion, motionName) {
+// 绑定动作到情绪 - 保存文件路径到情绪分类
+async function bindMotionToEmotion(emotion, motionKey, filePath) {
+    // motionKey 是配置中的键名（如"动作 1"）
+    // filePath 是文件路径（如"motions/hiyori_m01.motion3.json"）
+    
+    // 如果没有传入 filePath，尝试从映射中获取
+    if (!filePath && motionKey) {
+        filePath = motionKeyToPath[motionKey] || getMotionFilePathByKey(motionKey);
+    }
+
     // 情绪名称映射（英文到中文）
     const emotionMapReverse = {
         'happy': '开心',
@@ -2153,40 +2805,55 @@ function bindMotionToEmotion(emotion, motionName) {
         'shy': '害羞',
         'playful': '俏皮'
     };
-    
+
     const chineseEmotion = emotionMapReverse[emotion] || emotion;
-    
+
     // 初始化该情绪的动作数组
     if (!motionConfig[chineseEmotion]) {
         motionConfig[chineseEmotion] = [];
     }
-    
-    // 检查是否已存在
-    if (motionConfig[chineseEmotion].includes(motionName)) {
+
+    // 检查是否已存在（检查文件路径）
+    if (motionConfig[chineseEmotion].includes(filePath)) {
         alert('该动作已绑定到此情绪');
         return;
     }
-    
-    // 添加动作
-    motionConfig[chineseEmotion].push(motionName);
-    
-    // 更新UI
+
+    // 添加动作（使用文件路径）
+    motionConfig[chineseEmotion].push(filePath);
+
+    // 更新 UI - 使用 data-file-path 属性匹配 - 显示键名
     const container = document.querySelector(`.emotion-category-actions[data-emotion="${emotion}"]`);
     if (container) {
         const emptyTip = container.querySelector('.empty-tip');
         if (emptyTip) {
             emptyTip.remove();
         }
-        
-        const item = createMotionBindingItem(emotion, motionName);
+
+        const item = createMotionBindingItem(emotion, filePath, motionKey);
         container.appendChild(item);
     }
-    
-    addLog(`已将动作 "${motionName}" 绑定到 ${chineseEmotion}`, 'success', 'system');
+
+    // 自动保存配置
+    await saveMotionConfigSilent();
+
+    addLog(`已将动作 "${motionKey}" 绑定到 ${chineseEmotion}`, 'success', 'system');
+}
+
+// 根据键名获取文件路径
+function getMotionFilePathByKey(motionKey) {
+    // 遍历配置查找文件路径
+    for (const [key, value] of Object.entries(motionConfig)) {
+        if (key === motionKey && Array.isArray(value) && value.length > 0) {
+            return value[0];
+        }
+    }
+    // 如果找不到，返回默认格式
+    return 'motions/' + motionKey + '.motion3.json';
 }
 
 // 删除动作绑定
-function removeMotionBinding(emotion, motionName) {
+async function removeMotionBinding(emotion, filePath) {
     // 情绪名称映射（英文到中文）
     const emotionMapReverse = {
         'happy': '开心',
@@ -2200,7 +2867,7 @@ function removeMotionBinding(emotion, motionName) {
     const chineseEmotion = emotionMapReverse[emotion] || emotion;
     
     if (motionConfig[chineseEmotion]) {
-        const index = motionConfig[chineseEmotion].indexOf(motionName);
+        const index = motionConfig[chineseEmotion].indexOf(filePath);
         if (index > -1) {
             motionConfig[chineseEmotion].splice(index, 1);
             
@@ -2209,7 +2876,7 @@ function removeMotionBinding(emotion, motionName) {
             if (container) {
                 const items = container.querySelectorAll('.motion-binding-item');
                 items.forEach(item => {
-                    if (item.querySelector('span').textContent === motionName) {
+                    if (item.querySelector('span').dataset.filePath === filePath) {
                         item.remove();
                     }
                 });
@@ -2219,8 +2886,11 @@ function removeMotionBinding(emotion, motionName) {
                     container.innerHTML = '<div class="empty-tip">拖拽动作到此绑定</div>';
                 }
             }
+
+            // 自动保存配置
+            await saveMotionConfigSilent();
             
-            addLog(`已移除动作 "${motionName}" 从 ${chineseEmotion}`, 'info', 'system');
+            addLog(`已移除动作 "${filePath}" 从 ${chineseEmotion}`, 'info', 'system');
         }
     }
 }
@@ -2233,18 +2903,61 @@ async function loadAllMotions() {
     ]);
 }
 
-// 预览列表中的动作
-async function previewMotionFromList(motionName) {
+// 预览动作（通过文件路径）
+async function previewMotionByPath(filePath) {
     try {
         const response = await fetch('/api/live2d/motion/preview', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ motion: motionName })
+            body: JSON.stringify({ motion: filePath })
         });
         const result = await response.json();
-        if (response.ok && result.success) {
-            alert('正在预览动作：' + motionName);
-        } else {
+        if (!(response.ok && result.success)) {
+            alert('预览失败：' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        alert('预览时出错：' + error.message);
+    }
+}
+
+// 预览列表中的动作（通过键名）
+async function previewMotionFromList(motionKey) {
+    try {
+        // 优先从 motionKeyToPath 映射中获取文件路径
+        let filePath = motionKeyToPath[motionKey];
+        
+        // 如果映射中没有，再从 motionConfig 中查找
+        if (!filePath) {
+            filePath = getMotionFilePathByKey(motionKey);
+        }
+
+        const response = await fetch('/api/live2d/motion/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ motion: filePath })
+        });
+        const result = await response.json();
+        if (!(response.ok && result.success)) {
+            alert('预览失败：' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        alert('预览时出错：' + error.message);
+    }
+}
+
+// 预览动作（通过键名，如"动作 1"）
+async function previewMotionByKey(motionKey) {
+    try {
+        // 从配置中查找键名对应的文件路径
+        const filePath = getMotionFilePathByKey(motionKey);
+        
+        const response = await fetch('/api/live2d/motion/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ motion: filePath })
+        });
+        const result = await response.json();
+        if (!(response.ok && result.success)) {
             alert('预览失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
@@ -2259,27 +2972,27 @@ async function saveMotionConfig() {
         document.querySelectorAll('#emotion-categories-grid .emotion-category').forEach(category => {
             const nameEl = category.querySelector('.emotion-category-header span');
             const name = nameEl ? nameEl.textContent.replace(/[😊😠😢😲😳😜]\s*/, '') : '未命名';
-            
+
             const actionsEl = category.querySelector('.emotion-category-actions');
             const emotion = actionsEl ? actionsEl.dataset.emotion : 'unknown';
-            
+
             const motions = [];
             actionsEl.querySelectorAll('.motion-item').forEach(item => {
                 motions.push(item.querySelector('span').textContent);
             });
-            
+
             categories.push({ name, emotion, motions });
         });
-        
+
         const response = await fetch('/api/live2d/motions/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ categories })
         });
-        
+
         const result = await response.json();
         if (response.ok && result.success) {
-            alert('动作配置已保存');
+            addLog('动作配置已保存', 'success', 'system');
         } else {
             alert('保存失败：' + (result.error || '未知错误'));
         }
@@ -2288,10 +3001,46 @@ async function saveMotionConfig() {
     }
 }
 
+// 静默保存动作配置（用于拖拽绑定时自动保存）
+async function saveMotionConfigSilent() {
+    try {
+        // 情绪名称映射（中文到英文）
+        const emotionMap = {
+            '开心': 'happy',
+            '生气': 'angry',
+            '难过': 'sad',
+            '惊讶': 'surprised',
+            '害羞': 'shy',
+            '俏皮': 'playful'
+        };
+
+        const categories = [];
+        for (const [emotionName, motions] of Object.entries(motionConfig)) {
+            const englishEmotion = emotionMap[emotionName] || emotionName;
+            categories.push({
+                name: emotionName,
+                emotion: englishEmotion,
+                motions: motions
+            });
+        }
+
+        await fetch('/api/live2d/motions/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ categories })
+        });
+    } catch (error) {
+        console.error('静默保存动作配置失败:', error);
+    }
+}
+
 // ============ Live2D 表情管理 ============
 
 // 表情配置缓存
 let expressionConfig = {};
+// 表情键名到文件路径的映射
+let expressionKeyToPath = {};
+let expressionPathToKey = {};
 
 // 加载表情配置
 async function loadExpressionConfig() {
@@ -2299,32 +3048,64 @@ async function loadExpressionConfig() {
         const response = await fetch('/api/live2d/expressions/config');
         if (response.ok) {
             const data = await response.json();
-            expressionConfig = data.expressions || {};
-            renderExpressionConfig(expressionConfig);
-            renderAvailableExpressions(data.available_expressions || []);
+            const expressions = data.expressions || {};
+            
+            // 初始化 expressionConfig
+            expressionConfig = {};
+            for (const [emotion, files] of Object.entries(expressions)) {
+                expressionConfig[emotion] = Array.isArray(files) ? files : [];
+            }
+            
+            // 构建表情键名到文件路径的映射
+            expressionKeyToPath = {};
+            expressionPathToKey = {};
+            
+            // 从可用表情中获取自定义键名映射
+            const availableExpressions = data.available_expressions || {};
+            // availableExpressions 格式：{"表情 1": "expressions/xxx.exp3.json", ...}
+            for (const [key, filePath] of Object.entries(availableExpressions)) {
+                expressionKeyToPath[key] = filePath;
+                expressionPathToKey[filePath] = key;
+            }
+            
+            renderExpressionConfigWithMapping(expressionConfig);
+            renderAvailableExpressions(availableExpressions);
         }
     } catch (error) {
         console.error('加载表情配置失败:', error);
-        document.getElementById('available-expressions').innerHTML = 
+        document.getElementById('available-expressions').innerHTML =
             '<div class="empty-tip">加载表情失败</div>';
     }
 }
 
-// 渲染表情配置
-function renderExpressionConfig(config) {
+// 表情分类列表
+const EXPRESSION_CATEGORIES = ['开心', '生气', '难过', '惊讶', '害羞', '俏皮'];
+
+// 渲染表情配置 - 使用映射显示键名
+function renderExpressionConfigWithMapping(config) {
     const emotions = ['开心', '生气', '难过', '惊讶', '害羞', '俏皮'];
-    
+
     emotions.forEach(emotion => {
         const container = document.querySelector(`.emotion-expression-actions[data-emotion="${emotion}"]`);
         if (!container) return;
-        
+
         // 清空现有内容
         container.innerHTML = '';
-        
-        const expressions = config[emotion] || [];
-        if (expressions.length > 0) {
-            expressions.forEach(expr => {
-                const item = createExpressionBindingItem(emotion, expr);
+
+        const expressionFiles = config[emotion] || [];
+        if (expressionFiles.length > 0) {
+            expressionFiles.forEach(exprFile => {
+                // 查找文件路径对应的键名
+                const exprKey = expressionPathToKey[exprFile];
+                // 如果键名是情绪分类名或不存在，使用文件名的友好显示
+                let displayName;
+                if (!exprKey || EXPRESSION_CATEGORIES.includes(exprKey)) {
+                    displayName = getExpressionDisplayName(exprFile);
+                } else {
+                    displayName = exprKey;  // 使用自定义键名（如"表情 1"）
+                }
+
+                const item = createExpressionBindingItem(emotion, exprFile, displayName);
                 container.appendChild(item);
             });
         } else {
@@ -2333,48 +3114,101 @@ function renderExpressionConfig(config) {
     });
 }
 
-// 创建表情绑定项
-function createExpressionBindingItem(emotion, expressionName) {
+// 从文件路径获取显示名称
+function getExpressionDisplayName(filePath) {
+    let name = filePath;
+    if (name.includes('/')) {
+        name = name.split('/').pop();
+    }
+    if (name.endsWith('.exp3.json')) {
+        name = name.replace('.exp3.json', '');
+    }
+    // 将 expression1, expression2 转换为 表情 1, 表情 2
+    if (name.startsWith('expression')) {
+        const num = name.replace('expression', '');
+        if (!isNaN(parseInt(num))) {
+            name = '表情' + num;
+        }
+    }
+    return name;
+}
+
+// 创建表情绑定项 - 使用传入的 displayName 参数
+function createExpressionBindingItem(emotion, filePath, displayName) {
     const item = document.createElement('div');
     item.className = 'expression-binding-item';
+
+    // 使用完整路径进行删除和预览
+    const escapedFilePath = filePath.replace(/'/g, "\\'");
+    const escapedEmotion = emotion.replace(/'/g, "\\'");
+
     item.innerHTML = `
-        <span>${expressionName}</span>
-        <button onclick="removeExpressionBinding('${emotion}', '${expressionName}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">删除</button>
+        <span data-file-path="${escapedFilePath}">${displayName}</span>
+        <div>
+            <button onclick="previewExpressionFromBinding('${escapedFilePath}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">预览</button>
+            <button onclick="removeExpressionBinding('${escapedEmotion}', '${escapedFilePath}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">删除</button>
+        </div>
     `;
     return item;
 }
 
-// 渲染可用表情列表
-function renderAvailableExpressions(expressions) {
+// 预览绑定区域中的表情（通过文件路径）
+async function previewExpressionFromBinding(filePath) {
+    try {
+        // 从文件路径查找键名
+        const exprKey = expressionPathToKey[filePath];
+        // 如果有键名，发送键名；否则发送文件路径
+        const expressionToSend = exprKey || filePath;
+        
+        const response = await fetch('/api/live2d/expression/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expression: expressionToSend })
+        });
+        const result = await response.json();
+        if (!(response.ok && result.success)) {
+            alert('预览失败：' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        alert('预览时出错：' + error.message);
+    }
+}
+
+// 渲染可用表情列表 - 显示键名，拖拽时传输文件路径
+function renderAvailableExpressions(expressionMap) {
     const container = document.getElementById('available-expressions');
     if (!container) return;
-    
+
     container.innerHTML = '';
-    
-    if (expressions.length === 0) {
+
+    const exprKeys = Object.keys(expressionMap);
+    if (exprKeys.length === 0) {
         container.innerHTML = '<div class="empty-tip">暂无可用表情</div>';
         return;
     }
-    
-    expressions.forEach(expr => {
+
+    exprKeys.forEach(exprKey => {
+        const filePath = expressionMap[exprKey];  // 获取文件路径
         const btn = document.createElement('button');
         btn.className = 'expression-button';
-        btn.textContent = expr;
+        btn.textContent = exprKey;  // 显示键名（如"表情 1"）
         btn.draggable = true;
-        btn.dataset.expression = expr;
-        
-        // 点击预览
-        btn.onclick = () => previewExpression(expr);
-        
-        // 拖拽开始
+        btn.dataset.expressionKey = exprKey;  // 存储键名
+        btn.dataset.filePath = filePath;      // 存储文件路径
+
+        // 点击预览 - 使用键名预览
+        btn.onclick = () => previewExpressionByKey(exprKey);
+
+        // 拖拽开始 - 传输文件路径（用于绑定）
         btn.ondragstart = (e) => {
-            e.dataTransfer.setData('text/plain', expr);
-            e.dataTransfer.setData('application/expression', expr);
+            e.dataTransfer.setData('text/plain', exprKey);
+            e.dataTransfer.setData('application/expression', exprKey);
+            e.dataTransfer.setData('application/expression-path', filePath);
         };
-        
+
         container.appendChild(btn);
     });
-    
+
     // 设置拖放区域
     setupExpressionDropZones();
 }
@@ -2382,67 +3216,93 @@ function renderAvailableExpressions(expressions) {
 // 设置表情拖放区域
 function setupExpressionDropZones() {
     const dropZones = document.querySelectorAll('.emotion-expression-actions');
-    
+
     dropZones.forEach(zone => {
         zone.ondragover = (e) => {
             e.preventDefault();
             zone.classList.add('drag-over');
         };
-        
+
         zone.ondragleave = () => {
             zone.classList.remove('drag-over');
         };
-        
+
         zone.ondrop = (e) => {
             e.preventDefault();
             zone.classList.remove('drag-over');
-            
-            const expressionName = e.dataTransfer.getData('application/expression') || 
-                                   e.dataTransfer.getData('text/plain');
+
+            // 优先获取文件路径，如果没有则使用键名
+            const filePath = e.dataTransfer.getData('application/expression-path');
+            const expressionKey = e.dataTransfer.getData('application/expression') ||
+                                  e.dataTransfer.getData('text/plain');
             const emotion = zone.dataset.emotion;
-            
-            if (expressionName && emotion) {
-                bindExpressionToEmotion(emotion, expressionName);
+
+            if (emotion) {
+                // 传递文件路径和键名
+                bindExpressionToEmotion(emotion, expressionKey, filePath);
             }
         };
     });
 }
 
-// 绑定表情到情绪
-function bindExpressionToEmotion(emotion, expressionName) {
+// 绑定表情到情绪 - 保存文件路径到情绪分类
+async function bindExpressionToEmotion(emotion, expressionKey, filePath) {
+    // expressionKey 是配置中的键名（如"表情 2"）
+    // filePath 是文件路径（如"expressions/xxx.exp3.json"）
+    
+    // 如果没有传入 filePath，尝试从映射中获取
+    if (!filePath && expressionKey) {
+        filePath = expressionKeyToPath[expressionKey] || getExpressionFilePathByKey(expressionKey);
+    }
+
     // 初始化该情绪的表情数组
     if (!expressionConfig[emotion]) {
         expressionConfig[emotion] = [];
     }
-    
-    // 检查是否已存在
-    if (expressionConfig[emotion].includes(expressionName)) {
+
+    // 检查是否已存在（检查文件路径）
+    if (expressionConfig[emotion].includes(filePath)) {
         alert('该表情已绑定到此情绪');
         return;
     }
-    
-    // 添加表情
-    expressionConfig[emotion].push(expressionName);
-    
-    // 更新UI
+
+    // 添加表情（使用文件路径）
+    expressionConfig[emotion].push(filePath);
+
+    // 更新 UI - 显示键名
     const container = document.querySelector(`.emotion-expression-actions[data-emotion="${emotion}"]`);
     if (container) {
         const emptyTip = container.querySelector('.empty-tip');
         if (emptyTip) {
             emptyTip.remove();
         }
-        
-        const item = createExpressionBindingItem(emotion, expressionName);
+
+        const item = createExpressionBindingItem(emotion, filePath, expressionKey);
         container.appendChild(item);
     }
-    
-    addLog(`已将表情 "${expressionName}" 绑定到 ${emotion}`, 'success', 'system');
+
+    // 自动保存配置
+    await saveExpressionConfigSilent();
+
+    addLog(`已将表情 "${expressionKey}" 绑定到 ${emotion}`, 'success', 'system');
+}
+
+// 根据键名获取文件路径
+function getExpressionFilePathByKey(expressionKey) {
+    // 遍历配置查找文件路径
+    for (const [key, value] of Object.entries(expressionConfig)) {
+        if (key === expressionKey && Array.isArray(value) && value.length > 0) {
+            return value[0];
+        }
+    }
+    // 如果找不到，返回默认格式
+    return 'expressions/' + expressionKey + '.exp3.json';
 }
 
 // 删除表情绑定
-function removeExpressionBinding(emotion, expressionName) {
+async function removeExpressionBinding(emotion, filePath) {
     if (expressionConfig[emotion]) {
-        const index = expressionConfig[emotion].indexOf(expressionName);
+        const index = expressionConfig[emotion].indexOf(filePath);
         if (index > -1) {
             expressionConfig[emotion].splice(index, 1);
             
@@ -2451,7 +3311,8 @@ function removeExpressionBinding(emotion, expressionName) {
             if (container) {
                 const items = container.querySelectorAll('.expression-binding-item');
                 items.forEach(item => {
-                    if (item.querySelector('span').textContent === expressionName) {
+                    const span = item.querySelector('span');
+                    if (span && span.dataset.filePath === filePath) {
                         item.remove();
                     }
                 });
@@ -2461,24 +3322,51 @@ function removeExpressionBinding(emotion, expressionName) {
                     container.innerHTML = '<div class="empty-tip">拖拽表情到此绑定</div>';
                 }
             }
-            
-            addLog(`已移除表情 "${expressionName}" 从 ${emotion}`, 'info', 'system');
+
+            // 自动保存配置
+            await saveExpressionConfigSilent();
+
+            // 从键名获取显示名用于日志
+            const exprKey = expressionPathToKey[filePath] || getExpressionDisplayName(filePath);
+            addLog(`已移除表情 "${exprKey}" 从 ${emotion}`, 'info', 'system');
         }
     }
 }
 
-// 预览表情
+// 预览表情（通过文件名）
 async function previewExpression(expressionName) {
     try {
+        // 确保表情名称包含完整的文件路径
+        let fullExpressionName = expressionName;
+        if (!fullExpressionName.includes('/')) {
+            fullExpressionName = 'expressions/' + expressionName + '.exp3.json';
+        }
+        
         const response = await fetch('/api/live2d/expression/preview', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ expression: expressionName })
+            body: JSON.stringify({ expression: fullExpressionName })
         });
         const result = await response.json();
-        if (response.ok && result.success) {
-            addLog(`正在预览表情：${expressionName}`, 'success', 'system');
-        } else {
+        if (!(response.ok && result.success)) {
+            alert('预览失败：' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        alert('预览时出错：' + error.message);
+    }
+}
+
+// 预览表情（通过键名，如"表情 1"）
+async function previewExpressionByKey(expressionKey) {
+    try {
+        // 直接发送键名作为 expression_name，让 Live2D 前端查找对应文件
+        const response = await fetch('/api/live2d/expression/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expression: expressionKey })
+        });
+        const result = await response.json();
+        if (!(response.ok && result.success)) {
             alert('预览失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
@@ -2488,10 +3376,6 @@ async function previewExpression(expressionName) {
 
 // 一键还原表情
 async function resetExpression() {
-    if (!confirm('确定要还原表情配置吗？这将清除所有自定义绑定。')) {
-        return;
-    }
-    
     try {
         const response = await fetch('/api/live2d/expressions/reset', {
             method: 'POST'
@@ -2502,10 +3386,10 @@ async function resetExpression() {
             // 重新加载配置
             await loadExpressionConfig();
         } else {
-            alert('还原失败：' + (result.error || '未知错误'));
+            addLog('还原失败：' + (result.error || '未知错误'), 'error', 'system');
         }
     } catch (error) {
-        alert('还原时出错：' + error.message);
+        addLog('还原时出错：' + error.message, 'error', 'system');
     }
 }
 
@@ -2517,15 +3401,27 @@ async function saveExpressionConfig() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ expressions: expressionConfig })
         });
-        
+
         const result = await response.json();
         if (response.ok && result.success) {
-            alert('表情配置已保存');
-            addLog('表情配置保存成功', 'success', 'system');
+            addLog('表情配置已保存', 'success', 'system');
         } else {
             alert('保存失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
         alert('保存时出错：' + error.message);
+    }
+}
+
+// 静默保存表情配置（用于拖拽绑定时自动保存）
+async function saveExpressionConfigSilent() {
+    try {
+        await fetch('/api/live2d/expressions/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expressions: expressionConfig })
+        });
+    } catch (error) {
+        console.error('静默保存表情配置失败:', error);
     }
 }

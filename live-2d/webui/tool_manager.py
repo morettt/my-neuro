@@ -98,8 +98,8 @@ def get_tool_description(file_path):
 def get_external_mcp_tools():
     """从 mcp_config.json 读取外部 MCP 工具（排除有本地文件的工具）"""
     tools = []
-    mcp_config_path = PROJECT_ROOT / 'live-2d' / 'mcp' / 'mcp_config.json'
-    mcp_tools_path = PROJECT_ROOT / 'live-2d' / 'mcp' / 'tools'
+    mcp_config_path = PROJECT_ROOT / 'mcp' / 'mcp_config.json'
+    mcp_tools_path = PROJECT_ROOT / 'mcp' / 'tools'
     
     if not mcp_config_path.exists():
         return tools
@@ -150,8 +150,8 @@ def list_tools():
 def list_all_tools():
     """列出所有工具（FC + MCP）"""
     try:
-        server_tools_path = PROJECT_ROOT / 'live-2d' / 'server-tools'
-        mcp_tools_path = PROJECT_ROOT / 'live-2d' / 'mcp' / 'tools'
+        server_tools_path = PROJECT_ROOT / 'server-tools'
+        mcp_tools_path = PROJECT_ROOT / 'mcp' / 'tools'
         
         fc_tools = scan_tools_directory(server_tools_path, 'fc')
         mcp_tools = scan_tools_directory(mcp_tools_path, 'mcp')
@@ -168,7 +168,7 @@ def list_all_tools():
 def list_fc_tools():
     """列出 Function Call 工具（server-tools 目录）"""
     try:
-        server_tools_path = PROJECT_ROOT / 'live-2d' / 'server-tools'
+        server_tools_path = PROJECT_ROOT / 'server-tools'
         tools = scan_tools_directory(server_tools_path, 'fc')
         return jsonify({'tools': tools})
     except Exception as e:
@@ -179,7 +179,7 @@ def list_fc_tools():
 def list_mcp_tools():
     """列出 MCP 工具（mcp/tools 目录 + 外部工具）"""
     try:
-        mcp_tools_path = PROJECT_ROOT / 'live-2d' / 'mcp' / 'tools'
+        mcp_tools_path = PROJECT_ROOT / 'mcp' / 'tools'
         tools = scan_tools_directory(mcp_tools_path, 'mcp')
         
         # 添加外部 MCP 工具
@@ -207,7 +207,7 @@ def toggle_tool():
         
         # 处理外部 MCP 工具
         if is_external:
-            mcp_config_path = PROJECT_ROOT / 'live-2d' / 'mcp' / 'mcp_config.json'
+            mcp_config_path = PROJECT_ROOT / 'mcp' / 'mcp_config.json'
             
             if not mcp_config_path.exists():
                 return jsonify({'success': False, 'error': 'MCP 配置文件不存在'}), 404
@@ -241,9 +241,9 @@ def toggle_tool():
         
         # 处理本地工具（.js ↔ .txt）
         if tool_type == 'fc':
-            dir_path = PROJECT_ROOT / 'live-2d' / 'server-tools'
+            dir_path = PROJECT_ROOT / 'server-tools'
         elif tool_type == 'mcp':
-            dir_path = PROJECT_ROOT / 'live-2d' / 'mcp' / 'tools'
+            dir_path = PROJECT_ROOT / 'mcp' / 'tools'
         else:
             return jsonify({'success': False, 'error': '无效的工具类型'}), 400
         
@@ -273,13 +273,14 @@ def toggle_tool():
 def list_models():
     """列出可用的 Live2D 模型"""
     try:
-        models_path = PROJECT_ROOT / 'live-2d' / '2D'
+        models_path = PROJECT_ROOT / '2D'
         models = []
         if models_path.exists():
             for folder in models_path.iterdir():
                 if folder.is_dir():
                     for file in folder.iterdir():
-                        if file.suffix == '.model3.json':
+                        # 使用 name.endswith() 而不是 suffix 来匹配 .model3.json 文件
+                        if file.name.endswith('.model3.json'):
                             models.append(folder.name)
                             break
         return jsonify(models)
@@ -292,7 +293,7 @@ def list_models():
 def get_current_model():
     """获取当前模型名称"""
     try:
-        config_path = PROJECT_ROOT / 'live-2d' / 'config.json'
+        config_path = PROJECT_ROOT / 'config.json'
         if config_path.exists():
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
@@ -306,8 +307,18 @@ def get_current_model():
 def get_categorized_motions():
     """获取已分类的动作列表"""
     try:
-        model_name = get_current_model()
-        actions_path = PROJECT_ROOT / 'live-2d' / 'emotion_actions.json'
+        import re
+        # 从 main.js 读取当前模型名
+        main_js_path = PROJECT_ROOT / 'main.js'
+        model_name = '肥牛'  # 默认
+        
+        if main_js_path.exists():
+            with open(main_js_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            match = re.search(r"const priorityFolders = \['([^']+)'", content)
+            if match:
+                model_name = match.group(1)
+        actions_path = PROJECT_ROOT / 'emotion_actions.json'
         
         if not actions_path.exists():
             return jsonify({'categorized': {}})
@@ -336,7 +347,7 @@ def get_uncategorized_motions():
     """获取未分类的动作列表"""
     try:
         model_name = get_current_model()
-        actions_path = PROJECT_ROOT / 'live-2d' / 'emotion_actions.json'
+        actions_path = PROJECT_ROOT / 'emotion_actions.json'
         
         if not actions_path.exists():
             return jsonify({'motions': []})
@@ -371,34 +382,55 @@ def get_uncategorized_motions():
 def save_motions():
     """保存动作配置"""
     try:
+        import re
+        
         data = request.get_json()
         categories = data.get('categories', [])
         
-        model_name = get_current_model()
-        actions_path = PROJECT_ROOT / 'live-2d' / 'emotion_actions.json'
+        # 从 main.js 读取当前模型名
+        main_js_path = PROJECT_ROOT / 'main.js'
+        model_name = '肥牛'  # 默认
         
+        if main_js_path.exists():
+            with open(main_js_path, 'r', encoding='utf-8') as f:
+                js_content = f.read()
+            match = re.search(r"const priorityFolders = \['([^']+)'", js_content)
+            if match:
+                model_name = match.group(1)
+        
+        actions_path = PROJECT_ROOT / 'emotion_actions.json'
+        
+        # 读取现有配置（保留其他模型的数据）
+        existing_config = {}
         if actions_path.exists():
             with open(actions_path, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+                existing_config = json.load(f)
         else:
-            config = {}
+            existing_config = {}
         
-        if model_name not in config:
-            config[model_name] = {'emotion_actions': {}}
+        # 确保模型配置存在
+        if model_name not in existing_config:
+            existing_config[model_name] = {'emotion_actions': {}}
         
+        # 保留现有的所有动作（包括自定义动作）
+        existing_actions = existing_config[model_name].get('emotion_actions', {})
+        
+        # 只更新 6 个标准情绪分类
         emotion_categories = ['开心', '生气', '难过', '惊讶', '害羞', '俏皮']
         for category in categories:
             name = category.get('name')
             motions = category.get('motions', [])
             if name in emotion_categories:
-                config[model_name]['emotion_actions'][name] = motions
+                existing_actions[name] = motions
+        
+        # 更新配置
+        existing_config[model_name]['emotion_actions'] = existing_actions
         
         with open(actions_path, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=2, ensure_ascii=False)
-        
+            json.dump(existing_config, f, indent=2, ensure_ascii=False)
         return jsonify({'success': True, 'message': '动作配置已保存'})
     except Exception as e:
-        logger.error(f'保存动作配置失败: {e}')
+        logger.error(f'保存动作配置失败：{e}')
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -407,29 +439,29 @@ def get_expression_config():
     """获取表情配置"""
     try:
         model_name = get_current_model()
-        expressions_path = PROJECT_ROOT / 'live-2d' / 'emotion_expressions.json'
+        expressions_path = PROJECT_ROOT / 'emotion_expressions.json'
         
         if not expressions_path.exists():
-            return jsonify({'expressions': {}, 'available_expressions': []})
+            return jsonify({'expressions': {}, 'available_expressions': {}})
         
         with open(expressions_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         model_data = data.get(model_name, {})
         emotion_expressions = model_data.get('emotion_expressions', {})
-        
+
         emotion_categories = ['开心', '生气', '难过', '惊讶', '害羞', '俏皮']
         expressions = {}
-        available_expressions = []
-        
+        available_expressions = {}  # 改为映射：{键名：文件路径}
+
         for key, exprs in emotion_expressions.items():
             if key in emotion_categories:
                 expressions[key] = exprs
             else:
-                available_expressions.extend(exprs)
-        
-        available_expressions = list(set(available_expressions))
-        
+                # 自定义键名，添加到可用表情映射
+                if exprs:
+                    available_expressions[key] = exprs[0]  # 取第一个文件路径
+
         return jsonify({
             'expressions': expressions,
             'available_expressions': available_expressions
@@ -447,7 +479,7 @@ def save_expressions():
         expressions = data.get('expressions', {})
         
         model_name = get_current_model()
-        expressions_path = PROJECT_ROOT / 'live-2d' / 'emotion_expressions.json'
+        expressions_path = PROJECT_ROOT / 'emotion_expressions.json'
         
         if expressions_path.exists():
             with open(expressions_path, 'r', encoding='utf-8') as f:
@@ -476,7 +508,7 @@ def reset_expressions():
     """重置表情配置"""
     try:
         model_name = get_current_model()
-        expressions_path = PROJECT_ROOT / 'live-2d' / 'emotion_expressions.json'
+        expressions_path = PROJECT_ROOT / 'emotion_expressions.json'
         
         if expressions_path.exists():
             with open(expressions_path, 'r', encoding='utf-8') as f:

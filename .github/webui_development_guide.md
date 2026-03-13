@@ -54,52 +54,37 @@ My Neuro WebUI 是一个基于 Flask 的 Web 控制面板，用于统一管理 L
 
 ```
 my-neuro-main/
-│
-├── webui/                          # WebUI 模块化目录
-│   ├── __init__.py                # 模块入口
-│   ├── utils.py                   # 共享工具函数
-│   ├── main_app.py                # Flask 应用初始化
-│   ├── service_controller.py      # 服务控制 API
-│   ├── config_manager.py          # 配置管理 API
-│   ├── plugin_manager.py          # 插件管理 API
-│   ├── tool_manager.py            # 工具管理 API
-│   ├── marketplace.py             # 广场与资源 API
-│   └── log_monitor.py             # 日志监控 API
-│
-├── webui_controller.py             # 后端入口（兼容旧版）
-├── 启动 WebUI 控制面板.bat          # 启动脚本
-│
-├── templates/                      # HTML 模板目录
-│   └── index.html                  # 主页面模板
-│
-├── static/                         # 静态资源目录
-│   ├── css/
-│   │   └── style.css               # 样式表
-│   └── js/
-│       └── app.js                  # 前端 JavaScript
-│
-├── live-2d/                        # Live2D 桌宠目录
-│   ├── go.bat                      # 桌宠启动脚本
-│   ├── runtime.log                 # 实时日志
-│   ├── config.json                 # 主配置文件
-│   ├── plugins/                    # 插件目录
-│   │   ├── built-in/              # 内置插件
-│   │   ├── community/             # 社区插件
-│   │   ├── plugin-house/          # 插件商店数据
-│   │   └── enabled_plugins.json   # 已启用插件列表
-│   ├── server-tools/              # Function Call 工具目录
-│   ├── mcp/                       # MCP 工具配置
-│   └── motions/                   # 动作文件目录
-│
-├── logs/                           # 服务日志目录
-│   ├── asr.log
-│   ├── tts.log
-│   ├── bert.log
-│   └── rag.log
-│
+├── live-2d/
+│   ├── webui/                         # WebUI 模块化目录
+│   │   ├── __init__.py                # 模块入口
+│   │   ├── utils.py                   # 共享工具函数
+│   │   ├── main_app.py                # Flask 应用初始化
+│   │   ├── config_manager.py          # 配置管理 API
+│   │   ├── log_monitor.py             # 日志监控 API
+│   │   ├── marketplace.py             # 广场与资源 API
+│   │   ├── plugin_manager.py          # 插件管理 API
+│   │   ├── service_controller.py      # 服务控制 API
+│   │   ├── tool_manager.py            # 工具管理 API
+│   │   ├── templates/
+│   │   │   └── index.html             # 主页面模板
+│   │   └── static/
+│   │       ├── css/                   # 样式表
+│   │       │   └── style.css
+│   │       └── js/                    # 前端 JavaScript
+│   │           └── app.js
+│   ├── 启动 WebUI 控制面板.bat
+│   │   （其他文件↓）
+│   ├── config.json
+│   ├── go.bat
+│   ├── main.js
+│   ├── plugins/
+│   ├── server-tools/
+│   ├── mcp/
+│   └── ...
 └── .github/
     ├── webui_development_guide.md      # 开发指南（本文档）
     └── webui_development_log.md        # 开发日志
+
 ```
 
 ---

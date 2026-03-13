@@ -7,9 +7,14 @@ WebUI 模块化重构 - 服务控制模块
 
 import sys
 import subprocess
+import time
+import os
 from flask import Blueprint, jsonify
 
 from .utils import PROJECT_ROOT, logger, service_processes, service_pids, is_service_running
+
+# Windows 下隐藏窗口的标志
+CREATE_NO_WINDOW = 0x08000000 if sys.platform.startswith('win') else 0
 
 # 创建服务控制蓝图
 service_bp = Blueprint('service', __name__)
@@ -57,48 +62,49 @@ def start_service(service):
             return jsonify({'success': False, 'error': '服务已在运行中'})
 
         # 根据服务类型启动对应的脚本
+        # live2d 使用特殊方式启动（不显示控制台），其他服务保持原样
+        # 注意：PROJECT_ROOT 现在指向 live-2d/，所以需要使用 PROJECT_ROOT.parent 访问 my-neuro-main/ 目录
         script_map = {
             'live2d': {
-                'script': str(PROJECT_ROOT / 'live-2d' / 'go.bat'),
-                'args': ['cmd', '/c', 'start', 'cmd', '/k', 'cd /d ' + str(PROJECT_ROOT / 'live-2d') + ' && go.bat'],
-                'cwd': str(PROJECT_ROOT / 'live-2d'),
-                'is_python': False,
-                'log_file': PROJECT_ROOT / 'live-2d' / 'runtime.log'  # 桌宠日志文件
+                'script': str(PROJECT_ROOT / 'go.bat'),
+                'cwd': str(PROJECT_ROOT),
+                'log_file': PROJECT_ROOT / 'runtime.log',
+                'hide_window': True  # 特殊标记：不显示控制台
             },
             'asr': {
-                'script': str(PROJECT_ROOT / '1.ASR.bat'),
-                'args': ['cmd', '/c', 'start', 'cmd', '/k', str(PROJECT_ROOT / '1.ASR.bat')],
-                'cwd': str(PROJECT_ROOT),
+                'script': str(PROJECT_ROOT.parent / '1.ASR.bat'),
+                'args': ['cmd', '/c', 'start', 'cmd', '/k', str(PROJECT_ROOT.parent / '1.ASR.bat')],
+                'cwd': str(PROJECT_ROOT.parent),
                 'is_python': False,
-                'log_file': PROJECT_ROOT / 'logs' / 'asr.log'
+                'log_file': PROJECT_ROOT.parent / 'logs' / 'asr.log'
             },
             'tts': {
-                'script': str(PROJECT_ROOT / '2.TTS.bat'),
-                'args': ['cmd', '/c', 'start', 'cmd', '/k', str(PROJECT_ROOT / '2.TTS.bat')],
-                'cwd': str(PROJECT_ROOT),
+                'script': str(PROJECT_ROOT.parent / '2.TTS.bat'),
+                'args': ['cmd', '/c', 'start', 'cmd', '/k', str(PROJECT_ROOT.parent / '2.TTS.bat')],
+                'cwd': str(PROJECT_ROOT.parent),
                 'is_python': False,
-                'log_file': PROJECT_ROOT / 'logs' / 'tts.log'
+                'log_file': PROJECT_ROOT.parent / 'logs' / 'tts.log'
             },
             'bert': {
-                'script': str(PROJECT_ROOT / '3.bert.bat'),
-                'args': ['cmd', '/c', 'start', 'cmd', '/k', str(PROJECT_ROOT / '3.bert.bat')],
-                'cwd': str(PROJECT_ROOT),
+                'script': str(PROJECT_ROOT.parent / '3.bert.bat'),
+                'args': ['cmd', '/c', 'start', 'cmd', '/k', str(PROJECT_ROOT.parent / '3.bert.bat')],
+                'cwd': str(PROJECT_ROOT.parent),
                 'is_python': False,
-                'log_file': PROJECT_ROOT / 'logs' / 'bert.log'
+                'log_file': PROJECT_ROOT.parent / 'logs' / 'bert.log'
             },
             'memos': {
-                'script': str(PROJECT_ROOT / 'memos_system' / 'start_memos.bat'),
-                'args': ['cmd', '/c', 'start', 'cmd', '/k', 'cd /d ' + str(PROJECT_ROOT / 'memos_system') + ' && start_memos.bat'],
-                'cwd': str(PROJECT_ROOT / 'memos_system'),
+                'script': str(PROJECT_ROOT.parent / 'memos_system' / 'start_memos.bat'),
+                'args': ['cmd', '/c', 'start', 'cmd', '/k', 'cd /d ' + str(PROJECT_ROOT.parent / 'memos_system') + ' && start_memos.bat'],
+                'cwd': str(PROJECT_ROOT.parent / 'memos_system'),
                 'is_python': False,
-                'log_file': PROJECT_ROOT / 'logs' / 'memos.log'
+                'log_file': PROJECT_ROOT.parent / 'logs' / 'memos.log'
             },
             'rag': {
-                'script': str(PROJECT_ROOT / 'RAG.bat'),
-                'args': ['cmd', '/c', 'start', 'cmd', '/k', str(PROJECT_ROOT / 'RAG.bat')],
-                'cwd': str(PROJECT_ROOT),
+                'script': str(PROJECT_ROOT.parent / 'RAG.bat'),
+                'args': ['cmd', '/c', 'start', 'cmd', '/k', str(PROJECT_ROOT.parent / 'RAG.bat')],
+                'cwd': str(PROJECT_ROOT.parent),
                 'is_python': False,
-                'log_file': PROJECT_ROOT / 'logs' / 'rag.log'
+                'log_file': PROJECT_ROOT.parent / 'logs' / 'rag.log'
             }
         }
 
@@ -118,11 +124,37 @@ def start_service(service):
                 logger.error(f'清空日志文件失败：{e}')
         
         # 启动服务
-        proc = subprocess.Popen(
-            config['args'],
-            cwd=config['cwd'],
-            creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform.startswith('win') else 0
-        )
+        if config.get('hide_window'):
+            # Live2D 服务：不显示控制台窗口，直接运行 bat
+            # 使用 shell=True 让 bat 文件能正确执行
+            proc = subprocess.Popen(
+                config['script'],
+                shell=True,
+                cwd=config['cwd'],
+                creationflags=CREATE_NO_WINDOW if sys.platform.startswith('win') else 0,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT
+            )
+            # 等待一下让进程启动
+            time.sleep(1)
+            # 检查进程是否真的在运行
+            if proc.poll() is not None:
+                # 进程已退出，尝试用 cmd /c 方式启动
+                proc = subprocess.Popen(
+                    ['cmd', '/c', config['script']],
+                    cwd=config['cwd'],
+                    creationflags=CREATE_NO_WINDOW if sys.platform.startswith('win') else 0,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT
+                )
+                time.sleep(1)
+        else:
+            # 其他服务：保持原有方式（显示控制台窗口）
+            proc = subprocess.Popen(
+                config['args'],
+                cwd=config['cwd'],
+                creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform.startswith('win') else 0
+            )
 
         service_processes[service] = proc
         # 记录服务已启动（即使进程对象可能立即结束）
@@ -142,32 +174,44 @@ def stop_service(service):
     try:
         # 使用 PowerShell 根据命令行参数查找 PID，然后用 taskkill /T 终止进程树
         if sys.platform.startswith('win'):
-            # 构建 bat 文件名
-            if service == 'live2d':
-                bat_name = 'go.bat'
-            elif service == 'memos':
-                bat_name = 'start_memos.bat'
-            elif service == 'rag':
-                bat_name = 'RAG.bat'
-            else:
-                bat_name = f'{service}.bat'
+            # 优先使用 service_processes 中保存的进程 PID
+            pids = []
 
-            # 使用 PowerShell 查找包含 bat 文件名的进程 PID
-            ps_script = f"""
-            $ErrorActionPreference = 'SilentlyContinue'
-            $procs = Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -and $_.CommandLine -like '*{bat_name}*' }}
-            foreach ($proc in $procs) {{
-                Write-Output $proc.ProcessId
-            }}
-            """
+            if service in service_processes:
+                proc = service_processes[service]
+                if proc and proc.poll() is None:
+                    # 进程还在运行，使用记录的 PID
+                    pids = [str(proc.pid)]
+                    logger.debug(f'使用记录的 PID: {proc.pid}')
 
-            result = subprocess.run(
-                ['powershell', '-Command', ps_script],
-                capture_output=True, text=True, timeout=10
-            )
+            # 如果没有找到记录的 PID，使用 PowerShell 查找
+            if not pids:
+                # 构建 bat 文件名
+                if service == 'live2d':
+                    bat_name = 'go.bat'
+                elif service == 'memos':
+                    bat_name = 'start_memos.bat'
+                elif service == 'rag':
+                    bat_name = 'RAG.bat'
+                else:
+                    bat_name = f'{service}.bat'
 
-            # 解析输出的 PID 列表
-            pids = [line.strip() for line in result.stdout.split('\n') if line.strip().isdigit()]
+                # 使用 PowerShell 查找包含 bat 文件名的进程 PID
+                ps_script = f"""
+                $ErrorActionPreference = 'SilentlyContinue'
+                $procs = Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -and $_.CommandLine -like '*{bat_name}*' }}
+                foreach ($proc in $procs) {{
+                    Write-Output $proc.ProcessId
+                }}
+                """
+
+                result = subprocess.run(
+                    ['powershell', '-Command', ps_script],
+                    capture_output=True, text=True, timeout=10
+                )
+
+                # 解析输出的 PID 列表
+                pids = [line.strip() for line in result.stdout.split('\n') if line.strip().isdigit()]
 
             # 如果没有找到进程，说明服务已停止，直接重置状态
             if not pids:
@@ -192,8 +236,13 @@ def stop_service(service):
                     killed_count += 1
                     logger.debug(f'已终止进程树 PID: {pid}')
                 else:
-                    # 只有在返回码非 0 时才认为是失败（有时输出为空但实际成功了）
-                    if kill_result.returncode != 0:
+                    # 检查是否是因为进程已不存在（进程已自行退出）
+                    if 'not found' in output.lower() or '找不到' in output:
+                        # 进程已不存在，服务已停止，视为成功
+                        killed_count += 1
+                        logger.debug(f'进程 PID {pid} 已不存在，视为已停止')
+                    elif kill_result.returncode != 0:
+                        # 只有在返回码非 0 且不是 "not found" 时才认为是失败
                         failed_pids.append(pid)
                         logger.warning(f'终止进程 PID {pid} 失败：{output or f"返回码={kill_result.returncode}"}')
                     else:

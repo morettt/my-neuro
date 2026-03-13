@@ -34,8 +34,8 @@ service_pids = {}
 
 # 日志文件路径配置
 LOG_FILE_PATHS = {
-    'pet': PROJECT_ROOT / 'live-2d' / 'runtime.log',
-    'tool': PROJECT_ROOT / 'live-2d' / 'runtime.log',
+    'pet': PROJECT_ROOT / 'runtime.log',
+    'tool': PROJECT_ROOT / 'runtime.log',
 }
 
 
@@ -51,8 +51,14 @@ def find_free_port():
 
 def is_service_running(service):
     """检查服务是否正在运行
-    
-    由于所有服务都使用 CREATE_NEW_CONSOLE 启动，窗口标题都是 cmd.exe，
-    无法通过 tasklist 可靠检测，因此只依赖 service_pids 标记。
+
+    通过检查进程对象是否存活来准确判断服务状态。
     """
+    # 首先检查是否有记录的进程对象
+    if service in service_processes:
+        proc = service_processes[service]
+        if proc and proc.poll() is None:
+            return True
+
+    # 如果没有进程对象，检查 service_pids 标记
     return service_pids.get(service, False)

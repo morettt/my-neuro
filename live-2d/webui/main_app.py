@@ -20,8 +20,8 @@ START_TIME = datetime.datetime.now()
 def create_app():
     """创建并配置 Flask 应用"""
     app = Flask(__name__,
-                template_folder=str(PROJECT_ROOT / 'templates'),
-                static_folder=str(PROJECT_ROOT / 'static'))
+                template_folder=str(PROJECT_ROOT / 'webui' / 'templates'),
+                static_folder=str(PROJECT_ROOT / 'webui' / 'static'))
     
     # 注册各个功能蓝图
     from .service_controller import service_bp
@@ -46,11 +46,11 @@ def create_app():
         port = find_free_port()
         return render_template('index.html', port=port, start_time=start_time_str)
 
-    # 提供 live-2d 目录的静态文件访问
+    # 提供 live-2d 目录的静态文件访问（路由保持 /live-2d/ 不变，但路径指向 PROJECT_ROOT）
     @app.route('/live-2d/<path:filename>')
     def serve_live2d_file(filename):
         """提供 live-2d 目录的文件访问"""
-        return send_from_directory(PROJECT_ROOT / 'live-2d', filename)
+        return send_from_directory(PROJECT_ROOT, filename)
 
     return app
 

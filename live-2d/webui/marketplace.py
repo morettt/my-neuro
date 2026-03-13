@@ -63,21 +63,14 @@ def get_prompt_market():
 
 @market_bp.route('/api/market/prompts/apply', methods=['POST'])
 def apply_prompt():
-    """应用提示词到 AI 人设"""
+    """应用提示词到 AI 人设（仅返回内容，由前端设置到输入框）"""
     try:
         data = request.get_json()
         prompt_content = data.get('content', '')
-        
-        # 更新 config.json 中的 system_prompt
-        from .config_manager import load_config, save_config
-        config = load_config()
-        if 'llm' not in config:
-            config['llm'] = {}
-        config['llm']['system_prompt'] = prompt_content
-        
-        if save_config(config):
-            return jsonify({'success': True, 'message': '提示词已应用到 AI 人设'})
-        return jsonify({'success': False, 'error': '保存失败'}), 500
+
+        # 返回提示词内容，由前端设置到输入框
+        # 不再直接修改 config.json，让用户在 LLM 配置中手动保存
+        return jsonify({'success': True, 'content': prompt_content})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -86,9 +79,9 @@ def apply_prompt():
 
 @market_bp.route('/api/market/plugins', methods=['GET'])
 def get_plugin_market():
-    """获取插件广场列表（从本地 plugin_hub.json 文件）"""
+    """获取插件广场列表（从本地 plugin-house.json 文件）"""
     try:
-        plugin_hub_path = PROJECT_ROOT / 'live-2d' / 'plugins' / 'plugin-house' / 'plugin_hub.json'
+        plugin_hub_path = PROJECT_ROOT / 'plugins' / 'plugin-house' / 'plugin_hub.json'
 
         if not plugin_hub_path.exists():
             return jsonify({
@@ -101,7 +94,7 @@ def get_plugin_market():
 
         # 转换为列表格式，并检测安装状态
         plugins = []
-        community_path = PROJECT_ROOT / 'live-2d' / 'plugins' / 'community'
+        community_path = PROJECT_ROOT / 'plugins' / 'community'
         
         for key, value in plugins_data.items():
             # 检测是否已安装
@@ -146,7 +139,7 @@ def download_plugin():
             return jsonify({'success': False, 'error': '该插件正在安装中'}), 400
 
         # 检查是否已安装
-        community_path = PROJECT_ROOT / 'live-2d' / 'plugins' / 'community'
+        community_path = PROJECT_ROOT / 'plugins' / 'community'
         plugin_dir = community_path / plugin_name
         if plugin_dir.exists() and any(plugin_dir.iterdir()):
             return jsonify({'success': False, 'error': '插件已安装'}), 400
@@ -297,7 +290,7 @@ def get_install_status(plugin_name):
         })
     else:
         # 检查是否已安装完成
-        community_path = PROJECT_ROOT / 'live-2d' / 'plugins' / 'community'
+        community_path = PROJECT_ROOT / 'plugins' / 'community'
         plugin_dir = community_path / plugin_name
         is_installed = plugin_dir.exists() and any(plugin_dir.iterdir())
         
@@ -311,7 +304,7 @@ def get_install_status(plugin_name):
 @market_bp.route('/api/market/plugins/check-installed/<plugin_name>', methods=['GET'])
 def check_plugin_installed(plugin_name):
     """检查插件是否已安装（直接检测目录）"""
-    community_path = PROJECT_ROOT / 'live-2d' / 'plugins' / 'community'
+    community_path = PROJECT_ROOT / 'plugins' / 'community'
     plugin_dir = community_path / plugin_name
     
     is_installed = plugin_dir.exists() and any(plugin_dir.iterdir())
@@ -388,7 +381,7 @@ def download_tool():
         save_filename = file_name if file_name else f'{tool_name}.js'
         
         # 下载工具文件到 mcp/tools 目录
-        mcp_tools_path = PROJECT_ROOT / 'live-2d' / 'mcp' / 'tools'
+        mcp_tools_path = PROJECT_ROOT / 'mcp' / 'tools'
         mcp_tools_path.mkdir(parents=True, exist_ok=True)
 
         file_path = mcp_tools_path / save_filename
@@ -497,7 +490,7 @@ def download_fc_tool():
         save_filename = file_name if file_name else f'{tool_name}.js'
         
         # 下载工具文件到 server-tools 目录
-        server_tools_path = PROJECT_ROOT / 'live-2d' / 'server-tools'
+        server_tools_path = PROJECT_ROOT / 'server-tools'
         server_tools_path.mkdir(parents=True, exist_ok=True)
 
         file_path = server_tools_path / save_filename
