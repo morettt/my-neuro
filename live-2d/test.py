@@ -467,8 +467,9 @@ class set_pyqt(QWidget):
         self.voice_clone_process = None  # 新增：声音克隆进程
         self.selected_model_path = None  # 选择的模型文件路径
         self.selected_audio_path = None  # 选择的音频文件路径
-        self.config_path = 'config.json'
-        self.providers_path = 'llm_providers.json'
+        self.app_path = get_app_path()
+        self.config_path = os.path.join(self.app_path, 'config.json')
+        self.providers_path = os.path.join(self.app_path, 'llm_providers.json')
         self.config = self.load_config()
 
         # 日志读取相关
@@ -3218,11 +3219,11 @@ class set_pyqt(QWidget):
         if active_provider is not None:
             self.ui.lineEdit.setText(active_provider.get('api_key', ''))
             self.ui.lineEdit_2.setText(active_provider.get('api_url', ''))
-            self.ui.lineEdit_3.setText(llm_config.get('model_id', llm_config.get('model', '')))
+            self.ui.lineEdit_3.setText(llm_config.get('model_id', ''))
         else:
-            self.ui.lineEdit.setText(llm_config.get('api_key', ''))
-            self.ui.lineEdit_2.setText(llm_config.get('api_url', ''))
-            self.ui.lineEdit_3.setText(llm_config.get('model', llm_config.get('model_id', '')))
+            self.ui.lineEdit.setText('')
+            self.ui.lineEdit_2.setText('')
+            self.ui.lineEdit_3.setText(llm_config.get('model_id', ''))
         self.ui.textEdit_3.setPlainText(llm_config.get('system_prompt', ''))
         self.ui.doubleSpinBox_temperature.setValue(
             llm_config.get('temperature', (active_provider or {}).get('temperature', 1.0))
@@ -3317,11 +3318,11 @@ class set_pyqt(QWidget):
         if vision_provider is not None:
             self.ui.lineEdit_vision_api_key.setText(vision_provider.get('api_key', ''))
             self.ui.lineEdit_vision_api_url.setText(vision_provider.get('api_url', ''))
-            self.ui.lineEdit_vision_model.setText(vision_config.get('model_id', vision_model_config.get('model', '')))
+            self.ui.lineEdit_vision_model.setText(vision_config.get('model_id', ''))
         else:
-            self.ui.lineEdit_vision_api_key.setText(vision_model_config.get('api_key', ''))
-            self.ui.lineEdit_vision_api_url.setText(vision_model_config.get('api_url', ''))
-            self.ui.lineEdit_vision_model.setText(vision_model_config.get('model', ''))
+            self.ui.lineEdit_vision_api_key.setText('')
+            self.ui.lineEdit_vision_api_url.setText('')
+            self.ui.lineEdit_vision_model.setText(vision_config.get('model_id', ''))
 
 
 
@@ -4483,13 +4484,14 @@ class set_pyqt(QWidget):
                 json.dump(config_to_save, f, ensure_ascii=False, indent=2)
         return config
 
+
     def _has_legacy_provider_data(self, source):
         if not isinstance(source, dict):
             return False
         return any(isinstance(source.get(key), str) and source.get(key).strip() for key in ('api_key', 'api_url'))
 
     def _build_provider_from_legacy(self, source, provider_id, name, temperature=None):
-        model_id = (source.get('model') or '').strip()
+        model_id = (source.get('model_id') or source.get('model') or '').strip()
         provider = {
             'id': provider_id,
             'name': name,
@@ -4521,7 +4523,8 @@ class set_pyqt(QWidget):
         should_save = False
         inline_providers = config.get('llm_providers', [])
         if isinstance(inline_providers, list) and inline_providers:
-            return inline_providers, True
+            merged, should_save = self._normalize_provider_collection(inline_providers)
+            return merged, True
 
         if os.path.exists(self.providers_path):
             try:
@@ -4532,16 +4535,8 @@ class set_pyqt(QWidget):
                 else:
                     providers = data
                 if isinstance(providers, list):
-                    merged = list(providers)
-                    provider_ids = {
-                        p.get('id', '') for p in merged if isinstance(p, dict) and p.get('id', '')
-                    }
-                    for legacy_provider in self._build_legacy_providers(config):
-                        legacy_id = legacy_provider.get('id', '')
-                        if legacy_id and legacy_id not in provider_ids:
-                            merged.append(legacy_provider)
-                            provider_ids.add(legacy_id)
-                            should_save = True
+                    merged, normalized_changed = self._normalize_provider_collection(providers)
+                    should_save = should_save or normalized_changed
                     return merged, should_save
             except Exception:
                 pass
@@ -4577,9 +4572,11 @@ class set_pyqt(QWidget):
         changed = False
 
         llm_cfg = config.setdefault('llm', {})
-        llm_model_id = llm_cfg.get('model_id') or llm_cfg.get('model') or ''
-        if llm_cfg.get('model') != llm_model_id:
-            llm_cfg['model'] = llm_model_id
+        if not llm_cfg.get('model_id') and llm_cfg.get('model'):
+            llm_cfg['model_id'] = llm_cfg.get('model', '')
+            changed = True
+        if 'model' in llm_cfg:
+            del llm_cfg['model']
             changed = True
         if llm_cfg.get('api_key'):
             llm_cfg['api_key'] = ''
@@ -4597,14 +4594,11 @@ class set_pyqt(QWidget):
             vision_cfg['vision_model'] = {}
             changed = True
 
-        if 'llm_providers' in config:
-            del config['llm_providers']
-            changed = True
-
         return changed
 
     def _save_provider_store(self, providers):
-        payload = {'providers': providers if isinstance(providers, list) else []}
+        normalized_providers, _ = self._normalize_provider_collection(providers)
+        payload = {'providers': normalized_providers}
         with open(self.providers_path, 'w', encoding='utf-8') as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
 
@@ -4618,19 +4612,35 @@ class set_pyqt(QWidget):
         return prefix.strip('/')
 
     def _normalize_model_id_for_provider(self, provider, model_id):
-        """将模型 ID 规范化为 provider/model 形式。"""
+        """整理模型 ID，内部始终保留接口原始值。"""
         model_id = (model_id or '').strip()
         if not model_id:
             return ''
-        if '/' in model_id:
-            return model_id
-        prefix = self._get_provider_model_prefix(provider)
-        return f'{prefix}/{model_id}' if prefix else model_id
+
+        prefixes = []
+        if isinstance(provider, dict):
+            provider_name = (provider.get('name') or '').strip().strip('/')
+            provider_id = (provider.get('id') or '').strip().strip('/')
+            if provider_name:
+                prefixes.append(provider_name)
+            if provider_id and provider_id not in prefixes:
+                prefixes.append(provider_id)
+
+        for prefix in prefixes:
+            if model_id.startswith(f'{prefix}/'):
+                return model_id[len(prefix) + 1:]
+
+        api_url = ((provider or {}).get('api_url') or '').strip().lower()
+        if 'dashscope.aliyuncs.com/compatible-mode' in api_url and model_id.count('/') == 1:
+            return model_id.split('/', 1)[1]
+
+        return model_id
 
     def _normalize_model_entry(self, provider, model_entry):
-        """兼容旧配置里只保存裸模型名的情况。"""
+        """兼容旧配置，同时保持 model_id 为接口原始值。"""
         if not isinstance(model_entry, dict):
-            return {'model_id': self._normalize_model_id_for_provider(provider, str(model_entry))}
+            normalized_model_id = self._normalize_model_id_for_provider(provider, str(model_entry))
+            return {'model_id': normalized_model_id, 'name': normalized_model_id}
 
         normalized = dict(model_entry)
         raw_model_id = normalized.get('model_id') or normalized.get('id') or normalized.get('name') or ''
@@ -4643,9 +4653,9 @@ class set_pyqt(QWidget):
         return normalized
 
     def _format_provider_model_display(self, provider, model_id):
-        """统一显示为 提供商/模型ID。"""
+        """统一显示为 提供商/模型ID，但不改写内部 model_id。"""
         prefix = self._get_provider_model_prefix(provider)
-        model_id = (model_id or '').strip()
+        model_id = self._normalize_model_id_for_provider(provider, model_id)
         if not prefix or not model_id:
             return model_id
         if model_id == prefix or model_id.startswith(f'{prefix}/'):
@@ -4663,13 +4673,13 @@ class set_pyqt(QWidget):
 
         llm_provider = provider_by_id.get(llm_cfg.get('provider_id', ''))
         llm_cfg['model_id'] = self._normalize_model_id_for_provider(
-            llm_provider, llm_cfg.get('model_id', llm_cfg.get('model', ''))
+            llm_provider, llm_cfg.get('model_id', '')
         )
 
         vision_provider = provider_by_id.get(vision_cfg.get('provider_id', ''))
         vision_cfg['model_id'] = self._normalize_model_id_for_provider(
             vision_provider,
-            vision_cfg.get('model_id', vision_cfg.get('vision_model', {}).get('model', ''))
+            vision_cfg.get('model_id', '')
         )
 
     def _iter_enabled_models(self, providers):
@@ -4693,11 +4703,9 @@ class set_pyqt(QWidget):
         if current_llm_pair not in enabled_pairs:
             if enabled_pairs:
                 llm_cfg['provider_id'], llm_cfg['model_id'] = enabled_pairs[0]
-                llm_cfg['model'] = llm_cfg['model_id']
             else:
                 llm_cfg['provider_id'] = ''
                 llm_cfg['model_id'] = ''
-                llm_cfg['model'] = ''
 
         vision_cfg = self.config.setdefault('vision', {})
         current_vision_pair = (vision_cfg.get('provider_id', ''), vision_cfg.get('model_id', ''))
@@ -4720,6 +4728,33 @@ class set_pyqt(QWidget):
         else:
             p['models'] = [self._normalize_model_entry(p, m) for m in p.get('models', [])]
         return p
+
+    def _normalize_provider_collection(self, providers):
+        """规范化 provider 列表，并返回是否发生过内容修正。"""
+        normalized_providers = []
+        normalized_changed = False
+
+        if not isinstance(providers, list):
+            return normalized_providers, normalized_changed
+
+        for provider in providers:
+            if not isinstance(provider, dict):
+                continue
+            normalized_provider = json.loads(json.dumps(provider, ensure_ascii=False))
+            before_provider = json.dumps(provider, ensure_ascii=False, sort_keys=True)
+            self._normalize_provider_models(normalized_provider)
+            after_provider = json.dumps(normalized_provider, ensure_ascii=False, sort_keys=True)
+            if before_provider != after_provider:
+                normalized_changed = True
+            normalized_providers.append(normalized_provider)
+
+        return normalized_providers, normalized_changed
+
+    def _providers_have_models(self, providers):
+        for provider in providers or []:
+            if isinstance(provider, dict) and provider.get('models'):
+                return True
+        return False
 
     def _init_provider_list(self):
         '''从 config 加载 providers 到列表，并选中当前使用的 provider'''
@@ -4962,7 +4997,8 @@ class set_pyqt(QWidget):
             table.setRowHeight(row_index, 46)
 
             display = self._format_provider_model_display(provider, mid)
-            model_item = QTableWidgetItem(display)
+            display_text = display if display == mid else f'{display}\n{mid}'
+            model_item = QTableWidgetItem(display_text)
             model_item.setData(Qt.UserRole, mid)
             model_item.setData(Qt.UserRole + 1, enabled)
             model_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
@@ -5071,7 +5107,6 @@ class set_pyqt(QWidget):
         models.remove(removed)
         if removed.get('model_id') == self.config.get('llm', {}).get('model_id', ''):
             self.config.setdefault('llm', {})['model_id'] = ''
-            self.config.setdefault('llm', {})['model'] = ''
         self._ensure_valid_selected_model_refs()
         self._populate_model_combos()
         self._refresh_model_list(models)
@@ -5256,6 +5291,19 @@ class set_pyqt(QWidget):
         self.ui.comboBox_vision_provider.setCurrentIndex(vis_sel)
         self.ui.comboBox_vision_provider.blockSignals(False)
 
+    def _resolve_provider_model_selection(self, combo_box, section_name, current_config):
+        """从下拉框读取 provider/model 引用，缺失时沿用当前配置。"""
+        selected_data = combo_box.currentData() or ''
+        if '|' in selected_data:
+            return selected_data.split('|', 1)
+
+        existing_section = self.config.get(section_name, {})
+        current_section = current_config.get(section_name, {})
+        return (
+            existing_section.get('provider_id', current_section.get('provider_id', '')),
+            existing_section.get('model_id', current_section.get('model_id', ''))
+        )
+
     def _on_llm_model_combo_changed(self, index):
         """用户在“默认对话模型”下拉框切换模型时触发。"""
         data = self.ui.comboBox_llm_provider.itemData(index) or ''
@@ -5265,7 +5313,6 @@ class set_pyqt(QWidget):
         llm_cfg = self.config.setdefault("llm", {})
         llm_cfg["provider_id"] = provider_id
         llm_cfg["model_id"] = model_id
-        llm_cfg["model"] = model_id
         self.ui.lineEdit_3.setText(model_id)
 
     def _on_vision_model_combo_changed(self, index):
@@ -5287,20 +5334,26 @@ class set_pyqt(QWidget):
             return
 
         current_config = self.load_config()
+        disk_providers = json.loads(
+            json.dumps(current_config.get('llm_providers', []), ensure_ascii=False)
+        )
         providers_to_save = []
         if hasattr(self, '_providers'):
             self._sync_current_provider()
             providers_to_save = json.loads(json.dumps(self._providers, ensure_ascii=False))
 
+        if not self._providers_have_models(providers_to_save) and self._providers_have_models(disk_providers):
+            providers_to_save = disk_providers
+
         # 从 comboBox 读取 provider_id / model_id
-        llm_data = self.ui.comboBox_llm_provider.currentData() or ''
-        if '|' in llm_data:
-            llm_provider_id, llm_model_id = llm_data.split('|', 1)
-        else:
-            llm_provider_id, llm_model_id = '', ''
+        llm_provider_id, llm_model_id = self._resolve_provider_model_selection(
+            self.ui.comboBox_llm_provider,
+            'llm',
+            current_config
+        )
         current_config.setdefault('llm', {})['provider_id'] = llm_provider_id
         current_config['llm']['model_id'] = llm_model_id
-        current_config['llm']['model'] = llm_model_id
+        current_config['llm'].pop('model', None)
         current_config['llm']['api_key'] = ''
         current_config['llm']['api_url'] = ''
         current_config['llm']['system_prompt'] = self.ui.textEdit_3.toPlainText()
@@ -5319,11 +5372,11 @@ class set_pyqt(QWidget):
 
         # 视觉模型配置
         current_config['vision']['use_vision_model'] = self.ui.checkBox_use_vision_model.isChecked()
-        vision_data = self.ui.comboBox_vision_provider.currentData() or ''
-        if '|' in vision_data:
-            vision_provider_id, vision_model_id = vision_data.split('|', 1)
-        else:
-            vision_provider_id, vision_model_id = '', ''
+        vision_provider_id, vision_model_id = self._resolve_provider_model_selection(
+            self.ui.comboBox_vision_provider,
+            'vision',
+            current_config
+        )
         current_config['vision']['provider_id'] = vision_provider_id
         current_config['vision']['model_id'] = vision_model_id
         current_config['vision']['vision_model'] = {}
