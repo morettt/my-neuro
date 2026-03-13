@@ -169,17 +169,25 @@ function ensureProviderStore(baseDir, config) {
         storeChanged = true;
     }
 
+    const shouldImportLegacyProviders = (
+        providers.length === 0
+        || (config.llm && (config.llm.provider_id || '').trim() === 'main')
+        || (config.vision && (config.vision.provider_id || '').trim() === 'vision')
+    );
+
     const providerIds = new Set(
         providers
             .filter(provider => provider && provider.id)
             .map(provider => provider.id)
     );
 
-    for (const legacyProvider of buildLegacyProviders(config)) {
-        if (!providerIds.has(legacyProvider.id)) {
-            providers.push(legacyProvider);
-            providerIds.add(legacyProvider.id);
-            storeChanged = true;
+    if (shouldImportLegacyProviders) {
+        for (const legacyProvider of buildLegacyProviders(config)) {
+            if (!providerIds.has(legacyProvider.id)) {
+                providers.push(legacyProvider);
+                providerIds.add(legacyProvider.id);
+                storeChanged = true;
+            }
         }
     }
 
