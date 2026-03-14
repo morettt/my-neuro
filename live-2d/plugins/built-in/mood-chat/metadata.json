@@ -1,0 +1,10 @@
+{
+  "name": "mood-chat",
+  "displayName": "心情对话系统",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "基于心情分数的智能主动对话模块，根据AI当前心情自动发起对话",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

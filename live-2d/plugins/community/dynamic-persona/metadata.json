@@ -1,0 +1,8 @@
+{
+  "name": "dynamic-persona",
+  "displayName": "动态人格",
+  "version": "1.0.0",
+  "author": "community",
+  "description": "根据用户消息和时间动态调整AI当前状态，让回复更有生命力",
+  "main": "index.js"
+}

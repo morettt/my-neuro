@@ -1,0 +1,12 @@
+{
+	"Type": "Live2D Expression",
+	"FadeInTime": 0.3,
+	"FadeOutTime": 0.3,
+	"Parameters": [
+		{
+			"Id": "biaoqing5",
+			"Value": 1,
+			"Blend": "Add"
+		}
+	]
+}

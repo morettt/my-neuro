@@ -1,0 +1,8 @@
+{
+  "interval": {
+    "title": "签到间隔（秒）",
+    "description": "每隔多少秒触发一次自动签到",
+    "type": "int",
+    "default": 20
+  }
+}

@@ -296,13 +296,50 @@ class ToastNotification(QLabel):
             self.opacity_animation.start()
 
 
+class _CloneWorker(QThread):
+    """后台执行 git clone（+ 可选 pip install），结果通过信号回到主线程"""
+    done     = pyqtSignal(bool, str)  # (success, error_message)
+    progress = pyqtSignal(str)        # 进度提示文字
+
+    def __init__(self, repo_url, target_dir):
+        super().__init__()
+        self.repo_url   = repo_url
+        self.target_dir = target_dir
+
+    def run(self):
+        import sys
+        try:
+            result = subprocess.run(
+                ["git", "clone", self.repo_url, self.target_dir],
+                capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=120
+            )
+            if result.returncode != 0:
+                self.done.emit(False, result.stderr.strip())
+                return
+
+            req_path = os.path.join(self.target_dir, 'requirements.txt')
+            if os.path.exists(req_path):
+                self.progress.emit("正在安装依赖...")
+                pip_result = subprocess.run(
+                    [sys.executable, '-m', 'pip', 'install', '-r', req_path],
+                    capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=300
+                )
+                if pip_result.returncode != 0:
+                    self.done.emit(False, f'依赖安装失败:\n{pip_result.stderr.strip()}')
+                    return
+
+            self.done.emit(True, "")
+        except Exception as ex:
+            self.done.emit(False, str(ex))
+
+
 class CustomTitleBar(QWidget):
     """自定义标题栏"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedHeight(55)
+        self.setFixedHeight(65)
         self.setStyleSheet("""
            CustomTitleBar {
                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(235, 233, 225, 255), stop:1 rgba(230, 228, 220, 255));
@@ -322,7 +359,7 @@ class CustomTitleBar(QWidget):
         self.title_label.setStyleSheet("""
            QLabel {
                color: rgb(114, 95, 77);
-               font-size: 12px;
+               font-size: 24px;
                font-family: "Microsoft YaHei";
                font-weight: bold;
                background-color: transparent;
@@ -337,9 +374,9 @@ class CustomTitleBar(QWidget):
            QPushButton {
                background-color: transparent;
                border: none;
-               width: 45px;
-               height: 40px;
-               font-size: 14px;
+               width: 55px;
+               height: 50px;
+               font-size: 22px;
                font-weight: bold;
                color: rgb(114, 95, 77);
            }
@@ -354,9 +391,9 @@ class CustomTitleBar(QWidget):
            QPushButton {
                background-color: transparent;
                border: none;
-               width: 45px;
-               height: 40px;
-               font-size: 14px;
+               width: 55px;
+               height: 50px;
+               font-size: 22px;
                font-weight: bold;
                color: rgb(114, 95, 77);
            }
@@ -428,7 +465,6 @@ class set_pyqt(QWidget):
         self.bert_process = None  # 新增：BERT进程
         self.rag_process = None  # 新增：RAG进程
         self.voice_clone_process = None  # 新增：声音克隆进程
-        self.minecraft_terminal_process = None  # 新增：Minecraft终端进程
         self.selected_model_path = None  # 选择的模型文件路径
         self.selected_audio_path = None  # 选择的音频文件路径
         self.config_path = 'config.json'
@@ -455,6 +491,14 @@ class set_pyqt(QWidget):
         self.resize_start_pos = None
         self.resize_start_geometry = None
         self.edge_margin = 10
+
+        # 字体缩放相关
+        self._base_size = None
+        self._base_font_entries = []   # [(widget, base_point_size), ...]
+        self._current_scale = 1.0
+        self._resize_debounce = QTimer()
+        self._resize_debounce.setSingleShot(True)
+        self._resize_debounce.timeout.connect(self._apply_font_scale)
 
         # 新增分页变量
         self.current_page = 0
@@ -483,7 +527,9 @@ class set_pyqt(QWidget):
         self.dragged_action = None
         # 备份原始配置
         self.original_config = None
+        self.original_config1 = None
         self.backup_original_config()
+        self.backup_original_config1()
 
     def init_ui(self):
         # 设置无边框
@@ -530,6 +576,8 @@ class set_pyqt(QWidget):
 
         # 添加自定义标题栏
         self.title_bar = CustomTitleBar(self)
+        version = self.config.get('version', '')
+        self.title_bar.title_label.setText(f'My-Neuro  {version}' if version else 'My-Neuro')
         container_layout.addWidget(self.title_bar)
 
         # 添加原始UI
@@ -586,9 +634,16 @@ class set_pyqt(QWidget):
 
         # 设置动画控制按钮
         self.setup_motion_buttons()
+        # 在现有动画控制按钮设置后添加表情按钮设置
+        self.setup_expression_buttons()
+        # 立即创建动画页面UI
+        self.create_expression_buttons_on_animation_page() 
 
         # 启动心情分定时器
         self.mood_timer.start()
+
+        # 延迟捕获基准字体（等待所有控件渲染完毕）
+        QTimer.singleShot(300, self._capture_base_fonts)
 
     def closeEvent(self, event):
         """处理窗口关闭事件"""
@@ -610,7 +665,6 @@ class set_pyqt(QWidget):
                 self.stop_rag()
                 self.stop_voice_tts()
                 self.stop_terminal()
-                self.stop_minecraft_terminal()
 
                 print("所有服务已关闭")
             else:
@@ -868,18 +922,18 @@ class set_pyqt(QWidget):
             self.toast.show_message(f"生成失败：{str(e)}", 3000)
             self.ui.label_bat_status.setText("生成失败")
 
+
     def setup_motion_buttons(self):
-        """设置动画控制按钮 - 统一使用底层触发"""
-        # 注意: "唱歌"和"停止"必须是 emotion_actions.json 中定义过的情绪名称
-        # 如果您没有定义，可以改成 "开心" "生气" 等已有的情绪
-        self.ui.start_singing_btn.clicked.connect(lambda: self.trigger_emotion_motion("唱歌"))
-        self.ui.stop_singing_btn.clicked.connect(lambda: self.trigger_emotion_motion("停止"))
 
         # 加载动作配置
         self.load_motion_config()
 
-        # 创建动态动作按钮
-        self.create_dynamic_motion_buttons()
+    def setup_expression_buttons(self):
+        """设置表情控制按钮"""
+    # 加载表情配置
+        self.load_expression_config()
+    # 创建动态表情按钮
+        self.create_dynamic_expression_buttons()
 
     def load_motion_config(self):
         try:
@@ -904,6 +958,69 @@ class set_pyqt(QWidget):
             print(f"加载动作配置失败: {e}")
             self.motion_config = {}
 
+
+    def load_expression_config(self):
+        """加载表情配置"""
+        try:
+            app_path = get_app_path()
+            config_path = os.path.join(app_path, 'emotion_expressions.json')
+            print(f"尝试加载配置文件: {config_path}")
+            with open(config_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            print(f"表情JSON文件中的角色列表: {list(data.keys())}")
+            
+            # 获取当前角色名称
+            current_character = self.get_current_character_name()
+            print(f"当前角色: '{current_character}'")
+            
+            # 加载对应角色的配置
+            if current_character in data:
+                self.expression_config = data[current_character].get('emotion_expressions', {})
+                print(f"成功加载角色 '{current_character}' 的表情配置，共 {len(self.expression_config)} 个表情")
+                
+                # # 检查配置中的表情命名，确保是中文
+                # self.ensure_expression_names_in_chinese()
+            else:
+                print(f"未找到角色 '{current_character}' 的表情配置，创建新配置")
+                print(f"可用角色: {list(data.keys())}")
+                self.expression_config = {}         
+        except Exception as e:
+            print(f"加载表情配置失败: {e}")
+            self.expression_config = {}
+
+
+    def scan_all_expressions_from_2d(self):
+        """扫描2D文件夹下所有角色的表情文件"""
+        try:
+            app_path = get_app_path()
+            two_d_path = os.path.join(app_path, "2D")
+            
+            if not os.path.exists(two_d_path):
+                print(f"2D文件夹不存在: {two_d_path}")
+                return []
+            
+            all_expressions = []
+            
+            # 遍历所有角色文件夹
+            for character_folder in os.listdir(two_d_path):
+                character_path = os.path.join(two_d_path, character_folder)
+                if os.path.isdir(character_path):
+                    # 检查是否有expressions文件夹
+                    expressions_dir = os.path.join(character_path, "expressions")
+                    if os.path.exists(expressions_dir):
+                        for file in os.listdir(expressions_dir):
+                            if file.endswith('.exp3.json'):
+                                # 去掉扩展名作为表情名称
+                                expression_name = file[:-10]  # 移除 .exp3.json
+                                all_expressions.append(expression_name)
+                                print(f"找到表情: {expression_name} (角色: {character_folder})")
+            
+            return all_expressions
+            
+        except Exception as e:
+            print(f"扫描2D文件夹失败: {e}")
+            return []  
+
     def get_current_character_name(self):
         # 直接从main.js读取当前设置的模型优先级
         try:
@@ -920,6 +1037,7 @@ class set_pyqt(QWidget):
                 current_character = match.group(1)
                 print(f"从main.js获取实际使用的角色: {current_character}")
                 return current_character
+
 
         except Exception as e:
             print(f"读取main.js失败: {e}")
@@ -973,6 +1091,25 @@ class set_pyqt(QWidget):
             print(f"加载备份配置失败: {e}")
             self.character_backups = {}
 
+    def backup_original_config1(self):
+        """检查并加载分角色备份配置"""
+        try:
+            app_path = get_app_path()
+            character_backup_path = os.path.join(app_path, 'character_backups1.json')
+           
+            # 加载分角色备份配置
+            if os.path.exists(character_backup_path):
+                with open(character_backup_path, 'r', encoding='utf-8') as f:
+                    self.character_backups1 = json.load(f)
+                    print("已加载分角色备份配置")
+            else:
+                self.character_backups1 = {}
+                print("未找到分角色备份文件，将在需要时创建")
+
+        except Exception as e:
+            print(f"加载备份配置失败: {e}")
+            self.character_backups1 = {}
+
     def migrate_old_backup_format(self, old_backup_path, new_backup_path):
         """将旧格式的备份文件迁移到新格式"""
         try:
@@ -1001,86 +1138,636 @@ class set_pyqt(QWidget):
         except Exception as e:
             print(f"迁移旧备份文件失败: {e}")
 
+    def scan_expression_files(self):
+        """扫描expressions文件夹中的表情文件"""
+        try:
+            app_path = get_app_path()
+            # 获取当前角色
+            current_character = self.get_current_character_name()
+            expressions_dir = os.path.join(app_path, "2D", current_character, "expressions")
+            
+            expression_files = []
+            if os.path.exists(expressions_dir):
+                for file in os.listdir(expressions_dir):
+                    if file.endswith('.exp3.json'):
+                        # 去掉扩展名作为表情名称
+                        expression_name = file[:-10]  # 移除 .exp3.json
+                        # 将 expression1, expression2 转换为 表情1, 表情2
+                        if expression_name.startswith("expression"):
+                            try:
+                                # 提取数字
+                                num = expression_name.replace("expression", "")
+                                if num.isdigit():
+                                    expression_name = f"表情{num}"
+                            except:
+                                pass
+                        expression_files.append(expression_name)
+            
+            return expression_files
+        except Exception as e:
+            print(f"扫描表情文件失败: {e}")
+            return []        
+        
+
+
     def create_dynamic_motion_buttons(self):
-        """创建拖拽分类界面"""
-        page_layout = self.ui.page_6.layout()
-        if not page_layout:
-            # 如果没有布局，创建一个新的垂直布局
-            page_layout = QVBoxLayout(self.ui.page_6)
-            self.ui.page_6.setLayout(page_layout)
+        """创建动画页面 - 包含表情按钮和动作分类"""
+        # 直接调用已存在的函数，这个函数已经集成了表情按钮
+        self.create_expression_buttons_on_animation_page()
 
-        # 创建拖拽分类容器
-        drag_drop_widget = QWidget()
-        drag_drop_layout = QVBoxLayout(drag_drop_widget)
+    def create_dynamic_expression_buttons(self):
+        """创建表情按钮（直接调用完整函数）"""
+        self.create_expression_buttons_on_animation_page()
 
-        # 添加控制按钮区域
-        control_layout = QHBoxLayout()
 
-        # 一键复位按钮
-        reset_button = QPushButton("🔄 一键复位")
-        reset_button.setObjectName("stopButton")  # 使用停止按钮的样式
-        reset_button.clicked.connect(self.reset_current_character)
-        control_layout.addWidget(reset_button)
-
-        # 添加弹性空间，让标签推到右边
-        control_layout.addStretch()
-
-        # 将情绪分类标签添加到同一行
-        emotion_label = QLabel("情绪分类区域（拖拽动作到这里进行分类）")
-        emotion_label.setObjectName("subTitle")
-        control_layout.addWidget(emotion_label)
-
-        drag_drop_layout.addLayout(control_layout)
-
+    def create_expression_buttons_on_animation_page(self):
+        """创建表情与动作页面 - 三部分布局"""
+        
+        # 获取动画页面的布局
+        page_6_layout = self.ui.page_6.layout()
+        if not page_6_layout:
+            page_6_layout = QVBoxLayout(self.ui.page_6)
+            self.ui.page_6.setLayout(page_6_layout)
+        
+        # 清空现有内容
+        while page_6_layout.count():
+            item = page_6_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                # 递归删除布局中的所有控件
+                while item.layout().count():
+                    child = item.layout().takeAt(0)
+                    if child.widget():
+                        child.widget().deleteLater()
+                    elif child.layout():
+                        self.delete_layout(child.layout())
+        
+        # 创建主滚动区域
+        scroll_area = QScrollArea()
+        scroll_widget = QWidget()
+        main_layout = QVBoxLayout(scroll_widget)
+        scroll_area.setWidget(scroll_widget)
+        scroll_area.setWidgetResizable(True)
+        
+        # === 第一部分：唱歌控制区域（固定在最上面）===
+        singing_section = QWidget()
+        singing_section.setFixedHeight(150)
+        singing_layout = QVBoxLayout(singing_section)
+        
+        singing_label = QLabel("🎵 唱歌控制")
+        singing_label.setObjectName("subTitle")
+        singing_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        singing_layout.addWidget(singing_label)
+        
+        singing_buttons_layout = QHBoxLayout()
+        start_singing_btn = QPushButton("🎵 开始唱歌")
+        start_singing_btn.setObjectName("start_singing_btn")
+        start_singing_btn.clicked.connect(lambda: self.trigger_emotion_motion("唱歌"))
+        
+        stop_singing_btn = QPushButton("🛑 停止唱歌")
+        stop_singing_btn.setObjectName("stop_singing_btn")
+        stop_singing_btn.clicked.connect(lambda: self.trigger_emotion_motion("停止"))
+        
+        singing_buttons_layout.addWidget(start_singing_btn)
+        singing_buttons_layout.addWidget(stop_singing_btn)
+        singing_layout.addLayout(singing_buttons_layout)
+        
+        # 添加固定分隔线
+        separator1 = QFrame()
+        separator1.setFrameShape(QFrame.HLine)
+        separator1.setFrameShadow(QFrame.Sunken)
+        separator1.setStyleSheet("background-color: #ccc; margin: 10px 0;")
+        separator1.setFixedHeight(2)
+        singing_layout.addWidget(separator1)
+        
+        main_layout.addWidget(singing_section)
+        
+        # === 第二部分：表情区块 ===
+        expression_section = QWidget()
+        expression_layout = QVBoxLayout(expression_section)
+        
+        expression_label = QLabel("😊 表情控制")
+        expression_label.setObjectName("subTitle")
+        expression_label.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 10px;")
+        expression_layout.addWidget(expression_label)
+        
+        # 表情一键还原按钮
+        expression_reset_btn = QPushButton("🔄 一键还原表情")
+        expression_reset_btn.setObjectName("stopButton")
+        # expression_reset_btn.clicked.connect(self.reset_expression_config)
+        expression_reset_btn.clicked.connect(self.reset_current_character1)
+        expression_layout.addWidget(expression_reset_btn, alignment=Qt.AlignRight)
+        
+        # 表情情绪绑定区域说明
+        binding_label = QLabel("情绪表情绑定区域（拖拽下方表情按钮到对应区域）")
+        binding_label.setObjectName("subTitle")
+        binding_label.setStyleSheet("font-size: 12px; color: #666; margin-top: 5px;")
+        expression_layout.addWidget(binding_label)
+        
+        # 创建情绪表情绑定区域（6种情绪）
+        emotion_expression_frame = QFrame()
+        emotion_expression_frame.setStyleSheet("""
+            QFrame {
+                border: 2px solid #9370DB;
+                border-radius: 10px;
+                padding: 10px;
+                background-color: #F8F0FF;
+                margin: 10px 0;
+            }
+        """)
+        emotion_expression_layout = QGridLayout(emotion_expression_frame)
+        
+        # 创建6种情绪绑定区域（不作为按钮，只作为投放区域）
+        emotion_bindings = ["开心", "生气", "难过", "惊讶", "害羞", "俏皮"]
+        for i, emotion in enumerate(emotion_bindings):
+            drop_zone = self.create_emotion_expression_drop_zone(emotion)
+            emotion_expression_layout.addWidget(drop_zone, i // 3, i % 3)
+        
+        expression_layout.addWidget(emotion_expression_frame)
+        
+        # 可拖动表情按钮区域说明
+        buttons_label = QLabel("可拖拽表情按钮（点击预览，拖拽到上方情绪区域绑定）")
+        buttons_label.setObjectName("subTitle")
+        expression_layout.addWidget(buttons_label)
+        
+        # 创建可拖拽的表情按钮区域
+        expression_buttons_frame = QFrame()
+        expression_buttons_frame.setStyleSheet("""
+            QFrame {
+                border: 2px solid #ddd;
+                border-radius: 10px;
+                padding: 10px;
+                background-color: #fff;
+                margin-bottom: 10px;
+            }
+        """)
+        expression_buttons_layout = QGridLayout(expression_buttons_frame)
+        
+        # 创建表情按钮（仅创建表情1-表情7等按钮，不包括情绪分类）
+        self.create_expression_draggable_buttons(expression_buttons_layout)
+        
+        expression_layout.addWidget(expression_buttons_frame)
+        main_layout.addWidget(expression_section)
+        
+        # 添加分隔线
+        separator2 = QFrame()
+        separator2.setFrameShape(QFrame.HLine)
+        separator2.setFrameShadow(QFrame.Sunken)
+        separator2.setStyleSheet("background-color: #ccc; margin: 10px 0;")
+        separator2.setFixedHeight(2)
+        main_layout.addWidget(separator2)
+        
+        # === 第三部分：动作区块 ===
+        motion_section = QWidget()
+        motion_layout = QVBoxLayout(motion_section)
+        
+        motion_label = QLabel("🎬 动作控制")
+        motion_label.setObjectName("subTitle")
+        motion_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        motion_layout.addWidget(motion_label)
+        
+        # 动作一键还原按钮
+        motion_reset_btn = QPushButton("🔄 一键还原动作")
+        motion_reset_btn.setObjectName("stopButton")
+        motion_reset_btn.clicked.connect(self.reset_current_character)
+        motion_layout.addWidget(motion_reset_btn, alignment=Qt.AlignRight)
+        
         # 情绪分类区域
         emotion_frame = QFrame()
-        emotion_frame.setStyleSheet("QFrame { border: 2px solid #ccc; border-radius: 10px; padding: 10px; }")
+        emotion_frame.setStyleSheet("""
+            QFrame {
+                border: 2px solid #ccc;
+                border-radius: 10px;
+                padding: 10px;
+                background-color: #f9f9f9;
+                margin: 10px 0;
+            }
+        """)
         emotion_layout = QGridLayout(emotion_frame)
-
-        # 创建情绪分类容器
+        
+        # 创建动作情绪分类容器
         empty_emotions = ["开心", "生气", "难过", "惊讶", "害羞", "俏皮"]
         for i, emotion in enumerate(empty_emotions):
             drop_zone = self.create_drop_zone(emotion)
             emotion_layout.addWidget(drop_zone, i // 3, i % 3)
-
-        drag_drop_layout.addWidget(emotion_frame)
-
+        
+        motion_layout.addWidget(emotion_frame)
+        
         # 未分类动作区域
         action_label = QLabel("未分类动作（点击预览，拖拽到上方分类）")
         action_label.setObjectName("subTitle")
-        drag_drop_layout.addWidget(action_label)
-
+        motion_layout.addWidget(action_label)
+        
         action_frame = QFrame()
-        action_frame.setStyleSheet("QFrame { border: 2px solid #ddd; border-radius: 10px; padding: 10px; }")
-        # action_frame.setMinimumHeight(300)  # 添加这行，设置固定高度
+        action_frame.setStyleSheet("""
+            QFrame {
+                border: 2px solid #ddd;
+                border-radius: 10px;
+                padding: 10px;
+                background-color: #fff;
+            }
+        """)
         action_layout = QGridLayout(action_frame)
-
-        # 创建分页后的动作按钮 - 只创建动作按钮，不创建分页控件
+        
+        # 创建分页后的动作按钮
         self.unclassified_actions_cache = [key for key in self.motion_config.keys()
-                                           if key not in empty_emotions and self.motion_config[key]]
+                                        if key not in empty_emotions and self.motion_config[key]]
         self.create_action_buttons_only(action_layout)
-
-        drag_drop_layout.addWidget(action_frame)
-        drag_drop_layout.setStretch(0,0)
-        drag_drop_layout.setStretch(1, 1)
-        drag_drop_layout.setStretch(2, 0)
-        drag_drop_layout.setStretch(3, 2)
-
-
-        # 在框外独立创建分页控件
+        
+        motion_layout.addWidget(action_frame)
+        
+        # 分页控件
         if len(self.unclassified_actions_cache) > self.items_per_page:
-            self.create_standalone_pagination(drag_drop_layout)
+            self.create_standalone_pagination(motion_layout)
+        
+        main_layout.addWidget(motion_section)
+        main_layout.addStretch()
+        
+        # 设置到页面
+        page_6_layout.addWidget(scroll_area)
 
-        # 插入到页面布局的第1个位置
-        page_layout.insertWidget(1, drag_drop_widget)
+    def create_emotion_expression_drop_zone(self, emotion_name):
+        """创建情绪表情投放区域（不作为按钮，只作为投放区域）"""
+        drop_zone = QLabel()
+        drop_zone.setMinimumSize(200, 120)
+        drop_zone.setAlignment(Qt.AlignCenter)
+        drop_zone.setWordWrap(True)
+        drop_zone.setAcceptDrops(True)
+        drop_zone.emotion_name = emotion_name
+        
+        # 更新显示
+        self.update_emotion_expression_drop_zone_display(drop_zone, emotion_name)
+        
+        # 拖拽事件
+        def dragEnterEvent(event):
+            if event.mimeData().hasText() and event.mimeData().text().startswith("EXPRESSION:"):
+                event.acceptProposedAction()
+        
+        def dropEvent(event):
+            mime_text = event.mimeData().text()
+            if mime_text.startswith("EXPRESSION:"):
+                expression_name = mime_text.replace("EXPRESSION:", "")
+                self.move_expression_to_emotion(expression_name, emotion_name)
+                event.acceptProposedAction()
+            else:
+                event.ignore()
+        
+        drop_zone.dragEnterEvent = dragEnterEvent
+        drop_zone.dropEvent = dropEvent
+        
+        return drop_zone    
+
+    def update_emotion_expression_drop_zone_display(self, drop_zone, emotion_name):
+        """更新情绪表情投放区域的显示"""
+        # 确保表情配置已加载
+        if not hasattr(self, 'expression_config'):
+            self.load_expression_config()
+        
+        # 检查是否有绑定的表情文件
+        has_expressions = False
+        expression_files = []
+        
+        if self.expression_config and emotion_name in self.expression_config:
+            expression_files = self.expression_config[emotion_name]
+            if expression_files and len(expression_files) > 0:
+                has_expressions = True
+        
+        if has_expressions:
+            # 有绑定的表情文件
+            count = len(expression_files)
+            
+            # 提取表情名称
+            expression_names = []
+            for expr_file in expression_files:
+                if isinstance(expr_file, str):
+                    # 从路径中提取表情名称
+                    filename = expr_file.split('/')[-1].replace('.exp3.json', '')
+                    # 转换为中文显示
+                    if filename.startswith("expression"):
+                        try:
+                            num = filename.replace("expression", "")
+                            if num.isdigit():
+                                filename = f"表情{num}"
+                        except:
+                            pass
+                    expression_names.append(filename)
+            
+            if len(expression_names) <= 2:
+                display_text = f"{emotion_name}\n({count}个表情)\n{', '.join(expression_names)}"
+            else:
+                display_text = f"{emotion_name}\n({count}个表情)\n{', '.join(expression_names[:2])}..."
+            
+            drop_zone.setStyleSheet("""
+                QLabel {
+                    border: 2px solid #9370DB;
+                    border-radius: 8px;
+                    background-color: #F0E6FF;
+                    font-size: 13px;
+                    color: #4B0082;
+                    padding: 5px;
+                    font-weight: bold;
+                }
+                QLabel:hover {
+                    border-color: #8A2BE2;
+                    background-color: #E6E6FA;
+                }
+            """)
+        else:
+            # 没有绑定的表情文件
+            display_text = f"{emotion_name}\n(拖拽表情到此绑定)"
+            drop_zone.setStyleSheet("""
+                QLabel {
+                    border: 2px dashed #aaa;
+                    border-radius: 8px;
+                    background-color: #f5f5f5;
+                    font-size: 14px;
+                    color: #666;
+                    padding: 5px;
+                }
+                QLabel:hover {
+                    border-color: #9370DB;
+                    background-color: #F0E6FF;
+                }
+            """)
+        
+        drop_zone.setText(display_text)
+
+    
+
+    def create_expression_draggable_buttons(self, layout):
+        """创建可拖拽的表情按钮（仅表情按钮，不包括情绪分类）"""
+        # 清空布局
+        for i in reversed(range(layout.count())):
+            item = layout.itemAt(i)
+            if item and item.widget():
+                item.widget().deleteLater()
+        
+        # 确保表情配置已加载
+        if not hasattr(self, 'expression_config') or not self.expression_config:
+            self.load_expression_config()
+            if not hasattr(self, 'expression_config') or not self.expression_config:
+                # 如果没有表情，显示提示
+                no_expr_label = QLabel("未找到表情文件")
+                no_expr_label.setAlignment(Qt.AlignCenter)
+                no_expr_label.setStyleSheet("color: #666; font-size: 12px; padding: 20px;")
+                layout.addWidget(no_expr_label)
+                return
+        
+        # 获取表情按钮列表（排除情绪分类）
+        expression_buttons = []
+        emotion_categories = ["开心", "生气", "难过", "惊讶", "害羞", "俏皮"]
+        
+        for key in self.expression_config.keys():
+            # 只显示表情按钮（表情1、表情2等），不显示情绪分类
+            if key not in emotion_categories and key != "默认表情":
+                # 检查是否是表情按钮（以"表情"开头或以"expression"开头）
+                if key.startswith("表情") or key.startswith("expression"):
+                    expression_buttons.append(key)
+        
+        print(f"可拖拽的表情按钮: {expression_buttons}")
+        
+        if not expression_buttons:
+            # 如果没有表情按钮，显示提示
+            no_expr_label = QLabel("未找到可用的表情按钮")
+            no_expr_label.setAlignment(Qt.AlignCenter)
+            no_expr_label.setStyleSheet("color: #666; font-size: 12px; padding: 20px;")
+            layout.addWidget(no_expr_label)
+            return
+        
+        # 创建表情按钮
+        for i, expression_name in enumerate(expression_buttons):
+            btn = self.create_single_expression_button(expression_name)
+            row = i // 4
+            col = i % 4
+            layout.addWidget(btn, row, col)
+
+    def create_single_expression_button(self, expression_name):
+        """创建单个表情按钮"""
+        btn = QPushButton(f"{expression_name}")
+        btn.setObjectName("expressionButton")
+        btn.setMinimumSize(150, 60)
+        btn.setMaximumSize(200, 80)
+        btn.expression_name = expression_name
+        
+        # 设置样式（与动作按钮相同）
+        btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 rgba(255, 218, 185, 255), 
+                    stop:1 rgba(255, 192, 203, 255));
+                color: rgb(139, 69, 19);
+                border: 1px solid #ffb6c1;
+                border-radius: 8px;
+                padding: 10px 15px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 rgba(255, 192, 203, 255), 
+                    stop:1 rgba(255, 182, 193, 255));
+                color: rgb(178, 34, 34);
+                border-color: #ff69b4;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
+                    stop:0 rgba(255, 182, 193, 255), 
+                    stop:1 rgba(255, 160, 122, 255));
+            }
+        """)
+        
+        # 点击预览表情
+        btn.clicked.connect(lambda checked, name=expression_name: self.trigger_expression(name))
+        
+        # 拖拽功能
+        btn.mousePressEvent = self.create_expression_mouse_press_event(btn)
+        btn.mouseMoveEvent = self.create_expression_mouse_move_event(btn)
+        btn.mouseReleaseEvent = self.create_expression_mouse_release_event(btn)
+        
+        return btn
+
+    def create_expression_mouse_press_event(self, btn):
+        """创建表情按钮的鼠标按下事件"""
+        def mousePressEvent(event):
+            if event.button() == Qt.LeftButton:
+                btn.drag_start_position = event.pos()
+            QPushButton.mousePressEvent(btn, event)
+        return mousePressEvent
+
+    def create_expression_mouse_move_event(self, btn):
+        """创建表情按钮的鼠标移动事件"""
+        def mouseMoveEvent(event):
+            if (event.buttons() == Qt.LeftButton and 
+                hasattr(btn, 'drag_start_position') and
+                btn.drag_start_position and
+                (event.pos() - btn.drag_start_position).manhattanLength() > 20):
+                
+                drag = QDrag(btn)
+                mimeData = QMimeData()
+                mimeData.setText(f"EXPRESSION:{btn.expression_name}")
+                drag.setMimeData(mimeData)
+                drag.exec_(Qt.MoveAction)
+            else:
+                QPushButton.mouseMoveEvent(btn, event)
+        return mouseMoveEvent
+
+    def create_expression_mouse_release_event(self, btn):
+        """创建表情按钮的鼠标释放事件"""
+        def mouseReleaseEvent(event):
+            if event.button() == Qt.LeftButton:
+                btn.drag_start_position = None
+            QPushButton.mouseReleaseEvent(btn, event)
+        return mouseReleaseEvent    
 
 
-        # 为拖拽区域设置拉伸因子为1（可拉伸）
-        page_layout.setStretch(0,0)
-        page_layout.setStretch(1, 1)
+    def move_expression_to_emotion(self, expression_name, emotion_name):
+        """将表情按钮绑定到指定情绪分类"""
+       
+        if expression_name in self.expression_config:
+            # 获取表情文件路径
+            expression_files = self.expression_config[expression_name]
+            
+            # 追加到目标情绪分类（不是覆盖）
+            if emotion_name in self.expression_config:
+                # 如果目标情绪已有动作，追加到现有列表
+                if isinstance(self.expression_config[emotion_name], list):
+                    self.expression_config[emotion_name].extend(expression_files)
+                else:
+                    self.expression_config[emotion_name] = expression_files
+            else:
+                # 如果目标情绪还没有动作，直接赋值
+                self.expression_config[emotion_name] = expression_files
+
+            self.save_expression_config()
+            # 刷新界面
+            self.refresh_expression_interface()
+            self.toast.show_message(f"已将 {expression_name} 追加到 {emotion_name}", 2000)    
+
+   
+
+    def save_expression_config(self):
+        """保存表情配置"""
+        try:
+            app_path = get_app_path()
+            config_path = os.path.join(app_path, 'emotion_expressions.json')
+            
+            # 读取完整配置
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    all_data = json.load(f)
+            else:
+                all_data = {}
+            
+            # 更新当前角色的配置
+            current_character = self.get_current_character_name()
+            if current_character not in all_data:
+                all_data[current_character] = {"emotion_expressions": {}}
+        
+            
+            all_data[current_character]["emotion_expressions"] = self.expression_config
+
+            # 保存回文件
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(all_data, f, ensure_ascii=False, indent=2)
+                
+        except Exception as e:
+            print(f"保存表情配置失败: {e}")
+            
+
+    def refresh_expression_interface(self):
+        """刷新表情界面"""
+
+        # 保存当前滚动位置
+        scroll_position = self.save_scroll_position()
+
+        # 重新加载表情配置
+        self.load_expression_config()
+        
+        # 重新创建表情页面
+        self.create_expression_buttons_on_animation_page()
+
+        # 恢复滚动位置
+        self.restore_scroll_position(scroll_position)
+
+    def scan_and_reload_expressions(self):
+        """扫描并重新加载表情"""
+        try:
+            # 扫描表情文件
+            expression_files = self.scan_expression_files()
+            
+            if not expression_files:
+                self.toast.show_message("未找到任何 .exp3.json 文件", 3000)
+                return
+            
+            self.toast.show_message(f"找到 {len(expression_files)} 个表情文件", 2000)
+            
+            # 重新加载表情配置
+            self.load_expression_config()
+            
+            # 刷新界面
+            self.refresh_drag_drop_interface()
+            
+        except Exception as e:
+            self.toast.show_message(f"扫描失败: {str(e)}", 3000)
+            print(f"扫描表情失败: {e}") 
 
 
+    def save_scroll_position(self):
+        """保存当前滚动区域的位置"""
+        try:
+            # 查找 page_6 中的滚动区域
+            scroll_area = self.find_scroll_area(self.ui.page_6)
+            if scroll_area:
+                return {
+                    'has_scroll': True,
+                    'value': scroll_area.verticalScrollBar().value()
+                }
+        except Exception as e:
+            print(f"保存滚动位置失败: {e}")
+        
+        return {'has_scroll': False}
 
+    def restore_scroll_position(self, scroll_position):
+        """恢复滚动区域的位置"""
+        if not scroll_position or not scroll_position.get('has_scroll'):
+            return
+        
+        try:
+            # 延迟恢复滚动位置，等待界面完全渲染
+            QTimer.singleShot(0, lambda: self.do_restore_scroll(scroll_position))
+        except Exception as e:
+            print(f"恢复滚动位置失败: {e}")
+
+    def do_restore_scroll(self, scroll_position):
+        """实际执行滚动位置恢复"""
+        try:
+            scroll_area = self.find_scroll_area(self.ui.page_6)
+            if scroll_area:
+                scroll_bar = scroll_area.verticalScrollBar()
+                target_value = scroll_position.get('value', 0)
+                # 确保目标值在有效范围内
+                max_value = scroll_bar.maximum()
+                if target_value > max_value:
+                    target_value = max_value
+                scroll_bar.setValue(target_value)
+                print(f"恢复滚动位置到: {target_value}")
+        except Exception as e:
+            print(f"执行滚动恢复失败: {e}")
+
+    def find_scroll_area(self, widget):
+        """递归查找 QScrollArea"""
+        if isinstance(widget, QScrollArea):
+            return widget
+        
+        for child in widget.children():
+            if isinstance(child, QScrollArea):
+                return child
+            result = self.find_scroll_area(child)
+            if result:
+                return result
+        
+        return None
 
     def create_action_buttons_only(self, action_layout):
         """只创建动作按钮，不创建分页控件"""
@@ -1357,9 +2044,59 @@ class set_pyqt(QWidget):
         except Exception as e:
             self.toast.show_message(f"复位失败：{str(e)}", 3000)
 
+    def reset_current_character1(self):
+        """复位当前选中的角色到原版配置"""
+        try:
+            # 获取当前角色名称
+            current_character = self.get_current_character_name()
+            if not current_character:
+                self.toast.show_message("无法获取当前角色信息", 3000)
+                return
+
+            # 检查角色是否有备份
+            if current_character not in self.character_backups1:
+                self.toast.show_message(f"角色 {current_character} 没有备份配置", 3000)
+                return
+
+            # 加载当前完整配置
+            app_path = get_app_path()
+            config_path = os.path.join(app_path, 'emotion_expressions.json')
+
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    all_config = json.load(f)
+            else:
+                self.toast.show_message("配置文件不存在", 3000)
+                return
+
+            # 只复位当前角色的配置
+            original_config = self.character_backups1[current_character]["original_config1"]
+            all_config[current_character] = original_config
+
+            # 保存更新后的配置
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(all_config, f, ensure_ascii=False, indent=2)
+
+            # 重新加载配置
+            self.load_expression_config()
+
+            
+            
+            # 刷新界面
+            self.refresh_expression_interface()
+
+            self.toast.show_message(f"已复位当前皮套到原版配置", 2000)
+
+        except Exception as e:
+            self.toast.show_message(f"复位失败：{str(e)}", 3000)
+
 
     def refresh_drag_drop_interface(self):
         """刷新拖拽界面"""
+
+        # 保存当前滚动位置
+        scroll_position = self.save_scroll_position()
+
         # 保持当前页码不变，除非超出范围
         unclassified_keys = [key for key in self.motion_config.keys()
                              if key not in ["开心", "生气", "难过", "惊讶", "害羞", "俏皮"]
@@ -1395,6 +2132,9 @@ class set_pyqt(QWidget):
                 item.layout().deleteLater()
 
         self.create_dynamic_motion_buttons()
+
+        # 恢复滚动位置
+        self.restore_scroll_position(scroll_position)
 
     def delete_layout(self, layout):
         """递归删除布局中的所有控件和子布局"""
@@ -1451,6 +2191,52 @@ class set_pyqt(QWidget):
         except Exception as e:
             error_message = f"动作触发失败: 发生未知错误 - {str(e)}"
             print(f"触发动作时发生未知错误: {e}")
+            self.toast.show_message(error_message, 3000)
+
+
+    def trigger_expression(self, expression_name):
+        """触发表情播放"""
+        if not (self.live2d_process and self.live2d_process.poll() is None):
+            self.toast.show_message("桌宠未启动，无法触发表情", 2000)
+            return
+        
+        print(f"准备通过HTTP发送表情指令: {expression_name}")
+        
+        # 转换为中文显示名称
+        display_name = expression_name
+        if expression_name.startswith("expression"):
+            try:
+                num = expression_name.replace("expression", "")
+                if num.isdigit():
+                    display_name = f"表情{num}"
+            except:
+                pass
+        
+        try:
+            # 构建HTTP请求
+            data = json.dumps({
+                "action": "trigger_expression",
+                "expression_name": expression_name  # 发送原始名称
+            }).encode('utf-8')
+            
+            req = urllib.request.Request(
+                'http://localhost:3002/control-expression',
+                data=data,
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            with urllib.request.urlopen(req, timeout=2) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                if result.get('success'):
+                    self.toast.show_message(f"已触发表情: {display_name}", 1500)
+                else:
+                    self.toast.show_message(f"表情触发失败: {result.get('message', '未知错误')}", 2000)
+                    
+        except urllib.error.URLError as e:
+            error_message = "表情触发失败: 无法连接到桌宠的命令接收器"
+            self.toast.show_message(error_message, 3000)
+        except Exception as e:
+            error_message = f"表情触发失败: {str(e)}"
             self.toast.show_message(error_message, 3000)
 
     def read_live2d_logs(self):
@@ -1759,6 +2545,17 @@ class set_pyqt(QWidget):
         # 这些方法保留，但主要逻辑在eventFilter中
         super().mouseReleaseEvent(event)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self._base_size:
+            self._resize_debounce.start(80)  # 80ms 防抖，避免拖拽时频繁刷新
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        # 最大化 ↔ 还原切换时 resizeEvent 在 Windows 上不总触发，这里兜底
+        if event.type() == QEvent.WindowStateChange and self._base_size:
+            self._resize_debounce.start(150)
+
     def do_resize(self, global_pos):
         """执行窗口调整大小"""
         if not self.resize_start_pos or not self.resize_start_geometry:
@@ -1837,17 +2634,16 @@ class set_pyqt(QWidget):
     def set_btu(self):
         self.ui.pushButton.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(1))
         self.ui.pushButton_3.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(0))
-        self.ui.pushButton_2.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(5))  # 直播改成5
         self.ui.pushButton_5.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(2))
-        self.ui.pushButton_6.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(3))
-        self.ui.pushButton_animation.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(4))  # 动画改成4
-        self.ui.pushButton_terminal.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(7))
-        self.ui.pushButton_game.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(9))
-        self.ui.pushButton_voice_clone.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(6))  # 声音克隆页面
-        self.ui.pushButton_ui_settings.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(11))  # UI设置页面
-        self.ui.pushButton_tools.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(10))  # 工具屋页面
-        self.ui.pushButton_cloud_config.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(12))  # 云端配置页面
-        self.ui.pushButton_prompt_market.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(13))  # 提示词广场页面
+        self.ui.pushButton_animation.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(3))  # 动画
+        self.ui.pushButton_terminal.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(6))
+        self.ui.pushButton_voice_clone.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(5))  # 声音克隆页面
+        self.ui.pushButton_ui_settings.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(9))  # UI设置页面
+        self.ui.pushButton_tools.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(8))  # 工具屋页面
+        self.ui.pushButton_cloud_config.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(10))  # 云端配置页面
+        self.ui.pushButton_prompt_market.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(11))  # 提示词广场页面
+        self.setup_plugins_page()
+        self.ui.pushButton_plugins.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(self._plugins_page_index))
         self.ui.pushButton_chat_history.clicked.connect(self.open_chat_history)  # 对话记录页面
         self.ui.saveConfigButton.clicked.connect(self.save_config)
         # 复位皮套位置按钮
@@ -1871,9 +2667,6 @@ class set_pyqt(QWidget):
         self.ui.pushButton_select_model.clicked.connect(self.select_model_file)
         self.ui.pushButton_select_audio.clicked.connect(self.select_audio_file)
         self.ui.pushButton_tutorial.clicked.connect(self.show_tutorial)
-
-        # 添加Minecraft游戏终端按钮绑定
-        self.ui.pushButton_start_minecraft_terminal.clicked.connect(self.start_minecraft_terminal)
 
         self.ui.pushButton_back_to_home.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(0))
 
@@ -1901,9 +2694,6 @@ class set_pyqt(QWidget):
 
         # 云端肥牛网页导航按钮
         self.ui.pushButton_gateway_website.clicked.connect(self.open_gateway_website)
-
-        # 加载Minecraft配置到UI
-        self.load_minecraft_config()
 
         # 初始化桌宠切换按钮样式（默认为"启动"状态）
         self.update_toggle_button_style(False)
@@ -2398,38 +3188,22 @@ class set_pyqt(QWidget):
         self.ui.doubleSpinBox_temperature.setValue(self.config['llm'].get('temperature', 1.0))
         self.ui.lineEdit_4.setText(self.config['ui']['intro_text'])
         self.ui.lineEdit_5.setText(str(self.config['context']['max_messages']))
-        self.ui.lineEdit_idle_time.setText(str(self.config['auto_chat']['idle_time']))
-        self.ui.textEdit_prompt.setPlainText(self.config['auto_chat']['prompt'])
-        self.ui.lineEdit_6.setText(str(self.config['bilibili']['roomId']))
         self.ui.checkBox_mcp.setChecked(self.config.get('tools', {}).get('enabled', True))
         self.ui.checkBox_mcp_enable.setChecked(self.config.get('mcp', {}).get('enabled', True))
         self.ui.checkBox_5.setChecked(self.config['vision']['auto_screenshot'])
         self.ui.checkBox_3.setChecked(self.config['ui']['show_chat_box'])
         self.ui.checkBox_4.setChecked(self.config['context']['enable_limit'])
-        self.ui.checkBox.setChecked(self.config['auto_chat']['enabled'])
-        self.ui.checkBox_2.setChecked(self.config['bilibili']['enabled'])
-        # 新增：动态主动对话配置
-        self.ui.checkBox_mood_chat_enabled.setChecked(self.config.get('mood_chat', {}).get('enabled', True))
-        self.ui.textEdit_mood_chat_prompt.setPlainText(self.config.get('mood_chat', {}).get('prompt', ''))
         # 新增ASR和TTS配置
         self.ui.checkBox_asr.setChecked(self.config['asr']['enabled'])
         self.ui.checkBox_tts.setChecked(self.config['tts']['enabled'])
         self.ui.checkBox_persistent_history.setChecked(self.config['context']['persistent_history'])
         self.ui.checkBox_voice_barge_in.setChecked(self.config['asr']['voice_barge_in'])
-        self.ui.checkBox_game_minecraft.setChecked(self.config['game']['Minecraft']['enabled'])
 
         # 新增：设置TTS语言下拉框
         tts_language = self.ui.comboBox_tts_language.currentText().split(' - ')[0]
         index = self.ui.comboBox_tts_language.findText(tts_language)
         if index >= 0:
             self.ui.comboBox_tts_language.setCurrentIndex(index)
-
-        # 新增：设置翻译配置
-        self.ui.checkBox_translation_enabled.setChecked(self.config['translation']['enabled'])
-        self.ui.lineEdit_translation_api_key.setText(self.config['translation']['api_key'])
-        self.ui.lineEdit_translation_api_url.setText(self.config['translation']['api_url'])
-        self.ui.lineEdit_translation_model.setText(self.config['translation']['model'])
-        self.ui.textEdit_translation_prompt.setPlainText(self.config['translation']['system_prompt'])
 
         # 新增：设置UI设置配置
         subtitle_labels = self.config.get('subtitle_labels', {})
@@ -2467,6 +3241,13 @@ class set_pyqt(QWidget):
             self.ui.comboBox_cloud_tts_format.setCurrentIndex(format_index)
         self.ui.doubleSpinBox_cloud_tts_speed.setValue(cloud_tts.get('speed', 1.0))
 
+        # 阿里云TTS配置
+        aliyun_tts = cloud_config.get('aliyun_tts', {})
+        self.ui.checkBox_aliyun_tts_enabled.setChecked(aliyun_tts.get('enabled', False))
+        self.ui.lineEdit_aliyun_tts_api_key.setText(aliyun_tts.get('api_key', ''))
+        self.ui.lineEdit_aliyun_tts_model.setText(aliyun_tts.get('model', 'cosyvoice-v3-flash'))
+        self.ui.lineEdit_aliyun_tts_voice.setText(aliyun_tts.get('voice', ''))
+
         # 百度流式ASR配置
         baidu_asr = cloud_config.get('baidu_asr', {})
         self.ui.checkBox_cloud_asr_enabled.setChecked(baidu_asr.get('enabled', False))
@@ -2481,13 +3262,6 @@ class set_pyqt(QWidget):
         self.ui.lineEdit_gateway_base_url.setText(api_gateway.get('base_url', ''))
         self.ui.lineEdit_gateway_api_key.setText(api_gateway.get('api_key', ''))
 
-        # 新增：设置总结压缩配置
-        compression_config = self.config.get('context', {}).get('compression', {})
-        self.ui.checkBox_compression_enabled.setChecked(compression_config.get('enabled', False))
-        self.ui.lineEdit_compression_trigger.setText(str(compression_config.get('trigger_threshold', 15)))
-        self.ui.lineEdit_compression_keep.setText(str(compression_config.get('keep_recent', 2)))
-        self.ui.textEdit_compression_prompt.setPlainText(compression_config.get('prompt', '请将以下历史对话总结为简洁的要点，保留关键信息和上下文。要求：1. 总结为200字以内的关键要点 2. 保留重要的人名、事件、决定等 3. 使用简洁的语言 4. 只输出总结内容，不要额外说明'))
-
         # 新增：设置辅助视觉模型配置
         vision_config = self.config.get('vision', {})
         self.ui.checkBox_use_vision_model.setChecked(vision_config.get('use_vision_model', True))
@@ -2496,15 +3270,829 @@ class set_pyqt(QWidget):
         self.ui.lineEdit_vision_api_url.setText(vision_model_config.get('api_url', ''))
         self.ui.lineEdit_vision_model.setText(vision_model_config.get('model', ''))
 
-        # 新增：设置AI日记配置
-        ai_diary_config = self.config.get('ai_diary', {})
-        self.ui.checkBox_diary_enabled.setChecked(ai_diary_config.get('enabled', False))
-        self.ui.lineEdit_diary_idle_time.setText(str(ai_diary_config.get('idle_time', 20000)))
-        self.ui.lineEdit_diary_file.setText(ai_diary_config.get('diary_file', 'AI记录室/AI日记.txt'))
-        self.ui.textEdit_diary_prompt.setPlainText(ai_diary_config.get('prompt', '请以fake neuro（肥牛）的身份，基于今天的对话记录写一篇简短的日记。'))
 
-        # 新增：设置Memos记忆配置（从独立的memos_config.json读取）
-        self.load_memos_config()
+
+    # ===== 插件配置文件读写 =====
+
+    def _plugin_config_path(self, plugin_type, plugin_name):
+        app_path = get_app_path()
+        return os.path.join(app_path, 'plugins', plugin_type, plugin_name, 'plugin_config.json')
+
+    def _load_plugin_file_config(self, plugin_type, plugin_name):
+        path = self._plugin_config_path(plugin_type, plugin_name)
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    def _save_plugin_file_config(self, plugin_type, plugin_name, cfg):
+        path = self._plugin_config_path(plugin_type, plugin_name)
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            QMessageBox.warning(self, '保存失败', f'插件配置保存失败: {e}')
+
+    # ===== enabled_plugins.json 读写 =====
+
+    def _enabled_plugins_path(self):
+        return os.path.join(get_app_path(), 'plugins', 'enabled_plugins.json')
+
+    def _load_enabled_plugins(self):
+        path = self._enabled_plugins_path()
+        if not os.path.exists(path):
+            return set()
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return set(data.get('plugins', []))
+        except Exception:
+            return set()
+
+    def _save_enabled_plugins(self, enabled_set):
+        path = self._enabled_plugins_path()
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump({'plugins': sorted(enabled_set)}, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            QMessageBox.warning(self, '保存失败', f'enabled_plugins.json 写入失败: {e}')
+
+    def _resolve_plugin_schema(self, raw):
+        """将 schema 格式的 plugin_config 解析为 {key: value} 平铺字典"""
+        result = {}
+        for key, field_def in raw.items():
+            if isinstance(field_def, dict) and 'type' in field_def:
+                if field_def['type'] == 'object' and 'fields' in field_def:
+                    result[key] = self._resolve_plugin_schema(field_def['fields'])
+                else:
+                    result[key] = field_def.get('value', field_def.get('default'))
+            else:
+                result[key] = field_def
+        return result
+
+    def _set_schema_value(self, raw, key, value):
+        """将值写入 schema 条目的 value 字段（兼容旧格式）"""
+        if isinstance(raw.get(key), dict) and 'type' in raw[key]:
+            raw[key]['value'] = value
+        else:
+            raw[key] = value
+
+    # ===== 插件管理页 =====
+
+    def setup_plugins_page(self):
+        app_path = get_app_path()
+        self._plugin_infos = []
+        self._plugin_tab_layouts = {}
+        self._plugin_tab_dirs    = {}
+
+        # --- 列表页：对齐提示词广场布局风格 ---
+        list_page = QWidget()
+        outer = QVBoxLayout(list_page)
+        outer.setContentsMargins(20, 20, 20, 20)
+        outer.setSpacing(15)
+
+        tab_widget = QTabWidget()
+        tab_widget.setFont(self._ui_font())
+        outer.addWidget(tab_widget)
+
+        for plugin_type, base_dir, tab_title in [
+            ('built-in',  os.path.join(app_path, 'plugins', 'built-in'),  '内置插件'),
+            ('community', os.path.join(app_path, 'plugins', 'community'), '社区插件'),
+        ]:
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.NoFrame)
+            scroll.setStyleSheet('QScrollArea { border: none; background-color: transparent; }')
+            content = QWidget()
+            content.setStyleSheet('background-color: transparent;')
+            layout = QVBoxLayout(content)
+            layout.setContentsMargins(0, 10, 0, 10)
+            layout.setSpacing(15)
+
+            if os.path.isdir(base_dir):
+                for entry in sorted(os.listdir(base_dir)):
+                    plugin_dir = os.path.join(base_dir, entry)
+                    meta_path  = os.path.join(plugin_dir, 'metadata.json')
+                    cfg_path   = os.path.join(plugin_dir, 'plugin_config.json')
+                    if not os.path.isdir(plugin_dir) or not os.path.exists(meta_path):
+                        continue
+                    try:
+                        with open(meta_path, 'r', encoding='utf-8') as f:
+                            meta = json.load(f)
+                    except Exception:
+                        continue
+                    cfg = {}
+                    if os.path.exists(cfg_path):
+                        try:
+                            with open(cfg_path, 'r', encoding='utf-8') as f:
+                                cfg = json.load(f)
+                        except Exception:
+                            pass
+                    info = {'meta': meta, 'cfg': cfg, 'cfg_path': cfg_path,
+                            'plugin_type': plugin_type, 'plugin_name': entry}
+                    self._plugin_infos.append(info)
+                    self._build_plugin_row(info, layout)
+
+            layout.addStretch()
+            scroll.setWidget(content)
+            tab_widget.addTab(scroll, tab_title)
+
+            self._plugin_tab_layouts[plugin_type] = layout
+            self._plugin_tab_dirs[plugin_type]    = base_dir
+
+        self._plugin_watcher = QFileSystemWatcher()
+        for _watch_dir in self._plugin_tab_dirs.values():
+            if os.path.isdir(_watch_dir):
+                self._plugin_watcher.addPath(_watch_dir)
+        self._plugin_watcher.directoryChanged.connect(self._on_plugin_dir_changed)
+
+        # --- 插件广场标签 ---
+        market_tab = QWidget()
+        market_tab.setStyleSheet('background-color: transparent;')
+        market_vbox = QVBoxLayout(market_tab)
+        market_vbox.setContentsMargins(0, 10, 0, 0)
+        market_vbox.setSpacing(10)
+
+        # 刷新按钮
+        refresh_btn = QPushButton('🔄 刷新列表')
+        refresh_btn.setFont(self._ui_font(10, bold=True))
+        refresh_btn.setMinimumHeight(36)
+        refresh_btn.setStyleSheet("""
+            QPushButton { background-color: #27ae60; color: white; border-radius: 8px; border: none; padding: 6px 14px; }
+            QPushButton:hover { background-color: #2ecc71; }
+            QPushButton:pressed { background-color: #1e8449; }
+        """)
+        refresh_btn.clicked.connect(self.refresh_plugin_market)
+        market_vbox.addWidget(refresh_btn)
+
+        # 卡片滚动区
+        market_scroll = QScrollArea()
+        market_scroll.setWidgetResizable(True)
+        market_scroll.setFrameShape(QFrame.NoFrame)
+        market_scroll.setStyleSheet('QScrollArea { border: none; background-color: transparent; }')
+        self._plugin_market_content = QWidget()
+        self._plugin_market_content.setStyleSheet('background-color: transparent;')
+        self._plugin_market_layout = QVBoxLayout(self._plugin_market_content)
+        self._plugin_market_layout.setContentsMargins(0, 0, 0, 0)
+        self._plugin_market_layout.setSpacing(12)
+        # 初始提示
+        hint = QLabel('点击「🔄 刷新列表」加载插件广场')
+        hint.setAlignment(Qt.AlignCenter)
+        hint.setFont(self._ui_font(11))
+        hint.setStyleSheet('color: #aaa; border: none;')
+        self._plugin_market_layout.addWidget(hint)
+        self._plugin_market_layout.addStretch()
+        market_scroll.setWidget(self._plugin_market_content)
+        market_vbox.addWidget(market_scroll)
+
+        tab_widget.addTab(market_tab, '🧩 插件广场')
+
+        self._plugins_page_index = self.ui.stackedWidget.addWidget(list_page)
+
+        # --- 详情页（对齐提示词广场按钮风格）---
+        self._detail_page = QWidget()
+        d = QVBoxLayout(self._detail_page)
+        d.setContentsMargins(20, 20, 20, 20)
+        d.setSpacing(15)
+
+        back_btn = QPushButton('← 返回插件列表')
+        back_btn.setFont(QFont('微软雅黑', 11, QFont.Bold))
+        back_btn.setMinimumHeight(40)
+        back_btn.setStyleSheet("""
+            QPushButton { background-color: #3498db; color: white; border-radius: 8px; padding: 8px; border: none; }
+            QPushButton:hover { background-color: #5dade2; }
+            QPushButton:pressed { background-color: #2874a6; }
+        """)
+        back_btn.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(self._plugins_page_index))
+        d.addWidget(back_btn)
+
+        header_row = QHBoxLayout()
+        self._detail_name_lbl = QLabel()
+        self._detail_name_lbl.setFont(self._ui_font(11, bold=True))
+        header_row.addWidget(self._detail_name_lbl, stretch=1)
+
+        self._detail_readme_btn = QPushButton('📖 此插件教程')
+        self._detail_readme_btn.setFont(self._ui_font(9, bold=True))
+        self._detail_readme_btn.setMinimumHeight(30)
+        self._detail_readme_btn.setStyleSheet(
+            'QPushButton{background:#8e44ad;color:white;border-radius:6px;border:none;padding:4px 12px;}'
+            'QPushButton:hover{background:#9b59b6;}'
+            'QPushButton:pressed{background:#6c3483;}'
+            'QPushButton:checked{background:#6c3483;}'
+        )
+        self._detail_readme_btn.setCheckable(True)
+        self._detail_readme_btn.setVisible(False)
+        self._detail_readme_btn.toggled.connect(self._toggle_plugin_readme)
+        header_row.addWidget(self._detail_readme_btn)
+        d.addLayout(header_row)
+
+        self._detail_desc_lbl = QLabel()
+        self._detail_desc_lbl.setFont(self._ui_font())
+        self._detail_desc_lbl.setWordWrap(True)
+        d.addWidget(self._detail_desc_lbl)
+
+        self._detail_form_scroll = QScrollArea()
+        self._detail_form_scroll.setWidgetResizable(True)
+        self._detail_form_scroll.setFrameShape(QFrame.NoFrame)
+        self._detail_form_scroll.setStyleSheet('QScrollArea { border: none; background-color: transparent; }')
+        d.addWidget(self._detail_form_scroll)
+        self._detail_form_layout = None
+
+        self._plugins_detail_index = self.ui.stackedWidget.addWidget(self._detail_page)
+        self._detail_edits = {}
+        self._detail_current_info = None
+
+    def _capture_base_fonts(self):
+        """记录当前所有子控件的字体大小，作为缩放基准"""
+        self._base_size = (self.width(), self.height())
+        self._base_font_entries = []
+        for w in self.findChildren(QWidget):
+            pt = w.font().pointSize()
+            if pt > 0:
+                self._base_font_entries.append((w, pt))
+
+    def _apply_font_scale(self):
+        """按当前窗口尺寸缩放所有已捕获控件的字体"""
+        if not self._base_size:
+            return
+        bw, bh = self._base_size
+        self._current_scale = min(self.width() / bw, self.height() / bh)
+        alive = []
+        for w, base_pt in self._base_font_entries:
+            try:
+                f = w.font()
+                f.setPointSize(max(7, round(base_pt * self._current_scale)))
+                w.setFont(f)
+                alive.append((w, base_pt))
+            except RuntimeError:
+                pass  # 控件已被销毁，跳过
+        self._base_font_entries = alive
+
+    def _ui_font(self, size=10, bold=False):
+        f = self.font()
+        f.setFamily('微软雅黑')
+        f.setPointSize(max(7, round(size * self._current_scale)))
+        f.setBold(bold)
+        return f
+
+    def _build_plugin_row(self, info, parent_layout):
+        meta         = info['meta']
+        cfg          = info['cfg']
+        plugin_type  = info['plugin_type']
+        plugin_name  = info['plugin_name']
+        extra_keys   = list(cfg.keys())
+
+        display_name = meta.get('displayName', meta.get('name', ''))
+        desc         = meta.get('description', '')
+
+        # 白色卡片容器，和提示词广场风格一致
+        card = QWidget()
+        card.setStyleSheet("""
+            QWidget {
+                background-color: white;
+                border-radius: 8px;
+                border: 1px solid #e0e0e0;
+            }
+        """)
+
+        card_layout = QHBoxLayout(card)
+        card_layout.setContentsMargins(15, 12, 15, 12)
+        card_layout.setSpacing(15)
+
+        # 左：插件名称 + 描述
+        summary_text = f'<b>{display_name}</b>'
+        if desc:
+            summary_text += f'  <span style="color: #777; font-size: 9pt;">{desc}</span>'
+        title_lbl = QLabel(summary_text)
+        title_lbl.setFont(QFont('微软雅黑', 10))
+        title_lbl.setStyleSheet('color: #2c3e50; border: none; background: transparent;')
+        title_lbl.setWordWrap(True)
+        card_layout.addWidget(title_lbl, stretch=1)
+
+        # 右：开关 checkbox（读取 enabled_plugins.json）+ 可选配置按钮
+        rel_path = f'{plugin_type}/{plugin_name}'
+        enabled_set = self._load_enabled_plugins()
+        chk = QCheckBox('启用')
+        chk.setFont(self._ui_font())
+        chk.setChecked(rel_path in enabled_set)
+        chk.stateChanged.connect(lambda state, pt=plugin_type, pn=plugin_name: self._on_plugin_enabled_changed(pt, pn, state))
+        card_layout.addWidget(chk)
+        if extra_keys:
+            btn = QPushButton('配置')
+            btn.setFont(self._ui_font())
+            btn.setMinimumSize(60, 30)
+            btn.clicked.connect(lambda checked=False, i=info: self._open_plugin_detail(i))
+            card_layout.addWidget(btn)
+
+        parent_layout.addWidget(card)
+
+    def _toggle_plugin_readme(self, checked):
+        if checked:
+            # 显示 README
+            if not self._detail_current_readme:
+                return
+            try:
+                with open(self._detail_current_readme, 'r', encoding='utf-8') as f:
+                    md_text = f.read()
+            except Exception as e:
+                self._detail_readme_btn.setChecked(False)
+                return
+            browser = QTextBrowser()
+            browser.setOpenExternalLinks(True)
+            browser.setHtml(self._md_to_html(md_text))
+            browser.setStyleSheet('QTextBrowser{background:#fff;border:none;}')
+            self._detail_form_scroll.setWidget(browser)
+            self._detail_readme_btn.setText('⚙ 返回配置')
+        else:
+            # 恢复配置表单
+            self._detail_readme_btn.setText('📖 此插件教程')
+            if self._detail_current_info:
+                self._rebuild_detail_form(self._detail_current_info['cfg'])
+
+    def _rebuild_detail_form(self, cfg):
+        form_widget = QWidget()
+        form_widget.setStyleSheet('background-color: transparent;')
+        self._detail_form_layout = QVBoxLayout(form_widget)
+        self._detail_form_layout.setSpacing(12)
+        self._detail_form_layout.setContentsMargins(0, 0, 0, 0)
+        self._detail_edits = {}
+        for key, field_def in cfg.items():
+            if not isinstance(field_def, dict) or 'type' not in field_def:
+                self._add_detail_field(key, key, '', 'string', field_def)
+                continue
+            field_type = field_def.get('type', 'string')
+            if field_type == 'object' and 'fields' in field_def:
+                section_lbl = QLabel(f'── {field_def.get("title", key)} ──')
+                section_lbl.setFont(self._ui_font(bold=True))
+                section_lbl.setStyleSheet('color:#555;border:none;background:transparent;')
+                self._detail_form_layout.addWidget(section_lbl)
+                if field_def.get('description'):
+                    hint = QLabel(field_def['description'])
+                    hint.setFont(self._ui_font(9))
+                    hint.setStyleSheet('color:#999;border:none;background:transparent;')
+                    hint.setWordWrap(True)
+                    self._detail_form_layout.addWidget(hint)
+                for sub_key, sub_def in field_def['fields'].items():
+                    if not isinstance(sub_def, dict) or 'type' not in sub_def:
+                        continue
+                    cur_val = sub_def.get('value', sub_def.get('default'))
+                    self._add_detail_field(f'{key}.{sub_key}',
+                                           sub_def.get('title', sub_key),
+                                           sub_def.get('description', ''),
+                                           sub_def.get('type', 'string'), cur_val)
+            else:
+                cur_val = field_def.get('value', field_def.get('default'))
+                self._add_detail_field(key, field_def.get('title', key),
+                                       field_def.get('description', ''),
+                                       field_type, cur_val)
+        self._detail_form_layout.addStretch()
+        self._detail_form_scroll.setWidget(form_widget)
+
+    def _show_plugin_readme(self, readme_path, plugin_name):
+        """弹出对话框展示插件 README.md（支持基础 Markdown 渲染）"""
+        try:
+            with open(readme_path, 'r', encoding='utf-8') as f:
+                md_text = f.read()
+        except Exception as e:
+            QMessageBox.warning(self, '读取失败', str(e))
+            return
+
+        html = self._md_to_html(md_text)
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f'{plugin_name} - 教程')
+        dlg.resize(720, 560)
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        browser = QTextBrowser()
+        browser.setOpenExternalLinks(True)
+        browser.setHtml(html)
+        browser.setStyleSheet('QTextBrowser { background: #fff; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }')
+        layout.addWidget(browser)
+
+        close_btn = QPushButton('关闭')
+        close_btn.setMinimumHeight(36)
+        close_btn.clicked.connect(dlg.accept)
+        layout.addWidget(close_btn)
+
+        dlg.exec_()
+
+    def _md_to_html(self, text):
+        """Markdown → 带样式 HTML，优先用 markdown 库，否则用内置转换"""
+        try:
+            import markdown
+            body = markdown.markdown(
+                text,
+                extensions=['fenced_code', 'tables', 'nl2br', 'sane_lists']
+            )
+        except ImportError:
+            import re as _re, html as _html
+            t = _html.escape(text)
+            # 代码块（```...```）
+            def code_block(m):
+                return f'<pre style="background:#f6f8fa;padding:12px;border-radius:6px;overflow-x:auto;font-family:Consolas,monospace;font-size:12px;">{m.group(1)}</pre>'
+            t = _re.sub(r'```[^\n]*\n(.*?)```', code_block, t, flags=_re.DOTALL)
+            # 标题
+            t = _re.sub(r'^### (.+)$', lambda m: f'<h3 style="color:#1a252f;font-size:15px;margin:14px 0 6px;border-bottom:1px solid #eee;padding-bottom:4px;">{m.group(1)}</h3>', t, flags=_re.MULTILINE)
+            t = _re.sub(r'^## (.+)$',  lambda m: f'<h2 style="color:#1a252f;font-size:18px;margin:16px 0 8px;border-bottom:2px solid #eee;padding-bottom:6px;">{m.group(1)}</h2>', t, flags=_re.MULTILINE)
+            t = _re.sub(r'^# (.+)$',   lambda m: f'<h1 style="color:#1a252f;font-size:22px;margin:18px 0 10px;border-bottom:3px solid #3498db;padding-bottom:8px;">{m.group(1)}</h1>', t, flags=_re.MULTILINE)
+            # 加粗 / 斜体
+            t = _re.sub(r'\*\*(.+?)\*\*', lambda m: f'<strong>{m.group(1)}</strong>', t)
+            t = _re.sub(r'\*(.+?)\*',     lambda m: f'<em>{m.group(1)}</em>', t)
+            # 行内代码
+            t = _re.sub(r'`(.+?)`', lambda m: f'<code style="background:#f0f0f0;padding:2px 5px;border-radius:3px;font-family:Consolas,monospace;font-size:12px;">{m.group(1)}</code>', t)
+            # 链接
+            t = _re.sub(r'\[([^\]]+)\]\(([^)]+)\)', lambda m: f'<a href="{m.group(2)}" style="color:#2980b9;">{m.group(1)}</a>', t)
+            # 列表项
+            t = _re.sub(r'^[-*] (.+)$', lambda m: f'<li style="margin:4px 0;">{m.group(1)}</li>', t, flags=_re.MULTILINE)
+            t = _re.sub(r'(<li.*</li>)', r'<ul style="padding-left:20px;margin:8px 0;">\1</ul>', t, flags=_re.DOTALL)
+            # 分割线
+            t = _re.sub(r'^---+$', '<hr style="border:none;border-top:1px solid #ddd;margin:16px 0;">', t, flags=_re.MULTILINE)
+            # 换行
+            t = t.replace('\n', '<br>')
+            body = t
+
+        return (
+            '<!DOCTYPE html><html><head><meta charset="utf-8">'
+            '<style>'
+            'body{font-family:"Microsoft YaHei",sans-serif;font-size:13px;line-height:1.8;color:#2c3e50;padding:16px;}'
+            'h1{color:#1a252f;font-size:22px;border-bottom:3px solid #3498db;padding-bottom:8px;margin:18px 0 10px;}'
+            'h2{color:#1a252f;font-size:18px;border-bottom:2px solid #eee;padding-bottom:6px;margin:16px 0 8px;}'
+            'h3{color:#1a252f;font-size:15px;border-bottom:1px solid #eee;padding-bottom:4px;margin:14px 0 6px;}'
+            'code{background:#f0f0f0;padding:2px 5px;border-radius:3px;font-family:Consolas,monospace;font-size:12px;}'
+            'pre{background:#f6f8fa;padding:12px;border-radius:6px;overflow-x:auto;border:1px solid #e1e4e8;}'
+            'pre code{background:none;padding:0;}'
+            'a{color:#2980b9;text-decoration:none;}'
+            'a:hover{text-decoration:underline;}'
+            'blockquote{border-left:4px solid #3498db;margin:12px 0;padding:8px 16px;background:#f8f9fa;color:#555;}'
+            'table{border-collapse:collapse;width:100%;margin:12px 0;}'
+            'th,td{border:1px solid #ddd;padding:8px 12px;text-align:left;}'
+            'th{background:#f0f0f0;font-weight:bold;}'
+            'tr:nth-child(even){background:#f9f9f9;}'
+            'hr{border:none;border-top:1px solid #ddd;margin:16px 0;}'
+            'ul,ol{padding-left:24px;margin:8px 0;}'
+            'li{margin:4px 0;}'
+            'img{max-width:100%;border-radius:4px;}'
+            '</style></head>'
+            f'<body>{body}</body></html>'
+        )
+
+    def _open_plugin_detail(self, info):
+        """切换到详情页并刷新内容（支持 schema 格式）"""
+        self._detail_current_info = info
+        meta = info['meta']
+        cfg  = info['cfg']
+
+        self._detail_name_lbl.setText(meta.get('displayName', meta.get('name', '')))
+        desc = meta.get('description', '')
+        self._detail_desc_lbl.setText(desc)
+        self._detail_desc_lbl.setVisible(bool(desc))
+
+        # 教程按钮：有 README.md 才显示，重置为未激活状态
+        readme_path = os.path.join(get_app_path(), 'plugins',
+                                   info['plugin_type'], info['plugin_name'], 'README.md')
+        self._detail_current_readme = readme_path if os.path.exists(readme_path) else None
+        self._detail_readme_btn.setVisible(self._detail_current_readme is not None)
+        self._detail_readme_btn.setChecked(False)
+
+        # 每次创建全新的内容 widget，setWidget 会自动销毁旧的
+        form_widget = QWidget()
+        form_widget.setStyleSheet('background-color: transparent;')
+        self._detail_form_layout = QVBoxLayout(form_widget)
+        self._detail_form_layout.setSpacing(12)
+        self._detail_form_layout.setContentsMargins(0, 0, 0, 0)
+        self._detail_edits = {}
+
+        for key, field_def in cfg.items():
+            if not isinstance(field_def, dict) or 'type' not in field_def:
+                self._add_detail_field(key, key, '', 'string', field_def)
+                continue
+
+            field_type = field_def.get('type', 'string')
+
+            if field_type == 'object' and 'fields' in field_def:
+                section_lbl = QLabel(f'── {field_def.get("title", key)} ──')
+                section_lbl.setFont(self._ui_font(bold=True))
+                section_lbl.setStyleSheet('color: #555; border: none; background: transparent;')
+                self._detail_form_layout.addWidget(section_lbl)
+                if field_def.get('description'):
+                    hint = QLabel(field_def['description'])
+                    hint.setFont(self._ui_font(9))
+                    hint.setStyleSheet('color: #999; border: none; background: transparent;')
+                    hint.setWordWrap(True)
+                    self._detail_form_layout.addWidget(hint)
+                for sub_key, sub_def in field_def['fields'].items():
+                    if not isinstance(sub_def, dict) or 'type' not in sub_def:
+                        continue
+                    cur_val = sub_def.get('value', sub_def.get('default'))
+                    self._add_detail_field(f'{key}.{sub_key}',
+                                           sub_def.get('title', sub_key),
+                                           sub_def.get('description', ''),
+                                           sub_def.get('type', 'string'),
+                                           cur_val)
+            else:
+                cur_val = field_def.get('value', field_def.get('default'))
+                self._add_detail_field(key,
+                                       field_def.get('title', key),
+                                       field_def.get('description', ''),
+                                       field_type,
+                                       cur_val)
+
+        self._detail_form_layout.addStretch()
+        self._detail_form_scroll.setWidget(form_widget)
+        self.ui.stackedWidget.setCurrentIndex(self._plugins_detail_index)
+
+    def _add_detail_field(self, edit_key, title, description, field_type, current_value):
+        """在详情页添加一个配置字段"""
+        container = QVBoxLayout()
+        container.setSpacing(3)
+
+        lbl = QLabel(title + '：')
+        lbl.setFont(self._ui_font(bold=True))
+        lbl.setStyleSheet('color: #2c3e50; border: none; background: transparent;')
+        lbl.setWordWrap(True)
+        container.addWidget(lbl)
+
+        if field_type == 'bool':
+            widget = QCheckBox()
+            widget.setChecked(bool(current_value))
+            self._detail_edits[edit_key] = widget
+            container.addWidget(widget)
+        elif field_type == 'text':
+            widget = QTextEdit()
+            widget.setFont(self._ui_font())
+            widget.setPlainText(str(current_value) if current_value is not None else '')
+            widget.setMinimumHeight(80)
+            widget.setMaximumHeight(120)
+            self._detail_edits[edit_key] = widget
+            container.addWidget(widget)
+        else:
+            widget = QLineEdit(str(current_value) if current_value is not None else '')
+            widget.setFont(self._ui_font())
+            self._detail_edits[edit_key] = widget
+            container.addWidget(widget)
+
+        if description:
+            desc_lbl = QLabel(description)
+            desc_lbl.setFont(self._ui_font(9))
+            desc_lbl.setStyleSheet('color: #999; border: none; background: transparent;')
+            desc_lbl.setWordWrap(True)
+            container.addWidget(desc_lbl)
+
+        self._detail_form_layout.addLayout(container)
+
+    def _save_plugin_detail(self):
+        if not self._detail_current_info:
+            return
+        cfg      = self._detail_current_info['cfg']
+        cfg_path = self._detail_current_info['cfg_path']
+
+        for edit_key, widget in self._detail_edits.items():
+            if isinstance(widget, QCheckBox):
+                value = widget.isChecked()
+            elif isinstance(widget, QTextEdit):
+                value = widget.toPlainText()
+            else:
+                value = widget.text()
+
+            if '.' in edit_key:
+                parent_key, child_key = edit_key.split('.', 1)
+                field_def = cfg.get(parent_key, {}).get('fields', {}).get(child_key, {})
+                value = self._cast_value(value, field_def.get('type', 'string'), edit_key)
+                if value is None:
+                    return
+                cfg[parent_key]['fields'][child_key]['value'] = value
+            else:
+                field_def = cfg.get(edit_key, {})
+                if isinstance(field_def, dict) and 'type' in field_def:
+                    if field_def.get('type') != 'bool':
+                        value = self._cast_value(value, field_def.get('type', 'string'), edit_key)
+                        if value is None:
+                            return
+                    cfg[edit_key]['value'] = value
+                else:
+                    cfg[edit_key] = value
+
+        try:
+            with open(cfg_path, 'w', encoding='utf-8') as f:
+                import json
+                json.dump(cfg, f, ensure_ascii=False, indent=2)
+            self.toast.show_message("配置已保存", 1500)
+        except Exception as e:
+            self.toast.show_message(f"保存失败: {e}", 3000)
+
+    def _cast_value(self, value, field_type, key):
+        """根据 type 转换输入值，失败返回 None"""
+        if field_type == 'int':
+            try:
+                return int(value)
+            except ValueError:
+                QMessageBox.warning(self, '格式错误', f'{key} 必须是整数')
+                return None
+        elif field_type == 'float':
+            try:
+                return float(value)
+            except ValueError:
+                QMessageBox.warning(self, '格式错误', f'{key} 必须是数字')
+                return None
+        return value
+
+    def _on_plugin_dir_changed(self, path):
+        """文件系统监听回调：插件目录有变化时刷新对应 tab"""
+        for plugin_type, base_dir in self._plugin_tab_dirs.items():
+            if os.path.normpath(path) == os.path.normpath(base_dir):
+                self._refresh_plugin_tab(plugin_type)
+                break
+
+    def _refresh_plugin_tab(self, plugin_type):
+        """清空并重建指定插件 tab 的卡片列表"""
+        layout  = self._plugin_tab_layouts.get(plugin_type)
+        base_dir = self._plugin_tab_dirs.get(plugin_type)
+        if not layout or not base_dir:
+            return
+
+        # 清除旧卡片
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        # 从 _plugin_infos 中移除该 type 的旧条目
+        self._plugin_infos = [i for i in self._plugin_infos if i['plugin_type'] != plugin_type]
+
+        # 重新扫描并构建卡片
+        if os.path.isdir(base_dir):
+            for entry in sorted(os.listdir(base_dir)):
+                plugin_dir = os.path.join(base_dir, entry)
+                meta_path  = os.path.join(plugin_dir, 'metadata.json')
+                cfg_path   = os.path.join(plugin_dir, 'plugin_config.json')
+                if not os.path.isdir(plugin_dir) or not os.path.exists(meta_path):
+                    continue
+                try:
+                    with open(meta_path, 'r', encoding='utf-8') as f:
+                        meta = json.load(f)
+                except Exception:
+                    continue
+                cfg = {}
+                if os.path.exists(cfg_path):
+                    try:
+                        with open(cfg_path, 'r', encoding='utf-8') as f:
+                            cfg = json.load(f)
+                    except Exception:
+                        pass
+                info = {'meta': meta, 'cfg': cfg, 'cfg_path': cfg_path,
+                        'plugin_type': plugin_type, 'plugin_name': entry}
+                self._plugin_infos.append(info)
+                self._build_plugin_row(info, layout)
+
+        layout.addStretch()
+
+    def _on_plugin_enabled_changed(self, plugin_type, plugin_name, state):
+        rel_path = f'{plugin_type}/{plugin_name}'
+        enabled_set = self._load_enabled_plugins()
+        if state == Qt.Checked:
+            enabled_set.add(rel_path)
+        else:
+            enabled_set.discard(rel_path)
+        self._save_enabled_plugins(enabled_set)
+
+    # ===== 插件广场 =====
+
+    def refresh_plugin_market(self):
+        RAW_URL = "https://raw.githubusercontent.com/morettt/my-neuro/main/live-2d/plugins/plugin-house/plugin_hub.json"
+        print("开始刷新插件广场...")
+        try:
+            resp = requests.get(RAW_URL, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            plugins = [
+                {
+                    "id":           key,
+                    "display_name": info.get("display_name", key),
+                    "desc":         info.get("desc", ""),
+                    "author":       info.get("author", ""),
+                    "repo":         info.get("repo", ""),
+                }
+                for key, info in data.items()
+            ]
+            self._display_plugin_market(plugins)
+            self.toast.show_message(f"插件广场已加载，共 {len(plugins)} 个插件", 2000)
+        except Exception as e:
+            print(f"拉取插件列表失败: {e}")
+            self.toast.show_message(f"获取插件列表失败: {e}", 3000)
+
+    def _display_plugin_market(self, plugins):
+        layout = self._plugin_market_layout
+        while layout.count() > 0:
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        app_path = get_app_path()
+        for plugin in plugins:
+            card = self._build_market_card(plugin, app_path)
+            layout.addWidget(card)
+        layout.addStretch()
+
+    def _build_market_card(self, plugin, app_path):
+        target_dir = os.path.join(app_path, "plugins", "community", plugin["id"])
+        already_installed = os.path.exists(target_dir)
+
+        card = QWidget()
+        card.setStyleSheet("""
+            QWidget { background-color: white; border-radius: 8px; border: 1px solid #e0e0e0; }
+        """)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(14, 12, 14, 12)
+        card_layout.setSpacing(6)
+
+        # 标题行 + 安装按钮
+        title_row = QHBoxLayout()
+        name_lbl = QLabel(f"🧩 <b>{plugin['display_name']}</b>")
+        name_lbl.setFont(self._ui_font(11))
+        name_lbl.setStyleSheet('color: #2c3e50; border: none;')
+        title_row.addWidget(name_lbl, 1)
+
+        install_btn = QPushButton("✓ 已安装" if already_installed else "⬇ 安装")
+        install_btn.setFont(self._ui_font(9, bold=True))
+        install_btn.setMinimumSize(88, 32)
+        install_btn.setEnabled(not already_installed)
+        install_btn.setStyleSheet("""
+            QPushButton { background-color: #27ae60; color: white; border-radius: 7px; border: none; }
+            QPushButton:hover { background-color: #2ecc71; }
+            QPushButton:pressed { background-color: #1e8449; }
+            QPushButton:disabled { background-color: #95a5a6; }
+        """)
+        install_btn.clicked.connect(lambda _, p=plugin, b=install_btn: self._install_plugin(p, b))
+        title_row.addWidget(install_btn)
+        card_layout.addLayout(title_row)
+
+        # 描述
+        if plugin.get("desc"):
+            desc_lbl = QLabel(plugin["desc"])
+            desc_lbl.setFont(self._ui_font(9))
+            desc_lbl.setStyleSheet('color: #555; border: none;')
+            desc_lbl.setWordWrap(True)
+            card_layout.addWidget(desc_lbl)
+
+        # 作者 + 来源
+        meta_row = QHBoxLayout()
+        author_lbl = QLabel(f"👤 {plugin.get('author', '未知')}")
+        author_lbl.setFont(self._ui_font(8))
+        author_lbl.setStyleSheet('color: #888; border: none;')
+        meta_row.addWidget(author_lbl)
+
+        repo = plugin.get("repo", "")
+        if repo:
+            repo_lbl = QLabel(f'<a href="{repo}" style="color:#3498db;">📎 查看来源</a>')
+            repo_lbl.setFont(self._ui_font(8))
+            repo_lbl.setStyleSheet('border: none;')
+            repo_lbl.setOpenExternalLinks(True)
+            meta_row.addWidget(repo_lbl)
+
+        meta_row.addStretch()
+        card_layout.addLayout(meta_row)
+        return card
+
+    def _install_plugin(self, plugin, btn):
+        repo_url  = plugin.get("repo", "")
+        plugin_id = plugin.get("id", "")
+        if not repo_url or not plugin_id:
+            self.toast.show_message("插件信息不完整，无法安装", 3000)
+            return
+
+        target_dir = os.path.join(get_app_path(), "plugins", "community", plugin_id)
+        if os.path.exists(target_dir):
+            self.toast.show_message(f"{plugin['display_name']} 已安装", 2000)
+            return
+
+        btn.setEnabled(False)
+        btn.setText("安装中...")
+        self.toast.show_message(f"正在安装 {plugin['display_name']}...", 2000)
+
+        worker = _CloneWorker(repo_url, target_dir)
+
+        def on_done(success, err):
+            if success:
+                btn.setText("✓ 已安装")
+                self.toast.show_message(f"✓ {plugin['display_name']} 安装成功！", 4000)
+                self._refresh_plugin_tab('community')
+            else:
+                btn.setText("⬇ 安装")
+                btn.setEnabled(True)
+                self.toast.show_message(f"✗ 安装失败: {err}", 4000)
+                print(f"插件安装失败: {err}")
+
+        worker.done.connect(on_done)
+        worker.progress.connect(lambda msg: self.toast.show_message(msg, 10000))
+        worker.start()
+        if not hasattr(self, '_clone_workers'):
+            self._clone_workers = []
+        self._clone_workers.append(worker)
 
     def toggle_live_2d(self):
         """切换桌宠启动/关闭状态"""
@@ -2698,150 +4286,12 @@ class set_pyqt(QWidget):
         with open(self.config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
 
-    def load_minecraft_config(self):
-        """加载Minecraft配置文件"""
-        try:
-            app_path = get_app_path()
-            andy_config_path = os.path.join(app_path, 'GAME', 'Minecraft', 'andy.json')
-            keys_config_path = os.path.join(app_path, 'GAME', 'Minecraft', 'keys.json')
-
-            # 加载andy.json配置
-            if os.path.exists(andy_config_path):
-                with open(andy_config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-
-                # 将配置加载到UI控件中
-                self.ui.lineEdit_minecraft_name.setText(config.get('name', ''))
-                self.ui.lineEdit_minecraft_model_name.setText(config.get('model', {}).get('model', ''))
-                self.ui.lineEdit_minecraft_model_url.setText(config.get('model', {}).get('url', ''))
-                self.ui.textEdit_minecraft_conversing.setPlainText(config.get('conversing', ''))
-
-            # 加载keys.json中的API KEY
-            if os.path.exists(keys_config_path):
-                with open(keys_config_path, 'r', encoding='utf-8') as f:
-                    keys_config = json.load(f)
-                    self.ui.lineEdit_minecraft_api_key.setText(keys_config.get('OPENAI_API_KEY', ''))
-
-        except Exception as e:
-            print(f"加载Minecraft配置失败: {e}")
-
-    def save_minecraft_config(self):
-        """保存Minecraft配置文件"""
-        try:
-            app_path = get_app_path()
-            andy_config_path = os.path.join(app_path, 'GAME', 'Minecraft', 'andy.json')
-            keys_config_path = os.path.join(app_path, 'GAME', 'Minecraft', 'keys.json')
-
-            # 创建目录（如果不存在）
-            os.makedirs(os.path.dirname(andy_config_path), exist_ok=True)
-
-            # 先读取现有配置，保留嵌入模型配置
-            existing_config = {}
-            if os.path.exists(andy_config_path):
-                with open(andy_config_path, 'r', encoding='utf-8') as f:
-                    existing_config = json.load(f)
-
-            # 构建配置数据，保留原有的embedding配置
-            config = {
-                "name": self.ui.lineEdit_minecraft_name.text(),
-                "model": {
-                    "api": existing_config.get('model', {}).get('api', 'openai'),  # 保持默认值
-                    "model": self.ui.lineEdit_minecraft_model_name.text(),
-                    "url": self.ui.lineEdit_minecraft_model_url.text()
-                },
-                "embedding": existing_config.get('embedding', {
-                    "api": "openai",
-                    "model": "text-embedding-ada-002",
-                    "url": "https://api.zhizengzeng.com/v1"
-                }),  # 保留原有embedding配置
-                "conversing": self.ui.textEdit_minecraft_conversing.toPlainText()
-            }
-
-            # 保存andy.json
-            with open(andy_config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=4)
-
-            # 保存API KEY到keys.json
-            existing_keys = {}
-            if os.path.exists(keys_config_path):
-                with open(keys_config_path, 'r', encoding='utf-8') as f:
-                    existing_keys = json.load(f)
-
-            # 更新API KEY
-            existing_keys['OPENAI_API_KEY'] = self.ui.lineEdit_minecraft_api_key.text()
-
-            # 保存keys.json
-            with open(keys_config_path, 'w', encoding='utf-8') as f:
-                json.dump(existing_keys, f, ensure_ascii=False, indent=4)
-
-            print("Minecraft配置已保存")
-
-        except Exception as e:
-            print(f"保存Minecraft配置失败: {e}")
-
-    def load_memos_config(self):
-        """加载Memos记忆系统配置文件"""
-        try:
-            app_path = get_app_path()
-            # memos_system在父目录，不是当前目录
-            memos_config_path = os.path.join(os.path.dirname(app_path), 'memos_system', 'config', 'memos_config.json')
-            print(f"[DEBUG] Memos配置路径: {memos_config_path}")
-            print(f"[DEBUG] 文件是否存在: {os.path.exists(memos_config_path)}")
-
-            if os.path.exists(memos_config_path):
-                with open(memos_config_path, 'r', encoding='utf-8') as f:
-                    memos_config = json.load(f)
-
-                print(f"[DEBUG] Memos配置内容: {memos_config}")
-                llm_config = memos_config.get('llm', {}).get('config', {})
-                print(f"[DEBUG] LLM配置: {llm_config}")
-                self.ui.lineEdit_memos_model.setText(llm_config.get('model', ''))
-                self.ui.lineEdit_memos_api_key.setText(llm_config.get('api_key', ''))
-                self.ui.lineEdit_memos_base_url.setText(llm_config.get('base_url', ''))
-                print(f"[DEBUG] Memos配置已加载到UI")
-            else:
-                print(f"[DEBUG] Memos配置文件不存在，设置为空")
-                # 如果文件不存在，设置为空
-                self.ui.lineEdit_memos_model.setText('')
-                self.ui.lineEdit_memos_api_key.setText('')
-                self.ui.lineEdit_memos_base_url.setText('')
-        except Exception as e:
-            print(f"加载Memos配置失败: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def save_memos_config(self):
-        """保存Memos记忆系统配置文件"""
-        try:
-            app_path = get_app_path()
-            # memos_system在父目录，不是当前目录
-            memos_config_path = os.path.join(os.path.dirname(app_path), 'memos_system', 'config', 'memos_config.json')
-
-            # 创建目录（如果不存在）
-            os.makedirs(os.path.dirname(memos_config_path), exist_ok=True)
-
-            # 读取原文件内容
-            with open(memos_config_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-
-            # 加载JSON配置
-            config = json.loads(content)
-
-            # 只修改llm.config的三个字段值，按照标准顺序：api_key, base_url, model
-            if 'llm' in config and 'config' in config['llm']:
-                config['llm']['config']['api_key'] = self.ui.lineEdit_memos_api_key.text()
-                config['llm']['config']['base_url'] = self.ui.lineEdit_memos_base_url.text()
-                config['llm']['config']['model'] = self.ui.lineEdit_memos_model.text()
-
-            # 保存时保持原格式（2空格缩进，确保字段顺序）
-            with open(memos_config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
-
-            print("Memos配置已保存")
-        except Exception as e:
-            print(f"保存Memos配置失败: {e}")
-
     def save_config(self):
+        # 如果当前在插件详情页，同时保存插件配置
+        if self.ui.stackedWidget.currentIndex() == self._plugins_detail_index:
+            self._save_plugin_detail()
+            return
+
         current_config = self.load_config()
 
         current_config['llm'] = {
@@ -2854,16 +4304,6 @@ class set_pyqt(QWidget):
 
         current_config["ui"]["intro_text"] = self.ui.lineEdit_4.text()
         current_config['context']['max_messages'] = int(self.ui.lineEdit_5.text())
-        current_config['auto_chat']['idle_time'] = int(self.ui.lineEdit_idle_time.text())
-        current_config['auto_chat']['prompt'] = self.ui.textEdit_prompt.toPlainText()
-
-        # 处理房间号
-        room_id_text = self.ui.lineEdit_6.text()
-        if room_id_text == "你的哔哩哔哩直播间的房间号" or room_id_text == "":
-            current_config['bilibili']['roomId'] = 0
-        else:
-            current_config['bilibili']['roomId'] = int(room_id_text)
-
         # 确保tools配置存在
         if 'tools' not in current_config:
             current_config['tools'] = {}
@@ -2886,21 +4326,6 @@ class set_pyqt(QWidget):
         current_config['context']['enable_limit'] = self.ui.checkBox_4.isChecked()
         current_config['context']['persistent_history'] = self.ui.checkBox_persistent_history.isChecked()
 
-        # 新增：保存总结压缩配置
-        if 'compression' not in current_config['context']:
-            current_config['context']['compression'] = {}
-        current_config['context']['compression']['enabled'] = self.ui.checkBox_compression_enabled.isChecked()
-        current_config['context']['compression']['trigger_threshold'] = int(self.ui.lineEdit_compression_trigger.text()) if self.ui.lineEdit_compression_trigger.text() else 15
-        current_config['context']['compression']['keep_recent'] = int(self.ui.lineEdit_compression_keep.text()) if self.ui.lineEdit_compression_keep.text() else 2
-        current_config['context']['compression']['prompt'] = self.ui.textEdit_compression_prompt.toPlainText()
-
-        current_config['auto_chat']['enabled'] = self.ui.checkBox.isChecked()
-        current_config['bilibili']['enabled'] = self.ui.checkBox_2.isChecked()
-        # 新增：保存动态主动对话配置
-        if 'mood_chat' not in current_config:
-            current_config['mood_chat'] = {}
-        current_config['mood_chat']['enabled'] = self.ui.checkBox_mood_chat_enabled.isChecked()
-        current_config['mood_chat']['prompt'] = self.ui.textEdit_mood_chat_prompt.toPlainText()
         # 保存本地ASR和TTS配置（保持现有配置结构，只更新enabled状态）
         current_config['asr']['enabled'] = self.ui.checkBox_asr.isChecked()
         current_config['asr']['voice_barge_in'] = self.ui.checkBox_voice_barge_in.isChecked()
@@ -2909,26 +4334,6 @@ class set_pyqt(QWidget):
         # 保存TTS语言
         tts_language = self.ui.comboBox_tts_language.currentText().split(' - ')[0]
         current_config['tts']['language'] = tts_language
-
-        # 新增：保存翻译配置
-        current_config['translation'] = {
-            "enabled": self.ui.checkBox_translation_enabled.isChecked(),
-            "api_key": self.ui.lineEdit_translation_api_key.text(),
-            "api_url": self.ui.lineEdit_translation_api_url.text(),
-            "model": self.ui.lineEdit_translation_model.text(),
-            "system_prompt": self.ui.textEdit_translation_prompt.toPlainText()
-        }
-
-        # 新增：保存AI日记配置
-        current_config['ai_diary'] = {
-            "enabled": self.ui.checkBox_diary_enabled.isChecked(),
-            "idle_time": int(self.ui.lineEdit_diary_idle_time.text()) if self.ui.lineEdit_diary_idle_time.text() else 20000,
-            "diary_file": self.ui.lineEdit_diary_file.text(),
-            "prompt": self.ui.textEdit_diary_prompt.toPlainText()
-        }
-
-        # 新增：保存Memos记忆配置（保存到独立的memos_config.json）
-        self.save_memos_config()
 
         # 新增：保存云端配置
         if 'cloud' not in current_config:
@@ -2948,6 +4353,14 @@ class set_pyqt(QWidget):
         current_config['cloud']['tts']['response_format'] = self.ui.comboBox_cloud_tts_format.currentText()
         current_config['cloud']['tts']['speed'] = self.ui.doubleSpinBox_cloud_tts_speed.value()
 
+        # 保存阿里云TTS配置
+        if 'aliyun_tts' not in current_config['cloud']:
+            current_config['cloud']['aliyun_tts'] = {}
+        current_config['cloud']['aliyun_tts']['enabled'] = self.ui.checkBox_aliyun_tts_enabled.isChecked()
+        current_config['cloud']['aliyun_tts']['api_key'] = self.ui.lineEdit_aliyun_tts_api_key.text()
+        current_config['cloud']['aliyun_tts']['model'] = self.ui.lineEdit_aliyun_tts_model.text() or 'cosyvoice-v3-flash'
+        current_config['cloud']['aliyun_tts']['voice'] = self.ui.lineEdit_aliyun_tts_voice.text()
+
         # 保存百度流式ASR配置
         if 'baidu_asr' not in current_config['cloud']:
             current_config['cloud']['baidu_asr'] = {}
@@ -2965,12 +4378,6 @@ class set_pyqt(QWidget):
         current_config['api_gateway']['use_gateway'] = self.ui.checkBox_gateway_enabled.isChecked()
         current_config['api_gateway']['base_url'] = self.ui.lineEdit_gateway_base_url.text()
         current_config['api_gateway']['api_key'] = self.ui.lineEdit_gateway_api_key.text()
-
-        # 新增：保存游戏配置
-        current_config['game']['Minecraft']['enabled'] = self.ui.checkBox_game_minecraft.isChecked()
-
-        # 保存Minecraft配置到andy.json
-        self.save_minecraft_config()
 
         # 新增：保存UI设置
         if 'subtitle_labels' not in current_config:
@@ -3278,6 +4685,10 @@ class set_pyqt(QWidget):
                         if line.strip():
                             print(f"扫描输出: {line.strip()}")
 
+                    # 进程结束后，刷新UI
+                    print("扫描完成，开始刷新UI...")
+                    self.scan_complete_refresh()
+
                 from threading import Thread
                 Thread(target=read_output, daemon=True).start()
                 print("后台扫描进程已启动")
@@ -3286,6 +4697,41 @@ class set_pyqt(QWidget):
 
         except Exception as e:
             print(f"运行皮套动作扫描失败: {str(e)}")
+
+    def scan_complete_refresh(self):
+        """扫描完成后刷新UI（在主线程中执行）"""
+        # 使用 QTimer 在主线程中执行刷新，避免线程安全问题
+        QTimer.singleShot(0, self.refresh_after_scan)
+
+    def refresh_after_scan(self):
+        """在主线程中刷新UI"""
+        try:
+            print("开始刷新UI以显示最新配置...")
+            
+            # 1. 重新加载动作配置
+            self.load_motion_config()
+            
+            # 2. 重新加载表情配置
+            self.load_expression_config()
+            
+            # # 3. 重新加载备份配置（可选，但推荐）
+            # self.backup_original_config()
+            # self.backup_original_config1()
+            
+            # 4. 刷新动作拖拽界面
+            self.refresh_drag_drop_interface()
+            
+            # 5. 刷新表情界面
+            self.refresh_expression_interface()
+            
+            # 6. 显示成功提示
+            self.toast.show_message("皮套配置已更新", 2000)
+            
+            print("UI刷新完成")
+            
+        except Exception as e:
+            print(f"刷新UI失败: {str(e)}")
+            self.toast.show_message(f"配置更新失败: {str(e)}", 3000)        
 
     def start_minecraft_terminal(self):
         """启动Minecraft游戏终端"""
@@ -4118,9 +5564,9 @@ class set_pyqt(QWidget):
             # API KEY输入框列表
             api_key_fields = [
                 self.ui.lineEdit,  # 主要LLM API KEY
-                self.ui.lineEdit_translation_api_key,  # 同传API KEY
-                self.ui.lineEdit_minecraft_api_key  # Minecraft API KEY
             ]
+            if hasattr(self.ui, 'lineEdit_translation_api_key'):
+                api_key_fields.append(self.ui.lineEdit_translation_api_key)  # 同传API KEY
 
             for line_edit in api_key_fields:
                 if line_edit:
@@ -4729,7 +6175,7 @@ class set_pyqt(QWidget):
         """打开对话记录页面并自动加载"""
         try:
             # 先切换到对话记录页面
-            self.ui.stackedWidget.setCurrentIndex(14)
+            self.ui.stackedWidget.setCurrentIndex(12)
 
             # 检查是否已经创建了WebView
             # 打包后禁用 WebEngineView，直接使用 QTextEdit 避免崩溃

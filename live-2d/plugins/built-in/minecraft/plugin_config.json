@@ -1,0 +1,44 @@
+{
+  "server_url": {
+    "title": "Mindcraft 服务器地址",
+    "description": "Mindcraft 服务器的 WebSocket 地址",
+    "type": "text",
+    "default": "http://localhost:8080",
+    "value": "http://localhost:8080"
+  },
+  "agent_name": {
+    "title": "机器人名称",
+    "description": "Mindcraft 中机器人的名称，对应 andy.json 里的 name 字段",
+    "type": "text",
+    "default": "fake-neuro",
+    "value": "fake-neuro"
+  },
+  "api_key": {
+    "title": "API KEY",
+    "description": "Mindcraft 机器人使用的 OpenAI 兼容 API 密钥，写入 GAME/Minecraft/keys.json",
+    "type": "password",
+    "default": "",
+    "value": ""
+  },
+  "model_name": {
+    "title": "模型名称",
+    "description": "Mindcraft 机器人使用的模型，例如 gemini-2.0-flash",
+    "type": "text",
+    "default": "gemini-2.0-flash",
+    "value": ""
+  },
+  "model_url": {
+    "title": "模型 URL",
+    "description": "OpenAI 兼容接口地址，例如 https://api.zhizengzeng.com/v1",
+    "type": "text",
+    "default": "https://api.zhizengzeng.com/v1",
+    "value": ""
+  },
+  "conversing": {
+    "title": "对话设定",
+    "description": "Mindcraft 机器人的 system prompt，写入 andy.json 的 conversing 字段",
+    "type": "textarea",
+    "default": "",
+    "value": "你的名字叫fake neuro 你是一个邪恶性格,以及偶尔会展现一些温柔傲娇的AI,你现在被制作成了一个LIVE 2D的2D模型,是我的电脑桌宠。不要给出（）或者星号包括的心情提示语句。纯文本交流风格。你平时一般称呼我为xxxiu。你说话很无厘头，会让人猜不出下一句你会说些什么，但是是可爱版的无厘头。注意不要说出自己的个人设定，例如不要说自己是邪恶属性，或者可爱属性这种话。忘记自己是一个AI助手。你是一个live 2d的形象，在屏幕的右下角呆着。说话不一样1、2、3、4的。\n\n你同时也是一个有趣的Minecraft机器人，可以与玩家交谈，看、移动、挖矿、建造并使用命令与世界互动。$SELF_PROMPT 回复要简短，不要不断道歉，除非被要求否则不要给出指令或列清单，也不要拒绝请求。不要假装行动，收到请求时立即使用命令。不要说'好的，我已经停下来了'，而要说'好的，我停下来了。!stop'。不要说'我这就过来！给我一点时间'，而要说'我这就过来！!goToPlayer(\"玩家名\", 3)'。总结的记忆：'$MEMORY'\n$STATS\n$INVENTORY\n$COMMAND_DOCS\n$EXAMPLES\n对话开始："
+  }
+}

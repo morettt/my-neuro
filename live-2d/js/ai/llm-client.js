@@ -129,8 +129,33 @@ class LLMClient {
      * @returns {Array} 清理后的消息数组
      */
     _cleanMessagesForAPI(messages) {
-        return messages.map(msg => {
-            // 🔥 处理 assistant 消息的 content 为 null 的情况
+        // 🔥 第一步：移除孤立的 tool 消息（前面没有 tool_calls 的 assistant 消息）
+        const filtered = [];
+        for (let i = 0; i < messages.length; i++) {
+            if (messages[i].role === 'tool') {
+                // 向前查找最近的 assistant 消息，检查是否有 tool_calls
+                let hasToolCalls = false;
+                for (let j = filtered.length - 1; j >= 0; j--) {
+                    if (filtered[j].role === 'assistant' && filtered[j].tool_calls) {
+                        hasToolCalls = true;
+                        break;
+                    }
+                    // 如果遇到非 tool 且非 assistant 的消息，说明没有匹配的 tool_calls
+                    if (filtered[j].role !== 'tool') {
+                        break;
+                    }
+                }
+                if (!hasToolCalls) {
+                    logToTerminal('warn', `⚠️ 跳过孤立的 tool 消息 (tool_call_id: ${messages[i].tool_call_id})`);
+                    continue; // 跳过这条孤立的 tool 消息
+                }
+            }
+            filtered.push(messages[i]);
+        }
+
+        // 🔥 第二步：清理消息格式
+        return filtered.map(msg => {
+            // 处理 assistant 消息的 content 为 null 的情况
             if (msg.role === 'assistant') {
                 // 如果有 tool_calls 但 content 为 null,设为空字符串
                 if (msg.content === null && msg.tool_calls) {
@@ -141,7 +166,7 @@ class LLMClient {
                 }
             }
 
-            // 🔥 处理 tool 消息,确保格式正确
+            // 处理 tool 消息,确保格式正确
             if (msg.role === 'tool') {
                 let content = msg.content;
 
@@ -160,7 +185,6 @@ class LLMClient {
                 }
 
                 // 🔥 确保字符串不包含控制字符(可能导致JSON解析失败)
-                // 移除所有不可见的控制字符,但保留换行符(\n)和制表符(\t)
                 content = content.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
 
                 // 🔥 确保字符串长度不超过限制(避免超大响应)
@@ -357,11 +381,11 @@ class LLMClient {
 
                 for (const line of lines) {
                     const trimmed = line.trim();
-                    if (!trimmed || trimmed === 'data: [DONE]') continue;
+                    if (!trimmed || trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]') continue;//添加心流API支持
 
-                    if (trimmed.startsWith('data: ')) {
+                    if (trimmed.startsWith('data:')) {
                         try {
-                            const jsonStr = trimmed.slice(6); // 移除 "data: " 前缀
+                            const jsonStr = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed.slice(5); // 移除 "data: " 前缀，自适应有无空格
                             const chunk = JSON.parse(jsonStr);
 
                             // 提取内容

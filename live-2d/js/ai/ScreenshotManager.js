@@ -12,12 +12,21 @@ class ScreenshotManager {
         const gatewayConfig = voiceChatInterface.config?.api_gateway || {};
         const bertConfig = voiceChatInterface.config?.bert || {};
 
-        if (gatewayConfig.use_gateway) {
+        const useBaiduASR = voiceChatInterface.config?.cloud?.baidu_asr?.enabled === true;
+
+        if (useBaiduASR) {
+            // 百度ASR不走BERT
+            this.bertEnabled = false;
+            this.bertUrl = null;
+            this.bertApiKey = null;
+        } else if (gatewayConfig.use_gateway) {
             this.bertUrl = `${gatewayConfig.base_url}/bert/classify`;
             this.bertApiKey = gatewayConfig.api_key || '';
+            this.bertEnabled = true;
         } else {
             this.bertUrl = bertConfig.url || 'http://127.0.0.1:6007/classify';
             this.bertApiKey = null;
+            this.bertEnabled = true;
         }
     }
 
@@ -46,7 +55,7 @@ class ScreenshotManager {
             const result = await this.callBertClassifier(text);
             if (result) {
                 const needVision = result["Vision"] === "是";
-                console.log(`截图判断结果: ${needVision ? "是" : "否"}`);
+                if (needVision) logToTerminal('info', '需要截图');
                 return needVision;
             }
             return false;
@@ -58,6 +67,9 @@ class ScreenshotManager {
 
     // 统一调用BERT分类API的方法
     async callBertClassifier(text) {
+        if (!this.bertEnabled) {
+            return null;
+        }
         try {
             const headers = {
                 'Content-Type': 'application/json'
@@ -82,7 +94,6 @@ class ScreenshotManager {
             }
 
             const data = await response.json();
-            console.log('BERT分类结果:', data);
             return data;
         } catch (error) {
             logToTerminal('error', `BERT分类错误: ${error.message}`);

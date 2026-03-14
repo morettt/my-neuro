@@ -92,9 +92,13 @@ class LLMHandler {
                 }
 
                 // 检查是否需要截图（只在第一次尝试且未重试过时）
+                // prompt 可能是 string 或多模态数组，取文本部分用于截图判断
+                const promptText = Array.isArray(prompt)
+                    ? (prompt.find(p => p.type === 'text')?.text ?? '')
+                    : prompt;
                 let screenshotBase64 = null;
                 if (isFirstAttempt && !hasRetriedWithoutImage) {
-                    const needScreenshot = await voiceChat.shouldTakeScreenshot(prompt);
+                    const needScreenshot = await voiceChat.shouldTakeScreenshot(promptText);
 
                     if (needScreenshot) {
                         try {
@@ -160,17 +164,26 @@ class LLMHandler {
                         }
 
                         if (lastUserMsgIndex !== -1) {
-                            console.log(`📸 将截图附加到消息索引 ${lastUserMsgIndex}，内容: ${prompt.substring(0, 50)}...`);
+                            console.log(`📸 将截图附加到消息索引 ${lastUserMsgIndex}，内容: ${promptText.substring(0, 50)}...`);
+                            // prompt 若已是多模态数组则直接追加图片，否则包装成数组
+                            const existingContent = Array.isArray(prompt)
+                                ? prompt
+                                : [{ 'type': 'text', 'text': prompt }];
                             messagesForAPI[lastUserMsgIndex] = {
                                 'role': 'user',
                                 'content': [
-                                    { 'type': 'text', 'text': prompt },
+                                    ...existingContent,
                                     { 'type': 'image_url', 'image_url': { 'url': `data:image/jpeg;base64,${screenshotBase64}` } }
                                 ]
                             };
                         } else {
                             console.error('⚠️ 未找到用户消息，无法附加截图');
                         }
+                    }
+
+                    // 触发插件 onLLMRequest 钩子（插件可修改 messages）
+                    if (global.pluginManager) {
+                        await global.pluginManager.runLLMRequestHooks({ messages: messagesForAPI, tools: allTools }).catch(() => {});
                     }
 
                     // 使用统一的LLM客户端
@@ -634,25 +647,28 @@ class LLMHandler {
 
                     // ===== 保存对话历史 =====
                     voiceChat.saveConversationHistory();
-                    
-                    // ===== MemOS: 异步保存对话到记忆系统 =====
-                    if (voiceChat.memosClient && voiceChat.config?.memos?.enabled) {
-                        const messages = [
-                            { role: 'user', content: prompt },
-                            { role: 'assistant', content: finalResponseContent }
-                        ];
-                        voiceChat.memosClient.addWithBuffer(messages).catch(err => {
-                            console.error('MemOS保存对话失败:', err);
-                        });
-                    }
+                    // MemOS 保存由 memos 插件的 onLLMResponse 钩子处理
 
                     // 🎙️ 播放最终回复的TTS（统一在这里播放，参考旧版本的设计）
                     console.log('✅ 最终回复已处理完成，开始播放TTS');
+
+                    // 触发插件 onLLMResponse 钩子（插件可修改 responseObj.text，影响 TTS 内容）
+                    const responseObj = { text: finalResponseContent };
+                    if (global.pluginManager) {
+                        await global.pluginManager.runLLMResponseHooks(responseObj).catch(() => {});
+                    }
+
                     if (iteration === 0) {
                         // 如果没有中间过程,才reset
                         ttsProcessor.reset();
                     }
-                    ttsProcessor.processTextToSpeech(finalResponseContent);
+
+                    // 触发插件 onTTSStart 钩子
+                    if (global.pluginManager) {
+                        await global.pluginManager.runTTSStartHooks(responseObj.text).catch(() => {});
+                    }
+
+                    ttsProcessor.processTextToSpeech(responseObj.text);
                 } else {
                     logToTerminal('error', '❌ 未获取到有效的AI回复');
 

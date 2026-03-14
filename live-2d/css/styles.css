@@ -78,12 +78,26 @@ body {
     flex: 1;
     outline: none;
     transition: all 0.3s ease;
+    background: #ffffff;
+    border: 1px solid #cccccc;
+    padding: 10px;
+    font-size: 14px;
+    color: #333333;
+    min-height: 20px;
+    overflow-y: auto;
+}
+
+#chat-input:empty:before {
+    content: attr(placeholder);
+    color: #999999;
+    pointer-events: none;
 }
 
 #chat-send-btn {
     border: none;
     cursor: pointer;
     transition: all 0.3s ease;
+    height: 20px;
 }
 
 /* ==================== 样式1: 现代毛玻璃风格 (默认) ==================== */

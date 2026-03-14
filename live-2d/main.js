@@ -168,10 +168,11 @@ ipcMain.handle('get-config', async (event) => {
     }
 });
 
-// 修改后的截图功能：不再隐藏窗口
 ipcMain.handle('take-screenshot', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
     try {
-        // 添加短暂延迟确保获取最新屏幕内容
+        // 截图前隐藏皮套窗口，截完再恢复，避免皮套出现在截图里
+        win.setOpacity(0);
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // 1. 获取系统识别到的所有物理显示器
@@ -208,6 +209,8 @@ ipcMain.handle('take-screenshot', async (event) => {
     } catch (error) {
         console.error('截图错误:', error)
         throw error;
+    } finally {
+        win.setOpacity(1);
     }
 });
 
