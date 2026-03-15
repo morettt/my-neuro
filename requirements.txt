@@ -32,7 +32,13 @@ pyinstaller
 streamlit
 aiohttp
 
+#webUI依赖
+flask
+
 pydantic>=2.0.0
 
 markdown
+
+
+
 
