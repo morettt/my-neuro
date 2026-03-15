@@ -5,6 +5,7 @@ const { Events } = require('../core/events.js');
 const { appState } = require('../core/app-state.js');
 const { LLMClient } = require('../ai/llm-client.js');
 const { toolExecutor } = require('../ai/tool-executor.js');
+const { llmProviderManager } = require('../core/llm-provider.js');
 
 class BarrageManager {
     constructor(config) {
@@ -13,7 +14,14 @@ class BarrageManager {
         this.priorityQueue = [];    // 优先队列（保留，暂未使用）
         this.isProcessing = false;
         this.interruptFlag = false; // 打断标志
-        this.llmClient = new LLMClient(config);
+        // 弹幕回复也复用同一套 provider/model 解析逻辑。
+        const resolvedProvider = llmProviderManager.resolveProviderOrFallback(
+            config.llm?.provider_id || null,
+            config.llm?.model_id || null
+        );
+        this.llmClient = resolvedProvider
+            ? LLMClient.fromProviderConfig(resolvedProvider)
+            : null;
 
         // 依赖的外部服务
         this.voiceChat = null;
@@ -124,6 +132,9 @@ class BarrageManager {
 
     // 执行弹幕处理
     async executeBarrage(nickname, text) {
+        if (!this.llmClient) {
+            throw new Error('未找到可用的 LLM 提供商配置');
+        }
         if (!this.voiceChat) {
             throw new Error('VoiceChat未初始化');
         }

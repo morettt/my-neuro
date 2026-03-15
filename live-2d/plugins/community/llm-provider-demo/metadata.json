@@ -1,0 +1,8 @@
+{
+  "name": "llm-provider-demo",
+  "displayName": "LLM Provider Demo",
+  "version": "1.0.0",
+  "author": "nagatoquin33",
+  "description": "演示插件如何通过插件配置选择 LLM 提供商和模型。",
+  "main": "index.js"
+}

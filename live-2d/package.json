@@ -5,7 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "start-server": "node server.js"
+    "start-server": "node server.js",
+    "test:llm-provider": "node tests/llm-provider-basic.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.1",

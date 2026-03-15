@@ -6,7 +6,9 @@ const { InputRouter } = require('./InputRouter.js');
 const { DiaryManager } = require('../DiaryManager.js');
 const { ScreenshotManager } = require('../ScreenshotManager.js');
 const { ContextManager } = require('../ContextManager.js');
-let MemosClient;
+const { llmProviderManager } = require('../../core/llm-provider.js');
+
+let MemosClient = null;
 try {
     ({ MemosClient } = require('../memos-client.js'));
 } catch (_) {
@@ -24,10 +26,20 @@ class VoiceChatFacade {
         this.showSubtitle = showSubtitle;
         this.hideSubtitle = hideSubtitle;
 
-        // LLM配置（暴露给外部使用）
-        this.API_KEY = config.llm.api_key;
-        this.API_URL = config.llm.api_url;
-        this.MODEL = config.llm.model;
+        // 先解析一次，确保对外暴露的字段与当前选中的模型保持一致。
+        const resolvedProvider = llmProviderManager.resolveProviderOrFallback(
+            config.llm?.provider_id || null,
+            config.llm?.model_id || null
+        );
+        if (resolvedProvider) {
+            this.API_KEY = resolvedProvider.api_key;
+            this.API_URL = resolvedProvider.api_url;
+            this.MODEL = resolvedProvider.model || '';
+        } else {
+            this.API_KEY = '';
+            this.API_URL = '';
+            this.MODEL = '';
+        }
 
         // ASR相关属性（暴露给外部使用）
         // ASR启用：本地ASR或百度流式ASR任一启用即可
@@ -72,6 +84,7 @@ class VoiceChatFacade {
         // 创建子模块
         this.diaryManager = new DiaryManager(this);
         this.screenshotManager = new ScreenshotManager(this);
+        // MemOS 客户端是可选依赖，缺失时保持为 null。
         // 创建MemOS客户端
         this.memosClient = MemosClient ? new MemosClient(this.config) : null;
 

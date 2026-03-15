@@ -4,10 +4,12 @@ const fs = require('fs')
 const { HttpServer } = require('./js/services/http-server')
 const { ModelPathUpdater } = require('./js/model/model-path-updater')
 const { ShortcutManager } = require('./js/shortcut-manager')
+const { persistProviderStore } = require('./js/core/llm-provider-store')
 const screenshot = require('screenshot-desktop');
 
 // 添加配置文件路径
 const configPath = path.join(app.getAppPath(), 'config.json');
+const baseDir = app.getAppPath();
 
 // Live2D模型优先级配置（Python程序会修改这个列表来切换模型）
 const priorityFolders = ['肥牛', 'Hiyouri', 'Default', 'Main'];
@@ -132,7 +134,8 @@ ipcMain.handle('save-config', async (event, configData) => {
         }
 
         // 保存新配置
-        fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+        const preparedConfig = JSON.parse(JSON.stringify(configData));
+        persistProviderStore(baseDir, configPath, preparedConfig);
 
         // 通知用户需要重启应用
         const result = await dialog.showMessageBox({
@@ -160,8 +163,9 @@ ipcMain.handle('save-config', async (event, configData) => {
 // 修改获取配置的IPC处理器，假设配置文件总是存在
 ipcMain.handle('get-config', async (event) => {
     try {
-        const configData = fs.readFileSync(configPath, 'utf8');
-        return { success: true, config: JSON.parse(configData) };
+        const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        persistProviderStore(baseDir, configPath, configData);
+        return { success: true, config: configData };
     } catch (error) {
         console.error('获取配置失败:', error);
         return { success: false, error: error.message };

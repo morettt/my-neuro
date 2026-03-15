@@ -1174,115 +1174,551 @@ QTabWidget#tabWidget_tools QTabBar {
            </item>
           </layout>
          </widget>
-         <widget class="QWidget" name="page_2">
-          <layout class="QVBoxLayout" name="verticalLayout_4">
-           <item>
-            <layout class="QGridLayout" name="gridLayout">
-             <item row="0" column="0">
-              <widget class="QLabel" name="label_3">
-               <property name="font">
-                <font>
-                 <family>微软雅黑</family>
-                 <pointsize>10</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>API KEY:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="1">
-              <widget class="QLineEdit" name="lineEdit">
-               <property name="font">
-                <font>
-                 <family>微软雅黑</family>
-                 <pointsize>10</pointsize>
-                </font>
-               </property>
-               <property name="echoMode">
-                <enum>QLineEdit::Password</enum>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="0">
-              <widget class="QLabel" name="label_4">
-               <property name="font">
-                <font>
-                 <family>微软雅黑</family>
-                 <pointsize>10</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>API URL:</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="1">
-              <widget class="QLineEdit" name="lineEdit_2">
-               <property name="font">
-                <font>
-                 <family>微软雅黑</family>
-                 <pointsize>10</pointsize>
-                </font>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="0">
-              <widget class="QLabel" name="label_5">
-               <property name="font">
-                <font>
-                 <family>微软雅黑</family>
-                 <pointsize>10</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>模型名称：</string>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="1">
-              <widget class="QLineEdit" name="lineEdit_3">
-               <property name="font">
-                <font>
-                 <family>微软雅黑</family>
-                 <pointsize>10</pointsize>
-                </font>
-               </property>
-              </widget>
-             </item>
-            </layout>
-           </item>
-           <item>
-            <widget class="QLabel" name="label_6">
-             <property name="font">
-              <font>
-               <family>微软雅黑</family>
-               <pointsize>10</pointsize>
-              </font>
-             </property>
-             <property name="text">
-              <string>AI人设：</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QTextEdit" name="textEdit_3">
-             <property name="minimumSize">
-              <size>
-               <width>0</width>
-               <height>400</height>
-              </size>
-             </property>
-             <property name="font">
-              <font>
-               <family>微软雅黑</family>
-               <pointsize>10</pointsize>
-              </font>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
+          <widget class="QWidget" name="page_2">
+           <layout class="QVBoxLayout" name="verticalLayout_4">
+            <property name="spacing">
+             <number>8</number>
+            </property>
+            <property name="leftMargin">
+             <number>10</number>
+            </property>
+            <property name="topMargin">
+             <number>10</number>
+            </property>
+            <property name="rightMargin">
+             <number>10</number>
+            </property>
+            <property name="bottomMargin">
+             <number>10</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="label_providers_title">
+              <property name="font">
+               <font>
+                <family>微软雅黑</family>
+                <pointsize>11</pointsize>
+                <weight>75</weight>
+                <bold>true</bold>
+               </font>
+              </property>
+              <property name="text">
+               <string>LLM 提供商管理</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_providers" stretch="2,3">
+              <property name="spacing">
+               <number>10</number>
+              </property>
+              <!-- 左侧：列表 + 操作按钮 -->
+              <item>
+               <layout class="QVBoxLayout" name="verticalLayout_provider_list">
+                <property name="spacing">
+                 <number>6</number>
+                </property>
+                <item>
+                 <widget class="QListWidget" name="listWidget_providers">
+                  <property name="font">
+                   <font>
+                    <family>微软雅黑</family>
+                    <pointsize>10</pointsize>
+                   </font>
+                  </property>
+                  <property name="styleSheet">
+                   <string notr="true">QListWidget { border: 1px solid #ddd; border-radius: 5px; }
+QListWidget::item { padding: 8px 6px; border-bottom: 1px solid #f0f0f0; }
+QListWidget::item:selected { background-color: #e3f2fd; color: #1565c0; }</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <layout class="QHBoxLayout" name="horizontalLayout_provider_buttons">
+                  <item>
+                   <widget class="QPushButton" name="pushButton_add_provider">
+                    <property name="font">
+                     <font>
+                      <family>微软雅黑</family>
+                      <pointsize>10</pointsize>
+                     </font>
+                    </property>
+                    <property name="cursor">
+                     <cursorShape>PointingHandCursor</cursorShape>
+                    </property>
+                    <property name="styleSheet">
+                     <string notr="true">QPushButton { background-color: #4caf50; color: white; border: none; border-radius: 4px; padding: 5px 10px; }
+QPushButton:hover { background-color: #388e3c; }</string>
+                    </property>
+                    <property name="text">
+                     <string>+ 新增</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="pushButton_del_provider">
+                    <property name="font">
+                     <font>
+                      <family>微软雅黑</family>
+                      <pointsize>10</pointsize>
+                     </font>
+                    </property>
+                    <property name="cursor">
+                     <cursorShape>PointingHandCursor</cursorShape>
+                    </property>
+                    <property name="styleSheet">
+                     <string notr="true">QPushButton { background-color: #f44336; color: white; border: none; border-radius: 4px; padding: 5px 10px; }
+QPushButton:hover { background-color: #c62828; }</string>
+                    </property>
+                    <property name="text">
+                     <string>删除</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+               </layout>
+              </item>
+              <!-- 右侧：编辑区 -->
+              <item>
+               <widget class="QWidget" name="widget_provider_editor">
+                <property name="styleSheet">
+                 <string notr="true">QWidget#widget_provider_editor { border: 1px solid #ddd; border-radius: 6px; background-color: #fafafa; }</string>
+                </property>
+                <layout class="QVBoxLayout" name="verticalLayout_provider_editor">
+                 <property name="spacing">
+                 <number>10</number>
+                 </property>
+                 <property name="leftMargin">
+                  <number>12</number>
+                 </property>
+                 <property name="topMargin">
+                  <number>12</number>
+                 </property>
+                 <property name="rightMargin">
+                  <number>12</number>
+                 </property>
+                 <property name="bottomMargin">
+                  <number>12</number>
+                 </property>
+                 <item>
+                  <widget class="QCheckBox" name="checkBox_provider_enabled">
+                   <property name="font">
+                    <font>
+                     <family>微软雅黑</family>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="text">
+                    <string>启用此提供商</string>
+                   </property>
+                   <property name="checked">
+                    <bool>true</bool>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <layout class="QGridLayout" name="gridLayout">
+                   <property name="verticalSpacing">
+                    <number>8</number>
+                   </property>
+                   <item row="0" column="0">
+                    <widget class="QLabel" name="label_provider_name_lbl">
+                     <property name="font">
+                      <font>
+                       <family>微软雅黑</family>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="text">
+                      <string>名称：</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="0" column="1">
+                    <widget class="QLineEdit" name="lineEdit_provider_name">
+                     <property name="font">
+                      <font>
+                       <family>微软雅黑</family>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="placeholderText">
+                      <string>提供商名称（如：硅基流动）</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="1" column="0">
+                    <widget class="QLabel" name="label_3">
+                     <property name="font">
+                      <font>
+                       <family>微软雅黑</family>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="text">
+                      <string>API KEY：</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="1" column="1">
+                    <widget class="QLineEdit" name="lineEdit">
+                     <property name="font">
+                      <font>
+                       <family>微软雅黑</family>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="echoMode">
+                      <enum>QLineEdit::Password</enum>
+                     </property>
+                     <property name="placeholderText">
+                      <string>输入 API Key</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="2" column="0">
+                    <widget class="QLabel" name="label_4">
+                     <property name="font">
+                      <font>
+                       <family>微软雅黑</family>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="text">
+                      <string>API URL：</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="2" column="1">
+                    <widget class="QLineEdit" name="lineEdit_2">
+                     <property name="font">
+                      <font>
+                       <family>微软雅黑</family>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="placeholderText">
+                      <string>如：https://api.siliconflow.cn/v1</string>
+                     </property>
+                    </widget>
+                   </item>
+                    <item row="3" column="0" colspan="2">
+                     <layout class="QVBoxLayout" name="verticalLayout_models_section">
+                      <property name="spacing">
+                       <number>4</number>
+                      </property>
+                      <item>
+                       <layout class="QHBoxLayout" name="horizontalLayout_models_header">
+                        <item>
+                         <widget class="QLabel" name="label_5">
+                          <property name="font">
+                           <font>
+                            <family>微软雅黑</family>
+                            <pointsize>10</pointsize>
+                           </font>
+                          </property>
+                          <property name="text">
+                           <string>模型列表：</string>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
+                         <spacer name="horizontalSpacer_models_header">
+                          <property name="orientation">
+                           <enum>Qt::Horizontal</enum>
+                          </property>
+                          <property name="sizeHint" stdset="0">
+                           <size>
+                            <width>40</width>
+                            <height>20</height>
+                           </size>
+                          </property>
+                         </spacer>
+                        </item>
+                       </layout>
+                      </item>
+                      <item>
+                       <widget class="QTableWidget" name="tableWidget_models">
+                        <property name="font">
+                         <font>
+                          <family>微软雅黑</family>
+                          <pointsize>10</pointsize>
+                         </font>
+                        </property>
+                        <property name="minimumSize">
+                         <size>
+                          <width>0</width>
+                          <height>220</height>
+                         </size>
+                        </property>
+                        <property name="styleSheet">
+                         <string notr="true">QTableWidget { border: 1px solid #ddd; border-radius: 6px; gridline-color: #efefef; selection-background-color: #e3f2fd; selection-color: #1565c0; background: #ffffff; alternate-background-color: #fafafa; }
+QHeaderView::section { background: #f7f7f7; border: none; border-bottom: 1px solid #e6e6e6; padding: 10px 12px; font-weight: bold; color: #555; }
+QTableWidget::item { padding: 10px 12px; }</string>
+                        </property>
+                        <property name="editTriggers">
+                         <set>QAbstractItemView::NoEditTriggers</set>
+                        </property>
+                        <property name="selectionMode">
+                         <enum>QAbstractItemView::SingleSelection</enum>
+                        </property>
+                        <property name="selectionBehavior">
+                         <enum>QAbstractItemView::SelectRows</enum>
+                        </property>
+                        <property name="showGrid">
+                         <bool>false</bool>
+                        </property>
+                        <property name="alternatingRowColors">
+                         <bool>true</bool>
+                        </property>
+                        <attribute name="horizontalHeaderStretchLastSection">
+                         <bool>false</bool>
+                        </attribute>
+                        <attribute name="verticalHeaderVisible">
+                         <bool>false</bool>
+                        </attribute>
+                        <property name="columnCount">
+                         <number>4</number>
+                        </property>
+                        <row/>
+                        <column>
+                         <property name="text">
+                          <string>模型</string>
+                         </property>
+                        </column>
+                        <column>
+                         <property name="text">
+                          <string>状态</string>
+                         </property>
+                        </column>
+                        <column>
+                         <property name="text">
+                          <string>测活</string>
+                         </property>
+                        </column>
+                        <column>
+                         <property name="text">
+                          <string>删除</string>
+                         </property>
+                        </column>
+                       </widget>
+                      </item>
+                      <item>
+                       <layout class="QHBoxLayout" name="horizontalLayout_model_add_row">
+                        <property name="spacing">
+                         <number>6</number>
+                        </property>
+                        <item>
+                         <widget class="QComboBox" name="comboBox_models">
+                          <property name="font">
+                           <font>
+                            <family>微软雅黑</family>
+                            <pointsize>10</pointsize>
+                           </font>
+                          </property>
+                          <property name="editable">
+                           <bool>true</bool>
+                          </property>
+                          <property name="placeholderText">
+                           <string>输入模型ID或获取后选择</string>
+                          </property>
+                          <property name="sizePolicy">
+                           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                            <horstretch>1</horstretch>
+                            <verstretch>0</verstretch>
+                           </sizepolicy>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
+                         <widget class="QPushButton" name="pushButton_fetch_models">
+                          <property name="font">
+                           <font>
+                            <family>微软雅黑</family>
+                            <pointsize>9</pointsize>
+                           </font>
+                          </property>
+                          <property name="cursor">
+                           <cursorShape>PointingHandCursor</cursorShape>
+                          </property>
+                          <property name="styleSheet">
+                           <string notr="true">QPushButton { background-color: #2196f3; color: white; border: none; border-radius: 4px; padding: 5px 10px; }
+QPushButton:hover { background-color: #1565c0; }
+QPushButton:disabled { background-color: #bdbdbd; }</string>
+                          </property>
+                          <property name="text">
+                           <string>获取模型</string>
+                          </property>
+                         </widget>
+                        </item>
+                        <item>
+                         <widget class="QPushButton" name="pushButton_add_model">
+                          <property name="font">
+                           <font>
+                            <family>微软雅黑</family>
+                            <pointsize>9</pointsize>
+                           </font>
+                          </property>
+                          <property name="cursor">
+                           <cursorShape>PointingHandCursor</cursorShape>
+                          </property>
+                          <property name="styleSheet">
+                           <string notr="true">QPushButton { background-color: #4caf50; color: white; border: none; border-radius: 4px; padding: 5px 10px; }
+QPushButton:hover { background-color: #388e3c; }</string>
+                          </property>
+                          <property name="text">
+                           <string>+ 添加</string>
+                          </property>
+                         </widget>
+                        </item>
+                       </layout>
+                      </item>
+                      <!-- lineEdit_3 hidden, keeps backward compat for save_config -->
+                      <item>
+                       <widget class="QLineEdit" name="lineEdit_3">
+                        <property name="visible">
+                         <bool>false</bool>
+                        </property>
+                       </widget>
+                      </item>
+                     </layout>
+                    </item>
+                   <item row="4" column="0">
+                    <widget class="QLabel" name="label_temperature">
+                     <property name="font">
+                      <font>
+                       <family>微软雅黑</family>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="text">
+                      <string>温度：</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item row="4" column="1">
+                    <layout class="QHBoxLayout" name="horizontalLayout_temp_row">
+                     <item>
+                      <widget class="QDoubleSpinBox" name="doubleSpinBox_temperature">
+                       <property name="minimumSize">
+                        <size>
+                         <width>100</width>
+                         <height>30</height>
+                        </size>
+                       </property>
+                       <property name="maximumSize">
+                        <size>
+                         <width>120</width>
+                         <height>16777215</height>
+                        </size>
+                       </property>
+                       <property name="font">
+                        <font>
+                         <family>微软雅黑</family>
+                         <pointsize>10</pointsize>
+                        </font>
+                       </property>
+                       <property name="minimum">
+                        <double>0.100000000000000</double>
+                       </property>
+                       <property name="maximum">
+                        <double>2.000000000000000</double>
+                       </property>
+                       <property name="singleStep">
+                        <double>0.100000000000000</double>
+                       </property>
+                       <property name="value">
+                        <double>1.000000000000000</double>
+                       </property>
+                      </widget>
+                     </item>
+                     <item>
+                      <spacer name="horizontalSpacer_temp">
+                       <property name="orientation">
+                        <enum>Qt::Horizontal</enum>
+                       </property>
+                       <property name="sizeHint" stdset="0">
+                        <size>
+                         <width>40</width>
+                         <height>20</height>
+                        </size>
+                       </property>
+                      </spacer>
+                     </item>
+                    </layout>
+                   </item>
+                   </layout>
+                  </item>
+                  <item>
+                   <!-- 当前活跃模型提示行 -->
+                   <layout class="QHBoxLayout" name="horizontalLayout_active_model">
+                    <property name="spacing">
+                     <number>6</number>
+                    </property>
+                    <item>
+                     <widget class="QLabel" name="label_active_model_lbl">
+                      <property name="font">
+                       <font>
+                        <family>微软雅黑</family>
+                        <pointsize>9</pointsize>
+                       </font>
+                      </property>
+                      <property name="text">
+                       <string>当前使用：</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLabel" name="label_active_model">
+                      <property name="font">
+                       <font>
+                        <family>微软雅黑</family>
+                        <pointsize>9</pointsize>
+                       </font>
+                      </property>
+                      <property name="text">
+                       <string>（点击列表中的模型行设为活跃）</string>
+                      </property>
+                      <property name="styleSheet">
+                       <string notr="true">color: #1565c0;</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <spacer name="horizontalSpacer_active_model">
+                      <property name="orientation">
+                       <enum>Qt::Horizontal</enum>
+                      </property>
+                      <property name="sizeHint" stdset="0">
+                       <size>
+                        <width>40</width>
+                        <height>20</height>
+                       </size>
+                      </property>
+                     </spacer>
+                    </item>
+                   </layout>
+                  </item>
+                  <item>
+                   <spacer name="verticalSpacer_editor">
+                    <property name="orientation">
+                     <enum>Qt::Vertical</enum>
+                    </property>
+                    <property name="sizeHint" stdset="0">
+                     <size>
+                      <width>20</width>
+                      <height>40</height>
+                     </size>
+                    </property>
+                   </spacer>
+                  </item>
+                 </layout>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
          <widget class="QWidget" name="page_3">
           <layout class="QVBoxLayout" name="verticalLayout_10">
            <property name="spacing">
@@ -1311,18 +1747,101 @@ QTabWidget#tabWidget_tools QTabBar {
              <property name="currentIndex">
               <number>0</number>
              </property>
-             <widget class="QWidget" name="tab_basic_config">
-              <attribute name="title">
-               <string>基础配置</string>
-              </attribute>
-              <layout class="QVBoxLayout" name="verticalLayout_basic_config">
-               <property name="spacing">
-                <number>10</number>
-               </property>
-               <item>
-                <layout class="QHBoxLayout" name="horizontalLayout_3">
-                 <item>
-                  <widget class="QLabel" name="label_7">
+              <widget class="QWidget" name="tab_basic_config">
+               <attribute name="title">
+                <string>基础配置</string>
+               </attribute>
+               <layout class="QVBoxLayout" name="verticalLayout_basic_config">
+                <property name="spacing">
+                 <number>10</number>
+                </property>
+                <item>
+                 <widget class="QFrame" name="frame_default_model">
+                  <property name="styleSheet">
+                   <string notr="true">QFrame#frame_default_model { border: 1px solid rgba(180,175,165,150); border-radius: 8px; background-color: rgba(245,243,235,180); padding: 2px; }</string>
+                  </property>
+                  <property name="frameShape">
+                   <enum>QFrame::StyledPanel</enum>
+                  </property>
+                  <layout class="QVBoxLayout" name="verticalLayout_default_model">
+                   <property name="spacing">
+                    <number>8</number>
+                   </property>
+                   <property name="leftMargin">
+                    <number>10</number>
+                   </property>
+                   <property name="topMargin">
+                    <number>8</number>
+                   </property>
+                   <property name="rightMargin">
+                    <number>10</number>
+                   </property>
+                   <property name="bottomMargin">
+                    <number>8</number>
+                   </property>
+                    <item>
+                     <layout class="QHBoxLayout" name="horizontalLayout_default_model">
+                      <item>
+                       <widget class="QLabel" name="label_default_model_title">
+                        <property name="font">
+                         <font>
+                          <family>微软雅黑</family>
+                          <pointsize>10</pointsize>
+                          <weight>75</weight>
+                          <bold>true</bold>
+                         </font>
+                        </property>
+                        <property name="text">
+                         <string>默认对话模型</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item>
+                       <widget class="QComboBox" name="comboBox_llm_provider">
+                        <property name="font">
+                         <font>
+                          <family>微软雅黑</family>
+                          <pointsize>10</pointsize>
+                         </font>
+                        </property>
+                        <property name="minimumSize">
+                         <size>
+                          <width>200</width>
+                          <height>0</height>
+                         </size>
+                        </property>
+                        <property name="styleSheet">
+                         <string notr="true">QComboBox { border: 1px solid rgba(180,175,165,200); border-radius: 4px; padding: 3px 8px; background-color: white; }
+QComboBox:hover { border-color: rgb(140,130,115); }
+QComboBox::drop-down { border: none; width: 20px; }</string>
+                        </property>
+                       </widget>
+                      </item>
+                     </layout>
+                    </item>
+                   <item>
+                    <widget class="QLabel" name="label_default_model_hint">
+                     <property name="font">
+                      <font>
+                       <family>微软雅黑</family>
+                       <pointsize>9</pointsize>
+                      </font>
+                     </property>
+                     <property name="text">
+                      <string>留空时使用第一个模型</string>
+                     </property>
+                     <property name="styleSheet">
+                      <string notr="true">color: rgb(150,140,130);</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </widget>
+                </item>
+                <item>
+                 <layout class="QHBoxLayout" name="horizontalLayout_3">
+                  <item>
+                   <widget class="QLabel" name="label_7">
                    <property name="minimumSize">
                     <size>
                      <width>0</width>
@@ -1591,73 +2110,7 @@ QTabWidget#tabWidget_tools QTabBar {
                    </item>
                   </layout>
                  </item>
-                 <item>
-                  <layout class="QHBoxLayout" name="horizontalLayout_temperature">
-                   <item>
-                    <widget class="QLabel" name="label_temperature">
-                     <property name="font">
-                      <font>
-                       <family>微软雅黑</family>
-                       <pointsize>10</pointsize>
-                      </font>
-                     </property>
-                     <property name="text">
-                      <string>温度：</string>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QDoubleSpinBox" name="doubleSpinBox_temperature">
-                     <property name="minimumSize">
-                      <size>
-                       <width>100</width>
-                       <height>35</height>
-                      </size>
-                     </property>
-                     <property name="maximumSize">
-                      <size>
-                       <width>120</width>
-                       <height>16777215</height>
-                      </size>
-                     </property>
-                     <property name="font">
-                      <font>
-                       <family>微软雅黑</family>
-                       <pointsize>10</pointsize>
-                      </font>
-                     </property>
-                     <property name="buttonSymbols">
-                      <enum>QAbstractSpinBox::UpDownArrows</enum>
-                     </property>
-                     <property name="minimum">
-                      <double>0.100000000000000</double>
-                     </property>
-                     <property name="maximum">
-                      <double>2.000000000000000</double>
-                     </property>
-                     <property name="singleStep">
-                      <double>0.100000000000000</double>
-                     </property>
-                     <property name="value">
-                      <double>1.000000000000000</double>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <spacer name="horizontalSpacer_temperature">
-                     <property name="orientation">
-                      <enum>Qt::Horizontal</enum>
-                     </property>
-                     <property name="sizeHint" stdset="0">
-                      <size>
-                       <width>40</width>
-                       <height>20</height>
-                      </size>
-                     </property>
-                    </spacer>
-                   </item>
-                  </layout>
-                 </item>
+                 
                  <item>
                   <widget class="QPushButton" name="pushButton_reset_model_position">
                    <property name="sizePolicy">
@@ -1719,34 +2172,159 @@ QPushButton:pressed {
               </layout>
              </widget>
              <widget class="QWidget" name="tab_vision">
+               <attribute name="title">
+                <string>图片转述模型</string>
+               </attribute>
+               <layout class="QVBoxLayout" name="verticalLayout_vision">
+                <property name="spacing">
+                 <number>10</number>
+                </property>
+                <item>
+                 <widget class="QFrame" name="frame_vision_model">
+                  <property name="styleSheet">
+                   <string notr="true">QFrame#frame_vision_model { border: 1px solid rgba(180,175,165,150); border-radius: 8px; background-color: rgba(245,243,235,180); padding: 2px; }</string>
+                  </property>
+                  <property name="frameShape">
+                   <enum>QFrame::StyledPanel</enum>
+                  </property>
+                  <layout class="QVBoxLayout" name="verticalLayout_vision_inner">
+                   <property name="spacing">
+                    <number>8</number>
+                   </property>
+                   <property name="leftMargin">
+                    <number>10</number>
+                   </property>
+                   <property name="topMargin">
+                    <number>8</number>
+                   </property>
+                   <property name="rightMargin">
+                    <number>10</number>
+                   </property>
+                   <property name="bottomMargin">
+                    <number>8</number>
+                   </property>
+                    <item>
+                     <layout class="QHBoxLayout" name="horizontalLayout_vision_model">
+                      <item>
+                       <widget class="QLabel" name="label_vision_model_title">
+                        <property name="font">
+                         <font>
+                          <family>微软雅黑</family>
+                          <pointsize>10</pointsize>
+                          <weight>75</weight>
+                          <bold>true</bold>
+                         </font>
+                        </property>
+                        <property name="text">
+                         <string>默认图片转述模型</string>
+                        </property>
+                       </widget>
+                      </item>
+                      <item>
+                       <widget class="QComboBox" name="comboBox_vision_provider">
+                        <property name="font">
+                         <font>
+                          <family>微软雅黑</family>
+                          <pointsize>10</pointsize>
+                         </font>
+                        </property>
+                        <property name="minimumSize">
+                         <size>
+                          <width>200</width>
+                          <height>0</height>
+                         </size>
+                        </property>
+                        <property name="styleSheet">
+                         <string notr="true">QComboBox { border: 1px solid rgba(180,175,165,200); border-radius: 4px; padding: 3px 8px; background-color: white; }
+QComboBox:hover { border-color: rgb(140,130,115); }
+QComboBox::drop-down { border: none; width: 20px; }</string>
+                        </property>
+                       </widget>
+                      </item>
+                     </layout>
+                    </item>
+                   <item>
+                    <widget class="QLabel" name="label_vision_model_hint">
+                     <property name="font">
+                      <font>
+                       <family>微软雅黑</family>
+                       <pointsize>9</pointsize>
+                      </font>
+                     </property>
+                     <property name="text">
+                      <string>留空时不使用，可用于非多模态模型的图片识别</string>
+                     </property>
+                     <property name="styleSheet">
+                      <string notr="true">color: rgb(150,140,130);</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QCheckBox" name="checkBox_use_vision_model">
+                  <property name="font">
+                   <font>
+                    <family>微软雅黑</family>
+                    <pointsize>10</pointsize>
+                   </font>
+                  </property>
+                  <property name="text">
+                   <string>启用图片转述模型（当主模型不支持视觉时自动启用）</string>
+                  </property>
+                  <property name="checked">
+                   <bool>true</bool>
+                  </property>
+                 </widget>
+                </item>
+                <!-- hidden legacy fields for backward compat -->
+                <item>
+                 <widget class="QLineEdit" name="lineEdit_vision_api_key">
+                  <property name="visible">
+                   <bool>false</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLineEdit" name="lineEdit_vision_api_url">
+                  <property name="visible">
+                   <bool>false</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLineEdit" name="lineEdit_vision_model">
+                  <property name="visible">
+                   <bool>false</bool>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="verticalSpacer_vision">
+                  <property name="orientation">
+                   <enum>Qt::Vertical</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>20</width>
+                    <height>40</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </widget>
+             <widget class="QWidget" name="tab_persona">
               <attribute name="title">
-               <string>辅助视觉模型配置</string>
+               <string>人格设置</string>
               </attribute>
-              <layout class="QVBoxLayout" name="verticalLayout_vision">
+              <layout class="QVBoxLayout" name="verticalLayout_persona">
                <property name="spacing">
-                <number>10</number>
+                <number>8</number>
                </property>
                <item>
-                <widget class="QLabel" name="label_vision_description">
-                 <property name="font">
-                  <font>
-                   <family>微软雅黑</family>
-                   <pointsize>9</pointsize>
-                  </font>
-                 </property>
-                 <property name="text">
-                  <string>说明：当主模型（LLM）不支持图片识别时，可以启用此配置。在需要视觉功能时，系统会自动使用此辅助模型处理图片。</string>
-                 </property>
-                 <property name="wordWrap">
-                  <bool>true</bool>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">color: #666666; padding: 5px; background-color: #f0f0f0; border-radius: 5px;</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QCheckBox" name="checkBox_use_vision_model">
+                <widget class="QLabel" name="label_6">
                  <property name="font">
                   <font>
                    <family>微软雅黑</family>
@@ -1754,131 +2332,19 @@ QPushButton:pressed {
                   </font>
                  </property>
                  <property name="text">
-                  <string>启用辅助视觉模型</string>
-                 </property>
-                 <property name="checked">
-                  <bool>true</bool>
+                  <string>人格设置（System Prompt）：</string>
                  </property>
                 </widget>
                </item>
                <item>
-                <widget class="QLabel" name="label_vision_model_title">
+                <widget class="QTextEdit" name="textEdit_3">
                  <property name="font">
                   <font>
                    <family>微软雅黑</family>
                    <pointsize>10</pointsize>
-                   <weight>75</weight>
-                   <bold>true</bold>
                   </font>
                  </property>
-                 <property name="text">
-                  <string>视觉模型API配置</string>
-                 </property>
                 </widget>
-               </item>
-               <item>
-                <layout class="QGridLayout" name="gridLayout_vision">
-                 <property name="horizontalSpacing">
-                  <number>10</number>
-                 </property>
-                 <property name="verticalSpacing">
-                  <number>10</number>
-                 </property>
-                 <item row="0" column="0">
-                  <widget class="QLabel" name="label_vision_api_key">
-                   <property name="font">
-                    <font>
-                     <family>微软雅黑</family>
-                     <pointsize>10</pointsize>
-                    </font>
-                   </property>
-                   <property name="text">
-                    <string>API KEY：</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="0" column="1">
-                  <widget class="QLineEdit" name="lineEdit_vision_api_key">
-                   <property name="font">
-                    <font>
-                     <family>微软雅黑</family>
-                     <pointsize>10</pointsize>
-                    </font>
-                   </property>
-                   <property name="echoMode">
-                    <enum>QLineEdit::Password</enum>
-                   </property>
-                   <property name="placeholderText">
-                    <string>输入视觉模型的API密钥</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="1" column="0">
-                  <widget class="QLabel" name="label_vision_api_url">
-                   <property name="font">
-                    <font>
-                     <family>微软雅黑</family>
-                     <pointsize>10</pointsize>
-                    </font>
-                   </property>
-                   <property name="text">
-                    <string>API URL：</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="1" column="1">
-                  <widget class="QLineEdit" name="lineEdit_vision_api_url">
-                   <property name="font">
-                    <font>
-                     <family>微软雅黑</family>
-                     <pointsize>10</pointsize>
-                    </font>
-                   </property>
-                   <property name="placeholderText">
-                    <string>输入视觉模型的API URL</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="2" column="0">
-                  <widget class="QLabel" name="label_vision_model">
-                   <property name="font">
-                    <font>
-                     <family>微软雅黑</family>
-                     <pointsize>10</pointsize>
-                    </font>
-                   </property>
-                   <property name="text">
-                    <string>模型名称：</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="2" column="1">
-                  <widget class="QLineEdit" name="lineEdit_vision_model">
-                   <property name="font">
-                    <font>
-                     <family>微软雅黑</family>
-                     <pointsize>10</pointsize>
-                    </font>
-                   </property>
-                   <property name="placeholderText">
-                    <string>例如：gemini-2.0-flash</string>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
-               </item>
-               <item>
-                <spacer name="verticalSpacer_vision">
-                 <property name="orientation">
-                  <enum>Qt::Vertical</enum>
-                 </property>
-                 <property name="sizeHint" stdset="0">
-                  <size>
-                   <width>20</width>
-                   <height>40</height>
-                  </size>
-                 </property>
-                </spacer>
                </item>
               </layout>
              </widget>
@@ -4563,9 +5029,9 @@ QTextEdit:focus {
              </property>
             </widget>
            </item>
-          </layout>
-         </widget>
-        </widget>
+               </layout>
+              </widget>
+             </widget>
        </item>
        <item>
         <widget class="QPushButton" name="saveConfigButton">

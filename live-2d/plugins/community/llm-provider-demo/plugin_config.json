@@ -1,0 +1,34 @@
+{
+  "llm": {
+    "title": "LLM 设置",
+    "description": "可以单独给这个插件指定提供商和模型。留空则跟随当前全局对话模型。",
+    "type": "object",
+    "fields": {
+      "provider_id": {
+        "title": "提供商",
+        "description": "从 LLM 提供商管理里选择一个启用中的提供商。",
+        "type": "llm_provider",
+        "default": ""
+      },
+      "model_id": {
+        "title": "模型",
+        "description": "从上面提供商下选择一个启用中的模型。",
+        "type": "llm_model",
+        "provider_field": "llm.provider_id",
+        "default": ""
+      },
+      "temperature": {
+        "title": "温度",
+        "description": "控制回复发散程度。",
+        "type": "float",
+        "default": 0.7
+      }
+    }
+  },
+  "prompt_prefix": {
+    "title": "提示词前缀",
+    "description": "会拼到每次示例请求前面。",
+    "type": "text",
+    "default": "请用简洁中文回答。"
+  }
+}

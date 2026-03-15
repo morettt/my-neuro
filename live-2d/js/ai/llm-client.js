@@ -1,16 +1,45 @@
 // llm-client.js - 统一的LLM API客户端
 const { logToTerminal, handleAPIError } = require('../api-utils.js');
+const { llmProviderManager } = require('../core/llm-provider.js');
 
 /**
  * 统一的LLM客户端
  * 封装所有LLM API调用逻辑,消除重复代码
+ * 
+ * 支持两种创建方式：
+ *   1. new LLMClient(config)          - 旧方式，从 config.llm 读取
+ *   2. LLMClient.fromProvider(id)     - 新方式，从 provider 注册表读取
+ *   3. LLMClient.fromProviderConfig(providerObj) - 直接传入 provider 对象
  */
 class LLMClient {
     constructor(config) {
-        this.apiKey = config.llm.api_key;
-        this.apiUrl = config.llm.api_url;
-        this.model = config.llm.model;
-        this.temperature = config.llm.temperature || 1.0;  // 🔥 读取temperature配置，默认1.0
+        // 兼容旧方式：从 config.llm 中读取。
+        // 新代码尽量通过 provider 感知的构造入口创建客户端。
+        const llmConfig = config.llm || config;
+        this.apiKey = llmConfig.api_key;
+        this.apiUrl = llmConfig.api_url;
+        this.model = llmConfig.model;
+        this.temperature = llmConfig.temperature || 1.0;  //🔥 读取temperature配置，默认1.0
+    }
+
+    /**
+     * 从 provider_id 创建 LLMClient 实例
+     * @param {string} providerId - 提供商 ID
+     * @returns {LLMClient}
+     */
+    static fromProvider(providerId, modelId = null) {
+        // 显式传入 modelId，避免多模型 provider 选错模型。
+        const provider = llmProviderManager.resolveProvider(providerId, modelId);
+        return LLMClient.fromProviderConfig(provider);
+    }
+
+    /**
+     * 从 provider 配置对象直接创建 LLMClient 实例
+     * @param {object} provider - { api_key, api_url, model, temperature }
+     * @returns {LLMClient}
+     */
+    static fromProviderConfig(provider) {
+        return new LLMClient(provider);
     }
 
     /**
@@ -462,9 +491,24 @@ class LLMClient {
      */
     updateConfig(newConfig) {
         if (newConfig.llm) {
-            this.apiKey = newConfig.llm.api_key || this.apiKey;
-            this.apiUrl = newConfig.llm.api_url || this.apiUrl;
-            this.model = newConfig.llm.model || this.model;
+            // 优先通过 provider 注册表解析，扁平 llm 字段只作回退。
+            if (newConfig.llm.provider_id) {
+                const provider = llmProviderManager.resolveProviderOrFallback(
+                    newConfig.llm.provider_id,
+                    newConfig.llm.model_id || null
+                );
+                if (provider) {
+                    this.apiKey = provider.api_key;
+                    this.apiUrl = provider.api_url;
+                    this.model = provider.model;
+                    if (provider.temperature !== undefined) {
+                        this.temperature = provider.temperature;
+                    }
+                    logToTerminal('info', `LLM客户端已切换到提供商: ${provider.name || provider.id}`);
+                    return;
+                }
+            }
+            // 必要时回退到显式的 llm 字段。
             this.temperature = newConfig.llm.temperature !== undefined ? newConfig.llm.temperature : this.temperature;  // 🔥 支持temperature更新
             logToTerminal('info', 'LLM客户端配置已更新');
         }
