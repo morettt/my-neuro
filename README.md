@@ -35,6 +35,10 @@
 
 <img src="./image/dmx1.png" width="300" />
 
+### 项目流程图
+
+<img src="./image/runtime-flow-dark-tech-cn.svg" width="1000" />
+
 
 ### 计划清单
 
