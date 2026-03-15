@@ -449,13 +449,13 @@ function switchTab(tabName) {
                 buttonHTML = '<button class="config-save-button save-dialog" onclick="saveDialogSettings()">保存对话配置</button>';
                 break;
             case 'llm-config':
-                buttonHTML = '<button class="config-save-button save-llm" onclick="saveLLMConfig()">保存LLM配置</button>';
+                buttonHTML = '<button class="config-save-button save-llm" onclick="saveLLMConfig()">保存 LLM 配置</button>';
                 break;
             case 'voice-settings':
                 buttonHTML = '<button class="config-save-button save-cloud" onclick="saveCloudSettings()">保存云端配置</button>';
                 break;
             case 'ui-settings':
-                buttonHTML = '<button class="config-save-button save-ui" onclick="saveUISettings()">保存UI设置</button>';
+                buttonHTML = '<button class="config-save-button save-ui" onclick="saveUISettings()">保存 UI 设置</button>';
                 break;
             default:
                 // 无保存按钮的页面显示空占位，保持布局稳定
@@ -463,6 +463,31 @@ function switchTab(tabName) {
                 break;
         }
         configSaveButtons.innerHTML = buttonHTML;
+    }
+
+    // 切换选项卡时重新加载对应配置
+    loadConfigForTab(tabName);
+}
+
+// 根据选项卡加载对应配置
+function loadConfigForTab(tabName) {
+    switch(tabName) {
+        case 'basic-config':
+            loadBasicConfig();
+            break;
+        case 'dialog-config':
+            loadDialogConfig();
+            break;
+        case 'llm-config':
+            loadLLMConfig();
+            break;
+        case 'voice-settings':
+            loadCloudSettings();
+            break;
+        case 'ui-settings':
+            loadUISettings();
+            break;
+        // 其他选项卡不需要加载配置
     }
 }
 
@@ -1148,15 +1173,23 @@ async function toggleTool(event, toolName, toolType) {
             // 更新按钮文本
             toggleBtn.textContent = newEnabled ? '禁用' : '启用';
             
-            // 更新状态显示
-            const detail = card.querySelector('.tool-card-detail');
-            const statusEl = detail.querySelector('.tool-status');
-            const statusIcon = newEnabled ? '●' : '○';
-            const statusText = newEnabled ? '已启用' : '已禁用';
-            statusEl.className = `tool-status ${newEnabled ? 'enabled' : 'disabled'}`;
-            statusEl.textContent = `${statusIcon} ${statusText}`;
+            // 更新状态显示 - 修复：使用正确的选择器查找状态元素
+            const statusEl = card.querySelector('.tool-status-inline');
+            if (statusEl) {
+                const statusIcon = newEnabled ? '●' : '○';
+                const statusText = newEnabled ? '已启用' : '已禁用';
+                statusEl.className = `tool-status-inline ${newEnabled ? 'enabled' : 'disabled'}`;
+                statusEl.textContent = `${statusIcon} ${statusText}`;
+            }
             
             addLog(`工具 ${toolName} 已${newEnabled ? '启用' : '禁用'}`, 'success', 'system');
+            
+            // 刷新工具列表以获取最新状态
+            if (toolType === 'fc') {
+                refreshFCTools();
+            } else {
+                refreshMCPTools();
+            }
         } else {
             addLog(`工具切换失败：${result.error || '未知错误'}`, 'error', 'system');
         }

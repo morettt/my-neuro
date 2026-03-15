@@ -15,7 +15,7 @@ from .utils import PROJECT_ROOT, logger
 tool_bp = Blueprint('tool', __name__)
 
 # 需要跳过的文件
-SKIP_FILES = {'index.js', 'note_server.js', 'pc_control_server.js', 'music_control.js', 'search_server.js'}
+SKIP_FILES = {'index.js'}
 
 
 def scan_tools_directory(dir_path, tool_type):
