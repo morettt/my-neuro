@@ -434,15 +434,7 @@ class UIController {
             const message = chatInput.textContent.trim();
             if (!message) return;
 
-            const chatMessages = document.getElementById('chat-messages');
-            if (chatMessages) {
-                const messageElement = document.createElement('div');
-                messageElement.innerHTML = `<strong>你:</strong> ${message}`;
-                chatMessages.appendChild(messageElement);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
-
-            voiceChat.sendToLLM(message);
+            voiceChat.handleTextMessage(message);
             chatInput.textContent = '';
         };
 

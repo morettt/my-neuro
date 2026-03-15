@@ -130,6 +130,9 @@ class InputRouter {
         // 发送到LLM
         await this.llmHandler(promptWithContext);
 
+        // 保存到记忆库
+        this.saveToMemoryLog();
+
         // 触发用户消息已接收事件（用于心情系统）
         eventBus.emit(Events.USER_MESSAGE_RECEIVED);
     }
