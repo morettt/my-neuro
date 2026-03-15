@@ -28,7 +28,7 @@ print("\n2. 创建 LLM Config...")
 try:
     llm_config = OpenAILLMConfig(
         model_name_or_path="zai-org/GLM-4.6",
-        api_key="sk-iosvzdshjjrzzldouqqnxefokpfncjfkwizvkwzxdjdmxvvm",
+        api_key="sk-your-api-key-here",
         api_base="https://api.siliconflow.cn/v1"
     )
     llm = OpenAILLM(llm_config)
