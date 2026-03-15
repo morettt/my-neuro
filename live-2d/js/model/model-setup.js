@@ -22,6 +22,19 @@ class ModelSetup {
         const model = await PIXI.live2d.Live2DModel.from("2D/肥牛/feiniu.model3.json");
         app.stage.addChild(model);
 
+        // 视线跟踪幅度控制（config.json 中 ui.focus_factor）
+        // 必须拦截 focusController.focus() 而非 model.focus()，
+        // 因为 model.focus() 内部用 atan2+cos/sin 仅传递方向，缩放坐标无效
+        const focusFactor = config.ui?.focus_factor ?? 1;
+        if (focusFactor < 1) {
+            const fc = model.internalModel.focusController;
+            const originalFcFocus = fc.focus.bind(fc);
+            fc.focus = function(x, y, instant) {
+                originalFcFocus(x * focusFactor, y * focusFactor, instant);
+            };
+            console.log(`视线跟踪幅度: ${(focusFactor * 100).toFixed(0)}%`);
+        }
+
         // 根据配置控制模型显示/隐藏
         const showModel = config.ui?.show_model !== false; // 默认显示
         model.visible = showModel;
