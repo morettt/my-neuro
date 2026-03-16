@@ -35,10 +35,6 @@
 
 <img src="./image/dmx1.png" width="300" />
 
-### 项目流程图
-
-<img src="./image/runtime-flow-dark-tech-cn.svg" width="1000" />
-
 
 ### 计划清单
 
@@ -79,6 +75,10 @@
 - [ ] 变色功能：按照模型心情让屏幕变色妨碍用户
 - [ ] 自由走动：模型自由在屏幕中移动
 
+
+### 项目流程图
+
+<img src="./image/runtime-flow-dark-tech-cn.svg" width="1000" />
 
 ### 结尾画饼
 
