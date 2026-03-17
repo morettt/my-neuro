@@ -1,0 +1,10 @@
+[theme]
+# 深色科技风主题
+primaryColor = "#00d4ff"
+backgroundColor = "#0a0e17"
+secondaryBackgroundColor = "#1a1f35"
+textColor = "#e2e8f0"
+font = "sans serif"
+
+[server]
+headless = true

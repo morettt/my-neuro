@@ -1,17 +1,75 @@
 {
+  "storage": {
+    "vector": {
+      "type": "qdrant",
+      "path": "./data/qdrant",
+      "collection_name": "memories",
+      "vector_size": 1024
+    },
+    "graph": {
+      "type": "networkx",
+      "path": "./data/graph_store.json",
+      "enabled": true
+    },
+    "legacy_json": {
+      "path": "./data/memory_store.json",
+      "enabled": true
+    }
+  },
+  "embedding": {
+    "model_path": "../full-hub/rag-hub",
+    "vector_size": 1024
+  },
+  "search": {
+    "default_top_k": 5,
+    "similarity_threshold": 0.5,
+    "enable_reranker": false,
+    "enable_bm25": true,
+    "bm25_weight": 0.3,
+    "enable_graph_query": true,
+    "graph_max_depth": 2,
+    "importance_weight": 0.3,
+    "type_weight_factor": 0.2
+  },
+  "entity_extraction": {
+    "enabled": true,
+    "auto_extract_on_add": true
+  },
+  "scheduler": {
+    "enabled": true,
+    "use_redis": false,
+    "redis_url": "redis://localhost:6379",
+    "max_workers": 4,
+    "quota_per_user": 100
+  },
+  "image": {
+    "enabled": true,
+    "storage_path": "./data/images",
+    "use_clip": false,
+    "max_size_mb": 5,
+    "auto_describe": true
+  },
+  "kb": {
+    "chunk_size": 500,
+    "chunk_overlap": 50
+  },
   "llm": {
     "config": {
-      "model": "",
-      "api_key": "",
-      "base_url": ""
+      "model": "deepseek-ai/DeepSeek-V3.2",
+      "api_key": "sk-",
+      "base_url": "https://api.siliconflow.cn/v1"
     }
   },
   "llm_fallback": {
     "enabled": true,
     "config": {
-      "model": "",
-      "api_key": "",
-      "base_url": ""
+      "model": "google/gemini-3-pro-preview",
+      "api_key": "sk-",
+      "base_url": "https://openrouter.ai/api/v1"
     }
+  },
+  "users": {
+    "default_user": "feiniu_default",
+    "enable_multi_user": false
   }
 }

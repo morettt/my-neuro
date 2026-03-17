@@ -76,6 +76,10 @@
 - [ ] 自由走动：模型自由在屏幕中移动
 
 
+### 项目流程图
+
+<img src="./image/runtime-flow-dark-tech-cn.svg" width="1000" />
+
 ### 结尾画饼
 
 我会把这几年的经验和对技术的理解都加入到此项目中。my neuro 这个名字除了蹭neuro sama的热度以外 更多的是我对AI边界的想象和期待
