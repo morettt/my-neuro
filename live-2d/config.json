@@ -78,8 +78,8 @@
   },
   "ui": {
     "intro_text": "你好啊",
-    "model_scale": 2.3,
-    "show_chat_box": false,
+    "model_scale": 0.25418658283290013,
+    "show_chat_box": true,
     "show_model": true,
     "text_only_mode": false,
     "auto_show_chat_on_text_mode": true,

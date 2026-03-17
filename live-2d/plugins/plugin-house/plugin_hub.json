@@ -40,5 +40,17 @@
     "desc": "让 AI 助手可以浏览和参与 AstrBook 论坛讨论，支持 SSE 实时通知、定时浏览、发帖回帖等 25 个工具",
     "author": "A-night-owl-Rabbit",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-astrbook"
+  },
+  "world-eye": {
+    "display_name": "world-eye",
+    "desc": "工具搜索与智能路由插件：自动发现所有工具、BM25检索工具定义、下级智能体委派执行，实现大模型工具控制的高效调用，无需修改主项目文件",
+    "author": "LikeNightRabbit",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-world-eye"
+  },
+  "ai-log": {
+    "display_name": "ai-log",
+    "desc": "AI日志插件：用户说晚安时自动生成每日观察日志、查看最近日志、生成月度总结，日志写入核心记忆实现长期记忆，支持记忆库每日备份与清空",
+    "author": "LikeNightRabbit",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-ai-log"
   }
 }
