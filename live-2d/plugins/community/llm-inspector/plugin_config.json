@@ -1,0 +1,36 @@
+{
+  "enabled": {
+    "title": "启用",
+    "type": "bool",
+    "default": true,
+    "value": true
+  },
+  "log_to_terminal": {
+    "title": "输出到终端",
+    "description": "每次请求时在终端打印摘要",
+    "type": "bool",
+    "default": true,
+    "value": true
+  },
+  "save_to_file": {
+    "title": "保存到文件",
+    "description": "将完整请求/响应追加写入 AI记录室/LLM抓包.jsonl",
+    "type": "bool",
+    "default": true,
+    "value": true
+  },
+  "max_content_chars": {
+    "title": "终端显示最大字符数",
+    "description": "每条消息在终端最多显示多少字符，0 = 不限制（文件保存始终完整）",
+    "type": "int",
+    "default": 0,
+    "value": 0
+  },
+  "show_tools": {
+    "title": "显示工具定义",
+    "description": "是否在终端输出 tools 列表（仅显示名称，不展开完整 schema）",
+    "type": "bool",
+    "default": true,
+    "value": true
+  }
+}

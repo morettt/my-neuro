@@ -41,7 +41,7 @@ class MemosPlugin extends Plugin {
             const memories = await this.client.search(event.text);
             if (memories.length > 0) {
                 const text = this.client.formatMemoriesForPrompt(memories);
-                this.context.addSystemPromptPatch('memos-recall', `\n【相关长期记忆】:\n${text}`);
+                this.context.addSystemPromptPatch('memos-recall', `\n\n【你对主人的已知记忆，回答时必须自然融入，不要说"根据记忆"】:\n${text}`);
             } else {
                 this.context.removeSystemPromptPatch('memos-recall');
             }
