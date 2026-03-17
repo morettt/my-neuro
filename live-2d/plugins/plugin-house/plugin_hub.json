@@ -52,5 +52,11 @@
     "desc": "AI日志插件：用户说晚安时自动生成每日观察日志、查看最近日志、生成月度总结，日志写入核心记忆实现长期记忆，支持记忆库每日备份与清空",
     "author": "LikeNightRabbit",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-ai-log"
+  },
+  "dawn-dusk-line": {
+    "display_name": "dawn-dusk-line",
+    "desc": "时间感知与整点主动问候插件：提供时间查询工具，并在 0/8/12/18 点智能发起问候，根据对话活跃度自动选择直接问候或自然融入回复，避免打断正在进行的对话",
+    "author": "LikeNightRabbit",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-dawn-dusk-line"
   }
 }
