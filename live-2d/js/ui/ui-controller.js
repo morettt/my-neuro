@@ -434,8 +434,14 @@ class UIController {
             const message = chatInput.textContent.trim();
             if (!message) return;
 
-            voiceChat.handleTextMessage(message);
             chatInput.textContent = '';
+
+            // 走 inputRouter.handleTextInput，触发插件 hooks（含 memos 记忆注入）
+            if (voiceChat.inputRouter) {
+                voiceChat.inputRouter.handleTextInput(message);
+            } else {
+                voiceChat.sendToLLM(message);
+            }
         };
 
         //新的Enter事件注册，不调用preventDefault，会换行

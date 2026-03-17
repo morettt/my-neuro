@@ -58,21 +58,21 @@
         "description": "后端记忆处理使用的 LLM 模型",
         "type": "string",
         "default": "deepseek-ai/DeepSeek-V3.2",
-        "value": "deepseek-ai/DeepSeek-V3.2"
+        "value": "gemini-2.0-flash"
       },
       "api_key": {
         "title": "API Key",
         "description": "后端 LLM 的 API 密钥",
         "type": "string",
         "default": "",
-        "value": ""
+        "value": "sk-zk285d1137be5edfe44a994040962c1c7e1699037a4d7309"
       },
       "base_url": {
         "title": "Base URL",
         "description": "后端 LLM 的 API 地址",
         "type": "string",
         "default": "https://api.siliconflow.cn/v1",
-        "value": "https://api.siliconflow.cn/v1"
+        "value": "https://api.zhizengzeng.com/v1"
       }
     }
   },
@@ -93,21 +93,21 @@
         "description": "备用 LLM 模型",
         "type": "string",
         "default": "google/gemini-3-pro-preview",
-        "value": "google/gemini-3.1-pro-preview"
+        "value": "gemini-2.0-flash"
       },
       "api_key": {
         "title": "备用 API Key",
         "description": "备用 LLM 的 API 密钥",
         "type": "string",
         "default": "",
-        "value": ""
+        "value": "sk-zk285d1137be5edfe44a994040962c1c7e1699037a4d7309"
       },
       "base_url": {
         "title": "备用 Base URL",
         "description": "备用 LLM 的 API 地址",
         "type": "string",
         "default": "https://openrouter.ai/api/v1",
-        "value": "https://openrouter.ai/api/v1"
+        "value": "https://api.zhizengzeng.com/v1"
       }
     }
   },
