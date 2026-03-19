@@ -316,7 +316,7 @@ class TTSPlaybackEngine {
                 if (typeof showSubtitle === 'function') {
                     showSubtitle(`${this.config.subtitle_labels?.ai || 'Fake Neuro'}: ${this.displayedText}`);
                 }
-                
+
                 this.cleanup();
                 this.isPlaying = false;
                 if (this.currentAudioResolve) {
@@ -324,36 +324,30 @@ class TTSPlaybackEngine {
                     this.currentAudioResolve = null;
                 }
 
-                // 触发结束回调
-                if (this.onEndCallback) {
-                    this.onEndCallback();
-                }
-                
-                eventBus.emit(Events.TTS_END);
+                // 注意：不在这里调用 onEndCallback 和发射 TTS_END
+                // 这些由 tts-processor.js 的 handleAllComplete() 统一处理
+                // 避免多段文本时每段结束都触发，导致提前解锁 ASR 和提前结束等待
                 resolve({ completed: true });
             };
             
             this.currentAudio.onerror = (e) => {
                 console.error('音频播放错误:', e);
-                
+
                 // 错误时也切换默认表情
                 if (this.expressionMapper) {
                     // this.expressionMapper.triggerExpression("表情7");
                     const defaultExpr = this.expressionMapper.defaultExpression || "表情1";
                     this.expressionMapper.triggerExpression(defaultExpr);
                 }
-                
+
                 this.cleanupOnError();
-                eventBus.emit(Events.TTS_END);
+                // 注意：不在这里发射 TTS_END 和调用 onEndCallback
+                // 由 tts-processor.js 的 handleAllComplete() 统一处理
                 if (this.currentAudioResolve) {
                     this.currentAudioResolve({ error: true });
                     this.currentAudioResolve = null;
                 }
 
-                if (this.onEndCallback) {
-                    this.onEndCallback();
-                }
-                
                 resolve({ error: true });
             };
             
@@ -361,20 +355,16 @@ class TTSPlaybackEngine {
             // 开始播放
             this.currentAudio.play().catch(error => {
                 console.error('播放失败:', error);
-                
+
                 // 播放失败时切换默认表情
                 if (this.expressionMapper) {
                     const defaultExpr = this.expressionMapper.defaultExpression || "表情1";
                     this.expressionMapper.triggerExpression(defaultExpr);
                 }
-                
+
                 this.cleanupOnError();
-                eventBus.emit(Events.TTS_END);
-                
-                if (this.onEndCallback) {
-                    this.onEndCallback();
-                }
-                
+                // 注意：不在这里发射 TTS_END 和调用 onEndCallback
+                // 由 tts-processor.js 的 handleAllComplete() 统一处理
                 resolve({ error: true });
             });
         });
