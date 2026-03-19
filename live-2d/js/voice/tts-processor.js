@@ -281,6 +281,9 @@ class EnhancedTextProcessor {
         this.isProcessing = false;
         this.shouldStop = false;
         this.ttsUnavailable = false;
+        // 递增中止代数，确保 reset 后还在飞行的旧请求返回时被正确丢弃
+        // 防止 abortAllRequests() abort 的请求因代数未变而错误设置 ttsUnavailable
+        this.abortGeneration++;
 
         // 🔥 取消之前的完成Promise
         if (this.completionResolve) {

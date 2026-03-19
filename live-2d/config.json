@@ -78,15 +78,15 @@
   },
   "ui": {
     "intro_text": "你好啊",
-    "model_scale": 0.25418658283290013,
+    "model_scale": 0.6592945326814194,
     "show_chat_box": true,
     "show_model": true,
     "text_only_mode": false,
     "auto_show_chat_on_text_mode": true,
     "hide_from_screenshot": true,
     "model_position": {
-      "x": 1.2534382152557373,
-      "y": 1.176663283515905,
+      "x": 1.3192581489183488,
+      "y": 0.5715708406376147,
       "remember_position": true
     }
   },
@@ -114,5 +114,5 @@
   "auto_close_services": {
     "enabled": false
   },
-  "version": "v6.3.6"
+  "version": "v6.3.7"
 }
