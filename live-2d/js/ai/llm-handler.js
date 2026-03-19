@@ -49,6 +49,53 @@ class LLMHandler {
             });
         };
 
+        // 辅助函数：过滤非法的 tool 消息
+        // 用于处理中转站 JSON 错乱时生成的孤立 tool 消息，避免 400 报错
+        const filterInvalidToolMessages = (messages) => {
+            const validMessages = [];
+            const pendingToolCallIds = new Set();
+            
+            for (let i = 0; i < messages.length; i++) {
+                const msg = messages[i];
+                
+                // 如果是 assistant 消息且有 tool_calls，记录所有 tool_call_id
+                if (msg.role === 'assistant' && msg.tool_calls && Array.isArray(msg.tool_calls)) {
+                    validMessages.push(msg);
+                    msg.tool_calls.forEach(tc => pendingToolCallIds.add(tc.id));
+                }
+                // 如果是 tool 消息，检查是否有效
+                else if (msg.role === 'tool') {
+                    // 检查是否有必需的字段
+                    if (!msg.tool_call_id || !msg.name) {
+                        console.warn('🧹 过滤掉缺少必要字段的 tool 消息:', JSON.stringify(msg));
+                        logToTerminal('warn', `🧹 过滤掉缺少必要字段的 tool 消息`);
+                        continue; // 跳过无效 tool 消息
+                    }
+                    // 检查是否有对应的 tool_call
+                    if (!pendingToolCallIds.has(msg.tool_call_id)) {
+                        console.warn('🧹 过滤掉孤立的 tool 消息 (无对应 tool_call):', msg.tool_call_id);
+                        logToTerminal('warn', `🧹 过滤掉孤立的 tool 消息：${msg.tool_call_id}`);
+                        continue; // 跳过孤立的 tool 消息
+                    }
+                    // 有效的 tool 消息，移除已匹配的 tool_call_id
+                    pendingToolCallIds.delete(msg.tool_call_id);
+                    validMessages.push(msg);
+                }
+                // 其他角色消息直接添加
+                else {
+                    validMessages.push(msg);
+                }
+            }
+            
+            // 如果有被过滤的消息，输出日志
+            if (validMessages.length !== messages.length) {
+                console.log(`🧹 已过滤 ${messages.length - validMessages.length} 条非法 tool 消息`);
+                logToTerminal('info', `🧹 已过滤 ${messages.length - validMessages.length} 条非法 tool 消息`);
+            }
+            
+            return validMessages;
+        };
+
         return async function(prompt) {
             let hasRetriedWithoutImage = false; // 标志：是否已经重试过（避免无限循环）
             let isFirstAttempt = true; // 标志：是否是第一次尝试
@@ -181,12 +228,15 @@ class LLMHandler {
                         }
                     }
 
+                    // 🔥 过滤非法的 tool 消息（处理中转站 JSON 错乱导致的孤立 tool 消息）
+                    messagesForAPI = filterInvalidToolMessages(messagesForAPI);
+
                     // 触发插件 onLLMRequest 钩子（插件可修改 messages）
                     if (global.pluginManager) {
                         await global.pluginManager.runLLMRequestHooks({ messages: messagesForAPI, tools: allTools }).catch(() => {});
                     }
 
-                    // 使用统一的LLM客户端
+                    // 使用统一的 LLM 客户端
                     // 🔍 如果是第一轮且有用户截图且启用了视觉模型，使用视觉模型客户端
                     let result;
                     if (iteration === 0 && useVisionModelForFirstRound) {
