@@ -53,18 +53,15 @@ class MemosPlugin extends Plugin {
     async onLLMResponse(response) {
         if (!this.client?.enabled || !this._cfg.auto_save) return;
 
-        try {
-            const messages = this.context.getMessages();
-            const lastUser = [...messages].reverse().find(m => m.role === 'user');
-            if (!lastUser) return;
+const messages = this.context.getMessages();
+        const lastUser = [...messages].reverse().find(m => m.role === 'user');
+        if (!lastUser) return;
 
-            await this.client.addWithBuffer([
-                { role: 'user', content: lastUser.content },
-                { role: 'assistant', content: response.text }
-            ]);
-        } catch (err) {
-            this.context.log('error', `MemOS 保存对话失败: ${err.message}`);
-        }
+        this.client.addWithBuffer([
+            { role: 'user', content: lastUser.content },
+            { role: 'assistant', content: response.text }
+        ]).catch(err => {            this.context.log('error', `MemOS 保存对话失败: ${err.message}`);
+        });
     }
 
     getTools() {
