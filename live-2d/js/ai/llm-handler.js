@@ -14,7 +14,9 @@ function filterThinkingContent(text) {
     if (!text) return text;
     let filtered = text;
     filtered = filtered.replace(/<think>[\s\S]*?<\/think>/gi, '');
+    filtered = filtered.replace(/^[\s\S]*<\/think>/gi, '');
     filtered = filtered.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+    filtered = filtered.replace(/^[\s\S]*<\/thinking>/gi, '');
     if (/^思考\s*\n/.test(filtered)) return '';
     if (/^Thinking\s*\n/i.test(filtered)) return '';
     return filtered.trim();

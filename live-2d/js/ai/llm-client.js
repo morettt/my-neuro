@@ -329,14 +329,20 @@ class LLMClient {
 
         let filtered = text;
 
-        // 过滤 <think>...</think> 块（DeepSeek、部分 Gemini 格式）
+        // 过滤成对的 <think>...</think> 块（DeepSeek 等）
         filtered = filtered.replace(/<think>[\s\S]*?<\/think>/gi, '');
 
-        // 过滤 <thinking>...</thinking> 块
+        // 过滤孤立 </think>：Gemini 经常不输出 <think> 开头，直接以 XML 分析块开始，
+        // 最后才出现 </think>，真正回复在其后面。贪婪匹配到最后一个 </think>
+        filtered = filtered.replace(/^[\s\S]*<\/think>/gi, '');
+
+        // 过滤成对的 <thinking>...</thinking> 块
         filtered = filtered.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
 
+        // 过滤孤立 </thinking>（同理）
+        filtered = filtered.replace(/^[\s\S]*<\/thinking>/gi, '');
+
         // 过滤 Gemini 中文思考格式：整段以"思考"开头（独占一行）的内容
-        // 仅在整段内容都是思考时才清除（避免误杀正常对话中的"思考"二字）
         if (/^思考\s*\n/.test(filtered)) {
             filtered = '';
         }
