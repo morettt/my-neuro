@@ -77,23 +77,35 @@ class LLMHandler {
                         eventBus.emit(Events.USER_INPUT_START);
                     }
 
-                // 检查是否正在播放TTS，如果是则先中断（仅第一次）
+                // 检查是否正在播放TTS（仅第一次）
                 if (isFirstAttempt && appState.isPlayingTTS()) {
-                    console.log('检测到TTS正在播放，执行打断操作');
-                    logToTerminal('info', '检测到TTS正在播放，执行打断操作');
+                    if (config.asr?.voice_barge_in) {
+                        // 语音打断模式：立即中断当前TTS
+                        console.log('检测到TTS正在播放，执行打断操作');
+                        logToTerminal('info', '检测到TTS正在播放，执行打断操作');
 
-                    // 发送中断信号
-                    if (ttsProcessor) {
-                        ttsProcessor.interrupt();
+                        if (ttsProcessor) {
+                            ttsProcessor.interrupt();
+                        }
+
+                        if (global.hideSubtitle) {
+                            global.hideSubtitle();
+                        }
+
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    } else {
+                        // 非打断模式：等待当前TTS播放完成再继续
+                        logToTerminal('info', '⏳ TTS 正在播放，等待播放完成后再处理...');
+                        await new Promise(resolve => {
+                            const onEnd = () => {
+                                eventBus.off(Events.TTS_END, onEnd);
+                                eventBus.off(Events.TTS_INTERRUPTED, onEnd);
+                                resolve();
+                            };
+                            eventBus.on(Events.TTS_END, onEnd);
+                            eventBus.on(Events.TTS_INTERRUPTED, onEnd);
+                        });
                     }
-
-                    // 隐藏字幕
-                    if (global.hideSubtitle) {
-                        global.hideSubtitle();
-                    }
-
-                    // 等待短暂时间确保中断完成
-                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
 
                 // global.isProcessingUserInput 已通过事件自动管理，无需手动设置
