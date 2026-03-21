@@ -91,6 +91,9 @@ app.whenReady().then(() => {
 
 
 app.on('window-all-closed', () => {
+    if (global.pluginManager) {
+        global.pluginManager.stopWatching();
+    }
     if (process.platform !== 'darwin') {
         app.quit()
     }
