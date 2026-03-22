@@ -6,6 +6,20 @@ const { appState } = require('../core/app-state.js');
 const { LLMClient } = require('./llm-client.js');
 const { toolExecutor } = require('./tool-executor.js');
 
+/**
+ * 过滤模型思考内容，与 LLMClient._filterThinkingContent 保持一致
+ * 作为 TTS/字幕前的二次安全过滤
+ */
+function filterThinkingContent(text) {
+    if (!text) return text;
+    let filtered = text;
+    filtered = filtered.replace(/<think>[\s\S]*?<\/think>/gi, '');
+    filtered = filtered.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+    if (/^思考\s*\n/.test(filtered)) return '';
+    if (/^Thinking\s*\n/i.test(filtered)) return '';
+    return filtered.trim();
+}
+
 class LLMHandler {
     // 创建增强的sendToLLM方法
     static createEnhancedSendToLLM(voiceChat, ttsProcessor, asrEnabled, config) {
@@ -243,16 +257,18 @@ class LLMHandler {
                         logToolAction('info', formatToolCalls(result.tool_calls));
 
                         // 🎙️ 如果AI在调用工具前说了话,必须等播放完才继续
-                        if (result.content && result.content.trim()) {
-                            console.log(`💬 AI中间过程: ${result.content}`);
-                            logToTerminal('info', `💬 AI中间过程: ${result.content}`);
+                        // 🔥 二次安全过滤：跳过模型思考内容（Gemini 等模型可能在 content 中输出思考过程）
+                        const filteredIntermediateContent = filterThinkingContent(result.content);
+                        if (filteredIntermediateContent && filteredIntermediateContent.trim()) {
+                            console.log(`💬 AI中间过程: ${filteredIntermediateContent}`);
+                            logToTerminal('info', `💬 AI中间过程: ${filteredIntermediateContent}`);
 
                             // 🔥 中间过程播放TTS（工具调用的中间内容）
                             if (iteration === 0) {
                                 // 第一轮才reset
                                 ttsProcessor.reset();
                             }
-                            ttsProcessor.processTextToSpeech(result.content);
+                            ttsProcessor.processTextToSpeech(filteredIntermediateContent);
 
                             // 等待TTS_END或TTS_INTERRUPTED事件触发
                             await new Promise(resolve => {
@@ -406,13 +422,15 @@ class LLMHandler {
                                     console.log(`AI分析图片后想继续调用工具，进入第 ${iteration} 轮`);
 
                                     // 🎙️ 如果AI在调用工具前说了话,必须等播放完才继续
-                                    if (visionResult.content && visionResult.content.trim()) {
-                                        console.log(`💬 AI图片分析后的中间过程: ${visionResult.content}`);
-                                        logToTerminal('info', `💬 AI图片分析后的中间过程: ${visionResult.content}`);
+                                    // 🔥 过滤思考内容
+                                    const filteredVisionContent = filterThinkingContent(visionResult.content);
+                                    if (filteredVisionContent && filteredVisionContent.trim()) {
+                                        console.log(`💬 AI图片分析后的中间过程: ${filteredVisionContent}`);
+                                        logToTerminal('info', `💬 AI图片分析后的中间过程: ${filteredVisionContent}`);
 
                                         // 播放TTS并等待真正的播放完成(监听TTS_END事件)
                                         ttsProcessor.reset();
-                                        ttsProcessor.processTextToSpeech(visionResult.content);
+                                        ttsProcessor.processTextToSpeech(filteredVisionContent);
 
                                         // 等待TTS_END或TTS_INTERRUPTED事件触发
                                         await new Promise(resolve => {
@@ -652,8 +670,11 @@ class LLMHandler {
                     // 🎙️ 播放最终回复的TTS（统一在这里播放，参考旧版本的设计）
                     console.log('✅ 最终回复已处理完成，开始播放TTS');
 
+                    // 🔥 过滤最终回复中的思考内容
+                    const filteredFinalContent = filterThinkingContent(finalResponseContent);
+
                     // 触发插件 onLLMResponse 钩子（插件可修改 responseObj.text，影响 TTS 内容）
-                    const responseObj = { text: finalResponseContent };
+                    const responseObj = { text: filteredFinalContent || finalResponseContent };
                     if (global.pluginManager) {
                         await global.pluginManager.runLLMResponseHooks(responseObj).catch(() => {});
                     }

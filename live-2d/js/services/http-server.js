@@ -193,6 +193,40 @@ class HttpServer {
                 .catch(error => res.json({ success: false, message: error.toString() }));
         });
 
+        // ===== 插件管理接口 =====
+
+        this.emotionApp.get('/plugins', (req, res) => {
+            const pm = global.pluginManager;
+            if (!pm) return res.json({ success: false, message: '插件管理器未初始化' });
+            res.json({ success: true, plugins: pm.getPluginList() });
+        });
+
+        this.emotionApp.post('/plugins/reload', (req, res) => {
+            const pm = global.pluginManager;
+            if (!pm) return res.json({ success: false, message: '插件管理器未初始化' });
+            const { name } = req.body || {};
+            if (!name) return res.json({ success: false, message: '缺少 name 参数' });
+            pm.reload(name)
+                .then(() => res.json({ success: true, message: `插件 ${name} 已重载` }))
+                .catch(e => res.json({ success: false, message: e.message }));
+        });
+
+        this.emotionApp.post('/plugins/reload-all', (req, res) => {
+            const pm = global.pluginManager;
+            if (!pm) return res.json({ success: false, message: '插件管理器未初始化' });
+            pm.reloadAll()
+                .then(() => res.json({ success: true, message: '所有插件已重载' }))
+                .catch(e => res.json({ success: false, message: e.message }));
+        });
+
+        this.emotionApp.post('/plugins/sync', (req, res) => {
+            const pm = global.pluginManager;
+            if (!pm) return res.json({ success: false, message: '插件管理器未初始化' });
+            pm.syncEnabledPlugins()
+                .then(() => res.json({ success: true, message: '插件列表已同步' }))
+                .catch(e => res.json({ success: false, message: e.message }));
+        });
+
         this.emotionApp.listen(3002, () => {
             console.log('情绪控制服务启动在端口3002');
         });
