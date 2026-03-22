@@ -114,5 +114,6 @@
   "auto_close_services": {
     "enabled": false
   },
+  "language": "zh_CN",
   "version": "v6.3.7"
 }

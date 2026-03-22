@@ -133,12 +133,12 @@ QPushButton:pressed {
 }
 
 /* 控制按钮特殊样式 */
-#pushButton_toggle_live2d[state="start"],#pushButton_start_terminal,#pushButton_start_asr,#pushButton_start_bert,#pushButton_start_rag,#pushButton_start_minecraft_terminal {
+#pushButton_toggle_live2d[state=&quot;start&quot;],#pushButton_start_terminal,#pushButton_start_asr,#pushButton_start_bert,#pushButton_start_rag,#pushButton_start_minecraft_terminal {
 	background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(144, 238, 144, 255), stop:1 rgba(152, 251, 152, 255));
 color: rgb(34, 139, 34);
 }
 
-#pushButton_toggle_live2d[state="stop"],#pushButton_stop_terminal,#pushButton_stop_asr,#pushButton_stop_bert,#pushButton_stop_rag {
+#pushButton_toggle_live2d[state=&quot;stop&quot;],#pushButton_stop_terminal,#pushButton_stop_asr,#pushButton_stop_bert,#pushButton_stop_rag {
 	background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(255, 182, 193, 255), stop:1 rgba(255, 160, 122, 255));
 color: rgb(139, 69, 19);
 }
@@ -432,19 +432,19 @@ QListWidget#listWidget_tools::item:selected {
 }
 
 /* 状态指示样式 */
-QListWidget#listWidget_tools::item[text^="● "] {
+QListWidget#listWidget_tools::item[text^=&quot;● &quot;] {
 	color: rgb(70, 60, 45);
 }
 
-QListWidget#listWidget_tools::item[text^="● "]:first-letter {
+QListWidget#listWidget_tools::item[text^=&quot;● &quot;]:first-letter {
 	color: rgba(70, 150, 70, 255);
 }
 
-QListWidget#listWidget_tools::item[text^="○ "] {
+QListWidget#listWidget_tools::item[text^=&quot;○ &quot;] {
 	color: rgb(70, 60, 45);
 }
 
-QListWidget#listWidget_tools::item[text^="○ "]:first-letter {
+QListWidget#listWidget_tools::item[text^=&quot;○ &quot;]:first-letter {
 	color: rgba(120, 120, 120, 255);
 }
 
@@ -480,19 +480,19 @@ QListWidget#listWidget_mcp_tools::item:selected {
 	color: rgb(40, 30, 15);
 }
 
-QListWidget#listWidget_mcp_tools::item[text^="● "] {
+QListWidget#listWidget_mcp_tools::item[text^=&quot;● &quot;] {
 	color: rgb(70, 60, 45);
 }
 
-QListWidget#listWidget_mcp_tools::item[text^="● "]:first-letter {
+QListWidget#listWidget_mcp_tools::item[text^=&quot;● &quot;]:first-letter {
 	color: rgba(70, 150, 70, 255);
 }
 
-QListWidget#listWidget_mcp_tools::item[text^="○ "] {
+QListWidget#listWidget_mcp_tools::item[text^=&quot;○ &quot;] {
 	color: rgb(70, 60, 45);
 }
 
-QListWidget#listWidget_mcp_tools::item[text^="○ "]:first-letter {
+QListWidget#listWidget_mcp_tools::item[text^=&quot;○ &quot;]:first-letter {
 	color: rgba(120, 120, 120, 255);
 }
 
@@ -1374,7 +1374,7 @@ QTabWidget#tabWidget_tools QTabBar {
                   </widget>
                  </item>
                  <item>
-                    <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="1,2,10">
+                  <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="1,2,10">
                    <property name="spacing">
                     <number>10</number>
                    </property>
@@ -1499,21 +1499,21 @@ QTabWidget#tabWidget_tools QTabBar {
                  </item>
                  <item>
                   <widget class="QCheckBox" name="checkBox_persistent_history">
-                      <property name="sizePolicy">
-                       <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="font">
-                       <font>
-                        <family>微软雅黑</family>
-                        <pointsize>10</pointsize>
-                       </font>
-                      </property>
-                      <property name="text">
-                       <string>启用对话历史记忆（警告：这个目前有bug 会导致AI复读混乱，请暂时别选择）</string>
-                      </property>
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="font">
+                    <font>
+                     <family>微软雅黑</family>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="text">
+                    <string>启用对话历史记忆（警告：这个目前有bug 会导致AI复读混乱，请暂时别选择）</string>
+                   </property>
                   </widget>
                  </item>
                  <item>
@@ -1734,14 +1734,14 @@ QPushButton:pressed {
                    <pointsize>9</pointsize>
                   </font>
                  </property>
+                 <property name="styleSheet">
+                  <string notr="true">color: #666666; padding: 5px; background-color: #f0f0f0; border-radius: 5px;</string>
+                 </property>
                  <property name="text">
                   <string>说明：当主模型（LLM）不支持图片识别时，可以启用此配置。在需要视觉功能时，系统会自动使用此辅助模型处理图片。</string>
                  </property>
                  <property name="wordWrap">
                   <bool>true</bool>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">color: #666666; padding: 5px; background-color: #f0f0f0; border-radius: 5px;</string>
                  </property>
                 </widget>
                </item>
@@ -1778,10 +1778,7 @@ QPushButton:pressed {
                </item>
                <item>
                 <layout class="QGridLayout" name="gridLayout_vision">
-                 <property name="horizontalSpacing">
-                  <number>10</number>
-                 </property>
-                 <property name="verticalSpacing">
+                 <property name="spacing">
                   <number>10</number>
                  </property>
                  <item row="0" column="0">
@@ -3085,22 +3082,22 @@ QTextBrowser img {
                </property>
                <item>
                 <widget class="QScrollArea" name="scrollArea_function_call">
-                 <property name="widgetResizable">
-                  <bool>true</bool>
-                 </property>
                  <property name="styleSheet">
                   <string notr="true">QScrollArea {
     border: none;
     background-color: transparent;
 }</string>
                  </property>
+                 <property name="widgetResizable">
+                  <bool>true</bool>
+                 </property>
                  <widget class="QWidget" name="scrollAreaWidgetContents_function_call">
                   <property name="geometry">
                    <rect>
                     <x>0</x>
                     <y>0</y>
-                    <width>587</width>
-                    <height>367</height>
+                    <width>100</width>
+                    <height>30</height>
                    </rect>
                   </property>
                   <layout class="QVBoxLayout" name="verticalLayout_fc_cards">
@@ -3135,22 +3132,22 @@ QTextBrowser img {
                </property>
                <item>
                 <widget class="QScrollArea" name="scrollArea_mcp">
-                 <property name="widgetResizable">
-                  <bool>true</bool>
-                 </property>
                  <property name="styleSheet">
                   <string notr="true">QScrollArea {
     border: none;
     background-color: transparent;
 }</string>
                  </property>
+                 <property name="widgetResizable">
+                  <bool>true</bool>
+                 </property>
                  <widget class="QWidget" name="scrollAreaWidgetContents_mcp">
                   <property name="geometry">
                    <rect>
                     <x>0</x>
                     <y>0</y>
-                    <width>587</width>
-                    <height>367</height>
+                    <width>100</width>
+                    <height>30</height>
                    </rect>
                   </property>
                   <layout class="QVBoxLayout" name="verticalLayout_mcp_cards">
@@ -3199,9 +3196,6 @@ QTextBrowser img {
                    <bold>true</bold>
                   </font>
                  </property>
-                 <property name="text">
-                  <string>🔄 刷新工具列表</string>
-                 </property>
                  <property name="styleSheet">
                   <string notr="true">QPushButton {
     background-color: #2c3e50;
@@ -3216,26 +3210,29 @@ QPushButton:pressed {
     background-color: #1a252f;
 }</string>
                  </property>
+                 <property name="text">
+                  <string>🔄 刷新工具列表</string>
+                 </property>
                 </widget>
                </item>
                <item>
                 <widget class="QScrollArea" name="scrollArea_tool_market">
-                 <property name="widgetResizable">
-                  <bool>true</bool>
-                 </property>
                  <property name="styleSheet">
                   <string notr="true">QScrollArea {
     border: none;
     background-color: transparent;
 }</string>
                  </property>
+                 <property name="widgetResizable">
+                  <bool>true</bool>
+                 </property>
                  <widget class="QWidget" name="scrollAreaWidgetContents_tool_market">
                   <property name="geometry">
                    <rect>
                     <x>0</x>
                     <y>0</y>
-                    <width>587</width>
-                    <height>367</height>
+                    <width>100</width>
+                    <height>30</height>
                    </rect>
                   </property>
                   <layout class="QVBoxLayout" name="verticalLayout_tool_cards">
@@ -3284,9 +3281,6 @@ QPushButton:pressed {
                    <bold>true</bold>
                   </font>
                  </property>
-                 <property name="text">
-                  <string>🔄 刷新FC工具列表</string>
-                 </property>
                  <property name="styleSheet">
                   <string notr="true">QPushButton {
     background-color: #FF9800;
@@ -3301,26 +3295,29 @@ QPushButton:pressed {
     background-color: #E65100;
 }</string>
                  </property>
+                 <property name="text">
+                  <string>🔄 刷新FC工具列表</string>
+                 </property>
                 </widget>
                </item>
                <item>
                 <widget class="QScrollArea" name="scrollArea_fc_market">
-                 <property name="widgetResizable">
-                  <bool>true</bool>
-                 </property>
                  <property name="styleSheet">
                   <string notr="true">QScrollArea {
     border: none;
     background-color: transparent;
 }</string>
                  </property>
+                 <property name="widgetResizable">
+                  <bool>true</bool>
+                 </property>
                  <widget class="QWidget" name="scrollAreaWidgetContents_fc_market">
                   <property name="geometry">
                    <rect>
                     <x>0</x>
                     <y>0</y>
-                    <width>587</width>
-                    <height>367</height>
+                    <width>100</width>
+                    <height>30</height>
                    </rect>
                   </property>
                   <layout class="QVBoxLayout" name="verticalLayout_fc_cards">
@@ -3462,13 +3459,41 @@ QPushButton:pressed {
              <property name="text">
               <string>说明：这里设置的名称会在对话界面中显示，用于区分用户和AI的消息。字幕开关控制是否显示对话字幕。自动关闭服务功能会在退出UI时同时关闭ASR、TTS、BERT、RAG等所有服务进程。</string>
              </property>
+             <property name="alignment">
+              <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+             </property>
              <property name="wordWrap">
               <bool>true</bool>
              </property>
-             <property name="alignment">
-              <set>Qt::AlignLeft|Qt::AlignTop</set>
-             </property>
             </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_7">
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <item>
+              <widget class="QLabel" name="label_8">
+               <property name="text">
+                <string>语言/Language:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QComboBox" name="comboBox_language_switch">
+               <item>
+                <property name="text">
+                 <string>中文（zh_CN）</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>English（en_US）</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+            </layout>
            </item>
            <item>
             <spacer name="verticalSpacer_ui_settings">
@@ -3563,10 +3588,7 @@ QPushButton:pressed {
                </item>
                <item>
                 <layout class="QGridLayout" name="gridLayout_cloud_gateway">
-                 <property name="horizontalSpacing">
-                  <number>10</number>
-                 </property>
-                 <property name="verticalSpacing">
+                 <property name="spacing">
                   <number>10</number>
                  </property>
                  <item row="0" column="0">
@@ -3754,10 +3776,7 @@ QPushButton:pressed {
                </item>
                <item>
                 <layout class="QGridLayout" name="gridLayout_cloud_general">
-                 <property name="horizontalSpacing">
-                  <number>10</number>
-                 </property>
-                 <property name="verticalSpacing">
+                 <property name="spacing">
                   <number>10</number>
                  </property>
                  <item row="0" column="0">
@@ -3854,10 +3873,7 @@ QPushButton:pressed {
                </item>
                <item>
                 <layout class="QGridLayout" name="gridLayout_cloud_tts">
-                 <property name="horizontalSpacing">
-                  <number>10</number>
-                 </property>
-                 <property name="verticalSpacing">
+                 <property name="spacing">
                   <number>10</number>
                  </property>
                  <item row="0" column="0">
@@ -4084,10 +4100,7 @@ QPushButton:pressed {
                </item>
                <item>
                 <layout class="QGridLayout" name="gridLayout_aliyun_tts">
-                 <property name="horizontalSpacing">
-                  <number>10</number>
-                 </property>
-                 <property name="verticalSpacing">
+                 <property name="spacing">
                   <number>10</number>
                  </property>
                  <item row="0" column="0">
@@ -4238,10 +4251,7 @@ QPushButton:pressed {
                </item>
                <item>
                 <layout class="QGridLayout" name="gridLayout_cloud_asr">
-                 <property name="horizontalSpacing">
-                  <number>10</number>
-                 </property>
-                 <property name="verticalSpacing">
+                 <property name="spacing">
                   <number>10</number>
                  </property>
                  <item row="0" column="0">
@@ -4402,9 +4412,6 @@ QPushButton:pressed {
                <bold>true</bold>
               </font>
              </property>
-             <property name="text">
-              <string>← 返回启动页</string>
-             </property>
              <property name="styleSheet">
               <string notr="true">QPushButton {
     background-color: #3498db;
@@ -4418,6 +4425,9 @@ QPushButton:hover {
 QPushButton:pressed {
     background-color: #2874a6;
 }</string>
+             </property>
+             <property name="text">
+              <string>← 返回启动页</string>
              </property>
             </widget>
            </item>
@@ -4437,9 +4447,6 @@ QPushButton:pressed {
                <bold>true</bold>
               </font>
              </property>
-             <property name="text">
-              <string>🔄 刷新提示词列表</string>
-             </property>
              <property name="styleSheet">
               <string notr="true">QPushButton {
     background-color: #8e44ad;
@@ -4454,26 +4461,29 @@ QPushButton:pressed {
     background-color: #6c3483;
 }</string>
              </property>
+             <property name="text">
+              <string>🔄 刷新提示词列表</string>
+             </property>
             </widget>
            </item>
            <item>
             <widget class="QScrollArea" name="scrollArea_prompt_market">
-             <property name="widgetResizable">
-              <bool>true</bool>
-             </property>
              <property name="styleSheet">
               <string notr="true">QScrollArea {
     border: none;
     background-color: transparent;
 }</string>
              </property>
+             <property name="widgetResizable">
+              <bool>true</bool>
+             </property>
              <widget class="QWidget" name="scrollAreaWidgetContents_prompt_market">
               <property name="geometry">
                <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>587</width>
-                <height>367</height>
+                <width>98</width>
+                <height>28</height>
                </rect>
               </property>
               <layout class="QVBoxLayout" name="verticalLayout_prompt_cards">
@@ -4519,9 +4529,6 @@ QPushButton:pressed {
                <bold>true</bold>
               </font>
              </property>
-             <property name="text">
-              <string>← 返回启动页</string>
-             </property>
              <property name="styleSheet">
               <string notr="true">QPushButton {
     background-color: #3498db;
@@ -4536,6 +4543,9 @@ QPushButton:pressed {
     background-color: #2874a6;
 }</string>
              </property>
+             <property name="text">
+              <string>← 返回启动页</string>
+             </property>
             </widget>
            </item>
            <item>
@@ -4545,9 +4555,6 @@ QPushButton:pressed {
                <family>微软雅黑</family>
                <pointsize>11</pointsize>
               </font>
-             </property>
-             <property name="readOnly">
-              <bool>true</bool>
              </property>
              <property name="styleSheet">
               <string notr="true">QTextEdit {
@@ -4560,6 +4567,9 @@ QPushButton:pressed {
 QTextEdit:focus {
     border: 1px solid rgba(0, 0, 0, 0.1);
 }</string>
+             </property>
+             <property name="readOnly">
+              <bool>true</bool>
              </property>
             </widget>
            </item>

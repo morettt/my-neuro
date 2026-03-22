@@ -1,4 +1,5 @@
 import json
+import locale
 import sys
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
@@ -21,6 +22,7 @@ import glob
 import webbrowser
 import requests
 from pathlib import Path
+from PyQt5.QtWidgets import QApplication, QMessageBox
 
 
 # 在这里添加新函数
@@ -44,6 +46,50 @@ def get_app_path():
         # 如果是开发环境，返回Python文件所在的目录
         return os.path.dirname(os.path.abspath(__file__))
 
+# 定义外部文件路径
+BASE_DIR = get_app_path()
+CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+LANG_DIR = os.path.join(BASE_DIR, "lang")
+def load_language_config():
+    """读取本地配置，默认中文"""
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                return config.get("language", "zh_CN")
+        except Exception:
+            pass
+
+    # 2. 如果是首次启动（无配置），探测操作系统语言
+    try:
+        sys_lang, _ = locale.getdefaultlocale()
+        if sys_lang and sys_lang.startswith('en'):
+            return "en_US"
+    except:
+        pass
+
+    return "zh_CN"
+
+
+def save_language_config(lang_code):
+    """保存用户的语言选择到本地"""
+    config = {}
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        except:
+            pass
+
+    config["language"] = lang_code
+    # 加入错误捕捉，如果是权限问题导致写不进去，可以通过弹窗抓到
+    try:
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        # 这个弹窗可以在没有界面的情况下弹出来
+        msg = QMessageBox()
+        msg.warning(None, "配置保存失败", f"无法写入 config.json: {e}")
 
 def load_tool_descriptions():
     """加载所有工具的名称和描述"""
@@ -963,7 +1009,7 @@ class set_pyqt(QWidget):
 
         except Exception as e:
             self.toast.show_message(f"生成失败：{str(e)}", 3000)
-            self.ui.label_bat_status.setText("生成失败")
+            self.ui.label_bat_status.setText(self.tr("生成失败"))
 
 
     def setup_motion_buttons(self):
@@ -1258,19 +1304,19 @@ class set_pyqt(QWidget):
         singing_section.setFixedHeight(150)
         singing_layout = QVBoxLayout(singing_section)
         
-        singing_label = QLabel("🎵 唱歌控制")
+        singing_label = QLabel(self.tr("🎵 唱歌控制"))
         singing_label.setObjectName("subTitle")
         singing_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         singing_layout.addWidget(singing_label)
         
         singing_buttons_layout = QHBoxLayout()
-        start_singing_btn = QPushButton("🎵 开始唱歌")
+        start_singing_btn = QPushButton(self.tr("🎵 开始唱歌"))
         start_singing_btn.setObjectName("start_singing_btn")
         start_singing_btn.clicked.connect(lambda: self.trigger_emotion_motion("唱歌"))
         
-        stop_singing_btn = QPushButton("🛑 停止唱歌")
+        stop_singing_btn = QPushButton(self.tr("🛑 停止唱歌"))
         stop_singing_btn.setObjectName("stop_singing_btn")
-        stop_singing_btn.clicked.connect(lambda: self.trigger_emotion_motion("停止"))
+        stop_singing_btn.clicked.connect(lambda: self.trigger_emotion_motion(self.tr("停止")))
         
         singing_buttons_layout.addWidget(start_singing_btn)
         singing_buttons_layout.addWidget(stop_singing_btn)
@@ -1290,20 +1336,20 @@ class set_pyqt(QWidget):
         expression_section = QWidget()
         expression_layout = QVBoxLayout(expression_section)
         
-        expression_label = QLabel("😊 表情控制")
+        expression_label = QLabel(self.tr("😊 表情控制"))
         expression_label.setObjectName("subTitle")
         expression_label.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 10px;")
         expression_layout.addWidget(expression_label)
         
         # 表情一键还原按钮
-        expression_reset_btn = QPushButton("🔄 一键还原表情")
+        expression_reset_btn = QPushButton(self.tr("🔄 一键还原表情"))
         expression_reset_btn.setObjectName("stopButton")
         # expression_reset_btn.clicked.connect(self.reset_expression_config)
         expression_reset_btn.clicked.connect(self.reset_current_character1)
         expression_layout.addWidget(expression_reset_btn, alignment=Qt.AlignRight)
         
         # 表情情绪绑定区域说明
-        binding_label = QLabel("情绪表情绑定区域（拖拽下方表情按钮到对应区域）")
+        binding_label = QLabel(self.tr("情绪表情绑定区域（拖拽下方表情按钮到对应区域）"))
         binding_label.setObjectName("subTitle")
         binding_label.setStyleSheet("font-size: 12px; color: #666; margin-top: 5px;")
         expression_layout.addWidget(binding_label)
@@ -1322,7 +1368,7 @@ class set_pyqt(QWidget):
         emotion_expression_layout = QGridLayout(emotion_expression_frame)
         
         # 创建6种情绪绑定区域（不作为按钮，只作为投放区域）
-        emotion_bindings = ["开心", "生气", "难过", "惊讶", "害羞", "俏皮"]
+        emotion_bindings = [self.tr("开心"), self.tr("生气"), self.tr("难过"), self.tr("惊讶"), self.tr("害羞"), self.tr("俏皮")]
         for i, emotion in enumerate(emotion_bindings):
             drop_zone = self.create_emotion_expression_drop_zone(emotion)
             emotion_expression_layout.addWidget(drop_zone, i // 3, i % 3)
@@ -1330,7 +1376,7 @@ class set_pyqt(QWidget):
         expression_layout.addWidget(emotion_expression_frame)
         
         # 可拖动表情按钮区域说明
-        buttons_label = QLabel("可拖拽表情按钮（点击预览，拖拽到上方情绪区域绑定）")
+        buttons_label = QLabel(self.tr("可拖拽表情按钮（点击预览，拖拽到上方情绪区域绑定）"))
         buttons_label.setObjectName("subTitle")
         expression_layout.addWidget(buttons_label)
         
@@ -1365,13 +1411,13 @@ class set_pyqt(QWidget):
         motion_section = QWidget()
         motion_layout = QVBoxLayout(motion_section)
         
-        motion_label = QLabel("🎬 动作控制")
+        motion_label = QLabel(self.tr("🎬 动作控制"))
         motion_label.setObjectName("subTitle")
         motion_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         motion_layout.addWidget(motion_label)
         
         # 动作一键还原按钮
-        motion_reset_btn = QPushButton("🔄 一键还原动作")
+        motion_reset_btn = QPushButton(self.tr("🔄 一键还原动作"))
         motion_reset_btn.setObjectName("stopButton")
         motion_reset_btn.clicked.connect(self.reset_current_character)
         motion_layout.addWidget(motion_reset_btn, alignment=Qt.AlignRight)
@@ -1398,7 +1444,7 @@ class set_pyqt(QWidget):
         motion_layout.addWidget(emotion_frame)
         
         # 未分类动作区域
-        action_label = QLabel("未分类动作（点击预览，拖拽到上方分类）")
+        action_label = QLabel(self.tr("未分类动作（点击预览，拖拽到上方分类）"))
         action_label.setObjectName("subTitle")
         motion_layout.addWidget(action_label)
         
@@ -1551,7 +1597,7 @@ class set_pyqt(QWidget):
             self.load_expression_config()
             if not hasattr(self, 'expression_config') or not self.expression_config:
                 # 如果没有表情，显示提示
-                no_expr_label = QLabel("未找到表情文件")
+                no_expr_label = QLabel(self.tr("未找到表情文件"))
                 no_expr_label.setAlignment(Qt.AlignCenter)
                 no_expr_label.setStyleSheet("color: #666; font-size: 12px; padding: 20px;")
                 layout.addWidget(no_expr_label)
@@ -1572,7 +1618,7 @@ class set_pyqt(QWidget):
         
         if not expression_buttons:
             # 如果没有表情按钮，显示提示
-            no_expr_label = QLabel("未找到可用的表情按钮")
+            no_expr_label = QLabel(self.tr("未找到可用的表情按钮"))
             no_expr_label.setAlignment(Qt.AlignCenter)
             no_expr_label.setStyleSheet("color: #666; font-size: 12px; padding: 20px;")
             layout.addWidget(no_expr_label)
@@ -1842,7 +1888,7 @@ class set_pyqt(QWidget):
         pagination_layout.addStretch()
 
         # 上一页按钮
-        prev_btn = QPushButton("上一页")
+        prev_btn = QPushButton(self.tr("上一页"))
         prev_btn.setObjectName("navButton")
         prev_btn.setMinimumSize(80, 40)
         prev_btn.setEnabled(self.current_page > 0)
@@ -1860,7 +1906,7 @@ class set_pyqt(QWidget):
             pagination_layout.addWidget(page_btn)
 
         # 下一页按钮
-        next_btn = QPushButton("下一页")
+        next_btn = QPushButton(self.tr("下一页"))
         next_btn.setObjectName("navButton")
         next_btn.setMinimumSize(80, 40)
         next_btn.setEnabled(self.current_page < total_pages - 1)
@@ -2049,7 +2095,7 @@ class set_pyqt(QWidget):
             # 获取当前角色名称
             current_character = self.get_current_character_name()
             if not current_character:
-                self.toast.show_message("无法获取当前角色信息", 3000)
+                self.toast.show_message(self.tr("无法获取当前角色信息"), 3000)
                 return
 
             # 检查角色是否有备份
@@ -2065,7 +2111,7 @@ class set_pyqt(QWidget):
                 with open(config_path, 'r', encoding='utf-8') as f:
                     all_config = json.load(f)
             else:
-                self.toast.show_message("配置文件不存在", 3000)
+                self.toast.show_message(self.tr("配置文件不存在"), 3000)
                 return
 
             # 只复位当前角色的配置
@@ -2109,7 +2155,7 @@ class set_pyqt(QWidget):
                 with open(config_path, 'r', encoding='utf-8') as f:
                     all_config = json.load(f)
             else:
-                self.toast.show_message("配置文件不存在", 3000)
+                self.toast.show_message(self.tr("配置文件不存在"), 3000)
                 return
 
             # 只复位当前角色的配置
@@ -2200,7 +2246,7 @@ class set_pyqt(QWidget):
         最终版：通过HTTP请求直接调用前端底层的情绪触发逻辑。
         """
         if not (self.live2d_process and self.live2d_process.poll() is None):
-            self.toast.show_message("桌宠未启动，无法触发动作", 2000)
+            self.toast.show_message(self.tr("桌宠未启动，无法触发动作"), 2000)
             return
 
         print(f"准备通过HTTP发送情绪指令: {emotion_name}")
@@ -2741,6 +2787,17 @@ class set_pyqt(QWidget):
         # 初始化桌宠切换按钮样式（默认为"启动"状态）
         self.update_toggle_button_style(False)
 
+        # 绑定语言选择下拉框的改变事件
+        self.trans = QTranslator()
+        current_lang = load_language_config()
+        if current_lang == "en_US":
+            # 1代表英文
+            self.ui.comboBox_language_switch.setCurrentIndex(1)
+        else:
+            # 0代表中文
+            self.ui.comboBox_language_switch.setCurrentIndex(0)
+        self.ui.comboBox_language_switch.currentIndexChanged.connect(self.on_lang_changed)
+
     def scan_voice_models(self):
         """扫描当前目录下的pth模型文件"""
         try:
@@ -3152,7 +3209,7 @@ class set_pyqt(QWidget):
             self.terminal_process = None
 
             # 更新状态显示
-            self.ui.label_terminal_status.setText("状态：TTS服务未启动")
+            self.ui.label_terminal_status.setText(self.tr("状态：TTS服务未启动"))
             self.update_status_indicator('tts', False)
 
             print("当前TTS终端已关闭！！！")
@@ -3402,8 +3459,8 @@ class set_pyqt(QWidget):
         outer.addWidget(tab_widget)
 
         for plugin_type, base_dir, tab_title in [
-            ('built-in',  os.path.join(app_path, 'plugins', 'built-in'),  '内置插件'),
-            ('community', os.path.join(app_path, 'plugins', 'community'), '社区插件'),
+            ('built-in',  os.path.join(app_path, 'plugins', 'built-in'),  self.tr('内置插件')),
+            ('community', os.path.join(app_path, 'plugins', 'community'), self.tr('社区插件')),
         ]:
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
@@ -3460,7 +3517,7 @@ class set_pyqt(QWidget):
         market_vbox.setSpacing(10)
 
         # 刷新按钮
-        refresh_btn = QPushButton('🔄 刷新列表')
+        refresh_btn = QPushButton(self.tr('🔄 刷新列表'))
         refresh_btn.setFont(self._ui_font(10, bold=True))
         refresh_btn.setMinimumHeight(36)
         refresh_btn.setStyleSheet("""
@@ -3482,7 +3539,7 @@ class set_pyqt(QWidget):
         self._plugin_market_layout.setContentsMargins(0, 0, 0, 0)
         self._plugin_market_layout.setSpacing(12)
         # 初始提示
-        hint = QLabel('点击「🔄 刷新列表」加载插件广场')
+        hint = QLabel(self.tr('点击「🔄 刷新列表」加载插件广场'))
         hint.setAlignment(Qt.AlignCenter)
         hint.setFont(self._ui_font(11))
         hint.setStyleSheet('color: #aaa; border: none;')
@@ -3491,7 +3548,7 @@ class set_pyqt(QWidget):
         market_scroll.setWidget(self._plugin_market_content)
         market_vbox.addWidget(market_scroll)
 
-        tab_widget.addTab(market_tab, '🧩 插件广场')
+        tab_widget.addTab(market_tab, self.tr('🧩 插件广场'))
 
         self._plugins_page_index = self.ui.stackedWidget.addWidget(list_page)
 
@@ -4075,7 +4132,7 @@ class set_pyqt(QWidget):
 
     def refresh_plugin_market(self):
         RAW_URL = "https://raw.githubusercontent.com/morettt/my-neuro/main/live-2d/plugins/plugin-house/plugin_hub.json"
-        print("开始刷新插件广场...")
+        print(self.tr("开始刷新插件广场..."))
         try:
             resp = requests.get(RAW_URL, timeout=15)
             resp.raise_for_status()
@@ -4173,7 +4230,7 @@ class set_pyqt(QWidget):
         repo_url  = plugin.get("repo", "")
         plugin_id = plugin.get("id", "")
         if not repo_url or not plugin_id:
-            self.toast.show_message("插件信息不完整，无法安装", 3000)
+            self.toast.show_message(self.tr("插件信息不完整，无法安装"), 3000)
             return
 
         target_dir = os.path.join(get_app_path(), "plugins", "community", plugin_id)
@@ -4182,18 +4239,18 @@ class set_pyqt(QWidget):
             return
 
         btn.setEnabled(False)
-        btn.setText("安装中...")
+        btn.setText(self.tr("安装中..."))
         self.toast.show_message(f"正在安装 {plugin['display_name']}...", 2000)
 
         worker = _CloneWorker(repo_url, target_dir)
 
         def on_done(success, err):
             if success:
-                btn.setText("✓ 已安装")
+                btn.setText(self.tr("✓ 已安装"))
                 self.toast.show_message(f"✓ {plugin['display_name']} 安装成功！", 4000)
                 self._refresh_plugin_tab('community')
             else:
-                btn.setText("⬇ 安装")
+                btn.setText(self.tr("⬇ 安装"))
                 btn.setEnabled(True)
                 self.toast.show_message(f"✗ 安装失败: {err}", 4000)
                 print(f"插件安装失败: {err}")
@@ -4222,10 +4279,10 @@ class set_pyqt(QWidget):
         """更新切换按钮的文本和样式"""
         button = self.ui.pushButton_toggle_live2d
         if is_running:
-            button.setText("关闭桌宠")
+            button.setText(self.tr("关闭桌宠"))
             button.setProperty("state", "stop")
         else:
-            button.setText("启动桌宠")
+            button.setText(self.tr("启动桌宠"))
             button.setProperty("state", "start")
         # 强制刷新样式
         button.style().unpolish(button)
@@ -4235,7 +4292,7 @@ class set_pyqt(QWidget):
     def start_live_2d(self):
         # 检查是否已经有桌宠在运行
         if self.live2d_process and self.live2d_process.poll() is None:
-            self.toast.show_message("桌宠已在运行中，请勿重复启动", 2000)
+            self.toast.show_message(self.tr("桌宠已在运行中，请勿重复启动"), 2000)
             return
 
         # 🔥 停止旧的日志读取线程（如果存在）
@@ -4275,7 +4332,7 @@ class set_pyqt(QWidget):
         self.log_thread_running = True
         Thread(target=self.tail_log_file, daemon=True).start()
 
-        self.toast.show_message("桌宠启动中...", 1500)
+        self.toast.show_message(self.tr("桌宠启动中..."), 1500)
 
     def check_tools_status(self):
         """检查工具状态和模块"""
@@ -4380,15 +4437,15 @@ class set_pyqt(QWidget):
                 if response.status_code == 200:
                     result = response.json()
                     if result.get('success'):
-                        self.toast.show_message("皮套位置已立即复位", 2000)
+                        self.toast.show_message(self.tr("皮套位置已立即复位"), 2000)
                     else:
-                        self.toast.show_message("皮套位置已保存，请重启桌宠生效", 2000)
+                        self.toast.show_message(self.tr("皮套位置已保存，请重启桌宠生效"), 2000)
                 else:
-                    self.toast.show_message("皮套位置已保存，请重启桌宠生效", 2000)
+                    self.toast.show_message(self.tr("皮套位置已保存，请重启桌宠生效"), 2000)
             except Exception as api_error:
                 # 如果API调用失败，只是提示需要重启
                 print(f"API调用失败: {api_error}")
-                self.toast.show_message("皮套位置已保存，请重启桌宠生效", 2000)
+                self.toast.show_message(self.tr("皮套位置已保存，请重启桌宠生效"), 2000)
 
         except Exception as e:
             self.toast.show_message(f"复位失败: {e}", 2000)
@@ -4579,6 +4636,13 @@ class set_pyqt(QWidget):
             self.toast.show_message("正在打开云端肥牛官网...", 2000)
         except Exception as e:
             self.toast.show_message(f"打开网页失败: {e}", 3000)
+
+    # 切换语言函数
+    def on_lang_changed(self, index):
+        if index == 1:
+            self.switch_language("en_US")
+        else:
+            self.switch_language("zh_CN")
 
     def init_live2d_models(self):
         """初始化Live2D模型功能"""
@@ -6677,6 +6741,30 @@ class set_pyqt(QWidget):
             import traceback
             traceback.print_exc()
 
+    def switch_language(self, lang_code):
+        try:
+            QApplication.instance().removeTranslator(self.trans)
+            if lang_code == "en_US":
+                qm_file = os.path.join(LANG_DIR, "en_US.qm")
+                if os.path.exists(qm_file):
+                    if self.trans.load(qm_file):
+                        QApplication.instance().installTranslator(self.trans)
+                    else:
+                        QMessageBox.warning(self, "加载失败", f"文件存在但无法加载: {qm_file}")
+                else:
+                    QMessageBox.warning(self, "文件丢失", f"找不到翻译包路径: {qm_file}")
+
+            save_language_config(lang_code)
+            QMessageBox.information(
+                self,
+                "语言切换 / Language Changed",
+                "语言设置已保存，请重新启动本软件以使界面生效。\nLanguage setting saved. Please restart the application."
+            )
+
+        except Exception as e:
+            import traceback
+            error_msg = f"错误: {e}\n{traceback.format_exc()}"
+            QMessageBox.critical(self, "崩溃拦截", error_msg)
 
 if __name__ == '__main__':
     # # 分辨率自适应 - 暂时禁用，可能导致UI尺寸异常
@@ -6689,6 +6777,15 @@ if __name__ == '__main__':
         pass  # 如果设置失败（比如打包后没有WebEngine），忽略即可
 
     app = QApplication(sys.argv)
+    # 加载语言包
+    app.translator = QTranslator()
+    current_lang = load_language_config()
+    # 如果用户上次选了英文，就加载对应的 .qm 包
+    if current_lang == "en_US":
+        qm_file = os.path.join(LANG_DIR, "en_US.qm")
+        if app.translator.load(qm_file):
+            app.installTranslator(app.translator)
+
     w = set_pyqt()
     w.show()
     sys.exit(app.exec_())
