@@ -14,7 +14,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent.absolute()
 
 # WebUI 版本
-WEBUI_VERSION = 'v2.0'
+WEBUI_VERSION = 'v2.5'
 
 # 配置日志 - 使用 WARNING 级别减少输出
 logging.basicConfig(
