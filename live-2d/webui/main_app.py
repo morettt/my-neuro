@@ -22,7 +22,7 @@ def create_app():
     app = Flask(__name__,
                 template_folder=str(PROJECT_ROOT / 'webui' / 'templates'),
                 static_folder=str(PROJECT_ROOT / 'webui' / 'static'))
-    
+
     # 注册各个功能蓝图
     from .service_controller import service_bp
     from .config_manager import config_bp
@@ -30,13 +30,15 @@ def create_app():
     from .tool_manager import tool_bp
     from .marketplace import market_bp
     from .log_monitor import log_bp
-    
+    from .live2d_manager import live2d_bp
+
     app.register_blueprint(service_bp)
     app.register_blueprint(config_bp)
     app.register_blueprint(plugin_bp)
     app.register_blueprint(tool_bp)
     app.register_blueprint(market_bp)
     app.register_blueprint(log_bp)
+    app.register_blueprint(live2d_bp)
     
     # 注册首页路由（必须在蓝图之后，确保根路径被正确处理）
     @app.route('/')

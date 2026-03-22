@@ -2,9 +2,9 @@
 
 > 本文档旨在帮助新加入的开发者（包括 AI 助手）快速了解 My Neuro WebUI 项目的结构、功能和开发进度。
 
-**文档版本**: v2.0.0  
-**最后更新**: 2026-03-10  
-**项目版本**: v2.0.0 (测试阶段)
+**文档版本**: v2.5.0  
+**最后更新**: 2026-03-22 
+**项目版本**: v2.5.0 (测试阶段)
 
 ---
 
@@ -65,6 +65,7 @@ my-neuro-main/
 │   │   ├── plugin_manager.py          # 插件管理 API
 │   │   ├── service_controller.py      # 服务控制 API
 │   │   ├── tool_manager.py            # 工具管理 API
+│   │   ├── live2d_manager.py           # Live2D管理API
 │   │   ├── templates/
 │   │   │   └── index.html             # 主页面模板
 │   │   └── static/
@@ -307,15 +308,6 @@ setInterval(pollLogs, 2000);
 }
 ```
 
-### 配置保存最佳实践
-```javascript
-// ✅ 正确：使用 === true 判断复选框
-element.checked = config.enabled === true;
-
-// ❌ 错误：使用 || 会导致 false 被覆盖
-element.checked = config.enabled || false;
-```
-
 ---
 
 ## 插件系统
@@ -372,38 +364,6 @@ def _install_plugin_worker(plugin_name, plugin_url, plugin_dir):
 
 ## 开发规范
 
-### 1. DOM 操作安全
-
-使用安全函数避免 null 错误：
-```javascript
-function _setVal(id, value) {
-    const el = document.getElementById(id);
-    if (el && document.activeElement !== el) el.value = value;
-}
-
-function _setChk(id, value) {
-    const el = document.getElementById(id);
-    if (el) el.checked = value;
-}
-```
-
-### 2. 配置项命名规范
-
-- 前端使用 kebab-case：`tts-enabled`
-- 后端使用 snake_case：`tts_enabled`
-
-### 3. 状态优先级
-
-```javascript
-// 插件按钮状态优先级
-if (installed) {
-    btnText = '✓ 已安装';  // 最高优先级
-} else if (installing) {
-    btnText = '⏳ 安装中...';
-} else {
-    btnText = '⬇ 安装';
-}
-```
 
 ---
 
@@ -426,19 +386,6 @@ if (installed) {
 - 文件系统为真相源
 - 不依赖中间状态
 - 定期自动刷新
-
----
-
-## 常见问题
-
-### Q1: 插件安装后按钮卡在"安装中"
-**A**: 确保后端安装完成后清理 `installing_tasks` 记录，前端 `installed` 状态优先级高于 `installing`。
-
-### Q2: 配置保存后刷新页面未生效
-**A**: 检查加载函数是否使用 `=== true` 判断复选框，避免使用 `||` 导致 false 被覆盖。
-
-### Q3: 服务启动后立即显示停止状态
-**A**: 服务启动需要时间，使用 `setTimeout` 延迟检测或轮询检测。
 
 ---
 
@@ -468,6 +415,7 @@ if (installed) {
 
 | 版本 | 日期 | 主要变更 |
 |------|------|----------|
+| v2.5.0 | 2026-03-22 | bug修复、新增历史对话 |
 | v2.0.0 | 2026-03-10 | 插件安装系统完善、正式进入测试阶段 |
 | v1.11.0 | 2026-03-10 | 图标支持、云端配置修复、去硬编码化 |
 | v1.10.0 | 2026-03-10 | WebUI 模块化重构 |

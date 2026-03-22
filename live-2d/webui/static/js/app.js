@@ -6,6 +6,122 @@ let logPollingInterval = null;
 let lastPetLogCount = 0;  // 记录上次桌宠日志数量
 let lastToolLogCount = 0; // 记录上次工具日志数量
 
+// 对话历史状态
+let chatHistoryState = {
+    messages: [],           // 当前显示的对话列表
+    page: 1,                // 当前页码
+    pageSize: 50,           // 每页数量
+    hasMore: false,         // 是否还有更多历史
+    total: 0,               // 总对话数
+    isLoading: false,       // 是否正在加载
+    pollInterval: null      // 轮询定时器
+};
+
+// ============ Toast 通知系统 ============
+
+// Toast 图标映射
+const TOAST_ICONS = {
+    success: '✓',
+    error: '✕',
+    warning: '⚠',
+    info: 'ℹ'
+};
+
+// Toast 配置
+const TOAST_CONFIG = {
+    maxToasts: 4,           // 最多显示的 Toast 数量
+    durations: {
+        success: 5000,      // 成功提示持续时间 (ms)
+        error: 8000,        // 错误提示持续时间 (ms)
+        warning: 6000,      // 警告提示持续时间 (ms)
+        info: 5000          // 信息提示持续时间 (ms)
+    },
+    hideDuration: 150       // 隐藏动画持续时间 (ms)
+};
+
+// 显示 Toast 通知
+function showToast(message, type = 'info', duration) {
+    const container = document.getElementById('toastContainer');
+    if (!container) {
+        console.warn('Toast 容器不存在');
+        return;
+    }
+
+    // 如果 Toast 数量超过限制，移除最旧的
+    const existingToasts = container.querySelectorAll('.toast');
+    while (existingToasts.length >= TOAST_CONFIG.maxToasts) {
+        const oldestToast = existingToasts[0];
+        hideToast(oldestToast, false);
+        break; // 每次只移除一个，避免多次触发
+    }
+
+    // 创建 Toast 元素
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    
+    const icon = TOAST_ICONS[type] || TOAST_ICONS.info;
+    
+    toast.innerHTML = `
+        <span class="toast-icon">${icon}</span>
+        <div class="toast-content">
+            <p class="toast-message">${message}</p>
+        </div>
+        <button class="toast-close" onclick="event.stopPropagation(); this.parentElement.remove();">&times;</button>
+    `;
+    
+    // 点击 Toast 时立即关闭
+    toast.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('toast-close')) {
+            hideToast(toast);
+        }
+    });
+    
+    // 添加到容器
+    container.appendChild(toast);
+    
+    // 使用默认持续时间（如果未指定）
+    const toastDuration = duration || TOAST_CONFIG.durations[type] || TOAST_CONFIG.durations.info;
+    
+    // 自动隐藏
+    setTimeout(() => {
+        hideToast(toast);
+    }, toastDuration);
+}
+
+// 隐藏 Toast 通知
+function hideToast(toast, useAnimation = true) {
+    if (useAnimation) {
+        toast.classList.add('toast-hiding');
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, TOAST_CONFIG.hideDuration);
+    } else {
+        // 直接移除，不使用动画
+        if (toast.parentElement) {
+            toast.remove();
+        }
+    }
+}
+
+// 便捷函数
+function showSuccess(message, duration) {
+    showToast(message, 'success', duration);
+}
+
+function showError(message, duration) {
+    showToast(message, 'error', duration);
+}
+
+function showWarning(message, duration) {
+    showToast(message, 'warning', duration);
+}
+
+function showInfo(message, duration) {
+    showToast(message, 'info', duration);
+}
+
 // ============ 日志系统 ============
 
 // 添加日志条目（仅用于系统日志）
@@ -70,7 +186,21 @@ function switchLogTab(tabId) {
     document.getElementById(tabId).classList.add('active');
     event.target.classList.add('active');
     currentLogTab = tabId;
-    
+
+    // 如果切换到历史对话选项卡，加载对话历史
+    if (tabId === 'chat-history') {
+        if (chatHistoryState.messages.length === 0) {
+            // 首次加载：先获取总数，计算最后一页，然后加载
+            loadLastPageOfChatHistory();
+        } else {
+            // 非首次：重新加载最后一页（最新对话）
+            loadLastPageOfChatHistory();
+        }
+        startChatHistoryPolling();
+    } else {
+        stopChatHistoryPolling();
+    }
+
     // 不再同步第二个面板，两个面板的选项卡独立操作，方便对照不同日志
 }
 
@@ -106,6 +236,28 @@ function syncLogTabToPanel2(tabId) {
 
 // 清空当前日志
 function clearCurrentLog() {
+    // 如果是历史对话选项卡，调用清空 API
+    if (currentLogTab === 'chat-history') {
+        if (confirm('确定要清空所有对话历史吗？此操作不可恢复！')) {
+            fetch('/api/chat-history/clear', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('对话历史已清空', 'success');
+                        chatHistoryState.messages = [];
+                        chatHistoryState.page = 1;
+                        chatHistoryState.hasMore = false;
+                        chatHistoryState.total = 0;
+                        renderChatHistory([]);
+                    } else {
+                        showToast('清空失败：' + data.error, 'error');
+                    }
+                })
+                .catch(err => showToast('清空失败：' + err.message, 'error'));
+        }
+        return;
+    }
+    
     let outputId;
     switch(currentLogTab) {
         case 'pet-log':
@@ -151,6 +303,20 @@ function switchLogTab2(tabId) {
 
     document.getElementById(tabId).classList.add('active');
     event.target.classList.add('active');
+
+    // 如果切换到历史对话选项卡，加载对话历史
+    if (tabId === 'chat-history2') {
+        if (chatHistoryState.messages.length === 0) {
+            // 首次加载：先获取总数，计算最后一页，然后加载
+            loadLastPageOfChatHistory();
+        } else {
+            // 非首次：重新加载最后一页（最新对话）
+            loadLastPageOfChatHistory();
+        }
+        startChatHistoryPolling();
+    } else {
+        stopChatHistoryPolling();
+    }
 }
 
 // 清空第二个面板的当前日志
@@ -159,39 +325,417 @@ function clearCurrentLog2() {
     let outputId;
     const activeTab = document.querySelector('#logPanelContainer1 .log-tab.active');
     const tabName = activeTab ? activeTab.textContent : '系统日志';
-    
+
     if (tabName === '桌宠日志') {
         outputId = 'pet-log-output2';
     } else if (tabName === '工具日志') {
         outputId = 'tool-log-output2';
+    } else if (tabName === '历史对话') {
+        // 历史对话清空与第一个面板相同
+        clearCurrentLog();
+        return;
     } else {
         outputId = 'system-log-output2';
     }
-    
+
     const logOutput = document.getElementById(outputId);
     logOutput.innerHTML = '<div class="log-entry log-info">日志已清空</div>';
+}
+
+// ============ 对话历史功能 ============
+
+// 加载最后一页对话历史（首次加载时使用）
+async function loadLastPageOfChatHistory() {
+    if (chatHistoryState.isLoading) return;
+
+    chatHistoryState.isLoading = true;
+    console.log('[ChatHistory] 开始加载最后一页...');
+    
+    try {
+        // 先获取第一页来确定总数
+        const response = await fetch(`/api/chat-history?page=1&page_size=${chatHistoryState.pageSize}`);
+        const data = await response.json();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        chatHistoryState.total = data.total;
+        console.log(`[ChatHistory] 总对话数：${data.total}`);
+
+        // 如果总数为 0，显示空状态
+        if (data.total === 0) {
+            document.getElementById('chat-history-output').innerHTML = 
+                '<div class="log-entry log-info">暂无对话记录</div>';
+            chatHistoryState.messages = [];
+            chatHistoryState.page = 1;
+            chatHistoryState.hasMorePrev = false;
+            updateChatHistoryLoadMoreButton();
+            return;
+        }
+
+        // 计算最后一页的页码
+        const lastPage = Math.ceil(data.total / chatHistoryState.pageSize);
+        console.log(`[ChatHistory] 最后一页：${lastPage}`);
+
+        // 直接加载最后一页
+        const responseLast = await fetch(`/api/chat-history?page=${lastPage}&page_size=${chatHistoryState.pageSize}`);
+        const dataLast = await responseLast.json();
+
+        if (dataLast.error) {
+            throw new Error(dataLast.error);
+        }
+
+        console.log(`[ChatHistory] 加载到 ${dataLast.messages.length} 条消息`);
+
+        chatHistoryState.page = lastPage;
+        chatHistoryState.hasMorePrev = dataLast.has_prev;
+        chatHistoryState.messages = dataLast.messages;
+
+        renderChatHistory(chatHistoryState.messages, false, 0, 0);
+        updateChatHistoryLoadMoreButton();
+        
+        // 在第一页时启动轮询
+        if (lastPage === 1) {
+            startChatHistoryPolling();
+        }
+        
+        console.log('[ChatHistory] 加载完成');
+
+    } catch (error) {
+        console.error('[ChatHistory] 加载失败:', error);
+        document.getElementById('chat-history-output').innerHTML =
+            `<div class="log-entry log-error">加载失败：${error.message}</div>`;
+    } finally {
+        chatHistoryState.isLoading = false;
+    }
+}
+
+// 加载对话历史（分页）
+async function loadChatHistory(page = 1, prependToTop = false) {
+    if (chatHistoryState.isLoading) return;
+
+    const container = document.getElementById('chat-history-output');
+    
+    // 保存加载前的滚动位置
+    const scrollBeforeLoad = container.scrollTop;
+    const scrollHeightBeforeLoad = container.scrollHeight;
+
+    chatHistoryState.isLoading = true;
+    try {
+        const response = await fetch(`/api/chat-history?page=${page}&page_size=${chatHistoryState.pageSize}`);
+        const data = await response.json();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        chatHistoryState.page = page;
+        chatHistoryState.hasMorePrev = data.has_prev;  // 是否还有更早的历史（上一页）
+        chatHistoryState.total = data.total;
+
+        if (prependToTop) {
+            // 前置模式（加载更多历史对话）：将新内容添加到当前内容上方
+            chatHistoryState.messages = [...data.messages, ...chatHistoryState.messages];
+        } else {
+            // 替换模式（初始加载或刷新）
+            chatHistoryState.messages = data.messages;
+        }
+
+        renderChatHistory(chatHistoryState.messages, prependToTop, scrollBeforeLoad, scrollHeightBeforeLoad);
+        updateChatHistoryLoadMoreButton();
+        
+        console.log(`[ChatHistory] 加载完成，当前页：${chatHistoryState.page}, 消息总数：${chatHistoryState.messages.length}`);
+
+        // 管理轮询：当不在第一页时暂停轮询
+        if (page > 1) {
+            stopChatHistoryPolling();
+        } else {
+            startChatHistoryPolling();
+        }
+
+    } catch (error) {
+        console.error('加载对话历史失败:', error);
+        document.getElementById('chat-history-output').innerHTML =
+            `<div class="log-entry log-error">加载失败：${error.message}</div>`;
+    } finally {
+        chatHistoryState.isLoading = false;
+    }
+}
+
+// 渲染对话历史
+function renderChatHistory(messages, prependToTop = false, scrollBeforeLoad = 0, scrollHeightBeforeLoad = 0) {
+    const container = document.getElementById('chat-history-output');
+    const logContainer = container.closest('.log-container');
+    
+    console.log(`[ChatHistory] renderChatHistory 调用`);
+    console.log(`[ChatHistory] container 存在：${!!container}`);
+    console.log(`[ChatHistory] logContainer 存在：${!!logContainer}`);
+    console.log(`[ChatHistory] messages 数量：${messages ? messages.length : 'null'}`);
+    
+    // 确保 log-container 有正确的高度限制和滚动
+    if (logContainer) {
+        logContainer.style.overflowY = 'auto';
+        console.log(`[ChatHistory] logContainer 高度：${logContainer.offsetHeight}px, 样式高度：${logContainer.style.height}`);
+    }
+
+    if (!messages || messages.length === 0) {
+        console.log('[ChatHistory] 消息为空，显示空状态');
+        container.innerHTML = '<div class="log-entry log-info">暂无对话记录</div>';
+        return;
+    }
+
+    const htmlParts = [];
+
+    // 添加"加载更多"按钮在顶部
+    htmlParts.push(`
+        <div class="chat-load-more" id="chat-load-more-container">
+            <button id="chat-load-more-btn" onclick="loadMoreChatHistory()" ${!chatHistoryState.hasMorePrev ? 'disabled' : ''}>
+                ${chatHistoryState.hasMorePrev ? '加载更多历史对话' : '没有更多了'}
+            </button>
+        </div>
+    `);
+
+    // 添加 CSS 样式
+    htmlParts.push(`
+        <style>
+            .chat-message {
+                margin-bottom: 10px;
+                padding: 8px 12px;
+                border-radius: 6px;
+                background: rgba(255, 255, 255, 0.05);
+                min-height: 2.4em;
+                overflow-wrap: break-word;
+                word-wrap: break-word;
+            }
+            .chat-message.user {
+                background: rgba(74, 144, 217, 0.1);
+                border-left: 3px solid #4a90d9;
+            }
+            .chat-message.assistant {
+                background: rgba(212, 133, 13, 0.1);
+                border-left: 3px solid #d4850d;
+            }
+            .chat-sender {
+                font-weight: bold;
+                margin-bottom: 2px;
+                font-size: 13px;
+                display: block;
+            }
+            .chat-sender.user {
+                color: #4a90d9;
+            }
+            .chat-sender.assistant {
+                color: #d4850d;
+            }
+            .chat-content {
+                line-height: 1.5;
+                color: #e0e0e0;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+                font-size: 14px;
+                max-width: 100%;
+            }
+            .chat-content img {
+                max-width: 100%;
+                border-radius: 6px;
+                margin: 8px 0;
+                cursor: pointer;
+                transition: transform 0.2s;
+                display: block;
+            }
+            .chat-content img:hover {
+                transform: scale(1.02);
+            }
+            .chat-load-more {
+                text-align: center;
+                padding: 12px;
+            }
+            .chat-load-more button {
+                padding: 6px 16px;
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                border: none;
+                border-radius: 6px;
+                color: white;
+                cursor: pointer;
+                font-size: 13px;
+            }
+            .chat-load-more button:disabled {
+                background: #555;
+                cursor: not-allowed;
+                font-size: 13px;
+            }
+            /* 确保 chat-history-output 容器内的内容不会撑开父容器 */
+            #chat-history-output {
+                max-width: 100%;
+            }
+        </style>
+    `);
+
+    // 遍历消息（保持原顺序：旧→新）
+    messages.forEach((msg) => {
+        const role = msg.role === 'user' ? 'user' : 'assistant';
+        const senderName = role === 'user' ? '用户' : 'AI';
+
+        // 处理内容中的 base64 图片
+        let content = escapeHtml(msg.content || '');
+        content = renderBase64Images(content);
+
+        htmlParts.push(`
+            <div class="chat-message ${role}">
+                <div class="chat-sender ${role}">${senderName}</div>
+                <div class="chat-content">${content}</div>
+            </div>
+        `);
+    });
+
+    container.innerHTML = htmlParts.join('');
+    
+    console.log(`[ChatHistory] HTML 已渲染，总长度：${htmlParts.join('').length}`);
+
+    // 同步到第二个面板
+    syncLogToPanel2();
+
+    // 滚动位置处理 - 使用延迟确保内容完全渲染
+    // 切换选项卡时需要等待 DOM 和样式完全应用
+    setTimeout(() => {
+        if (prependToTop) {
+            // 加载更多时，计算新内容的高度并恢复滚动位置
+            const newScrollHeight = container.scrollHeight;
+            const heightDiff = newScrollHeight - scrollHeightBeforeLoad;
+            container.scrollTop = scrollBeforeLoad + heightDiff;
+            console.log(`[ChatHistory] 加载更多，恢复滚动位置：${container.scrollTop}`);
+        } else {
+            // 初始加载或刷新时，滚动到底部（最新对话）
+            // 使用 scrollHeight 确保滚动到最底部
+            const targetScroll = container.scrollHeight;
+            container.scrollTop = targetScroll;
+            console.log(`[ChatHistory] 滚动到底部：${targetScroll}, 实际滚动位置：${container.scrollTop}`);
+            
+            // 验证滚动是否成功
+            setTimeout(() => {
+                console.log(`[ChatHistory] 验证滚动位置：${container.scrollTop} / ${container.scrollHeight}`);
+            }, 200);
+        }
+    }, 300);
+}
+
+// HTML 转义函数
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 渲染内容中的 base64 图片
+function renderBase64Images(content) {
+    // 匹配 data:image/jpeg;base64, 开头的图片
+    const imageRegex = /data:image\/jpeg;base64,[A-Za-z0-9+/=]+/g;
+    return content.replace(imageRegex, (match) => {
+        return `<img src="${match}" alt="图片" onclick="previewImage(this.src)">`;
+    });
+}
+
+// 图片预览功能
+function previewImage(src) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.95);
+        z-index: 999999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+    `;
+    
+    const img = document.createElement('img');
+    img.src = src;
+    img.style.cssText = `
+        max-width: 98%;
+        max-height: 98%;
+        object-fit: contain;
+    `;
+    
+    overlay.appendChild(img);
+    overlay.onclick = () => overlay.remove();
+    document.body.appendChild(overlay);
+}
+
+// 加载更多历史对话
+function loadMoreChatHistory() {
+    // 检查是否还有更早的历史，或者是否正在加载
+    if (!chatHistoryState.hasMorePrev || chatHistoryState.isLoading) return;
+
+    // 加载上一页的内容（更早的历史），前置到顶部
+    const prevPage = chatHistoryState.page - 1;
+    if (prevPage < 1) return;
+    
+    loadChatHistory(prevPage, true);  // true 表示前置到顶部
+}
+
+// 更新加载更多按钮状态
+function updateChatHistoryLoadMoreButton() {
+    const btn = document.getElementById('chat-load-more-btn');
+    if (btn) {
+        btn.disabled = !chatHistoryState.hasMorePrev;
+        btn.textContent = chatHistoryState.hasMorePrev ? '加载更多历史对话' : '没有更多了';
+    }
+}
+
+// 启动对话历史轮询
+function startChatHistoryPolling() {
+    stopChatHistoryPolling();
+    chatHistoryState.pollInterval = setInterval(() => {
+        // 只在当前显示历史对话选项卡时轮询，且只在第一页（最新对话）时更新
+        const isChatHistoryActive = document.getElementById('chat-history')?.classList.contains('active');
+        if (isChatHistoryActive && chatHistoryState.messages.length > 0 && chatHistoryState.page === 1) {
+            // 轮询时重新加载第一页，保持最新对话
+            loadChatHistory(1, false);
+        }
+    }, 2000);
+}
+
+// 停止对话历史轮询
+function stopChatHistoryPolling() {
+    if (chatHistoryState.pollInterval) {
+        clearInterval(chatHistoryState.pollInterval);
+        chatHistoryState.pollInterval = null;
+    }
 }
 
 // 同步日志到第二个面板
 function syncLogToPanel2() {
     const container2 = document.getElementById('logPanelContainer2');
     if (container2.style.display === 'none' || container2.style.display === '') return;
-    
+
     // 同步系统日志
     const systemLog1 = document.getElementById('system-log-output');
     const systemLog2 = document.getElementById('system-log-output2');
     systemLog2.innerHTML = systemLog1.innerHTML;
-    
+
     // 同步桌宠日志
     const petLog1 = document.getElementById('pet-log-output');
     const petLog2 = document.getElementById('pet-log-output2');
     petLog2.innerHTML = petLog1.innerHTML;
-    
+
     // 同步工具日志
     const toolLog1 = document.getElementById('tool-log-output');
     const toolLog2 = document.getElementById('tool-log-output2');
     toolLog2.innerHTML = toolLog1.innerHTML;
-    
+
+    // 同步对话历史
+    const chatHistory1 = document.getElementById('chat-history-output');
+    const chatHistory2 = document.getElementById('chat-history-output2');
+    if (chatHistory2) {
+        chatHistory2.innerHTML = chatHistory1.innerHTML;
+    }
+
     // 同步滚动位置
     const activePanel1 = document.querySelector('#logPanelContainer1 .log-panel.active .log-container');
     const activePanel2 = document.querySelector('#logPanelContainer2 .log-panel.active .log-container');
@@ -443,19 +987,19 @@ function switchTab(tabName) {
         let buttonHTML = '';
         switch(tabName) {
             case 'basic-config':
-                buttonHTML = '<button class="config-save-button save-basic" onclick="saveBasicSettings()">保存基础配置</button>';
+                buttonHTML = '<button class="config-save-button" onclick="saveBasicSettings()">保存配置</button>';
                 break;
             case 'dialog-config':
-                buttonHTML = '<button class="config-save-button save-dialog" onclick="saveDialogSettings()">保存对话配置</button>';
+                buttonHTML = '<button class="config-save-button" onclick="saveDialogSettings()">保存配置</button>';
                 break;
             case 'llm-config':
-                buttonHTML = '<button class="config-save-button save-llm" onclick="saveLLMConfig()">保存 LLM 配置</button>';
+                buttonHTML = '<button class="config-save-button" onclick="saveLLMConfig()">保存配置</button>';
                 break;
             case 'voice-settings':
-                buttonHTML = '<button class="config-save-button save-cloud" onclick="saveCloudSettings()">保存云端配置</button>';
+                buttonHTML = '<button class="config-save-button" onclick="saveCloudSettings()">保存配置</button>';
                 break;
             case 'ui-settings':
-                buttonHTML = '<button class="config-save-button save-ui" onclick="saveUISettings()">保存 UI 设置</button>';
+                buttonHTML = '<button class="config-save-button" onclick="saveUISettings()">保存配置</button>';
                 break;
             default:
                 // 无保存按钮的页面显示空占位，保持布局稳定
@@ -463,31 +1007,6 @@ function switchTab(tabName) {
                 break;
         }
         configSaveButtons.innerHTML = buttonHTML;
-    }
-
-    // 切换选项卡时重新加载对应配置
-    loadConfigForTab(tabName);
-}
-
-// 根据选项卡加载对应配置
-function loadConfigForTab(tabName) {
-    switch(tabName) {
-        case 'basic-config':
-            loadBasicConfig();
-            break;
-        case 'dialog-config':
-            loadDialogConfig();
-            break;
-        case 'llm-config':
-            loadLLMConfig();
-            break;
-        case 'voice-settings':
-            loadCloudSettings();
-            break;
-        case 'ui-settings':
-            loadUISettings();
-            break;
-        // 其他选项卡不需要加载配置
     }
 }
 
@@ -521,7 +1040,24 @@ async function saveLLMConfig() {
         temperature: parseFloat(document.getElementById('temperature').value),
         system_prompt: document.getElementById('system-prompt').value
     };
-    await saveConfig('/api/config/llm', config, 'LLM 配置保存成功');
+    try {
+        const response = await fetch('/api/config/llm', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(config)
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            addLog('LLM 配置保存成功', 'success', 'system');
+            showSuccess('LLM 配置保存成功');
+        } else {
+            addLog('LLM 配置保存失败：' + (result.error || '未知错误'), 'error', 'system');
+            showError('LLM 配置保存失败：' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        addLog('LLM 配置保存时出错：' + error.message, 'error', 'system');
+        showError('LLM 配置保存时出错：' + error.message);
+    }
 }
 
 // 加载 LLM 配置
@@ -590,7 +1126,24 @@ async function saveCloudSettings() {
             api_key: document.getElementById('gateway-api-key').value
         }
     };
-    await saveConfig('/api/settings/voice', data, '云端配置保存成功');
+    try {
+        const response = await fetch('/api/settings/voice', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            addLog('云端配置保存成功', 'success', 'system');
+            showSuccess('云端配置保存成功');
+        } else {
+            addLog('云端配置保存失败：' + (result.error || '未知错误'), 'error', 'system');
+            showError('云端配置保存失败：' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        addLog('云端配置保存时出错：' + error.message, 'error', 'system');
+        showError('云端配置保存时出错：' + error.message);
+    }
 }
 
 // 加载云端配置
@@ -760,19 +1313,19 @@ async function generateTTSBat() {
     const text = document.getElementById('voice-clone-text').value.trim();
 
     if (!selectedModelFile) {
-        alert('请先选择模型文件（pth）');
+        showError('请先选择模型文件（pth）');
         return;
     }
     if (!selectedAudioFile) {
-        alert('请先选择参考音频（wav）');
+        showError('请先选择参考音频（wav）');
         return;
     }
     if (!roleName) {
-        alert('请输入角色名称');
+        showError('请输入角色名称');
         return;
     }
     if (!text) {
-        alert('请输入参考音频的文本内容');
+        showError('请输入参考音频的文本内容');
         return;
     }
 
@@ -795,15 +1348,15 @@ async function generateTTSBat() {
         if (response.ok && result.success) {
             statusEl.textContent = '状态：' + result.message;
             statusEl.classList.add('has-file');
-            alert(result.message);
+            showSuccess(result.message);
         } else {
             statusEl.textContent = '状态：生成失败 - ' + (result.error || '未知错误');
-            alert('生成失败：' + (result.error || '未知错误'));
+            showError('生成失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
         const statusEl = document.getElementById('voice-clone-status');
         statusEl.textContent = '状态：生成失败 - ' + error.message;
-        alert('生成时出错：' + error.message);
+        showError('生成时出错：' + error.message);
     }
 }
 
@@ -852,6 +1405,12 @@ document.addEventListener('DOMContentLoaded', function() {
     addLog('WebUI 控制面板已就绪', 'success', 'system');
 
     console.log('My Neuro WebUI 初始化完成');
+
+    // 页面卸载时停止所有轮询
+    window.addEventListener('beforeunload', () => {
+        stopLogPolling();
+        stopChatHistoryPolling();
+    });
 
     // 初始化日志高度调整手柄
     initLogResizer();
@@ -930,13 +1489,28 @@ async function saveUISettings() {
         show_chat_box: document.getElementById('show-chat-box').checked,
         show_model: !document.getElementById('hide-model').checked,  // 勾选表示隐藏，所以取反
         model_scale: parseFloat(document.getElementById('model-scale').value),
-        subtitle_labels: {
-            enabled: document.getElementById('subtitle-enabled').checked,
-            user: document.getElementById('subtitle-user').value,
-            ai: document.getElementById('subtitle-ai').value
-        }
+        subtitle_user: document.getElementById('subtitle-user').value,
+        subtitle_ai: document.getElementById('subtitle-ai').value,
+        subtitle_enabled: document.getElementById('subtitle-enabled').checked
     };
-    await saveConfig('/api/settings/ui', settings, 'UI 设置保存成功');
+    try {
+        const response = await fetch('/api/settings/ui', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(settings)
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            addLog('UI 设置保存成功', 'success', 'system');
+            showSuccess('UI 设置保存成功');
+        } else {
+            addLog('UI 设置保存失败：' + (result.error || '未知错误'), 'error', 'system');
+            showError('UI 设置保存失败：' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        addLog('UI 设置保存时出错：' + error.message, 'error', 'system');
+        showError('UI 设置保存时出错：' + error.message);
+    }
 }
 
 // 保存主动对话设置
@@ -963,7 +1537,6 @@ async function saveMoodChatSettings() {
 // 保存高级设置
 async function saveAdvancedSettings() {
     const settings = {
-        vision_enabled: document.getElementById('vision-enabled').checked,
         auto_screenshot: document.getElementById('auto-screenshot').checked,
         use_vision_model: document.getElementById('use-vision-model').checked,
         memory_enabled: document.getElementById('memory-enabled').checked,
@@ -1092,6 +1665,7 @@ function createToolCard(tool, type = 'fc') {
     card.className = 'tool-card';
     card.dataset.toolName = tool.name;
     card.dataset.toolType = type;
+    card.setAttribute('data-is-external', tool.is_external === true ? 'true' : 'false');
 
     const statusClass = tool.enabled ? 'enabled' : 'disabled';
     const statusText = tool.enabled ? '已启用' : '已禁用';
@@ -1151,44 +1725,46 @@ function toggleToolDetail(event, btn) {
 // 切换工具启用状态
 async function toggleTool(event, toolName, toolType) {
     event.stopPropagation();
-    
+
     const card = event.target.closest('.tool-card');
     const toggleBtn = event.target;
-    
+    // 使用 getAttribute 避免大小写问题
+    const isExternal = card.getAttribute('data-is-external') === 'true';
+
     try {
         const response = await fetch('/api/tools/toggle', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 name: toolName,
-                type: toolType
+                type: toolType,
+                is_external: isExternal
             })
         });
 
         const result = await response.json();
-        
+
         if (response.ok && result.success) {
-            const newEnabled = result.enabled;
-            
-            // 更新按钮文本
-            toggleBtn.textContent = newEnabled ? '禁用' : '启用';
-            
-            // 更新状态显示 - 修复：使用正确的选择器查找状态元素
-            const statusEl = card.querySelector('.tool-status-inline');
-            if (statusEl) {
-                const statusIcon = newEnabled ? '●' : '○';
-                const statusText = newEnabled ? '已启用' : '已禁用';
-                statusEl.className = `tool-status-inline ${newEnabled ? 'enabled' : 'disabled'}`;
-                statusEl.textContent = `${statusIcon} ${statusText}`;
-            }
-            
-            addLog(`工具 ${toolName} 已${newEnabled ? '启用' : '禁用'}`, 'success', 'system');
-            
-            // 刷新工具列表以获取最新状态
-            if (toolType === 'fc') {
-                refreshFCTools();
+            // 外部 MCP 工具切换后需要刷新列表（因为名称会变化）
+            if (isExternal) {
+                await refreshMCPTools();
+                addLog(`工具已${result.enabled ? '启用' : '禁用'}`, 'success', 'system');
             } else {
-                refreshMCPTools();
+                const newEnabled = result.enabled;
+
+                // 更新按钮文本
+                toggleBtn.textContent = newEnabled ? '禁用' : '启用';
+
+                // 更新状态显示（使用 tool-status-inline）
+                const statusEl = card.querySelector('.tool-status-inline');
+                if (statusEl) {
+                    const statusIcon = newEnabled ? '●' : '○';
+                    const statusText = newEnabled ? '已启用' : '已禁用';
+                    statusEl.className = `tool-status-inline ${newEnabled ? 'enabled' : 'disabled'}`;
+                    statusEl.textContent = `${statusIcon} ${statusText}`;
+                }
+
+                addLog(`工具 ${toolName} 已${newEnabled ? '启用' : '禁用'}`, 'success', 'system');
             }
         } else {
             addLog(`工具切换失败：${result.error || '未知错误'}`, 'error', 'system');
@@ -1201,9 +1777,10 @@ async function toggleTool(event, toolName, toolType) {
 async function refreshModelList() {
     try {
         const response = await fetch('/api/models/list');
-        
+
         if (response.ok) {
-            const models = await response.json();
+            const data = await response.json();
+            const models = data.models || [];
             const modelSelect = document.getElementById('live2d-model-select');
 
             // 如果元素不存在，跳过
@@ -1213,7 +1790,7 @@ async function refreshModelList() {
 
             // 清空选项
             modelSelect.innerHTML = '';
-            
+
             // 添加模型到下拉框
             models.forEach(model => {
                 const option = document.createElement('option');
@@ -1221,7 +1798,7 @@ async function refreshModelList() {
                 option.textContent = model;
                 modelSelect.appendChild(option);
             });
-            
+
             // 读取当前模型并选中
             const currentResponse = await fetch('/api/settings/current-model');
             if (currentResponse.ok) {
@@ -1245,17 +1822,17 @@ async function startMinecraftGame() {
         const result = await response.json();
         
         if (response.ok && result.success) {
-            alert('Minecraft 游戏已启动！');
+            showSuccess('Minecraft 游戏已启动！');
         } else {
             const errorMsg = result.error || '启动失败';
             if (errorMsg.includes('开启游戏终端.bat')) {
-                alert('启动脚本不存在：开启游戏终端.bat');
+                showError('启动脚本不存在：开启游戏终端.bat');
             } else {
-                alert('启动失败：' + errorMsg);
+                showError('启动失败：' + errorMsg);
             }
         }
     } catch (error) {
-        alert('启动时出错：' + error.message);
+        showError('启动时出错：' + error.message);
     }
 }
 
@@ -1434,7 +2011,8 @@ function renderPlugins(plugins) {
 function createPluginCard(plugin) {
     const card = document.createElement('div');
     card.className = 'plugin-card';
-    card.dataset.pluginName = plugin.name;
+    // 使用 plugin_path 作为唯一标识符（如 built-in/mood-chat 或 community/mood-chat）
+    card.dataset.pluginPath = plugin.plugin_path;
 
     const statusIcon = plugin.enabled ? '●' : '○';
     const statusText = plugin.enabled ? '已启用' : '已禁用';
@@ -1453,11 +2031,11 @@ function createPluginCard(plugin) {
         </div>
         <p class="plugin-description">${plugin.description}</p>
         <div class="plugin-actions">
-            <button class="btn-plugin-toggle" onclick="togglePlugin('${plugin.name}')">
+            <button class="btn-plugin-toggle" onclick="togglePlugin('${plugin.plugin_path}')">
                 ${plugin.enabled ? '禁用' : '启用'}
             </button>
-            <button class="btn-open-config" onclick="openPluginConfig('${plugin.name}')">
-                打开配置
+            <button class="btn-open-config" onclick="openPluginConfig('${plugin.plugin_path}')">
+                ${plugin.has_own_config ? '配置' : '打开配置'}
             </button>
         </div>
     `;
@@ -1465,24 +2043,31 @@ function createPluginCard(plugin) {
     return card;
 }
 
-// 切换插件启用状态
-async function togglePlugin(pluginName) {
+// 切换插件启用状态（使用 plugin_path 作为唯一标识符）
+async function togglePlugin(pluginPath) {
     try {
-        const response = await fetch(`/api/plugins/${pluginName}/toggle`, { method: 'POST' });
+        const response = await fetch('/api/plugins/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plugin_path: pluginPath })
+        });
         const result = await response.json();
 
         if (response.ok && result.success) {
             const action = result.action;
             const newEnabled = action === 'enabled';
-            const card = document.querySelector(`.plugin-card[data-plugin-name="${pluginName}"]`);
-            const statusEl = card.querySelector('.plugin-status');
-            const toggleBtn = card.querySelector('.btn-plugin-toggle');
+            // 使用 plugin_path 选择卡片
+            const card = document.querySelector(`.plugin-card[data-plugin-path="${pluginPath}"]`);
+            if (card) {
+                const statusEl = card.querySelector('.plugin-status');
+                const toggleBtn = card.querySelector('.btn-plugin-toggle');
 
-            statusEl.className = `plugin-status ${newEnabled ? 'enabled' : 'disabled'}`;
-            statusEl.innerHTML = `${newEnabled ? '●' : '○'} ${newEnabled ? '已启用' : '已禁用'}`;
-            toggleBtn.textContent = newEnabled ? '禁用' : '启用';
+                statusEl.className = `plugin-status ${newEnabled ? 'enabled' : 'disabled'}`;
+                statusEl.innerHTML = `${newEnabled ? '●' : '○'} ${newEnabled ? '已启用' : '已禁用'}`;
+                toggleBtn.textContent = newEnabled ? '禁用' : '启用';
+            }
 
-            addLog(`插件 ${pluginName} 已${newEnabled ? '启用' : '禁用'}`, 'success', 'system');
+            addLog(`插件 ${pluginPath} 已${newEnabled ? '启用' : '禁用'}`, 'success', 'system');
 
             // 重新加载插件列表
             loadPlugins();
@@ -1494,8 +2079,8 @@ async function togglePlugin(pluginName) {
     }
 }
 
-// 打开插件配置
-async function openPluginConfig(pluginName) {
+// 打开插件配置（使用 display_name 作为唯一标识符）
+async function openPluginConfig(pluginPath) {
     try {
         // 首先检查插件是否有配置文件
         const pluginsResponse = await fetch('/api/plugins/list');
@@ -1504,11 +2089,16 @@ async function openPluginConfig(pluginName) {
         }
         
         const plugins = await pluginsResponse.json();
-        const plugin = plugins.find(p => p.name === pluginName);
+        // 使用 plugin_path 查找插件
+        const plugin = plugins.find(p => p.plugin_path === pluginPath);
         
         if (!plugin || !plugin.has_own_config) {
-            // 如果没有配置文件，使用原来的打开目录逻辑
-            const response = await fetch(`/api/plugins/${pluginName}/open-config`, { method: 'POST' });
+            // 如果没有配置文件，打开插件目录
+            const response = await fetch('/api/plugins/open-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plugin_path: pluginPath })
+            });
             const result = await response.json();
             
             if (response.ok && result.success) {
@@ -1522,17 +2112,17 @@ async function openPluginConfig(pluginName) {
             return;
         }
         
-        // 如果有配置文件，打开配置模态框
-        openPluginConfigModal(pluginName);
+        // 如果有配置文件，打开配置模态框 - 使用 display_name 作为标识符
+        openPluginConfigModal(pluginPath, plugin.display_name);
     } catch (error) {
         addLog('打开配置时出错：' + error.message, 'error', 'system');
     }
 }
 
 // 打开插件配置模态框
-function openPluginConfigModal(pluginName) {
-    // 设置模态框标题
-    document.getElementById('pluginConfigModalTitle').textContent = `插件配置 - ${pluginName}`;
+function openPluginConfigModal(pluginPath, displayName) {
+    // 设置模态框标题（使用 display_name 显示）
+    document.getElementById('pluginConfigModalTitle').textContent = `插件配置 - ${displayName}`;
     
     // 显示加载状态
     document.getElementById('pluginConfigLoading').style.display = 'block';
@@ -1542,28 +2132,102 @@ function openPluginConfigModal(pluginName) {
     // 显示模态框
     document.getElementById('pluginConfigModal').style.display = 'block';
     
-    // 加载配置数据
-    loadPluginConfig(pluginName);
+    // 禁用背景滚动，修复滑动 bug
+    document.body.style.overflow = 'hidden';
+    
+    // 保存 plugin_path 用于后续操作（如保存配置）
+    window.currentPluginPath = pluginPath;
+    
+    // 加载配置数据 - 使用 display_name 作为标识符
+    loadPluginConfig(displayName);
 }
 
 // 关闭插件配置模态框
 function closePluginConfigModal() {
     document.getElementById('pluginConfigModal').style.display = 'none';
+    // 恢复背景滚动
+    document.body.style.overflow = '';
 }
 
-// 加载插件配置
-async function loadPluginConfig(pluginName) {
+// 检查 README 是否存在 - 使用 display_name 识别插件
+async function checkReadmeExists(displayName) {
     try {
-        const response = await fetch(`/api/plugins/${pluginName}/config`);
+        const response = await fetch(`/api/plugins/${encodeURIComponent(displayName)}/readme-exists`, {
+            method: 'GET'
+        });
+        const result = await response.json();
+        
+        const readmeBtn = document.getElementById('readmeBtn');
+        if (readmeBtn) {
+            if (result.exists) {
+                readmeBtn.disabled = false;
+                readmeBtn.style.opacity = '1';
+                readmeBtn.style.cursor = 'pointer';
+            } else {
+                readmeBtn.disabled = true;
+                readmeBtn.style.opacity = '0.5';
+                readmeBtn.style.cursor = 'not-allowed';
+            }
+        }
+    } catch (error) {
+        console.error('检查 README 存在性失败:', error);
+        // 出错时也禁用按钮
+        const readmeBtn = document.getElementById('readmeBtn');
+        if (readmeBtn) {
+            readmeBtn.disabled = true;
+            readmeBtn.style.opacity = '0.5';
+            readmeBtn.style.cursor = 'not-allowed';
+        }
+    }
+}
+
+// 打开插件 README 文件 - 使用 display_name 识别插件
+async function openPluginReadme() {
+    if (!window.currentPluginDisplayName) {
+        showToast('没有打开的插件配置', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/plugins/${encodeURIComponent(window.currentPluginDisplayName)}/readme`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            showToast('已打开 README 文件', 'success');
+        } else {
+            showToast('该插件没有 README.md 文件', 'warning');
+        }
+    } catch (error) {
+        showToast('打开配置说明时出错', 'error');
+    }
+}
+
+// 加载插件配置（使用 display_name 作为唯一标识符）
+async function loadPluginConfig(displayName) {
+    try {
+        const response = await fetch(`/api/plugins/${encodeURIComponent(displayName)}/config`);
         const result = await response.json();
         
         if (response.ok && result.success) {
             // 隐藏加载状态，显示表单
             document.getElementById('pluginConfigLoading').style.display = 'none';
+            document.getElementById('pluginConfigError').style.display = 'none';
             document.getElementById('pluginConfigForm').style.display = 'block';
             
-            // 渲染配置表单
-            renderPluginConfigForm(result.config, pluginName);
+            // 保存配置键顺序（用于保持渲染和保存顺序）
+            window.currentPluginConfigKeys = result.config_keys || Object.keys(result.config);
+            
+            // 保存当前插件的 display_name 用于后续操作
+            window.currentPluginDisplayName = displayName;
+            
+            // 渲染配置表单（使用键顺序）
+            renderPluginConfigForm(result.config);
+            
+            // 检查 README 是否存在
+            checkReadmeExists(displayName);
         } else {
             // 显示错误
             document.getElementById('pluginConfigLoading').style.display = 'none';
@@ -1577,24 +2241,27 @@ async function loadPluginConfig(pluginName) {
     }
 }
 
-// 渲染插件配置表单
-function renderPluginConfigForm(config, pluginName) {
+// 渲染插件配置表单 - 保持原始配置顺序
+function renderPluginConfigForm(config) {
     const fieldsContainer = document.getElementById('pluginConfigFields');
     fieldsContainer.innerHTML = '';
     
     // 保存原始配置用于重置
     window.currentPluginConfig = JSON.parse(JSON.stringify(config));
-    window.currentPluginName = pluginName;
     
-    // 遍历所有配置字段
-    for (const [key, field] of Object.entries(config)) {
-        const fieldElement = createConfigField(key, field, pluginName);
-        fieldsContainer.appendChild(fieldElement);
+    // 使用从后端获取的键顺序（如果没有则使用 Object.keys）
+    const keys = window.currentPluginConfigKeys || Object.keys(config);
+    for (const key of keys) {
+        if (config.hasOwnProperty(key)) {
+            const field = config[key];
+            const fieldElement = createConfigField(key, field);
+            fieldsContainer.appendChild(fieldElement);
+        }
     }
 }
 
 // 创建配置字段元素
-function createConfigField(key, field, pluginName) {
+function createConfigField(key, field) {
     const fieldDiv = document.createElement('div');
     fieldDiv.className = 'config-field';
     fieldDiv.dataset.fieldKey = key;
@@ -1641,7 +2308,7 @@ function createConfigField(key, field, pluginName) {
             
             const nestedContainer = fieldDiv.querySelector(`#nested-${key}`);
             for (const [nestedKey, nestedField] of Object.entries(field.fields || {})) {
-                const nestedFieldElement = createConfigField(nestedKey, nestedField, pluginName);
+                const nestedFieldElement = createConfigField(nestedKey, nestedField);
                 nestedContainer.appendChild(nestedFieldElement);
             }
             return fieldDiv;
@@ -1667,7 +2334,7 @@ function createConfigField(key, field, pluginName) {
 
 // 重置插件配置为默认值
 function resetPluginConfig() {
-    if (!window.currentPluginConfig || !window.currentPluginName) {
+    if (!window.currentPluginConfig || !window.currentPluginPath) {
         return;
     }
     
@@ -1698,18 +2365,19 @@ function resetFieldToDefault(key, field) {
     }
 }
 
-// 保存插件配置
+// 保存插件配置（使用 display_name 作为唯一标识符）
 async function savePluginConfig() {
-    if (!window.currentPluginConfig || !window.currentPluginName) {
+    if (!window.currentPluginConfig || !window.currentPluginDisplayName) {
+        addLog('没有打开的插件配置', 'warning', 'system');
         return;
     }
     
     try {
-        // 收集表单数据
-        const updatedConfig = collectConfigFormData(window.currentPluginConfig);
+        // 收集表单数据（按照原始键顺序）
+        const updatedConfig = collectConfigFormData();
         
-        // 发送保存请求
-        const response = await fetch(`/api/plugins/${window.currentPluginName}/config`, {
+        // 使用 display_name 发送保存请求
+        const response = await fetch(`/api/plugins/${encodeURIComponent(window.currentPluginDisplayName)}/config`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1721,23 +2389,66 @@ async function savePluginConfig() {
         
         if (response.ok && result.success) {
             addLog('插件配置保存成功', 'success', 'system');
+            showSuccess('插件配置保存成功');
             closePluginConfigModal();
             // 重新加载插件列表以更新状态
             loadPlugins();
         } else {
             addLog('保存配置失败：' + (result.error || '未知错误'), 'error', 'system');
+            showError('保存配置失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
         addLog('保存配置时出错：' + error.message, 'error', 'system');
+        showError('保存配置时出错：' + error.message);
     }
 }
 
-// 收集表单数据
-function collectConfigFormData(originalConfig) {
-    const updatedConfig = JSON.parse(JSON.stringify(originalConfig));
+// 收集表单数据 - 按照原始键顺序收集
+function collectConfigFormData() {
+    const updatedConfig = {};
+    const keys = window.currentPluginConfigKeys || Object.keys(window.currentPluginConfig || {});
     
-    for (const [key, field] of Object.entries(updatedConfig)) {
-        updateFieldFromForm(key, field);
+    for (const key of keys) {
+        const field = window.currentPluginConfig[key];
+        if (!field) continue;
+        
+        const input = document.getElementById(`config-${key}`);
+        if (!input) continue;
+        
+        // 根据字段类型收集值
+        let value;
+        if (field.type === 'bool') {
+            value = input.checked;
+        } else if (field.type === 'int') {
+            value = parseInt(input.value) || field.default || 0;
+        } else if (field.type === 'float') {
+            value = parseFloat(input.value) || field.default || 0.0;
+        } else if (field.type === 'object') {
+            // 处理嵌套对象
+            value = {};
+            for (const [nestedKey, nestedField] of Object.entries(field.fields || {})) {
+                const nestedInput = document.getElementById(`config-${nestedKey}`);
+                if (nestedInput) {
+                    if (nestedField.type === 'bool') {
+                        value[nestedKey] = nestedInput.checked;
+                    } else if (nestedField.type === 'int') {
+                        value[nestedKey] = parseInt(nestedInput.value) || nestedField.default || 0;
+                    } else if (nestedField.type === 'float') {
+                        value[nestedKey] = parseFloat(nestedInput.value) || nestedField.default || 0.0;
+                    } else {
+                        value[nestedKey] = nestedInput.value;
+                    }
+                } else {
+                    // 如果找不到输入元素，使用默认值
+                    value[nestedKey] = nestedField.default;
+                }
+            }
+        } else {
+            // text, string 等类型
+            value = input.value;
+        }
+        
+        updatedConfig[key] = value;
     }
     
     return updatedConfig;
@@ -1764,10 +2475,11 @@ function updateFieldFromForm(key, field) {
     }
 }
 
-// 更新插件卡片按钮状态
+// 更新插件卡片按钮状态（使用 plugin_path 作为唯一标识符）
 function updatePluginCardButtons(plugins) {
     plugins.forEach(plugin => {
-        const card = document.querySelector(`.plugin-card[data-plugin-name="${plugin.name}"]`);
+        // 使用 plugin_path 选择卡片
+        const card = document.querySelector(`.plugin-card[data-plugin-path="${plugin.plugin_path}"]`);
         if (card) {
             const configBtn = card.querySelector('.btn-open-config');
             if (configBtn) {
@@ -1815,7 +2527,6 @@ function renderPlugins(plugins) {
 async function saveBasicSettings() {
     try {
         const config = {
-            vision_enabled: document.getElementById('vision-enabled').checked,
             auto_screenshot: document.getElementById('auto-screenshot').checked,
             use_vision_model: document.getElementById('use-vision-model').checked,
             show_chat_box: document.getElementById('show-chat-box').checked,
@@ -1840,11 +2551,14 @@ async function saveBasicSettings() {
 
         if (response.ok && result.success) {
             addLog('基础配置已保存', 'success', 'system');
+            showSuccess('基础配置已保存');
         } else {
             addLog('保存基础配置失败：' + (result.error || '未知错误'), 'error', 'system');
+            showError('保存基础配置失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
         addLog('保存基础配置时出错：' + error.message, 'error', 'system');
+        showError('保存基础配置时出错：' + error.message);
     }
 }
 
@@ -1854,7 +2568,6 @@ async function loadBasicConfig() {
         const response = await fetch('/api/settings/advanced');
         if (response.ok) {
             const config = await response.json();
-            _setChk('vision-enabled', config.vision_enabled === true);
             _setChk('auto-screenshot', config.auto_screenshot === true);
             _setChk('use-vision-model', config.use_vision_model === true);
             _setChk('auto-close-services', config.auto_close_services === true);
@@ -1900,11 +2613,14 @@ async function saveDialogSettings() {
 
         if (response.ok && result.success) {
             addLog('对话配置已保存', 'success', 'system');
+            showSuccess('对话配置已保存');
         } else {
             addLog('保存对话配置失败：' + (result.error || '未知错误'), 'error', 'system');
+            showError('保存对话配置失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
         addLog('保存对话配置时出错：' + error.message, 'error', 'system');
+        showError('保存对话配置时出错：' + error.message);
     }
 }
 
@@ -2017,14 +2733,14 @@ async function resetModelPosition() {
 
         if (response.ok && result.success) {
             addLog('皮套位置已复位', 'success', 'system');
-            alert('皮套位置已复位，请重启桌宠生效');
+            showSuccess('皮套位置已复位，请重启桌宠生效');
         } else {
             addLog('复位皮套位置失败：' + (result.error || '未知错误'), 'error', 'system');
-            alert('复位失败：' + (result.error || '未知错误'));
+            showError('复位失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
         addLog('复位皮套位置时出错：' + error.message, 'error', 'system');
-        alert('复位出错：' + error.message);
+        showError('复位出错：' + error.message);
     }
 }
 
@@ -2128,14 +2844,14 @@ async function applyPrompt(title) {
                     if (promptInput) {
                         promptInput.value = res.content;
                     }
-                    alert('请在 LLM 配置中保存');
+                    showSuccess('提示词已应用，请在 LLM 配置中保存');
                 } else {
-                    alert('应用失败：' + (res.error || '未知错误'));
+                    showError('应用失败：' + (res.error || '未知错误'));
                 }
             }
         }
     } catch (error) {
-        alert('应用时出错：' + error.message);
+        showError('应用时出错：' + error.message);
     }
 }
 
@@ -2200,12 +2916,12 @@ async function downloadTool(toolName, downloadUrl, fileName) {
         });
         const res = await result.json();
         if (res.success) {
-            alert(`工具 ${toolName} 已下载！`);
+            showSuccess(`工具 ${toolName} 已下载！`);
         } else {
-            alert('下载失败：' + (res.error || '未知错误'));
+            showError('下载失败：' + (res.error || '未知错误'));
         }
     } catch (error) {
-        alert('下载时出错：' + error.message);
+        showError('下载时出错：' + error.message);
     }
 }
 
@@ -2262,12 +2978,12 @@ async function downloadFCtool(toolName, downloadUrl) {
         });
         const res = await result.json();
         if (res.success) {
-            alert(`FC 工具 ${toolName} 已下载！`);
+            showSuccess(`FC 工具 ${toolName} 已下载！`);
         } else {
-            alert('下载失败：' + (res.error || '未知错误'));
+            showError('下载失败：' + (res.error || '未知错误'));
         }
     } catch (error) {
-        alert('下载时出错：' + error.message);
+        showError('下载时出错：' + error.message);
     }
 }
 
@@ -2373,12 +3089,12 @@ async function installPlugin(pluginName, downloadUrl) {
             // 开始轮询检测插件目录
             pollPluginInstalled(pluginName);
         } else {
-            alert('安装失败：' + (res.error || '未知错误'));
+            showError('安装失败：' + (res.error || '未知错误'));
             // 恢复按钮状态
             restoreInstallButton(pluginName, '⬇ 安装');
         }
     } catch (error) {
-        alert('安装时出错：' + error.message);
+        showError('安装时出错：' + error.message);
         restoreInstallButton(pluginName, '⬇ 安装');
     }
 }
@@ -2495,10 +3211,12 @@ async function startSinging() {
         const response = await fetch('/api/live2d/singing/start', { method: 'POST' });
         const result = await response.json();
         if (!(response.ok && result.success)) {
-            alert('启动失败：' + (result.error || '未知错误'));
+            showError('启动失败：' + (result.error || '未知错误'));
+        } else {
+            showSuccess('开始唱歌');
         }
     } catch (error) {
-        alert('启动时出错：' + error.message);
+        showError('启动时出错：' + error.message);
     }
 }
 
@@ -2508,10 +3226,12 @@ async function stopSinging() {
         const response = await fetch('/api/live2d/singing/stop', { method: 'POST' });
         const result = await response.json();
         if (!(response.ok && result.success)) {
-            alert('停止失败：' + (result.error || '未知错误'));
+            showError('停止失败：' + (result.error || '未知错误'));
+        } else {
+            showSuccess('停止唱歌');
         }
     } catch (error) {
-        alert('停止时出错：' + error.message);
+        showError('停止时出错：' + error.message);
     }
 }
 
@@ -2530,14 +3250,14 @@ async function resetMotion() {
         
         const result = await response.json();
         if (response.ok && result.success) {
-            alert('动作配置已还原');
+            showSuccess('动作配置已还原');
             // 重新加载配置
             await loadAllMotions();
         } else {
-            alert('复位失败：' + (result.error || '未知错误'));
+            showError('复位失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
-        alert('复位时出错：' + error.message);
+        showError('复位时出错：' + error.message);
     }
 }
 
@@ -2582,10 +3302,10 @@ async function previewMotion(btn) {
         });
         const result = await response.json();
         if (!(response.ok && result.success)) {
-            alert('预览失败：' + (result.error || '未知错误'));
+            showError('预览失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
-        alert('预览时出错：' + error.message);
+        showError('预览时出错：' + error.message);
     }
 }
 
@@ -2848,7 +3568,7 @@ async function bindMotionToEmotion(emotion, motionKey, filePath) {
 
     // 检查是否已存在（检查文件路径）
     if (motionConfig[chineseEmotion].includes(filePath)) {
-        alert('该动作已绑定到此情绪');
+        showWarning('该动作已绑定到此情绪');
         return;
     }
 
@@ -2946,10 +3666,10 @@ async function previewMotionByPath(filePath) {
         });
         const result = await response.json();
         if (!(response.ok && result.success)) {
-            alert('预览失败：' + (result.error || '未知错误'));
+            showError('预览失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
-        alert('预览时出错：' + error.message);
+        showError('预览时出错：' + error.message);
     }
 }
 
@@ -2971,10 +3691,10 @@ async function previewMotionFromList(motionKey) {
         });
         const result = await response.json();
         if (!(response.ok && result.success)) {
-            alert('预览失败：' + (result.error || '未知错误'));
+            showError('预览失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
-        alert('预览时出错：' + error.message);
+        showError('预览时出错：' + error.message);
     }
 }
 
@@ -2991,10 +3711,10 @@ async function previewMotionByKey(motionKey) {
         });
         const result = await response.json();
         if (!(response.ok && result.success)) {
-            alert('预览失败：' + (result.error || '未知错误'));
+            showError('预览失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
-        alert('预览时出错：' + error.message);
+        showError('预览时出错：' + error.message);
     }
 }
 
@@ -3026,11 +3746,12 @@ async function saveMotionConfig() {
         const result = await response.json();
         if (response.ok && result.success) {
             addLog('动作配置已保存', 'success', 'system');
+            showSuccess('动作配置已保存');
         } else {
-            alert('保存失败：' + (result.error || '未知错误'));
+            showError('保存失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
-        alert('保存时出错：' + error.message);
+        showError('保存时出错：' + error.message);
     }
 }
 
@@ -3200,10 +3921,10 @@ async function previewExpressionFromBinding(filePath) {
         });
         const result = await response.json();
         if (!(response.ok && result.success)) {
-            alert('预览失败：' + (result.error || '未知错误'));
+            showError('预览失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
-        alert('预览时出错：' + error.message);
+        showError('预览时出错：' + error.message);
     }
 }
 
@@ -3295,7 +4016,7 @@ async function bindExpressionToEmotion(emotion, expressionKey, filePath) {
 
     // 检查是否已存在（检查文件路径）
     if (expressionConfig[emotion].includes(filePath)) {
-        alert('该表情已绑定到此情绪');
+        showWarning('该表情已绑定到此情绪');
         return;
     }
 
@@ -3382,10 +4103,10 @@ async function previewExpression(expressionName) {
         });
         const result = await response.json();
         if (!(response.ok && result.success)) {
-            alert('预览失败：' + (result.error || '未知错误'));
+            showError('预览失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
-        alert('预览时出错：' + error.message);
+        showError('预览时出错：' + error.message);
     }
 }
 
@@ -3400,10 +4121,10 @@ async function previewExpressionByKey(expressionKey) {
         });
         const result = await response.json();
         if (!(response.ok && result.success)) {
-            alert('预览失败：' + (result.error || '未知错误'));
+            showError('预览失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
-        alert('预览时出错：' + error.message);
+        showError('预览时出错：' + error.message);
     }
 }
 
@@ -3438,11 +4159,12 @@ async function saveExpressionConfig() {
         const result = await response.json();
         if (response.ok && result.success) {
             addLog('表情配置已保存', 'success', 'system');
+            showSuccess('表情配置已保存');
         } else {
-            alert('保存失败：' + (result.error || '未知错误'));
+            showError('保存失败：' + (result.error || '未知错误'));
         }
     } catch (error) {
-        alert('保存时出错：' + error.message);
+        showError('保存时出错：' + error.message);
     }
 }
 
@@ -3456,5 +4178,32 @@ async function saveExpressionConfigSilent() {
         });
     } catch (error) {
         console.error('静默保存表情配置失败:', error);
+    }
+}
+
+// ============ 头部折叠功能 ============
+
+// 头部折叠状态
+let isHeaderCollapsed = false;
+
+// 切换头部折叠状态
+function toggleHeaderCollapse() {
+    const body = document.body;
+    const collapseBtn = document.querySelector('.btn-collapse-header');
+    
+    isHeaderCollapsed = !isHeaderCollapsed;
+    
+    if (isHeaderCollapsed) {
+        // 折叠状态
+        body.classList.add('header-collapsed');
+        if (collapseBtn) {
+            collapseBtn.querySelector('.collapse-text').textContent = '展开';
+        }
+    } else {
+        // 展开状态
+        body.classList.remove('header-collapsed');
+        if (collapseBtn) {
+            collapseBtn.querySelector('.collapse-text').textContent = '折叠';
+        }
     }
 }

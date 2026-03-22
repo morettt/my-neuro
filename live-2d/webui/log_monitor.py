@@ -198,24 +198,6 @@ def tail_logs(log_type):
 #         return jsonify({'error': str(e)}), 500
 
 
-@log_bp.route('/api/live2d/motions/uncategorized', methods=['GET'])
-def get_uncategorized_motions():
-    """获取未分类动作列表"""
-    try:
-        motions_dir = PROJECT_ROOT / 'motions'
-        if not motions_dir.exists():
-            return jsonify({'motions': []})
-        
-        motions = []
-        for file_path in motions_dir.iterdir():
-            if file_path.suffix == '.json' and 'motion' in file_path.name.lower():
-                motions.append(file_path.name)
-        
-        return jsonify({'motions': motions})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
 # ============ 声音克隆 API ============
 
 @log_bp.route('/api/voice-clone/generate-bat', methods=['POST'])
@@ -228,24 +210,24 @@ def generate_tts_bat():
         role_name = request.form.get('role_name', '')
         language = request.form.get('language', 'zh')
         text = request.form.get('text', '')
-        
+
         if not model_file or not audio_file or not role_name or not text:
             return jsonify({'success': False, 'error': '缺少必要参数'}), 400
-        
+
         # 保存到 Voice_Model_Factory 目录
         voice_model_dir = PROJECT_ROOT / 'Voice_Model_Factory'
         voice_model_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # 保存模型文件
         model_filename = f'{role_name}.pth'
         model_path = voice_model_dir / model_filename
         model_file.save(model_path)
-        
+
         # 保存音频文件
         audio_filename = f'{role_name}.wav'
         audio_path = voice_model_dir / audio_filename
         audio_file.save(audio_path)
-        
+
         # 生成 bat 文件
         bat_content = f'''@echo off
 chcp 65001 >nul
@@ -268,15 +250,76 @@ echo 生成完成！
 echo.
 pause
 '''
-        
+
         bat_path = voice_model_dir / f'{role_name}.bat'
         with open(bat_path, 'w', encoding='utf-8') as f:
             f.write(bat_content)
-        
+
         return jsonify({
             'success': True,
             'message': f'已生成 TTS 的 bat 文件：{role_name}.bat',
             'bat_path': str(bat_path)
         })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============ 对话历史 API ============
+
+@log_bp.route('/api/chat-history')
+def get_chat_history():
+    """获取对话历史记录（支持分页）"""
+    try:
+        # 获取分页参数
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', 50, type=int)
+        
+        # 对话历史文件路径
+        history_file = PROJECT_ROOT / 'AI记录室' / '对话历史.jsonl'
+        
+        if not history_file.exists():
+            return jsonify({'messages': [], 'has_more': False, 'has_prev': False, 'total': 0})
+
+        # 读取所有对话
+        messages = []
+        with open(history_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        messages.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+
+        total = len(messages)
+
+        # 分页：返回指定范围的对话（保持原文件顺序，旧→新）
+        # 第一页返回最早的对话，最后一页返回最新的对话
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_messages = messages[start:end]
+
+        return jsonify({
+            'messages': page_messages,
+            'has_more': end < total,  # 是否有下一页（更新的对话）
+            'has_prev': page > 1,     # 是否有上一页（更早的对话）
+            'total': total
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@log_bp.route('/api/chat-history/clear', methods=['POST'])
+def clear_chat_history():
+    """清空对话历史记录"""
+    try:
+        history_file = PROJECT_ROOT / 'AI记录室' / '对话历史.jsonl'
+        
+        if history_file.exists():
+            # 清空文件内容
+            with open(history_file, 'w', encoding='utf-8') as f:
+                pass
+        
+        return jsonify({'success': True, 'message': '对话历史已清空'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

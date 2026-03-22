@@ -94,24 +94,8 @@ h1 {
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
 }
 
-.config-save-button.save-basic {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-}
-
-.config-save-button.save-dialog {
+.config-save-button {
     background: linear-gradient(135deg, #10b981, #059669);
-}
-
-.config-save-button.save-llm {
-    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-}
-
-.config-save-button.save-cloud {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-}
-
-.config-save-button.save-ui {
-    background: linear-gradient(135deg, #ec4899, #db2777);
 }
 .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
 @media (max-width: 1200px) {
@@ -1395,5 +1379,326 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
     
     .modal-footer button {
         width: 100%;
+    }
+}
+
+/* ============ Toast 通知样式 ============ */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 400px;
+    width: auto;
+}
+
+.toast {
+    min-width: 280px;
+    max-width: 400px;
+    padding: 14px 18px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    animation: toastSlideIn 0.15s ease-out;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.toast:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+.toast.toast-hiding {
+    animation: toastSlideOut 0.15s ease-in forwards;
+}
+
+@keyframes toastSlideIn {
+    from {
+        transform: translateY(-100px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes toastSlideOut {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateY(-100px);
+        opacity: 0;
+    }
+}
+
+/* Toast 进度条 */
+.toast::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    width: 100%;
+    animation: toastProgress linear forwards;
+}
+
+.toast.toast-hiding::before {
+    animation: none;
+}
+
+@keyframes toastProgress {
+    from { width: 100%; }
+    to { width: 0%; }
+}
+
+/* Toast 类型样式 */
+.toast.toast-success {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.9), rgba(5, 150, 105, 0.9));
+    border: 1px solid rgba(16, 185, 129, 0.5);
+}
+
+.toast.toast-success::before {
+    background: linear-gradient(90deg, #34d399, #10b981);
+}
+
+.toast.toast-error {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.9), rgba(220, 38, 38, 0.9));
+    border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+.toast.toast-error::before {
+    background: linear-gradient(90deg, #f87171, #ef4444);
+}
+
+.toast.toast-warning {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.9), rgba(217, 119, 6, 0.9));
+    border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
+.toast.toast-warning::before {
+    background: linear-gradient(90deg, #fbbf24, #f59e0b);
+}
+
+.toast.toast-info {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 0.9));
+    border: 1px solid rgba(59, 130, 246, 0.5);
+}
+
+.toast.toast-info::before {
+    background: linear-gradient(90deg, #60a5fa, #3b82f6);
+}
+
+/* Toast 图标 */
+.toast-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.toast-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.toast-message {
+    color: white;
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0;
+    word-wrap: break-word;
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.toast-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+/* Toast 容器响应式 */
+@media (max-width: 768px) {
+    .toast-container {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        max-width: none;
+    }
+    
+    .toast {
+        min-width: auto;
+        max-width: none;
+    }
+}
+
+/* ============ 头部折叠功能样式 ============ */
+
+/* 折叠控制栏 - 位于 header 和选项卡之间，包含保存按钮、小标题和折叠按钮 */
+.header-collapse-control {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 10px;
+    padding: 0 20px;
+    min-height: 52px;
+    transition: all 0.4s ease;
+}
+
+/* 保存按钮容器 */
+.header-collapse-control .config-save-buttons {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-right: auto;
+}
+
+/* 右侧容器 - 包含小标题和折叠按钮 */
+.header-collapse-control .collapse-right-group {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+/* 折叠按钮 - 与保存按钮等高 */
+.btn-collapse-header {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: white;
+    border: none;
+    padding: 16px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 15px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    min-width: 120px;
+    justify-content: center;
+    height: 52px;
+    box-sizing: border-box;
+}
+
+.btn-collapse-header:hover {
+    background: linear-gradient(135deg, #818cf8, #6366f1);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+}
+
+.btn-collapse-header:active {
+    transform: translateY(0);
+}
+
+/* 折叠图标 */
+.collapse-icon {
+    display: inline-block;
+    transition: transform 0.4s ease;
+    font-size: 16px;
+}
+
+/* 折叠状态 - 图标旋转 */
+body.header-collapsed .collapse-icon {
+    transform: rotate(180deg);
+}
+
+/* 折叠文本 */
+.collapse-text {
+    white-space: nowrap;
+}
+
+/* 小标题 - 折叠时显示 */
+.collapsed-mini-title {
+    display: none;
+    font-size: 18px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+    padding: 0 10px;
+    opacity: 0;
+    transform: translateX(20px);
+    transition: all 0.4s ease;
+    white-space: nowrap;
+    height: 52px;
+    line-height: 52px;
+    box-sizing: border-box;
+}
+
+/* 折叠状态 - 显示小标题 */
+body.header-collapsed .collapsed-mini-title {
+    display: block;
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* 折叠状态 - header 隐藏 */
+body.header-collapsed header {
+    max-height: 0;
+    opacity: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    transition: all 0.4s ease;
+}
+
+/* 折叠状态 - 背景变暗 */
+body.header-collapsed {
+    background: linear-gradient(135deg, #0f2447, #1a3a6e);
+}
+
+/* 折叠状态 - 容器向上移动 */
+body.header-collapsed .container {
+    transform: translateY(-20px);
+    transition: transform 0.4s ease;
+}
+
+/* 响应式适配 */
+@media (max-width: 768px) {
+    .header-collapse-control {
+        padding: 0 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+    }
+    
+    .btn-collapse-header {
+        padding: 12px 18px;
+        font-size: 14px;
+        min-width: 100px;
+        height: 44px;
+    }
+    
+    .collapsed-mini-title {
+        font-size: 16px;
+        height: 44px;
+        line-height: 44px;
     }
 }

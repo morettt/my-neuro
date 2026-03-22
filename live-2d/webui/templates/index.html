@@ -8,6 +8,9 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
+    <!-- Toast 通知容器 -->
+    <div class="toast-container" id="toastContainer"></div>
+
     <div class="container">
         <header>
             <h1>
@@ -17,9 +20,16 @@
             <p class="subtitle">管理肥牛各项服务与配置</p>
         </header>
 
-        <!-- 保存按钮栏 - 位于服务控制和基础配置选项卡之间 -->
-        <div class="config-save-bar">
+        <!-- 折叠控制栏和保存按钮栏 - 位于 header 和选项卡之间，同一行显示 -->
+        <div class="header-collapse-control">
             <div class="config-save-buttons" id="configSaveButtons"></div>
+            <div class="collapse-right-group">
+                <div class="collapsed-mini-title" id="collapsedMiniTitle">My Neuro - 控制中心</div>
+                <button class="btn-collapse-header" onclick="toggleHeaderCollapse()">
+                    <span class="collapse-icon">▼</span>
+                    <span class="collapse-text">折叠</span>
+                </button>
+            </div>
         </div>
 
         <div class="tabs">
@@ -121,6 +131,7 @@
                                 <button class="log-tab active" onclick="switchLogTab('system-log')">系统日志</button>
                                 <button class="log-tab" onclick="switchLogTab('pet-log')">桌宠日志</button>
                                 <button class="log-tab" onclick="switchLogTab('tool-log')">工具日志</button>
+                                <button class="log-tab" onclick="switchLogTab('chat-history')">历史对话</button>
                                 <button class="clear-log-button" onclick="clearCurrentLog()">清空日志</button>
                             </div>
                         </div>
@@ -149,6 +160,14 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div id="chat-history" class="log-panel">
+                            <div class="log-container" data-log-type="main">
+                                <div id="chat-history-output">
+                                    <div class="log-entry log-info">点击刷新按钮加载对话历史...</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- 第二个日志面板容器（拆分时显示） -->
@@ -159,6 +178,7 @@
                                 <button class="log-tab active" onclick="switchLogTab2('system-log2')">系统日志</button>
                                 <button class="log-tab" onclick="switchLogTab2('pet-log2')">桌宠日志</button>
                                 <button class="log-tab" onclick="switchLogTab2('tool-log2')">工具日志</button>
+                                <button class="log-tab" onclick="switchLogTab2('chat-history2')">历史对话</button>
                                 <button class="clear-log-button" onclick="clearCurrentLog2()">清空日志</button>
                             </div>
                         </div>
@@ -179,6 +199,12 @@
                         <div id="tool-log2" class="log-panel">
                             <div class="log-container" data-log-type="second">
                                 <div id="tool-log-output2"></div>
+                            </div>
+                        </div>
+
+                        <div id="chat-history2" class="log-panel">
+                            <div class="log-container" data-log-type="second">
+                                <div id="chat-history-output2"></div>
                             </div>
                         </div>
                     </div>
@@ -718,10 +744,6 @@
             <div class="section">
                 <h4>视觉功能</h4>
                 <div class="checkbox-group">
-                    <input type="checkbox" id="vision-enabled">
-                    <label for="vision-enabled">启用视觉功能</label>
-                </div>
-                <div class="checkbox-group">
                     <input type="checkbox" id="auto-screenshot">
                     <label for="auto-screenshot">开启后，每次对话 AI 都会去识图（会增加延迟）</label>
                 </div>
@@ -816,7 +838,6 @@
             </div>
             <p style="opacity: 0.7; margin-bottom: 20px;">
                 管理所有已安装的插件，控制功能启用状态<br>
-                💡 提示：点击"打开配置"可打开插件目录或配置文件，在 plugin_config.json 中配置详细参数
             </p>
 
             <!-- 插件子选项卡 -->
@@ -844,7 +865,12 @@
                         <i class="icon-gear"></i>
                         <span id="pluginConfigModalTitle">插件配置</span>
                     </h3>
-                    <button type="button" class="btn-close" onclick="closePluginConfigModal()">&times;</button>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button type="button" class="btn btn-info" id="readmeBtn" onclick="openPluginReadme()" style="padding: 8px 16px; background: linear-gradient(135deg, #06b6d4, #0891b2); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                            📖 配置说明
+                        </button>
+                        <button type="button" class="btn-close" onclick="closePluginConfigModal()">&times;</button>
+                    </div>
                 </div>
                 <div class="modal-body">
                     <div id="pluginConfigLoading" class="text-center" style="display: none;">
@@ -872,7 +898,7 @@
 
     </div>
 
-    <script src="static/js/app.js?v=20260309r"></script>
+    <script src="static/js/app.js?v=20260322"></script>
     
     <!-- 调试脚本：广场下载问题排查 -->
     <script>
