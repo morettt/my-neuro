@@ -231,78 +231,66 @@ class ToastNotification(QLabel):
         self.hide()
 
         # 创建动画效果
-        self.effect = QGraphicsOpacityEffect()
-        self.setGraphicsEffect(self.effect)
-
-        # 滑入动画
-        self.slide_in_animation = QPropertyAnimation(self, b"pos")
-        self.slide_in_animation.setDuration(300)
-        self.slide_in_animation.setEasingCurve(QEasingCurve.OutCubic)
-
-        # 滑出动画（使用独立对象）
-        self.slide_out_animation = QPropertyAnimation(self, b"pos")
-        self.slide_out_animation.setDuration(300)
-        self.slide_out_animation.setEasingCurve(QEasingCurve.InCubic)
-
-        # 透明度动画
-        self.opacity_in_animation = QPropertyAnimation(self.effect, b"opacity")
-        self.opacity_in_animation.setDuration(300)
-
-        self.opacity_out_animation = QPropertyAnimation(self.effect, b"opacity")
-        self.opacity_out_animation.setDuration(300)
-        self.opacity_out_animation.finished.connect(self.hide)
-
-        # 定时器
-        self._hide_timer = QTimer(self)
-        self._hide_timer.setSingleShot(True)
-        self._hide_timer.timeout.connect(self.hide_with_animation)
-
-    def show_message(self, message, duration=2000):
-        """显示消息，duration为显示时长（毫秒）"""
-        self.setText(message)
-        self.adjustSize()
-
-        # 计算位置
-        parent = self.parent()
-        if parent:
-            x = (parent.width() - self.width()) // 2
-            start_y = -self.height()  # 从顶部外面开始
-            end_y = 20  # 最终位置距离顶部20像素
-
-            # 设置起始位置
-            self.move(x, start_y)
-            self.show()
-            self.raise_()
-
-            # 滑入动画
-            self.slide_in_animation.setStartValue(QPoint(x, start_y))
-            self.slide_in_animation.setEndValue(QPoint(x, end_y))
-            self.slide_in_animation.start()
-
-            # 透明度渐入
-            self.opacity_in_animation.setStartValue(0.0)
-            self.opacity_in_animation.setEndValue(1.0)
-            self.opacity_in_animation.start()
-
-            # 启动隐藏定时器
-            self._hide_timer.start(duration)
-
-    def hide_with_animation(self):
-        """带动画的隐藏"""
-        parent = self.parent()
-        if parent and self.isVisible():
-            current_pos = self.pos()
-            end_y = -self.height()
-
-            # 滑出动画（使用独立对象）
-            self.slide_out_animation.setStartValue(current_pos)
-            self.slide_out_animation.setEndValue(QPoint(current_pos.x(), end_y))
-            self.slide_out_animation.start()
-
-            # 透明度渐出
-            self.opacity_out_animation.setStartValue(1.0)
-            self.opacity_out_animation.setEndValue(0.0)
-            self.opacity_out_animation.start()
+	self.effect = QGraphicsOpacityEffect()
+	self.setGraphicsEffect(self.effect)
+	
+	# 创建动画组（滑入/滑出共用）
+	self.slide_anim = QPropertyAnimation(self, b"pos")
+	self.slide_anim.setDuration(300)
+	
+	self.opacity_anim = QPropertyAnimation(self.effect, b"opacity")
+	self.opacity_anim.setDuration(300)
+	self.opacity_anim.finished.connect(lambda: self.isVisible() or self.hide())
+	
+	# 定时器
+	self._hide_timer = QTimer(self)
+	self._hide_timer.setSingleShot(True)
+	self._hide_timer.timeout.connect(self.hide_with_animation)
+	
+	def show_message(self, message, duration=2000):
+	    self.setText(message)
+	    self.adjustSize()
+	  
+	    parent = self.parent()
+	    if not parent:
+	        return
+	  
+	    x = (parent.width() - self.width()) // 2
+	    start_y, end_y = -self.height(), 20
+	  
+	    self.move(x, start_y)
+	    self.show()
+	    self.raise_()
+	  
+	    # 滑入
+	    self.slide_anim.setEasingCurve(QEasingCurve.OutCubic)
+	    self.slide_anim.setStartValue(QPoint(x, start_y))
+	    self.slide_anim.setEndValue(QPoint(x, end_y))
+	    self.slide_anim.start()
+	  
+	    # 淡入
+	    self.opacity_anim.setStartValue(0.0)
+	    self.opacity_anim.setEndValue(1.0)
+	    self.opacity_anim.start()
+	  
+	    self._hide_timer.start(duration)
+	
+	def hide_with_animation(self):
+	    if not self.parent() or not self.isVisible():
+	        return
+	  
+	    current_pos = self.pos()
+	  
+	    # 滑出
+	    self.slide_anim.setEasingCurve(QEasingCurve.InCubic)
+	    self.slide_anim.setStartValue(current_pos)
+	    self.slide_anim.setEndValue(QPoint(current_pos.x(), -self.height()))
+	    self.slide_anim.start()
+	  
+	    # 淡出
+	    self.opacity_anim.setStartValue(1.0)
+	    self.opacity_anim.setEndValue(0.0)
+	    self.opacity_anim.start()
 
 
 class _CloneWorker(QThread):
