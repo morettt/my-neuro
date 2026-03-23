@@ -333,6 +333,49 @@ class _CloneWorker(QThread):
             self.done.emit(False, str(ex))
 
 
+class _DlcWorker(QThread):
+    """后台下载并解压插件DLC，结果通过信号回到主线程"""
+    done     = pyqtSignal(bool, str)  # (success, error_message)
+    progress = pyqtSignal(str)        # 进度文字
+
+    def __init__(self, url, dlc_dir):
+        super().__init__()
+        self.url = url
+        self.dlc_dir = dlc_dir
+
+    def run(self):
+        import zipfile
+        import io
+        try:
+            os.makedirs(self.dlc_dir, exist_ok=True)
+            response = requests.get(self.url, timeout=180, stream=True)
+            response.raise_for_status()
+
+            total = int(response.headers.get('content-length', 0))
+            downloaded = 0
+            chunks = []
+            for chunk in response.iter_content(chunk_size=65536):
+                if chunk:
+                    chunks.append(chunk)
+                    downloaded += len(chunk)
+                    if total > 0:
+                        pct = int(downloaded * 100 / total)
+                        self.progress.emit(f'下载中 {pct}%')
+                    else:
+                        self.progress.emit(f'下载中 {downloaded // 1024}KB')
+
+            zip_data = io.BytesIO(b''.join(chunks))
+            with zipfile.ZipFile(zip_data) as zf:
+                names = zf.namelist()
+                total_files = len(names)
+                for i, name in enumerate(names, 1):
+                    zf.extract(name, self.dlc_dir)
+                    self.progress.emit(f'解压中 {i}/{total_files}')
+            self.done.emit(True, '')
+        except Exception as ex:
+            self.done.emit(False, str(ex))
+
+
 class CustomTitleBar(QWidget):
     """自定义标题栏"""
 
@@ -3680,17 +3723,40 @@ class set_pyqt(QWidget):
         # 右：开关 checkbox（读取 enabled_plugins.json）+ 可选配置按钮
         rel_path = f'{plugin_type}/{plugin_name}'
         enabled_set = self._load_enabled_plugins()
-        chk = QCheckBox('启用')
-        chk.setFont(self._ui_font())
-        chk.setChecked(rel_path in enabled_set)
-        chk.stateChanged.connect(lambda state, pt=plugin_type, pn=plugin_name: self._on_plugin_enabled_changed(pt, pn, state))
-        card_layout.addWidget(chk)
-        if extra_keys:
-            btn = QPushButton('配置')
-            btn.setFont(self._ui_font())
-            btn.setMinimumSize(60, 30)
-            btn.clicked.connect(lambda checked=False, i=info: self._open_plugin_detail(i))
-            card_layout.addWidget(btn)
+
+        # 检查是否为特殊插件（需要DLC）
+        download_dlc = meta.get('download_dlc')
+        dlc_installed = True
+        if download_dlc:
+            dlc_path = os.path.join(get_base_path(), 'plugins-dlc', plugin_name)
+            dlc_installed = os.path.isdir(dlc_path)
+
+        if download_dlc and not dlc_installed:
+            # DLC未安装，显示"安装DLC"按钮
+            dlc_btn = QPushButton('安装DLC')
+            dlc_btn.setFont(self._ui_font())
+            dlc_btn.setMinimumSize(80, 30)
+            dlc_btn.setStyleSheet("""
+                QPushButton { background-color: #FF9800; color: white; border-radius: 6px; border: none; padding: 4px 8px; }
+                QPushButton:hover { background-color: #F57C00; }
+                QPushButton:pressed { background-color: #E65100; }
+            """)
+            dlc_btn.clicked.connect(lambda checked=False, url=download_dlc, pn=plugin_name,
+                                    btn=dlc_btn, cl=card_layout, pt=plugin_type, ek=extra_keys, inf=info:
+                                    self._install_plugin_dlc(url, pn, btn, cl, pt, ek, inf))
+            card_layout.addWidget(dlc_btn)
+        else:
+            chk = QCheckBox('启用')
+            chk.setFont(self._ui_font())
+            chk.setChecked(rel_path in enabled_set)
+            chk.stateChanged.connect(lambda state, pt=plugin_type, pn=plugin_name: self._on_plugin_enabled_changed(pt, pn, state))
+            card_layout.addWidget(chk)
+            if extra_keys:
+                btn = QPushButton('配置')
+                btn.setFont(self._ui_font())
+                btn.setMinimumSize(60, 30)
+                btn.clicked.connect(lambda checked=False, i=info: self._open_plugin_detail(i))
+                card_layout.addWidget(btn)
 
         parent_layout.addWidget(card)
 
@@ -4064,6 +4130,51 @@ class set_pyqt(QWidget):
         else:
             enabled_set.discard(rel_path)
         self._save_enabled_plugins(enabled_set)
+
+    # ===== DLC 安装 =====
+
+    def _install_plugin_dlc(self, url, plugin_name, dlc_btn, card_layout, plugin_type, extra_keys, info):
+        """后台下载并解压插件DLC"""
+        dlc_path = os.path.join(get_base_path(), 'plugins-dlc', plugin_name)
+        dlc_btn.setEnabled(False)
+        dlc_btn.setText('下载中...')
+
+        worker = _DlcWorker(url, dlc_path)
+        worker.progress.connect(lambda msg, btn=dlc_btn: btn.setText(msg))
+        worker.done.connect(lambda ok, err,
+                            btn=dlc_btn, cl=card_layout, pn=plugin_name,
+                            pt=plugin_type, ek=extra_keys, inf=info:
+                            self._on_dlc_installed(ok, err, btn, cl, pn, pt, ek, inf))
+        # 防止被GC回收
+        if not hasattr(self, '_dlc_workers'):
+            self._dlc_workers = []
+        self._dlc_workers.append(worker)
+        worker.start()
+
+    def _on_dlc_installed(self, success, error, dlc_btn, card_layout, plugin_name, plugin_type, extra_keys, info):
+        """DLC安装完成回调"""
+        if not success:
+            dlc_btn.setText('安装DLC')
+            dlc_btn.setEnabled(True)
+            QMessageBox.warning(self, 'DLC安装失败', f'下载失败: {error}')
+            return
+
+        # 安装成功：移除DLC按钮，替换为启用checkbox
+        dlc_btn.deleteLater()
+        rel_path = f'{plugin_type}/{plugin_name}'
+        enabled_set = self._load_enabled_plugins()
+        chk = QCheckBox('启用')
+        chk.setFont(self._ui_font())
+        chk.setChecked(rel_path in enabled_set)
+        chk.stateChanged.connect(lambda state, pt=plugin_type, pn=plugin_name:
+                                 self._on_plugin_enabled_changed(pt, pn, state))
+        card_layout.addWidget(chk)
+        if extra_keys:
+            btn = QPushButton('配置')
+            btn.setFont(self._ui_font())
+            btn.setMinimumSize(60, 30)
+            btn.clicked.connect(lambda checked=False, i=info: self._open_plugin_detail(i))
+            card_layout.addWidget(btn)
 
     # ===== 插件广场 =====
 

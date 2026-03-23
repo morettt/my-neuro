@@ -362,6 +362,9 @@ class AppInitializer {
                     logToTerminal('error', `❌ 插件 startAll 失败: ${err.message}`);
                 });
 
+                // 启动热加载文件监听
+                this.pluginManager.startWatching();
+
                 // 监听 TTS_END 事件，触发插件 onTTSEnd 钩子
                 eventBus.on(Events.TTS_END, () => {
                     if (this.pluginManager) {

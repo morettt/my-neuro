@@ -6,5 +6,6 @@
   "description": "连接 Mindcraft 服务器，将语音输入转发给 MC 机器人",
   "framework_version": ">=1.0.0",
   "main": "index.js",
-  "lang": "js"
+  "lang": "js",
+  "download_dlc": "https://github.com/morettt/my-neuro/releases/download/v2.0/Minecraft.zip"
 }
