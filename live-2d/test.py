@@ -234,12 +234,28 @@ class ToastNotification(QLabel):
         self.effect = QGraphicsOpacityEffect()
         self.setGraphicsEffect(self.effect)
 
-        self.slide_animation = QPropertyAnimation(self, b"pos")
-        self.slide_animation.setDuration(300)
-        self.slide_animation.setEasingCurve(QEasingCurve.OutCubic)
+        # 滑入动画
+        self.slide_in_animation = QPropertyAnimation(self, b"pos")
+        self.slide_in_animation.setDuration(300)
+        self.slide_in_animation.setEasingCurve(QEasingCurve.OutCubic)
 
-        self.opacity_animation = QPropertyAnimation(self.effect, b"opacity")
-        self.opacity_animation.setDuration(300)
+        # 滑出动画（使用独立对象）
+        self.slide_out_animation = QPropertyAnimation(self, b"pos")
+        self.slide_out_animation.setDuration(300)
+        self.slide_out_animation.setEasingCurve(QEasingCurve.InCubic)
+
+        # 透明度动画
+        self.opacity_in_animation = QPropertyAnimation(self.effect, b"opacity")
+        self.opacity_in_animation.setDuration(300)
+
+        self.opacity_out_animation = QPropertyAnimation(self.effect, b"opacity")
+        self.opacity_out_animation.setDuration(300)
+        self.opacity_out_animation.finished.connect(self.hide)
+
+        # 定时器
+        self._hide_timer = QTimer(self)
+        self._hide_timer.setSingleShot(True)
+        self._hide_timer.timeout.connect(self.hide_with_animation)
 
     def show_message(self, message, duration=2000):
         """显示消息，duration为显示时长（毫秒）"""
@@ -259,41 +275,34 @@ class ToastNotification(QLabel):
             self.raise_()
 
             # 滑入动画
-            self.slide_animation.setStartValue(QPoint(x, start_y))
-            self.slide_animation.setEndValue(QPoint(x, end_y))
+            self.slide_in_animation.setStartValue(QPoint(x, start_y))
+            self.slide_in_animation.setEndValue(QPoint(x, end_y))
+            self.slide_in_animation.start()
 
             # 透明度渐入
-            self.opacity_animation.setStartValue(0.0)
-            self.opacity_animation.setEndValue(1.0)
+            self.opacity_in_animation.setStartValue(0.0)
+            self.opacity_in_animation.setEndValue(1.0)
+            self.opacity_in_animation.start()
 
-            # 开始动画
-            self.slide_animation.start()
-            self.opacity_animation.start()
-
-            # 延迟后滑出
-            QTimer.singleShot(duration, self.hide_with_animation)
+            # 启动隐藏定时器
+            self._hide_timer.start(duration)
 
     def hide_with_animation(self):
         """带动画的隐藏"""
         parent = self.parent()
-        if parent:
+        if parent and self.isVisible():
             current_pos = self.pos()
             end_y = -self.height()
 
-            # 滑出动画
-            self.slide_animation.setStartValue(current_pos)
-            self.slide_animation.setEndValue(QPoint(current_pos.x(), end_y))
+            # 滑出动画（使用独立对象）
+            self.slide_out_animation.setStartValue(current_pos)
+            self.slide_out_animation.setEndValue(QPoint(current_pos.x(), end_y))
+            self.slide_out_animation.start()
 
             # 透明度渐出
-            self.opacity_animation.setStartValue(1.0)
-            self.opacity_animation.setEndValue(0.0)
-
-            # 动画完成后隐藏
-            self.slide_animation.finished.connect(self.hide)
-
-            # 开始动画
-            self.slide_animation.start()
-            self.opacity_animation.start()
+            self.opacity_out_animation.setStartValue(1.0)
+            self.opacity_out_animation.setEndValue(0.0)
+            self.opacity_out_animation.start()
 
 
 class _CloneWorker(QThread):
