@@ -1188,26 +1188,43 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
 
 /* ============ 插件配置模态框样式 ============ */
 .modal {
-    display: none;
+    display: none !important;
     position: fixed;
-    z-index: 1000;
+    z-index: 10000;
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.7);
-    overflow: auto;
+    /* 确保不受 body 样式影响 */
+    margin: 0 !important;
+    padding: 0 !important;
+    /* 使用纯 CSS 居中，不依赖 Flexbox */
+}
+
+/* 当模态框激活时，使用 style="display: block" 覆盖 */
+.modal[style*="display: block"] {
+    display: block !important;
 }
 
 .modal-content {
     background: linear-gradient(135deg, #1e3c72, #2a5298);
-    margin: 5% auto;
+    /* 使用纯 CSS 居中方式：相对于视口居中 */
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     padding: 0;
     border-radius: 15px;
     width: 80%;
     max-width: 800px;
     border: 1px solid rgba(255, 255, 255, 0.3);
     backdrop-filter: blur(10px);
+    /* 确保模态框内容不超过视口高度 */
+    max-height: 90vh;
+    overflow: auto;
+    /* 防止内容变化时影响定位 */
+    margin: 0;
 }
 
 .modal-header {
@@ -1360,11 +1377,13 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
 @media (max-width: 768px) {
     .modal-content {
         width: 95%;
-        margin: 2% auto;
+        margin: auto;
+        max-height: 95vh;
     }
     
     .modal-body {
         padding: 15px;
+        max-height: 70vh;
     }
     
     .modal-header {
@@ -1569,7 +1588,7 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
     margin-bottom: 10px;
     padding: 0 20px;
     min-height: 52px;
-    transition: all 0.4s ease;
+    transition: all 0.3s ease;
 }
 
 /* 保存按钮容器 */
@@ -1621,7 +1640,7 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
 /* 折叠图标 */
 .collapse-icon {
     display: inline-block;
-    transition: transform 0.4s ease;
+    transition: transform 0.3s ease;
     font-size: 16px;
 }
 
@@ -1643,9 +1662,6 @@ body.header-collapsed .collapse-icon {
     color: rgba(255, 255, 255, 0.9);
     text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
     padding: 0 10px;
-    opacity: 0;
-    transform: translateX(20px);
-    transition: all 0.4s ease;
     white-space: nowrap;
     height: 52px;
     line-height: 52px;
@@ -1655,29 +1671,11 @@ body.header-collapsed .collapse-icon {
 /* 折叠状态 - 显示小标题 */
 body.header-collapsed .collapsed-mini-title {
     display: block;
-    opacity: 1;
-    transform: translateX(0);
 }
 
-/* 折叠状态 - header 隐藏 */
+/* 折叠状态 - header 隐藏 - 使用 display 而非 max-height 避免影响布局 */
 body.header-collapsed header {
-    max-height: 0;
-    opacity: 0;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    transition: all 0.4s ease;
-}
-
-/* 折叠状态 - 背景变暗 */
-body.header-collapsed {
-    background: linear-gradient(135deg, #0f2447, #1a3a6e);
-}
-
-/* 折叠状态 - 容器向上移动 */
-body.header-collapsed .container {
-    transform: translateY(-20px);
-    transition: transform 0.4s ease;
+    display: none;
 }
 
 /* 响应式适配 */

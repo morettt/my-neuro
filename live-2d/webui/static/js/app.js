@@ -566,6 +566,34 @@ function renderChatHistory(messages, prependToTop = false, scrollBeforeLoad = 0,
                 cursor: not-allowed;
                 font-size: 13px;
             }
+            /* 工具调用样式 */
+            .chat-tool-calls {
+                margin: 8px 0;
+                padding: 8px;
+                background: rgba(102, 126, 234, 0.1);
+                border-radius: 6px;
+                border-left: 3px solid #667eea;
+            }
+            .chat-tool-call {
+                margin: 4px 0;
+                padding: 4px;
+            }
+            .chat-tool-name {
+                font-weight: bold;
+                color: #667eea;
+                font-size: 13px;
+                margin-bottom: 4px;
+            }
+            .chat-tool-args {
+                font-family: monospace;
+                font-size: 12px;
+                color: #a0a0a0;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                background: rgba(0, 0, 0, 0.2);
+                padding: 4px 8px;
+                border-radius: 4px;
+            }
             /* 确保 chat-history-output 容器内的内容不会撑开父容器 */
             #chat-history-output {
                 max-width: 100%;
@@ -577,15 +605,55 @@ function renderChatHistory(messages, prependToTop = false, scrollBeforeLoad = 0,
     messages.forEach((msg) => {
         const role = msg.role === 'user' ? 'user' : 'assistant';
         const senderName = role === 'user' ? '用户' : 'AI';
+        
+        let contentHtml = '';
 
-        // 处理内容中的 base64 图片
-        let content = escapeHtml(msg.content || '');
-        content = renderBase64Images(content);
+        // 处理工具调用
+        if (msg.tool_calls && msg.tool_calls.length > 0) {
+            contentHtml += '<div class="chat-tool-calls">';
+            msg.tool_calls.forEach(tool => {
+                const functionName = tool.function?.name || 'unknown';
+                const functionArgs = tool.function?.arguments || '{}';
+                contentHtml += `
+                    <div class="chat-tool-call">
+                        <div class="chat-tool-name">🔧 调用工具：${escapeHtml(functionName)}</div>
+                        <div class="chat-tool-args">${escapeHtml(functionArgs)}</div>
+                    </div>
+                `;
+            });
+            contentHtml += '</div>';
+        }
+
+        // 处理 content 字段
+        if (msg.content) {
+            if (Array.isArray(msg.content)) {
+                // content 是数组格式（多模态消息）
+                msg.content.forEach(item => {
+                    if (item.type === 'text') {
+                        let text = escapeHtml(item.text || '');
+                        text = renderBase64Images(text);
+                        contentHtml += `<div class="chat-content">${text}</div>`;
+                    } else if (item.type === 'image_url') {
+                        const imageUrl = item.image_url?.url || '';
+                        if (imageUrl.startsWith('data:image/')) {
+                            contentHtml += `<img src="${imageUrl}" alt="图片" onclick="previewImage(this.src)" style="max-width: 100%; border-radius: 6px; margin: 8px 0; cursor: pointer;">`;
+                        } else {
+                            contentHtml += `<img src="${imageUrl}" alt="图片" onclick="previewImage(this.src)" style="max-width: 100%; border-radius: 6px; margin: 8px 0; cursor: pointer;">`;
+                        }
+                    }
+                });
+            } else {
+                // content 是字符串格式
+                let content = escapeHtml(msg.content || '');
+                content = renderBase64Images(content);
+                contentHtml += `<div class="chat-content">${content}</div>`;
+            }
+        }
 
         htmlParts.push(`
             <div class="chat-message ${role}">
                 <div class="chat-sender ${role}">${senderName}</div>
-                <div class="chat-content">${content}</div>
+                ${contentHtml}
             </div>
         `);
     });
@@ -2129,11 +2197,16 @@ function openPluginConfigModal(pluginPath, displayName) {
     document.getElementById('pluginConfigError').style.display = 'none';
     document.getElementById('pluginConfigForm').style.display = 'none';
     
-    // 显示模态框
-    document.getElementById('pluginConfigModal').style.display = 'block';
+    // 显示模态框 - 使用 setProperty 确保覆盖 CSS 的 !important
+    const modal = document.getElementById('pluginConfigModal');
+    modal.style.setProperty('display', 'block', 'important');
     
-    // 禁用背景滚动，修复滑动 bug
+    // 保存当前滚动位置
+    window.scrollPosition = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+    
+    // 禁用背景滚动 - 使用纯 CSS 居中，不依赖 body 样式
     document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
     
     // 保存 plugin_path 用于后续操作（如保存配置）
     window.currentPluginPath = pluginPath;
@@ -2144,9 +2217,15 @@ function openPluginConfigModal(pluginPath, displayName) {
 
 // 关闭插件配置模态框
 function closePluginConfigModal() {
-    document.getElementById('pluginConfigModal').style.display = 'none';
     // 恢复背景滚动
     document.body.style.overflow = '';
+    document.documentElement.style.overflow = '';
+    
+    // 恢复到之前的滚动位置
+    window.scrollTo(0, window.scrollPosition || 0);
+    
+    // 隐藏模态框
+    document.getElementById('pluginConfigModal').style.display = 'none';
 }
 
 // 检查 README 是否存在 - 使用 display_name 识别插件
