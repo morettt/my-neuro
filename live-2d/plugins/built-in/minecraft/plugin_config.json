@@ -18,21 +18,21 @@
     "description": "Mindcraft 机器人使用的 OpenAI 兼容 API 密钥，写入 GAME/Minecraft/keys.json",
     "type": "password",
     "default": "",
-    "value": "sk-zk225e73a53a5996adbf6bbb7c7a5594b4f69bedbc0be708"
+    "value": ""
   },
   "model_name": {
     "title": "模型名称",
     "description": "Mindcraft 机器人使用的模型，例如 gemini-2.0-flash",
     "type": "text",
     "default": "gemini-2.0-flash",
-    "value": "gemini-2.0-flash"
+    "value": ""
   },
   "model_url": {
     "title": "模型 URL",
     "description": "OpenAI 兼容接口地址，例如 https://api.zhizengzeng.com/v1",
     "type": "text",
     "default": "https://api.zhizengzeng.com/v1",
-    "value": "https://api.zhizengzeng.com/v1"
+    "value": ""
   },
   "conversing": {
     "title": "对话设定",
