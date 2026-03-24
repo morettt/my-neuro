@@ -205,16 +205,22 @@ class LLMProviderManager {
     resolveModelId(provider, modelId = null) {
         if (!provider) return '';
         const models = provider.models || [];
+        const normalizedRequestedModelId = modelId
+            ? this._normalizeModelId(provider, modelId)
+            : null;
+        const normalizedActiveModelId = this._activeModelId
+            ? this._normalizeModelId(provider, this._activeModelId)
+            : null;
         // 1. 显式传入。
         // 只有命中且模型仍处于 enabled 状态时才直接返回；
         // 否则继续向下回退到首个启用模型，避免禁用模型仍被旧调用链使用。
-        if (modelId) {
-            const found = models.find(m => m.model_id === modelId);
+        if (normalizedRequestedModelId) {
+            const found = models.find(m => m.model_id === normalizedRequestedModelId);
             if (found && found.enabled !== false) return found.model_id;
         }
         // 2. 全局 active model id，同样只接受启用中的模型。
-        if (this._activeModelId) {
-            const found = models.find(m => m.model_id === this._activeModelId);
+        if (normalizedActiveModelId) {
+            const found = models.find(m => m.model_id === normalizedActiveModelId);
             if (found && found.enabled !== false) return found.model_id;
         }
         // 3. 第一个 enabled

@@ -291,5 +291,7 @@ function persistProviderStore(baseDir, configPath, config) {
 }
 
 module.exports = {
-    persistProviderStore
+    persistProviderStore,
+    resolveProvidersForConfig: ensureProviderStore,
+    saveProviders
 };
