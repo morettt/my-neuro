@@ -74,9 +74,22 @@ function createWindow () {
 
 // 在主进程启动时调用
 app.whenReady().then(() => {
-    // 在创建窗口前先更新Live2D模型路径
-    const modelPathUpdater = new ModelPathUpdater(app.getAppPath(), priorityFolders);
-    modelPathUpdater.update();
+    // 读取配置判断模型类型
+    let modelType = 'live2d';
+    try {
+        const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        modelType = configData.ui?.model_type || 'live2d';
+    } catch (e) {
+        console.log('读取配置失败，使用默认Live2D模式');
+    }
+
+    // 仅在Live2D模式下更新模型路径
+    if (modelType === 'live2d') {
+        const modelPathUpdater = new ModelPathUpdater(app.getAppPath(), priorityFolders);
+        modelPathUpdater.update();
+    } else {
+        console.log('VRM模式，跳过Live2D模型路径更新');
+    }
 
     const mainWindow = createWindow();
 
@@ -91,6 +104,9 @@ app.whenReady().then(() => {
 
 
 app.on('window-all-closed', () => {
+    if (global.pluginManager) {
+        global.pluginManager.stopWatching();
+    }
     if (process.platform !== 'darwin') {
         app.quit()
     }
@@ -115,6 +131,11 @@ ipcMain.on('window-move', (event, { mouseX, mouseY }) => {
 
 ipcMain.on('set-ignore-mouse-events', (event, { ignore, options }) => {
     BrowserWindow.fromWebContents(event.sender).setIgnoreMouseEvents(ignore, options)
+})
+
+ipcMain.on('set-window-opacity', (event, opacity) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) win.setOpacity(Math.max(0, Math.min(1, opacity)));
 })
 
 ipcMain.on('request-top-most', (event) => {
@@ -169,50 +190,36 @@ ipcMain.handle('get-config', async (event) => {
 });
 
 ipcMain.handle('take-screenshot', async (event) => {
-    const win = BrowserWindow.fromWebContents(event.sender);
     try {
-        // 截图前隐藏皮套窗口，截完再恢复，避免皮套出现在截图里
-        win.setOpacity(0);
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        // 1. 获取系统识别到的所有物理显示器
-        //TO DO 目前截图一次大约需要250ms，此处可以加一个系统显示器信息缓存，能够省下50ms截图时间开销
         const displays = await screenshot.listDisplays();
 
-        // 2. 计算当前鼠标所在的逻辑屏幕索引
         const cursorPoint = screen.getCursorScreenPoint();
         const currentDisplay = screen.getDisplayNearestPoint(cursorPoint);
 
-        // 3. 对 Electron 识别的屏幕按 X 轴坐标排序 (bounds.x)
         const electronDisplays = screen.getAllDisplays().sort((a, b) => a.bounds.x - b.bounds.x);
         const targetIndex = electronDisplays.findIndex(d => d.id === currentDisplay.id);
 
-        // 对screenshot-desktop原生库识别的屏幕按 X 轴坐标排序 (left)，以确保索引一致
         const nativeDisplays = displays.sort((a, b) => (a.left || 0) - (b.left || 0));
 
-        // 越界防御检查
         if (targetIndex >= nativeDisplays.length) {
             throw new Error(`屏幕索引越界：鼠标在 Index ${targetIndex}，但原生只检测到 ${nativeDisplays.length} 个屏幕`);
         }
 
         const targetNativeDisplay = nativeDisplays[targetIndex];
 
-        // 4. 执行截图
         const imgBuffer = await screenshot({
             screen: targetNativeDisplay.id,
             format: 'jpg'
         });
 
-        // 5. 返回结果 (Base64)
         return imgBuffer.toString('base64');
-
     } catch (error) {
         console.error('截图错误:', error)
         throw error;
-    } finally {
-        win.setOpacity(1);
     }
-});
+})
 
 // 添加IPC处理器，允许从渲染进程手动更新模型
 ipcMain.handle('update-live2d-model', async (event) => {
@@ -315,5 +322,29 @@ ipcMain.on('save-model-position', (event, position) => {
 
     } catch (error) {
         console.error('保存模型位置失败:', error);
+    }
+})
+
+// 切换到VRM模型的IPC处理器
+ipcMain.handle('switch-vrm-model', async (event, vrmFileName) => {
+    try {
+        console.log(`切换VRM模型到: ${vrmFileName}`);
+
+        // 更新config.json
+        const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        if (!configData.ui) configData.ui = {};
+        configData.ui.model_type = 'vrm';
+        configData.ui.vrm_model = vrmFileName;
+        configData.ui.vrm_model_path = `3D/${vrmFileName}`;
+        fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+
+        // 重新加载窗口
+        const win = BrowserWindow.fromWebContents(event.sender);
+        win.reload();
+
+        return { success: true, message: `VRM模型已切换到 ${vrmFileName}，页面将重新加载` };
+    } catch (error) {
+        console.error('切换VRM模型时出错:', error);
+        return { success: false, message: `切换失败: ${error.message}` };
     }
 })
