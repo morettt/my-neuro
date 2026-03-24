@@ -5,6 +5,7 @@ const { VoiceChatFacade } = require('./ai/conversation/VoiceChatFacade.js');
 const { UIController } = require('./ui/ui-controller.js');
 const { TTSFactory } = require('./voice/tts-factory.js');
 const { ModelSetup } = require('./model/model-setup.js');
+const { VRMModelSetup } = require('./model/vrm-model-setup.js');
 const { BarrageManager } = require('./live/barrage-manager.js');
 // LiveStreamModule → plugins/built-in/bilibili-live
 // AutoChatModule   → plugins/built-in/auto-chat
@@ -234,20 +235,47 @@ class AppInitializer {
         }
     }
 
-    // 第五阶段: 加载Live2D模型
+    // 第五阶段: 加载模型（Live2D或VRM）
     async initializeModel() {
-        const result = await ModelSetup.initialize(
-            this.modelController,
-            this.config,
-            this.ttsEnabled,
-            this.asrEnabled,
-            this.ttsProcessor,
-            this.voiceChat
-        );
+        const modelType = this.config.ui?.model_type || 'live2d';
+        console.log(`模型类型: ${modelType}`);
+
+        let result;
+        if (modelType === 'vrm') {
+            // 使用VRM模型
+            logToTerminal('info', '正在加载VRM 3D模型...');
+            result = await VRMModelSetup.initialize(
+                this.modelController,
+                this.config,
+                this.ttsEnabled,
+                this.asrEnabled,
+                this.ttsProcessor,
+                this.voiceChat
+            );
+        } else {
+            // 默认使用Live2D模型
+            result = await ModelSetup.initialize(
+                this.modelController,
+                this.config,
+                this.ttsEnabled,
+                this.asrEnabled,
+                this.ttsProcessor,
+                this.voiceChat
+            );
+        }
 
         this.model = result.model;
         this.emotionMapper = result.emotionMapper;
         this.musicPlayer = result.musicPlayer;
+
+        // VRM模式：替换modelController并更新TTS唇形回调
+        if (result.vrmController) {
+            this.modelController = result.vrmController;
+            if (this.ttsProcessor?.playbackEngine) {
+                this.ttsProcessor.playbackEngine.onAudioDataCallback =
+                    (value) => result.vrmController.setMouthOpenY(value);
+            }
+        }
 
         global.currentModel = this.model;
         global.pixiApp = result.app;
@@ -333,6 +361,9 @@ class AppInitializer {
                 this.pluginManager.startAll().catch(err => {
                     logToTerminal('error', `❌ 插件 startAll 失败: ${err.message}`);
                 });
+
+                // 启动热加载文件监听
+                this.pluginManager.startWatching();
 
                 // 监听 TTS_END 事件，触发插件 onTTSEnd 钩子
                 eventBus.on(Events.TTS_END, () => {

@@ -97,9 +97,15 @@ class LLMClient {
             const message = responseData.choices[0].message;
 
             // 🔥 处理 Qwen3 等模型的 reasoning_content 字段
-            // 如果 content 为空但有 reasoning_content，则使用 reasoning_content
-            if ((!message.content || message.content.trim() === '') && message.reasoning_content) {
+            // 仅在没有 tool_calls 时才用 reasoning_content 替代空 content（Qwen3 推理模式）
+            // 有 tool_calls 时 reasoning_content 是思考过程，不应作为回复内容（Gemini 等）
+            if ((!message.content || message.content.trim() === '') && message.reasoning_content && !message.tool_calls) {
                 message.content = message.reasoning_content;
+            }
+
+            // 🔥 过滤思考内容（Gemini / DeepSeek 等模型可能在 content 中混入思考）
+            if (message.content) {
+                message.content = this._filterThinkingContent(message.content);
             }
 
             // 🔥 解析 Qwen 模型的文本格式工具调用（Hermes/XML style）
@@ -129,33 +135,8 @@ class LLMClient {
      * @returns {Array} 清理后的消息数组
      */
     _cleanMessagesForAPI(messages) {
-        // 🔥 第一步：移除孤立的 tool 消息（前面没有 tool_calls 的 assistant 消息）
-        const filtered = [];
-        for (let i = 0; i < messages.length; i++) {
-            if (messages[i].role === 'tool') {
-                // 向前查找最近的 assistant 消息，检查是否有 tool_calls
-                let hasToolCalls = false;
-                for (let j = filtered.length - 1; j >= 0; j--) {
-                    if (filtered[j].role === 'assistant' && filtered[j].tool_calls) {
-                        hasToolCalls = true;
-                        break;
-                    }
-                    // 如果遇到非 tool 且非 assistant 的消息，说明没有匹配的 tool_calls
-                    if (filtered[j].role !== 'tool') {
-                        break;
-                    }
-                }
-                if (!hasToolCalls) {
-                    logToTerminal('warn', `⚠️ 跳过孤立的 tool 消息 (tool_call_id: ${messages[i].tool_call_id})`);
-                    continue; // 跳过这条孤立的 tool 消息
-                }
-            }
-            filtered.push(messages[i]);
-        }
-
-        // 🔥 第二步：清理消息格式
-        return filtered.map(msg => {
-            // 处理 assistant 消息的 content 为 null 的情况
+        return messages.map(msg => {
+            // 🔥 处理 assistant 消息的 content 为 null 的情况
             if (msg.role === 'assistant') {
                 // 如果有 tool_calls 但 content 为 null,设为空字符串
                 if (msg.content === null && msg.tool_calls) {
@@ -166,7 +147,7 @@ class LLMClient {
                 }
             }
 
-            // 处理 tool 消息,确保格式正确
+            // 🔥 处理 tool 消息,确保格式正确
             if (msg.role === 'tool') {
                 let content = msg.content;
 
@@ -185,6 +166,7 @@ class LLMClient {
                 }
 
                 // 🔥 确保字符串不包含控制字符(可能导致JSON解析失败)
+                // 移除所有不可见的控制字符,但保留换行符(\n)和制表符(\t)
                 content = content.replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '');
 
                 // 🔥 确保字符串长度不超过限制(避免超大响应)
@@ -337,6 +319,37 @@ class LLMClient {
     }
 
     /**
+     * 过滤模型思考/推理内容，防止思考过程被TTS播放或显示为字幕
+     * 支持 Gemini、DeepSeek 等模型的多种思考格式
+     * @param {string} text - 原始文本
+     * @returns {string} 过滤后的文本
+     */
+    _filterThinkingContent(text) {
+        if (!text) return text;
+
+        let filtered = text;
+
+        // 过滤 <think>...</think> 块（DeepSeek、部分 Gemini 格式）
+        filtered = filtered.replace(/<think>[\s\S]*?<\/think>/gi, '');
+
+        // 过滤 <thinking>...</thinking> 块
+        filtered = filtered.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+
+        // 过滤 Gemini 中文思考格式：整段以"思考"开头（独占一行）的内容
+        // 仅在整段内容都是思考时才清除（避免误杀正常对话中的"思考"二字）
+        if (/^思考\s*\n/.test(filtered)) {
+            filtered = '';
+        }
+
+        // 过滤 Gemini 英文思考格式：整段以"Thinking"开头（独占一行）
+        if (/^Thinking\s*\n/i.test(filtered)) {
+            filtered = '';
+        }
+
+        return filtered.trim();
+    }
+
+    /**
      * 从内容中移除工具调用部分
      * @private
      * @param {string} content - 原始内容
@@ -425,6 +438,11 @@ class LLMClient {
             }
 
 //            logToTerminal('info', `✅ 流式响应接收完成`);
+
+            // 🔥 过滤思考内容（Gemini 等模型可能在流式 content 中混入思考过程）
+            if (fullContent) {
+                fullContent = this._filterThinkingContent(fullContent);
+            }
 
             // 构建完整的消息对象
             const message = {
