@@ -78,6 +78,9 @@
   },
   "ui": {
     "intro_text": "你好啊",
+    "model_type": "live2d",
+    "vrm_model": "",
+    "vrm_model_path": "",
     "model_scale": 0.6592945326814194,
     "show_chat_box": true,
     "show_model": true,
@@ -95,6 +98,11 @@
     "max_messages": 18,
     "persistent_history": false,
     "history_file": "AI记录室/对话历史.json"
+  },
+  "vmc": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 39539
   },
   "tools": {
     "enabled": true,
@@ -114,5 +122,5 @@
   "auto_close_services": {
     "enabled": false
   },
-  "version": "v6.3.7"
+  "version": "v6.3.9"
 }
