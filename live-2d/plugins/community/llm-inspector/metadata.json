@@ -1,0 +1,10 @@
+{
+  "name": "llm-inspector",
+  "displayName": "LLM 抓包器",
+  "version": "1.0.0",
+  "author": "community",
+  "description": "拦截每次 LLM 请求，完整记录 system/user/assistant/tool 消息和工具定义，同步输出到终端和日志文件",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

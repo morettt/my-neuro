@@ -65,8 +65,8 @@ function createWindow () {
     })
     win.on('will-move', (event, newBounds) => {
         const { width, height } = primaryDisplay.workAreaSize
-        if (newBounds.x < 0 || newBounds.y < 0 || 
-            newBounds.x + newBounds.width > width || 
+        if (newBounds.x < 0 || newBounds.y < 0 ||
+            newBounds.x + newBounds.width > width ||
             newBounds.y + newBounds.height > height) {
             event.preventDefault()
         }
@@ -77,16 +77,29 @@ function createWindow () {
     setInterval(() => {
         ensureTopMost(win)
     }, 1000)
-    
-    
+
+
     return win
 }
 
 // 在主进程启动时调用
 app.whenReady().then(() => {
-    // 在创建窗口前先更新Live2D模型路径
-    const modelPathUpdater = new ModelPathUpdater(app.getAppPath(), priorityFolders);
-    modelPathUpdater.update();
+    // 读取配置判断模型类型
+    let modelType = 'live2d';
+    try {
+        const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        modelType = configData.ui?.model_type || 'live2d';
+    } catch (e) {
+        console.log('读取配置失败，使用默认Live2D模式');
+    }
+
+    // 仅在Live2D模式下更新模型路径
+    if (modelType === 'live2d') {
+        const modelPathUpdater = new ModelPathUpdater(app.getAppPath(), priorityFolders);
+        modelPathUpdater.update();
+    } else {
+        console.log('VRM模式，跳过Live2D模型路径更新');
+    }
 
     const mainWindow = createWindow();
 
@@ -101,6 +114,9 @@ app.whenReady().then(() => {
 
 
 app.on('window-all-closed', () => {
+    if (global.pluginManager) {
+        global.pluginManager.stopWatching();
+    }
     if (process.platform !== 'darwin') {
         app.quit()
     }
@@ -125,6 +141,11 @@ ipcMain.on('window-move', (event, { mouseX, mouseY }) => {
 
 ipcMain.on('set-ignore-mouse-events', (event, { ignore, options }) => {
     BrowserWindow.fromWebContents(event.sender).setIgnoreMouseEvents(ignore, options)
+})
+
+ipcMain.on('set-window-opacity', (event, opacity) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) win.setOpacity(Math.max(0, Math.min(1, opacity)));
 })
 
 ipcMain.on('request-top-most', (event) => {
@@ -216,7 +237,6 @@ ipcMain.handle('take-screenshot', async (event) => {
 
         // 5. 返回结果 (Base64)
         return imgBuffer.toString('base64');
-
     } catch (error) {
         console.error('截图错误:', error)
         throw error;
@@ -317,11 +337,36 @@ ipcMain.on('save-model-position', (event, position) => {
 
         configData.ui.model_position.x = position.x;
         configData.ui.model_position.y = position.y;
+        configData.ui.model_scale = position.scale;
 
         // 保存到文件
         fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
 
     } catch (error) {
         console.error('保存模型位置失败:', error);
+    }
+})
+
+// 切换到VRM模型的IPC处理器
+ipcMain.handle('switch-vrm-model', async (event, vrmFileName) => {
+    try {
+        console.log(`切换VRM模型到: ${vrmFileName}`);
+
+        // 更新config.json
+        const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        if (!configData.ui) configData.ui = {};
+        configData.ui.model_type = 'vrm';
+        configData.ui.vrm_model = vrmFileName;
+        configData.ui.vrm_model_path = `3D/${vrmFileName}`;
+        fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+
+        // 重新加载窗口
+        const win = BrowserWindow.fromWebContents(event.sender);
+        win.reload();
+
+        return { success: true, message: `VRM模型已切换到 ${vrmFileName}，页面将重新加载` };
+    } catch (error) {
+        console.error('切换VRM模型时出错:', error);
+        return { success: false, message: `切换失败: ${error.message}` };
     }
 })

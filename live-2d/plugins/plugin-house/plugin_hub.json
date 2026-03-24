@@ -46,5 +46,29 @@
     "desc": "工具搜索与智能路由插件：自动发现所有工具、BM25检索工具定义、下级智能体委派执行，实现大模型工具控制的高效调用，无需修改主项目文件",
     "author": "LikeNightRabbit",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-world-eye"
+  },
+  "ai-log": {
+    "display_name": "ai-log",
+    "desc": "AI日志插件：用户说晚安时自动生成每日观察日志、查看最近日志、生成月度总结，日志写入核心记忆实现长期记忆，支持记忆库每日备份与清空",
+    "author": "LikeNightRabbit",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-ai-log"
+  },
+  "dawn-dusk-line": {
+    "display_name": "dawn-dusk-line",
+    "desc": "时间感知与整点主动问候插件：提供时间查询工具，并在 0/8/12/18 点智能发起问候，根据对话活跃度自动选择直接问候或自然融入回复，避免打断正在进行的对话",
+    "author": "LikeNightRabbit",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-dawn-dusk-line"
+  },
+  "mood-chat": {
+    "display_name": "mood-chat",
+    "desc": "潮汐之音：基于心情评估的智能主动对话模块。通过AI日志评估初始心情、实时对话情感分析、回复速度感知等多维度影响心情值，根据心情自动调整主动对话频率与风格，支持心情持久化与离线回归",
+    "author": "LikeNightRabbit",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-mood-chat"
+  },
+  "thinking-bubble": {
+    "display_name": "thinking-bubble",
+    "desc": "思考气泡：在用户发出语音或文本后、LLM 返回并通过 TTS 播报前，在 Live2D 模型旁显示萌系「正在思考」提示气泡，内置约 50 条随机文案；与工具调用气泡、歌词气泡分层错开显示，避免遮挡；支持水平/垂直偏移、显示延迟、文案切换间隔与自定义文案列表等配置。",
+    "author": "A-night-owl-Rabbit",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-thinking-bubble"
   }
 }

@@ -434,16 +434,14 @@ class UIController {
             const message = chatInput.textContent.trim();
             if (!message) return;
 
-            const chatMessages = document.getElementById('chat-messages');
-            if (chatMessages) {
-                const messageElement = document.createElement('div');
-                messageElement.innerHTML = `<strong>你:</strong> ${message}`;
-                chatMessages.appendChild(messageElement);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
-
-            voiceChat.sendToLLM(message);
             chatInput.textContent = '';
+
+            // 走 inputRouter.handleTextInput，触发插件 hooks（含 memos 记忆注入）
+            if (voiceChat.inputRouter) {
+                voiceChat.inputRouter.handleTextInput(message);
+            } else {
+                voiceChat.sendToLLM(message);
+            }
         };
 
         //新的Enter事件注册，不调用preventDefault，会换行
