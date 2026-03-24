@@ -41,7 +41,7 @@ class MinecraftPlugin extends Plugin {
 
     _syncConfigFiles(cfg) {
         try {
-            const gameDir = path.join(__dirname, '..', '..', '..', 'GAME', 'Minecraft');
+            const gameDir = path.join(__dirname, '..', '..', '..', '..', 'plugins-dlc', 'minecraft', 'Minecraft');
             const andyPath = path.join(gameDir, 'andy.json');
             const keysPath = path.join(gameDir, 'keys.json');
 
