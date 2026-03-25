@@ -117,10 +117,14 @@
   "subtitle_labels": {
     "enabled": true,
     "user": "用户",
+<<<<<<< Updated upstream
     "ai": "Fake Neuro"
+=======
+    "ai": "肥牛"
+>>>>>>> Stashed changes
   },
   "auto_close_services": {
     "enabled": false
   },
-  "version": "v6.3.9"
+  "version": "v6.4"
 }
