@@ -115,9 +115,9 @@
     "auto_start_servers": true
   },
   "subtitle_labels": {
-    "enabled": false,
+    "enabled": true,
     "user": "用户",
-    "ai": "肥牛"
+    "ai": "fake neuro"
   },
   "auto_close_services": {
     "enabled": false
