@@ -117,10 +117,10 @@
   "subtitle_labels": {
     "enabled": false,
     "user": "用户",
-    "ai": "AI"
+    "ai": "肥牛"
   },
   "auto_close_services": {
     "enabled": false
   },
-  "version": "v6.3.9"
+  "version": "v6.4"
 }
