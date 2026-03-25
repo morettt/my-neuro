@@ -88,8 +88,8 @@
     "auto_show_chat_on_text_mode": true,
     "hide_from_screenshot": true,
     "model_position": {
-      "x": 1.3192581489183488,
-      "y": 0.5715708406376147,
+      "x": 1.35,
+      "y": 0.8,
       "remember_position": true
     }
   },
@@ -115,13 +115,9 @@
     "auto_start_servers": true
   },
   "subtitle_labels": {
-    "enabled": true,
+    "enabled": false,
     "user": "用户",
-<<<<<<< Updated upstream
-    "ai": "Fake Neuro"
-=======
     "ai": "肥牛"
->>>>>>> Stashed changes
   },
   "auto_close_services": {
     "enabled": false
