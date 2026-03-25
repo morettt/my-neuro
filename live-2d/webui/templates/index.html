@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Neuro - 控制中心</title>
+    <link rel="icon" href="/live-2d/fake_neuro.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Toast 通知容器 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="container">
+        <header>
+            <h1>
+                <img src="/live-2d/fake_neuro.ico" alt="Logo" class="header-logo">
+                My Neuro - 控制中心
+            </h1>
+            <p class="subtitle">管理肥牛各项服务与配置</p>
+        </header>
+
+        <!-- 折叠控制栏和保存按钮栏 - 位于 header 和选项卡之间，同一行显示 -->
+        <div class="header-collapse-control">
+            <div class="config-save-buttons" id="configSaveButtons"></div>
+            <div class="collapse-right-group">
+                <div class="collapsed-mini-title" id="collapsedMiniTitle">My Neuro - 控制中心</div>
+                <button class="btn-collapse-header" onclick="toggleHeaderCollapse()">
+                    <span class="collapse-icon">▼</span>
+                    <span class="collapse-text">折叠</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-button active" onclick="switchTab('dashboard')">服务控制</button>
+            <button class="tab-button" onclick="switchTab('basic-config')">基础配置</button>
+            <button class="tab-button" onclick="switchTab('dialog-config')">对话配置</button>
+            <button class="tab-button" onclick="switchTab('llm-config')">LLM 配置</button>
+            <button class="tab-button" onclick="switchTab('voice-settings')">云端配置</button>
+            <button class="tab-button" onclick="switchTab('ui-settings')">Live2D设置</button>
+            <button class="tab-button" onclick="switchTab('model-manager')">声音克隆</button>
+            <button class="tab-button" onclick="switchTab('market')">广场</button>
+            <button class="tab-button" onclick="switchTab('tools')">工具屋</button>
+            <button class="tab-button" onclick="switchTab('plugins')">插件管理</button>
+        </div>
+
+        <!-- 服务控制面板 -->
+        <div id="dashboard" class="tab-content active">
+            <!-- 系统信息栏 -->
+            <div class="system-info-bar">
+                <div class="info-item">
+                    <span class="info-label">WebUI 版本:</span>
+                    <span class="info-value" id="webui-version">加载中...</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">运行时间:</span>
+                    <span class="info-value" id="system-uptime">0 小时 0 分钟 0 秒</span>
+                </div>
+                <div class="info-actions">
+                    <button class="btn-start" onclick="startAllServices()">一键启动</button>
+                    <button class="btn-stop" onclick="stopAllServices()">一键停止</button>
+                </div>
+            </div>
+            
+            <div class="dashboard">
+                <div class="card">
+                    <h3><span class="status" id="live2d-status"></span>Live2D 主服务</h3>
+                    <p>核心 Live2D 桌面宠物服务</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('live2d')" id="live2d-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('live2d')" id="live2d-stop" disabled>停止</button>
+                        <button class="btn-restart" onclick="restartService('live2d')" id="live2d-restart">重启</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="asr-status"></span>ASR 语音识别</h3>
+                    <p>语音转文字服务</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('asr')" id="asr-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('asr')" id="asr-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="tts-status"></span>TTS 语音合成</h3>
+                    <p>文字转语音服务</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('tts')" id="tts-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('tts')" id="tts-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="memos-status"></span>记忆系统</h3>
+                    <p>MemOS 记忆存储与检索</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('memos')" id="memos-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('memos')" id="memos-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="rag-status"></span>RAG 服务</h3>
+                    <p>检索增强生成服务</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('rag')" id="rag-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('rag')" id="rag-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="bert-status"></span>BERT 服务</h3>
+                    <p>情感分析与文本分类</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('bert')" id="bert-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('bert')" id="bert-stop" disabled>停止</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 多日志系统 -->
+            <div class="log-section">
+                <!-- 拆分按钮栏 -->
+                <div class="log-split-bar">
+                    <button class="split-log-button" onclick="toggleLogSplit()" id="splitLogButton">拆分</button>
+                </div>
+
+                <div class="log-wrapper" id="logWrapper">
+                    <!-- 第一个日志面板容器 -->
+                    <div class="log-panel-container" id="logPanelContainer1">
+                        <!-- 头部：选项卡 -->
+                        <div class="log-header">
+                            <div class="log-tabs-main">
+                                <button class="log-tab active" onclick="switchLogTab('system-log')">系统日志</button>
+                                <button class="log-tab" onclick="switchLogTab('pet-log')">桌宠日志</button>
+                                <button class="log-tab" onclick="switchLogTab('tool-log')">工具日志</button>
+                                <button class="log-tab" onclick="switchLogTab('chat-history')">历史对话</button>
+                                <button class="clear-log-button" onclick="clearCurrentLog()">清空日志</button>
+                            </div>
+                        </div>
+
+                        <!-- 日志内容 -->
+                        <div id="system-log" class="log-panel active">
+                            <div class="log-container" data-log-type="main">
+                                <div id="system-log-output">
+                                    <div class="log-entry log-info">系统控制台已启动，等待服务操作...</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="pet-log" class="log-panel">
+                            <div class="log-container" data-log-type="main">
+                                <div id="pet-log-output">
+                                    <div class="log-entry log-info">等待桌宠服务启动...</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="tool-log" class="log-panel">
+                            <div class="log-container" data-log-type="main">
+                                <div id="tool-log-output">
+                                    <div class="log-entry log-info">等待工具调用...</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="chat-history" class="log-panel">
+                            <div class="log-container" data-log-type="main">
+                                <div id="chat-history-output">
+                                    <div class="log-entry log-info">点击刷新按钮加载对话历史...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 第二个日志面板容器（拆分时显示） -->
+                    <div class="log-panel-container" id="logPanelContainer2" style="display: none;">
+                        <!-- 头部：选项卡 -->
+                        <div class="log-header">
+                            <div class="log-tabs-main">
+                                <button class="log-tab active" onclick="switchLogTab2('system-log2')">系统日志</button>
+                                <button class="log-tab" onclick="switchLogTab2('pet-log2')">桌宠日志</button>
+                                <button class="log-tab" onclick="switchLogTab2('tool-log2')">工具日志</button>
+                                <button class="log-tab" onclick="switchLogTab2('chat-history2')">历史对话</button>
+                                <button class="clear-log-button" onclick="clearCurrentLog2()">清空日志</button>
+                            </div>
+                        </div>
+
+                        <!-- 日志内容 -->
+                        <div id="system-log2" class="log-panel active">
+                            <div class="log-container" data-log-type="second">
+                                <div id="system-log-output2"></div>
+                            </div>
+                        </div>
+
+                        <div id="pet-log2" class="log-panel">
+                            <div class="log-container" data-log-type="second">
+                                <div id="pet-log-output2"></div>
+                            </div>
+                        </div>
+
+                        <div id="tool-log2" class="log-panel">
+                            <div class="log-container" data-log-type="second">
+                                <div id="tool-log-output2"></div>
+                            </div>
+                        </div>
+
+                        <div id="chat-history2" class="log-panel">
+                            <div class="log-container" data-log-type="second">
+                                <div id="chat-history-output2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 高度调整手柄 -->
+                <div class="log-resizer" id="logResizer"></div>
+            </div>
+        </div>
+
+        <!-- LLM 配置面板 -->
+        <div id="llm-config" class="tab-content">
+            <h3>LLM 配置</h3>
+            <div class="section">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="api-key">API Key</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" id="api-key" placeholder="输入您的 API 密钥" style="flex: 1;">
+                            <button type="button" onclick="toggleApiKeyVisibility()" style="width: auto; padding: 12px 20px;">👁️</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="api-url">API URL</label>
+                        <input type="text" id="api-url" placeholder="https://api.example.com/v1">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="model">模型</label>
+                        <input type="text" id="model" placeholder="gpt-4, qwen3.5-27b 等">
+                    </div>
+                    <div class="form-group">
+                        <label for="temperature">Temperature</label>
+                        <input type="number" id="temperature" min="0" max="2" step="0.1" placeholder="0.9">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="system-prompt">AI 人设</label>
+                    <textarea id="system-prompt" class="system-prompt-textarea" placeholder="在这里输入 AI 人设..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- 云端配置面板 -->
+        <div id="voice-settings" class="tab-content">
+            <h3>云端配置</h3>
+            
+            <!-- 云端配置子选项卡 -->
+            <div class="sub-tabs">
+                <button class="sub-tab-button active" onclick="switchCloudTab('gateway')">云端肥牛</button>
+                <button class="sub-tab-button" onclick="switchCloudTab('tts')">云端 TTS</button>
+                <button class="sub-tab-button" onclick="switchCloudTab('aliyun')">阿里云 TTS</button>
+                <button class="sub-tab-button" onclick="switchCloudTab('baidu')">百度流式 ASR</button>
+            </div>
+            
+            <!-- 云端肥牛面板 -->
+            <div id="gateway-panel" class="cloud-panel active">
+                <div class="section">
+                    <h4>🐂 云端肥牛配置</h4>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="gateway-enabled">
+                        <label for="gateway-enabled">启动全云端</label>
+                    </div>
+                    <div class="form-group">
+                        <label for="gateway-base-url">肥牛 URL：</label>
+                        <input type="text" id="gateway-base-url" placeholder="例如：http://ominifn.natapp1.cc/api/v1">
+                    </div>
+                    <div class="form-group">
+                        <label for="gateway-api-key">肥牛密钥：</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" id="gateway-api-key" placeholder="输入肥牛密钥" style="flex: 1;">
+                            <button type="button" onclick="togglePasswordVisibility('gateway-api-key')" style="width: 40px;">👁️</button>
+                        </div>
+                    </div>
+                    <div class="info-tip">
+                        💡 提示：启动就能用！语音识别、语音合成、智能对话这些功能全在云端跑，你的电脑上不用装任何东西。不管是 Windows 还是 Mac、Linux，只要能上网就行。点击下方的按键前往肥牛官网注册登录后。选择肥牛 API 密钥，在那即可获取到肥牛的 API KEY
+                    </div>
+                    <button onclick="openGatewayWebsite()" class="btn-start" style="margin-top: 15px;">🔗 获取 API KEY - 前往云端肥牛官网</button>
+                </div>
+            </div>
+            
+            <!-- 云端 TTS 面板 -->
+            <div id="tts-panel" class="cloud-panel">
+                <div class="section">
+                    <h4>🌐 云服务通用配置</h4>
+                    <div class="form-group">
+                        <label for="cloud-provider">云服务提供商：</label>
+                        <input type="text" id="cloud-provider" placeholder="例如：siliconflow">
+                    </div>
+                    <div class="form-group">
+                        <label for="cloud-api-key">API KEY：</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" id="cloud-api-key" placeholder="输入云服务 API 密钥" style="flex: 1;">
+                            <button type="button" onclick="togglePasswordVisibility('cloud-api-key')" style="width: 40px;">👁️</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="section">
+                    <h4>🔊 云端 TTS 配置</h4>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="cloud-tts-enabled">
+                        <label for="cloud-tts-enabled">启用云端 TTS</label>
+                    </div>
+                    <div class="form-group">
+                        <label for="cloud-tts-url">TTS API URL：</label>
+                        <input type="text" id="cloud-tts-url" placeholder="https://api.siliconflow.cn/v1/audio/speech">
+                    </div>
+                    <div class="form-group">
+                        <label for="cloud-tts-model">模型：</label>
+                        <input type="text" id="cloud-tts-model" placeholder="FunAudioLLM/CosyVoice2-0.5B">
+                    </div>
+                    <div class="form-group">
+                        <label for="cloud-tts-voice">音色：</label>
+                        <input type="text" id="cloud-tts-voice" placeholder="speech:fake-neuro:...">
+                    </div>
+                    <div class="form-group">
+                        <label for="cloud-tts-format">格式：</label>
+                        <select id="cloud-tts-format">
+                            <option value="wav">WAV</option>
+                            <option value="mp3">MP3</option>
+                            <option value="ogg">OGG</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cloud-tts-speed">速度：</label>
+                        <input type="number" id="cloud-tts-speed" min="0.5" max="2.0" step="0.1" value="1.0">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 阿里云 TTS 面板 -->
+            <div id="aliyun-panel" class="cloud-panel">
+                <div class="section">
+                    <h4>🔊 阿里云 TTS 配置</h4>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="aliyun-tts-enabled">
+                        <label for="aliyun-tts-enabled">启用阿里云 TTS</label>
+                    </div>
+                    <div class="form-group">
+                        <label for="aliyun-tts-api-key">API KEY：</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" id="aliyun-tts-api-key" placeholder="输入阿里云 API 密钥" style="flex: 1;">
+                            <button type="button" onclick="togglePasswordVisibility('aliyun-tts-api-key')" style="width: 40px;">👁️</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="aliyun-tts-model">模型名：</label>
+                        <input type="text" id="aliyun-tts-model" placeholder="cosyvoice-v3-flash">
+                    </div>
+                    <div class="form-group">
+                        <label for="aliyun-tts-voice">声音 ID：</label>
+                        <input type="text" id="aliyun-tts-voice" placeholder="输入声音 ID">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 百度流式 ASR 面板 -->
+            <div id="baidu-panel" class="cloud-panel">
+                <div class="section">
+                    <h4>🎤 百度流式 ASR 配置</h4>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="baidu-asr-enabled">
+                        <label for="baidu-asr-enabled">启用百度流式 ASR</label>
+                    </div>
+                    <div class="form-group">
+                        <label for="baidu-asr-url">WebSocket URL：</label>
+                        <input type="text" id="baidu-asr-url" placeholder="ws://vop.baidu.com/realtime_asr">
+                    </div>
+                    <div class="form-group">
+                        <label for="baidu-asr-appid">APP ID：</label>
+                        <input type="number" id="baidu-asr-appid" placeholder="百度语音应用的 APP ID">
+                    </div>
+                    <div class="form-group">
+                        <label for="baidu-asr-appkey">APP KEY：</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" id="baidu-asr-appkey" placeholder="百度语音应用的 APP Key" style="flex: 1;">
+                            <button type="button" onclick="togglePasswordVisibility('baidu-asr-appkey')" style="width: 40px;">👁️</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="baidu-asr-devpid">DEV PID：</label>
+                        <input type="number" id="baidu-asr-devpid" placeholder="15372（普通话）">
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+
+        <!-- 声音克隆 -->
+        <div id="model-manager" class="tab-content">
+            <h3>声音克隆</h3>
+            
+            <!-- 声音克隆子选项卡 -->
+            <div class="sub-tabs">
+                <button class="sub-tab-button active" onclick="switchVoiceCloneTab('config')">模型文件配置</button>
+                <button class="sub-tab-button" onclick="switchVoiceCloneTab('train')">一键训练 TTS 模型</button>
+            </div>
+            
+            <!-- 模型文件配置面板 -->
+            <div id="config-panel" class="voice-clone-panel active">
+                <div class="section">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>模型文件（pth）</label>
+                            <div class="file-drop-area" id="model-drop-area" onclick="document.getElementById('model-file-input').click()">
+                                <input type="file" id="model-file-input" accept=".pth" style="display: none;" onchange="handleModelFileSelect(this.files)">
+                                <div class="file-drop-text">选择模型文件 或拖拽文件到此处</div>
+                            </div>
+                            <div class="file-status" id="model-file-status">未上传模型文件（pth）</div>
+                        </div>
+                        <div class="form-group">
+                            <label>参考音频（wav）</label>
+                            <div class="file-drop-area" id="audio-drop-area" onclick="document.getElementById('audio-file-input').click()">
+                                <input type="file" id="audio-file-input" accept=".wav" style="display: none;" onchange="handleAudioFileSelect(this.files)">
+                                <div class="file-drop-text">选择音频文件 或拖拽文件到此处</div>
+                            </div>
+                            <div class="file-status" id="audio-file-status">未上传参考音频（wav）</div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="voice-clone-role-name">角色名称：</label>
+                        <input type="text" id="voice-clone-role-name" placeholder="输入角色名称，用于生成 bat 文件名">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="voice-clone-language">参考音频语种：</label>
+                        <select id="voice-clone-language">
+                            <option value="zh">zh - 中文</option>
+                            <option value="en">en - 英语</option>
+                            <option value="ja">ja - 日语</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="voice-clone-text">参考音频的文本内容：</label>
+                        <textarea id="voice-clone-text" placeholder="请输入参考音频对应的文本内容" rows="3"></textarea>
+                    </div>
+                    
+                    <button onclick="generateTTSBat()" class="btn-start">生成 TTS 的 bat 文件</button>
+                    <div class="file-status" id="voice-clone-status" style="margin-top: 15px;">状态：请上传文件并生成配置</div>
+                </div>
+            </div>
+            
+            <!-- 一键训练 TTS 模型面板 -->
+            <div id="train-panel" class="voice-clone-panel">
+                <div class="section">
+                    <div class="info-tip" style="text-align: center; padding: 40px;">
+                        <p style="font-size: 16px; margin-bottom: 10px;">🚧 此功能开发中…</p>
+                        <p style="font-size: 14px; opacity: 0.7;">敬请期待</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 工具屋面板 -->
+        <div id="tools" class="tab-content">
+            <h3>工具屋</h3>
+
+            <!-- 工具子选项卡 -->
+            <div class="sub-tabs">
+                <button class="sub-tab-button active" onclick="switchToolTab('fc')">Function Call 工具</button>
+                <button class="sub-tab-button" onclick="switchToolTab('mcp')">MCP Tools</button>
+            </div>
+
+            <!-- Function Call 工具列表 -->
+            <div id="fc-tools-panel" class="tool-panel active">
+                <div class="tool-list" id="fc-tools-list">
+                    <div class="log-entry log-info">加载 Function Call 工具中...</div>
+                </div>
+            </div>
+
+            <!-- MCP 工具列表 -->
+            <div id="mcp-tools-panel" class="tool-panel">
+                <div class="tool-list" id="mcp-tools-list">
+                    <div class="log-entry log-info">加载 MCP 工具中...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 广场面板 -->
+        <div id="market" class="tab-content">
+            <h3>广场</h3>
+            
+            <!-- 广场子选项卡 -->
+            <div class="sub-tabs">
+                <button class="sub-tab-button active" onclick="switchMarketTab('prompt')">提示词广场</button>
+                <button class="sub-tab-button" onclick="switchMarketTab('tool')">工具广场</button>
+                <button class="sub-tab-button" onclick="switchMarketTab('fc')">FC 广场</button>
+                <button class="sub-tab-button" onclick="switchMarketTab('plugin')">插件广场</button>
+            </div>
+
+            <!-- 提示词广场 -->
+            <div id="prompt-market-panel" class="market-panel active">
+                <div class="market-header">
+                    <button onclick="refreshPromptMarket()" class="btn-start">🔄 刷新提示词列表</button>
+                </div>
+                <div class="market-list" id="prompt-market-list">
+                    <div class="log-entry log-info">点击刷新按钮加载提示词列表...</div>
+                </div>
+            </div>
+
+            <!-- 工具广场 -->
+            <div id="tool-market-panel" class="market-panel">
+                <div class="market-header">
+                    <button onclick="refreshToolMarket()" class="btn-start">🔄 刷新工具列表</button>
+                </div>
+                <div class="market-list" id="tool-market-list">
+                    <div class="log-entry log-info">点击刷新按钮加载工具列表...</div>
+                </div>
+            </div>
+
+            <!-- FC 广场 -->
+            <div id="fc-market-panel" class="market-panel">
+                <div class="market-header">
+                    <button onclick="refreshFCMarket()" class="btn-start">🔄 刷新 FC 工具列表</button>
+                </div>
+                <div class="market-list" id="fc-market-list">
+                    <div class="log-entry log-info">点击刷新按钮加载 FC 工具列表...</div>
+                </div>
+            </div>
+
+            <!-- 插件广场 -->
+            <div id="plugin-market-panel" class="market-panel">
+                <div class="market-header">
+                    <button onclick="refreshPluginMarket()" class="btn-start">🔄 刷新插件列表</button>
+                </div>
+                <div class="market-list" id="plugin-market-list">
+                    <div class="log-entry log-info">点击刷新按钮加载插件列表...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- UI 设置面板 -->
+        <div id="ui-settings" class="tab-content">
+            <h3>Live2D 设置</h3>
+            
+            <!-- 唱歌控制（移动到分选项卡之上） -->
+            <div class="section" style="margin-bottom: 20px;">
+                <h4>🎵 唱歌控制</h4>
+                <div class="action-buttons" style="display: flex; gap: 15px;">
+                    <button onclick="startSinging()" class="btn-start">🎵 开始唱歌</button>
+                    <button onclick="stopSinging()" class="btn-stop">🛑 停止唱歌</button>
+                </div>
+            </div>
+            
+            <!-- 子选项卡 -->
+            <div class="sub-tabs">
+                <button class="sub-tab-button active" onclick="switchUISubTab('ui')">UI 设置</button>
+                <button class="sub-tab-button" onclick="switchUISubTab('motion')">动作</button>
+                <button class="sub-tab-button" onclick="switchUISubTab('expression')">表情</button>
+            </div>
+            
+            <!-- UI 设置面板 -->
+            <div id="ui-sub-panel" class="ui-sub-panel active">
+                <div class="section">
+                    <h4>Live2D 模型选择</h4>
+                    <div class="form-group">
+                        <label for="live2d-model-select">选择模型：</label>
+                        <select id="live2d-model-select" style="width: 100%; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.3); color: white;">
+                        </select>
+                    </div>
+                    <button onclick="saveLive2DModel()" class="btn-start" style="margin-top: 10px;">应用模型</button>
+                    <button onclick="resetModelPosition()" class="btn-start" style="margin-top: 10px; background: linear-gradient(135deg, #f59e0b, #d97706);">复位皮套位置</button>
+                </div>
+                <div class="section">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="subtitle-enabled">
+                        <label for="subtitle-enabled">启用字幕显示</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="hide-model">
+                        <label for="hide-model">隐藏皮套</label>
+                    </div>
+                    <div class="form-group">
+                        <label for="model-scale">模型缩放比例</label>
+                        <input type="number" id="model-scale" min="0.1" max="5" step="0.1" placeholder="2.3">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="subtitle-user">用户标签</label>
+                            <input type="text" id="subtitle-user" placeholder="用户名称">
+                        </div>
+                        <div class="form-group">
+                            <label for="subtitle-ai">AI 标签</label>
+                            <input type="text" id="subtitle-ai" placeholder="AI 名称">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 动作管理面板 -->
+            <div id="motion-sub-panel" class="ui-sub-panel">
+                <div class="section">
+                    <div class="action-buttons" style="display: flex; gap: 15px; margin-bottom: 20px;">
+                        <button onclick="resetMotion()" class="btn-restart">🔄 一键还原动作</button>
+                    </div>
+                    
+                    <h4>动作绑定区域</h4>
+                    <div class="emotion-categories-grid" id="emotion-categories-grid">
+                        <div class="emotion-category">
+                            <div class="emotion-category-header">
+                                <span>😊 开心</span>
+                            </div>
+                            <div class="emotion-category-actions" data-emotion="happy">
+                                <div class="empty-tip">点击"+添加动作"选择动作文件</div>
+                            </div>
+                            <button onclick="addMotionToCategory(this)" class="btn-sm" style="margin-top: 10px;">+ 添加动作</button>
+                        </div>
+                        <div class="emotion-category">
+                            <div class="emotion-category-header">
+                                <span>😠 生气</span>
+                            </div>
+                            <div class="emotion-category-actions" data-emotion="angry">
+                                <div class="empty-tip">点击"+添加动作"选择动作文件</div>
+                            </div>
+                            <button onclick="addMotionToCategory(this)" class="btn-sm" style="margin-top: 10px;">+ 添加动作</button>
+                        </div>
+                        <div class="emotion-category">
+                            <div class="emotion-category-header">
+                                <span>😢 难过</span>
+                            </div>
+                            <div class="emotion-category-actions" data-emotion="sad">
+                                <div class="empty-tip">点击"+添加动作"选择动作文件</div>
+                            </div>
+                            <button onclick="addMotionToCategory(this)" class="btn-sm" style="margin-top: 10px;">+ 添加动作</button>
+                        </div>
+                        <div class="emotion-category">
+                            <div class="emotion-category-header">
+                                <span>😲 惊讶</span>
+                            </div>
+                            <div class="emotion-category-actions" data-emotion="surprised">
+                                <div class="empty-tip">点击"+添加动作"选择动作文件</div>
+                            </div>
+                            <button onclick="addMotionToCategory(this)" class="btn-sm" style="margin-top: 10px;">+ 添加动作</button>
+                        </div>
+                        <div class="emotion-category">
+                            <div class="emotion-category-header">
+                                <span>😳 害羞</span>
+                            </div>
+                            <div class="emotion-category-actions" data-emotion="shy">
+                                <div class="empty-tip">点击"+添加动作"选择动作文件</div>
+                            </div>
+                            <button onclick="addMotionToCategory(this)" class="btn-sm" style="margin-top: 10px;">+ 添加动作</button>
+                        </div>
+                        <div class="emotion-category">
+                            <div class="emotion-category-header">
+                                <span>😜 俏皮</span>
+                            </div>
+                            <div class="emotion-category-actions" data-emotion="playful">
+                                <div class="empty-tip">点击"+添加动作"选择动作文件</div>
+                            </div>
+                            <button onclick="addMotionToCategory(this)" class="btn-sm" style="margin-top: 10px;">+ 添加动作</button>
+                        </div>
+                    </div>
+                    
+                    <h4 style="margin-top: 30px;">可用动作（点击预览，拖拽到上方动作区域绑定）</h4>
+                    <div class="available-motions" id="available-motions">
+                        <div class="empty-tip">加载动作中...</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 表情管理面板 -->
+            <div id="expression-sub-panel" class="ui-sub-panel">
+                <div class="section">
+                    <div class="action-buttons" style="display: flex; gap: 15px; margin-bottom: 20px;">
+                        <button onclick="resetExpression()" class="btn-restart">🔄 一键还原表情</button>
+                    </div>
+                    
+                    <h4>表情绑定区域</h4>
+                    <div class="expression-categories-grid" id="emotion-expressions-grid">
+                        <div class="emotion-category" data-emotion="开心">
+                            <div class="emotion-category-header">
+                                <span>😊 开心</span>
+                            </div>
+                            <div class="emotion-expression-actions" data-emotion="开心">
+                                <div class="empty-tip">拖拽表情到此绑定</div>
+                            </div>
+                        </div>
+                        <div class="emotion-category" data-emotion="生气">
+                            <div class="emotion-category-header">
+                                <span>😠 生气</span>
+                            </div>
+                            <div class="emotion-expression-actions" data-emotion="生气">
+                                <div class="empty-tip">拖拽表情到此绑定</div>
+                            </div>
+                        </div>
+                        <div class="emotion-category" data-emotion="难过">
+                            <div class="emotion-category-header">
+                                <span>😢 难过</span>
+                            </div>
+                            <div class="emotion-expression-actions" data-emotion="难过">
+                                <div class="empty-tip">拖拽表情到此绑定</div>
+                            </div>
+                        </div>
+                        <div class="emotion-category" data-emotion="惊讶">
+                            <div class="emotion-category-header">
+                                <span>😲 惊讶</span>
+                            </div>
+                            <div class="emotion-expression-actions" data-emotion="惊讶">
+                                <div class="empty-tip">拖拽表情到此绑定</div>
+                            </div>
+                        </div>
+                        <div class="emotion-category" data-emotion="害羞">
+                            <div class="emotion-category-header">
+                                <span>😳 害羞</span>
+                            </div>
+                            <div class="emotion-expression-actions" data-emotion="害羞">
+                                <div class="empty-tip">拖拽表情到此绑定</div>
+                            </div>
+                        </div>
+                        <div class="emotion-category" data-emotion="俏皮">
+                            <div class="emotion-category-header">
+                                <span>😜 俏皮</span>
+                            </div>
+                            <div class="emotion-expression-actions" data-emotion="俏皮">
+                                <div class="empty-tip">拖拽表情到此绑定</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h4 style="margin-top: 30px;">可用表情（点击预览，拖拽到上方情绪区域绑定）</h4>
+                    <div class="available-expressions" id="available-expressions">
+                        <div class="empty-tip">加载表情中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 基础配置面板 -->
+        <div id="basic-config" class="tab-content">
+            <h3>基础配置</h3>
+            
+            <!-- 视觉功能 -->
+            <div class="section">
+                <h4>视觉功能</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="auto-screenshot">
+                    <label for="auto-screenshot">开启后，每次对话 AI 都会去识图（会增加延迟）</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="use-vision-model">
+                    <label for="use-vision-model">启用辅助视觉模型</label>
+                </div>
+                <div class="form-group" style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: bold; color: #66b3ff;">
+                        💡 说明：当主模型（LLM）不支持图片识别时，可以启用此配置。在需要视觉功能时，系统会自动使用此辅助模型处理
+                    </label>
+                    <label style="font-size: 13px; opacity: 0.8;">视觉模型 API Key:</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <input type="password" id="vision-model-api-key" placeholder="sk-..." style="flex: 1;">
+                        <button type="button" onclick="togglePasswordVisibility('vision-model-api-key')" style="width: 40px;">👁️</button>
+                    </div>
+                    <label style="font-size: 13px; opacity: 0.8;">视觉模型 API URL:</label>
+                    <input type="text" id="vision-model-api-url" placeholder="https://..." style="margin-bottom: 10px;">
+                    <label style="font-size: 13px; opacity: 0.8;">视觉模型名称:</label>
+                    <input type="text" id="vision-model-name" placeholder="qwen-vl-max 等">
+                </div>
+            </div>
+            
+            <!-- 工具开关 -->
+            <div class="section">
+                <h4>工具配置</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tools-enabled">
+                    <label for="tools-enabled">启用 Function Call 工具</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="mcp-enabled">
+                    <label for="mcp-enabled">启用 MCP 工具</label>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 对话配置面板 -->
+        <div id="dialog-config" class="tab-content">
+            <h3>对话配置</h3>
+            <div class="section">
+                <h4>基础设置</h4>
+                <div class="form-group">
+                    <label for="intro-text">开场白:</label>
+                    <textarea id="intro-text" placeholder="你好啊" rows="1"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="max-messages">最大消息数:</label>
+                    <input type="number" id="max-messages" min="1" max="100" placeholder="30">
+                </div>
+            </div>
+            
+            <div class="section">
+                <h4>功能开关</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="asr-enabled">
+                    <label for="asr-enabled">启用 ASR（本地语音识别）</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tts-enabled">
+                    <label for="tts-enabled">启用 TTS（本地语音合成）</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="voice-barge-in">
+                    <label for="voice-barge-in">开启语音打断（实时语音打断 AI 说话）</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="show-chat-box">
+                    <label for="show-chat-box">文字输入框（可打字交互）</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="enable-limit">
+                    <label for="enable-limit">启用上下文限制（超出对话轮次截断）</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="persistent-history">
+                    <label for="persistent-history">启用对话历史记忆</label>
+                    <span style="font-size: 12px; color: #f87171; margin-left: 10px;">⚠️ 警告：这个目前有 bug 会导致 AI 复读混乱，请暂时别选择</span>
+                </div>
+            </div>
+            
+        </div>
+
+        <!-- 插件管理面板 -->
+        <div id="plugins" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">插件管理</h3>
+                <button onclick="refreshPlugins()" class="btn-start" style="padding: 8px 16px; font-size: 14px;">
+                    🔄 刷新插件列表
+                </button>
+            </div>
+            <p style="opacity: 0.7; margin-bottom: 20px;">
+                管理所有已安装的插件，控制功能启用状态<br>
+            </p>
+
+            <!-- 插件子选项卡 -->
+            <div class="sub-tabs">
+                <button class="sub-tab-button active" onclick="switchPluginTab('builtin')">内置插件</button>
+                <button class="sub-tab-button" onclick="switchPluginTab('community')">社区插件</button>
+            </div>
+
+            <!-- 内置插件面板 -->
+            <div id="builtin-plugin-panel" class="plugin-panel active">
+                <div id="builtin-plugins-list" class="plugins-container"></div>
+            </div>
+
+            <!-- 社区插件面板 -->
+            <div id="community-plugin-panel" class="plugin-panel">
+                <div id="community-plugins-list" class="plugins-container"></div>
+            </div>
+        </div>
+
+        <!-- 插件配置模态框 -->
+        <div id="pluginConfigModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>
+                        <i class="icon-gear"></i>
+                        <span id="pluginConfigModalTitle">插件配置</span>
+                    </h3>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button type="button" class="btn btn-info" id="readmeBtn" onclick="openPluginReadme()" style="padding: 8px 16px; background: linear-gradient(135deg, #06b6d4, #0891b2); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                            📖 配置说明
+                        </button>
+                        <button type="button" class="btn-close" onclick="closePluginConfigModal()">&times;</button>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <div id="pluginConfigLoading" class="text-center" style="display: none;">
+                        <div class="spinner"></div>
+                        <p class="text-muted">正在加载配置...</p>
+                    </div>
+                    <div id="pluginConfigError" class="alert alert-danger" style="display: none;">
+                        <span id="pluginConfigErrorText"></span>
+                    </div>
+                    <form id="pluginConfigForm">
+                        <div id="pluginConfigFields"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closePluginConfigModal()">取消</button>
+                    <button type="button" class="btn btn-warning" id="resetConfigBtn" onclick="resetPluginConfig()">
+                        <i class="icon-undo"></i>重置默认值
+                    </button>
+                    <button type="button" class="btn btn-primary" id="saveConfigBtn" onclick="savePluginConfig()">
+                        <i class="icon-save"></i>保存配置
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="static/js/app.js?v=20260322"></script>
+    
+    <!-- 调试脚本：广场下载问题排查 -->
+    <script>
+        // 覆盖 downloadTool 函数添加调试日志
+        const _originalDownloadTool = window.downloadTool;
+        window.downloadTool = async function(toolName, downloadUrl, fileName) {
+            console.log('=== 工具广场下载调试 ===');
+            console.log('工具名称:', toolName);
+            console.log('下载 URL:', downloadUrl);
+            console.log('文件名:', fileName);
+            console.log('调用堆栈:', new Error().stack);
+            try {
+                await _originalDownloadTool(toolName, downloadUrl, fileName);
+            } catch (error) {
+                console.error('下载失败:', error);
+                throw error;
+            }
+        };
+        
+        // 覆盖 applyPrompt 函数添加调试日志
+        const _originalApplyPrompt = window.applyPrompt;
+        window.applyPrompt = async function(title) {
+            console.log('=== 提示词应用调试 ===');
+            console.log('提示词标题:', title);
+            console.log('调用堆栈:', new Error().stack);
+            try {
+                await _originalApplyPrompt(title);
+            } catch (error) {
+                console.error('应用失败:', error);
+                throw error;
+            }
+        };
+        
+        console.log('✅ 调试脚本已加载');
+    </script>
+</body>
+</html>
