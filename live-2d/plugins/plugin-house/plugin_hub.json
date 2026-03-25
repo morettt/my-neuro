@@ -70,5 +70,11 @@
     "desc": "思考气泡：在用户发出语音或文本后、LLM 返回并通过 TTS 播报前，在 Live2D 模型旁显示萌系「正在思考」提示气泡，内置约 50 条随机文案；与工具调用气泡、歌词气泡分层错开显示，避免遮挡；支持水平/垂直偏移、显示延迟、文案切换间隔与自定义文案列表等配置。",
     "author": "A-night-owl-Rabbit",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-thinking-bubble"
+  },
+  "rebirth-feiniu-music": {
+    "display_name": "rebirth-feiniu-music",
+    "desc": "网易云音乐集成：搜索、播放、歌单管理、每日推荐、智能推荐（私人漫游/心动模式/雷达歌单）、偏好分析、随机播放；完整 Live2D 联动（嘴型同步、歌词气泡、麦克风动作）。仓库内已打包 ncm-cli 依赖，用户运行 setup.bat 配置开放平台 API Key 并扫码登录即可开箱即用。",
+    "author": "LikeNightRabbit",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-rebirth-feiniu-music"
   }
 }
