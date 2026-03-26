@@ -4509,7 +4509,7 @@ class set_pyqt(QWidget):
             config['ui']['model_position']['x'] = default_x
             config['ui']['model_position']['y'] = default_y
             config['ui']['model_position']['remember_position'] = True
-            config['ui']['model_scale'] = 0.8
+            config['ui']['model_scale'] = 0.65
 
             # 保存配置文件
             with open(self.config_path, 'w', encoding='utf-8') as f:
