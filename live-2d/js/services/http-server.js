@@ -210,7 +210,7 @@ class HttpServer {
 		            const model = mc.model;
 		            const defaultX = window.innerWidth * 1.35;
 		            const defaultY = window.innerHeight * 0.8;
-		            const scale = 0.8;
+		            const scale = 0.65;
                     // 复位到默认位置
 		            model.x = defaultX;
 		            model.y = defaultY;
