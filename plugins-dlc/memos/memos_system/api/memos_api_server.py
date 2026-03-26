@@ -95,7 +95,7 @@ async def startup_event():
         
         # 加载 embedding 模型
         print("📦 加载 Embedding 模型: ../../full-hub/rag-hub")
-        rag_model_path = os.path.join(os.path.dirname(__file__), "..", "..", "full-hub", "rag-hub")
+        rag_model_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "full-hub", "rag-hub")
         embedding_model = SentenceTransformer(rag_model_path)
         
         # 使用 GPU 加速

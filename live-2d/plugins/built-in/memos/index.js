@@ -4,7 +4,7 @@ const { MemosTools } = require('./tools.js');
 const fs = require('fs');
 const path = require('path');
 
-const BACKEND_CONFIG_PATH = path.join(__dirname, '..', '..', '..', '..', 'memos_system', 'config', 'memos_config.json');
+const BACKEND_CONFIG_PATH = path.join(__dirname, '..', '..', '..', '..', 'plugins-dlc', 'memos', 'memos_system', 'config', 'memos_config.json');
 
 class MemosPlugin extends Plugin {
 

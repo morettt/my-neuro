@@ -3147,7 +3147,7 @@ class set_pyqt(QWidget):
             print("正在启动RAG终端.....")
 
             base_path = get_base_path()
-            bat_file = os.path.join(base_path, "MEMOS-API.bat")
+            bat_file = os.path.join(base_path, "plugins-dlc", "memos", "MEMOS-API.bat")
 
             if not os.path.exists(bat_file):
                 error_msg = f"找不到文件：{bat_file}"
@@ -3760,7 +3760,7 @@ class set_pyqt(QWidget):
             chk.setChecked(rel_path in enabled_set)
             chk.stateChanged.connect(lambda state, pt=plugin_type, pn=plugin_name: self._on_plugin_enabled_changed(pt, pn, state))
             card_layout.addWidget(chk)
-            bat_file = meta.get('bat') if download_dlc else None
+            bat_file = meta.get('bat')
             if bat_file:
                 bat_btn = QPushButton('启动')
                 bat_btn.setFont(self._ui_font())
