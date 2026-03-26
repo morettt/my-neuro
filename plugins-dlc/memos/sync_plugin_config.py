@@ -38,17 +38,12 @@ if llm:
         'base_url': llm.get('base_url', '')
     }
 
-# 同步备用 LLM
-llm_fb = get_fields(cfg, 'backend_llm_fallback')
-if llm_fb:
-    backend['llm_fallback'] = {
-        'enabled': llm_fb.get('enabled', True),
-        'config': {
-            'model':    llm_fb.get('model', ''),
-            'api_key':  llm_fb.get('api_key', ''),
-            'base_url': llm_fb.get('base_url', '')
-        }
-    }
+# 同步 Embedding 配置
+backend.setdefault('embedding', {}).update({
+    'use_api':        get_val(cfg, 'use_api_embedding') is True,
+    'api_model':      get_val(cfg, 'api_embedding_model') or 'text-embedding-3-large',
+    'api_dimensions': get_val(cfg, 'api_embedding_dimensions') or 1024
+})
 
 # 同步检索配置
 search = get_fields(cfg, 'backend_search')
