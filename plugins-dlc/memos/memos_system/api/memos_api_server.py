@@ -9,10 +9,50 @@ import os
 import re
 import asyncio
 from datetime import datetime
-from sentence_transformers import SentenceTransformer
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-import torch
+
+
+class EmbeddingModel:
+    """统一的 Embedding 接口，支持本地 SentenceTransformer 和 OpenAI 兼容 API 两种模式"""
+
+    def __init__(self, emb_type: str, local_model=None,
+                 api_key: str = None, api_base_url: str = None,
+                 api_model: str = None, dimensions: int = None):
+        self.emb_type = emb_type
+        self._local = local_model
+        self._api_key = api_key
+        self._api_base_url = (api_base_url or '').rstrip('/')
+        self._api_model = api_model
+        self._dimensions = dimensions
+
+    def encode(self, texts: list) -> np.ndarray:
+        """与 SentenceTransformer.encode() 兼容的接口，始终返回 np.ndarray"""
+        if self.emb_type == 'local':
+            return self._local.encode(texts)
+        return self._encode_api(texts)
+
+    def _encode_api(self, texts: list) -> np.ndarray:
+        import requests
+        payload = {"model": self._api_model, "input": texts}
+        if self._dimensions:
+            payload["dimensions"] = self._dimensions
+        resp = requests.post(
+            f"{self._api_base_url}/embeddings",
+            headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=30
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        vectors = [item["embedding"] for item in sorted(data["data"], key=lambda x: x["index"])]
+        return np.array(vectors, dtype=np.float32)
+
+    def to(self, device):
+        """兼容 .to('cuda') 调用（API 模式下为空操作）"""
+        if self.emb_type == 'local' and self._local is not None:
+            self._local = self._local.to(device)
+        return self
 
 app = FastAPI(title="MemOS API for 肥牛AI", version="1.0.0")
 
@@ -93,22 +133,64 @@ async def startup_event():
             print(f"⚠️ 配置文件不存在: {config_path}")
             print("   记忆加工功能将不可用")
         
-        # 加载 embedding 模型
-        print("📦 加载 Embedding 模型: ../../full-hub/rag-hub")
-        rag_model_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "full-hub", "rag-hub")
-        embedding_model = SentenceTransformer(rag_model_path)
-        
-        # 使用 GPU 加速
-        if torch.cuda.is_available():
-            embedding_model = embedding_model.to('cuda')
-            print("✅ 使用 GPU 加速")
-        else:
-            print("ℹ️ 使用 CPU")
-        
-        # 加载已存在的记忆（如果有）
+        # 加载 Embedding 模型
         data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
         os.makedirs(data_dir, exist_ok=True)
         memory_file = os.path.join(data_dir, "memory_store.json")
+        marker_file = os.path.join(data_dir, "embedding_marker.json")
+
+        emb_cfg = (full_config or {}).get('embedding', {})
+        use_api = emb_cfg.get('use_api', False)
+
+        if use_api:
+            api_model = emb_cfg.get('api_model', 'text-embedding-3-large')
+            dimensions = emb_cfg.get('api_dimensions', 1024)
+            api_key = llm_config.get('api_key', '') if llm_config else ''
+            api_base_url = llm_config.get('base_url', '') if llm_config else ''
+            print(f"📦 使用 API Embedding 模型: {api_model} (维度: {dimensions})")
+            new_marker = f"api:{api_model}:{dimensions}"
+            embedding_model = EmbeddingModel(
+                'api', api_key=api_key, api_base_url=api_base_url,
+                api_model=api_model, dimensions=dimensions
+            )
+        else:
+            rag_model_path = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'full-hub', 'rag-hub'))
+            print(f"📦 加载本地 Embedding 模型: {rag_model_path}")
+            try:
+                from sentence_transformers import SentenceTransformer
+                import torch
+                local_model = SentenceTransformer(rag_model_path)
+                if torch.cuda.is_available():
+                    local_model = local_model.to('cuda')
+                    print("✅ 使用 GPU 加速")
+                else:
+                    print("ℹ️ 使用 CPU")
+            except ImportError as ie:
+                raise RuntimeError(f"本地模式需要安装 sentence-transformers 和 torch: {ie}")
+            new_marker = f"local:{rag_model_path}"
+            embedding_model = EmbeddingModel('local', local_model=local_model)
+
+        # 检测 Embedding 模型是否更换，若更换则清空旧记忆（向量空间不兼容）
+        old_marker = None
+        if os.path.exists(marker_file):
+            try:
+                with open(marker_file, 'r', encoding='utf-8') as f:
+                    old_marker = json.load(f).get('marker')
+            except Exception:
+                pass
+        if old_marker and old_marker != new_marker:
+            print(f"⚠️ Embedding 模型已更换 ({old_marker} → {new_marker})")
+            print("🗑️ 清空旧记忆（向量空间不兼容，将重新积累）...")
+            if os.path.exists(memory_file):
+                import shutil
+                backup = memory_file + f".model_change_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                shutil.copy(memory_file, backup)
+                print(f"📦 已备份旧记忆到: {backup}")
+                os.remove(memory_file)
+        with open(marker_file, 'w', encoding='utf-8') as f:
+            json.dump({'marker': new_marker, 'updated_at': datetime.now().isoformat()}, f)
+
+        # 加载已存在的记忆（如果有）
         
         if os.path.exists(memory_file):
             try:
@@ -183,7 +265,7 @@ async def startup_event():
         
         print("✅ MemOS 服务启动成功!")
         print(f"📍 向量存储路径: ./memos_system/data")
-        print(f"🧠 Embedding 模型: ./full-hub/rag-hub")
+        print(f"🧠 Embedding 模型: {new_marker}")
         print(f"🤖 记忆加工 LLM: {llm_config.get('model', 'N/A') if llm_config else '未配置'}")
         
     except Exception as e:

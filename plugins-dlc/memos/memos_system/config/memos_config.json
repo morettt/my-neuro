@@ -18,11 +18,14 @@
   },
   "embedding": {
     "model_path": "../full-hub/rag-hub",
-    "vector_size": 1024
+    "vector_size": 1024,
+    "use_api": true,
+    "api_model": "text-embedding-3-large",
+    "api_dimensions": 1024
   },
   "search": {
     "default_top_k": 5,
-    "similarity_threshold": 0.6,
+    "similarity_threshold": 0.3,
     "enable_reranker": false,
     "enable_bm25": true,
     "bm25_weight": 0.3,
