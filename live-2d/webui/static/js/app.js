@@ -4660,3 +4660,325 @@ async function loadLLMConfig() {
         console.error('鍔犺浇 LLM 閰嶇疆澶辫触:', error);
     }
 }
+
+function ensureLLMProviderLayout() {
+    const section = document.querySelector('#llm-config .section');
+    if (!section || section.dataset.providerLayoutReady === 'true') return;
+
+    section.innerHTML = `
+        <div class="provider-manager provider-manager-v2">
+            <div class="provider-list-panel">
+                <div class="provider-list-header">
+                    <div>
+                        <div class="provider-panel-title">提供商源</div>
+                        <div class="provider-panel-subtitle">管理当前可用的模型服务来源</div>
+                    </div>
+                    <button type="button" class="provider-add-button provider-list-add-button" onclick="addLLMProvider()">+ 新增</button>
+                </div>
+                <div id="provider-list" class="provider-list"></div>
+            </div>
+            <div class="provider-editor-panel">
+                <div class="provider-editor-header">
+                    <div class="provider-editor-title-wrap">
+                        <div id="provider-editor-title" class="provider-editor-title">-</div>
+                        <div id="provider-editor-subtitle" class="provider-editor-subtitle">-</div>
+                    </div>
+                    <button type="button" class="provider-save-button" onclick="saveLLMConfig()">保存配置</button>
+                </div>
+                <div class="form-row provider-top-row">
+                    <div class="form-group">
+                        <label for="provider-id">ID</label>
+                        <div class="field-help">提供商唯一 ID，用于配置落盘</div>
+                        <input type="text" id="provider-id" placeholder="openai_main">
+                    </div>
+                    <div class="form-group provider-enabled-group">
+                        <label class="provider-enabled-label">
+                            <input type="checkbox" id="provider-enabled">
+                            启用此提供商
+                        </label>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="provider-name">名称</label>
+                        <div class="field-help">展示名称，用于列表和选择器显示</div>
+                        <input type="text" id="provider-name" placeholder="OpenAI 主服务">
+                    </div>
+                    <div class="form-group">
+                        <label for="api-key">API Key</label>
+                        <div class="field-help">当前服务的访问密钥</div>
+                        <div class="provider-password-row">
+                            <input type="password" id="api-key" placeholder="输入 API Key">
+                            <button type="button" class="provider-inline-button" onclick="toggleApiKeyVisibility()">显示</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="api-url">API Base URL</label>
+                        <div class="field-help">自定义 API 端点 URL</div>
+                        <input type="text" id="api-url" placeholder="https://api.example.com/v1">
+                    </div>
+                </div>
+                <details class="provider-advanced-panel">
+                    <summary>高级配置</summary>
+                    <div class="provider-advanced-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="temperature">Temperature</label>
+                                <div class="field-help">控制回复发散程度</div>
+                                <input type="number" id="temperature" min="0" max="2" step="0.1" placeholder="0.9">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="system-prompt">AI 人设</label>
+                            <div class="field-help">当前 provider 对应的默认系统提示词</div>
+                            <textarea id="system-prompt" class="system-prompt-textarea" placeholder="在这里输入 AI 人设..."></textarea>
+                        </div>
+                    </div>
+                </details>
+                <div class="provider-models-panel">
+                    <div class="provider-models-header">
+                        <div class="provider-models-title-wrap">
+                            <span class="provider-models-title">已配置的模型</span>
+                            <span class="provider-model-active" id="active-provider-model-label">当前使用: 未设置</span>
+                        </div>
+                        <div class="provider-model-toolbar">
+                            <input type="text" id="provider-model-search" class="provider-model-search" placeholder="搜索模型 ID">
+                            <button type="button" class="provider-inline-button" onclick="addProviderModel()">新增模型</button>
+                        </div>
+                    </div>
+                    <div class="provider-model-input-row">
+                        <input type="text" id="model-input" placeholder="输入模型 ID，如 gpt-4o-mini">
+                    </div>
+                    <div id="provider-model-list" class="provider-model-list"></div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    section.dataset.providerLayoutReady = 'true';
+
+    ['provider-enabled', 'provider-id', 'provider-name', 'api-key', 'api-url', 'temperature'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener(id === 'provider-enabled' ? 'change' : 'input', syncCurrentLLMProviderForm);
+    });
+
+    const searchInput = document.getElementById('provider-model-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', renderLLMProviderModels);
+    }
+}
+
+function syncCurrentLLMProviderForm() {
+    const provider = getSelectedLLMProvider();
+    if (!provider) return;
+
+    const nextId = document.getElementById('provider-id')?.value?.trim();
+    if (nextId && nextId !== provider.id) {
+        provider.id = nextId;
+        llmProviderState.selectedProviderId = nextId;
+    }
+
+    provider.enabled = !!document.getElementById('provider-enabled')?.checked;
+    provider.name = document.getElementById('provider-name')?.value?.trim() || provider.name || provider.id;
+    provider.api_key = document.getElementById('api-key')?.value || '';
+    provider.api_url = document.getElementById('api-url')?.value || '';
+    const parsedTemperature = parseFloat(document.getElementById('temperature')?.value);
+    provider.temperature = Number.isFinite(parsedTemperature) ? parsedTemperature : 0.9;
+    renderLLMProviderList();
+}
+
+function renderLLMProviderList() {
+    const container = document.getElementById('provider-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    llmProviderState.providers.forEach((provider) => {
+        const item = document.createElement('div');
+        item.className = `provider-list-item${provider.id === llmProviderState.selectedProviderId ? ' active' : ''}`;
+        item.onclick = () => selectLLMProvider(provider.id);
+
+        const content = document.createElement('div');
+        content.className = 'provider-list-content';
+        content.innerHTML = `
+            <div class="provider-list-name-row">
+                <span class="provider-list-name">${provider.name || provider.id}</span>
+                ${provider.enabled === false ? '<span class="provider-list-tag">已停用</span>' : ''}
+            </div>
+            <div class="provider-list-url">${provider.api_url || '未配置 API URL'}</div>
+        `;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'provider-list-delete';
+        removeBtn.textContent = '删除';
+        removeBtn.onclick = (event) => {
+            event.stopPropagation();
+            deleteLLMProvider(provider.id);
+        };
+
+        item.appendChild(content);
+        item.appendChild(removeBtn);
+        container.appendChild(item);
+    });
+}
+
+function renderLLMProviderEditor() {
+    const provider = getSelectedLLMProvider();
+    const disabled = !provider;
+    const setValue = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.value = value;
+    };
+
+    const enabledEl = document.getElementById('provider-enabled');
+    if (enabledEl) enabledEl.checked = provider ? provider.enabled !== false : true;
+    setValue('provider-id', provider?.id || '');
+    setValue('provider-name', provider?.name || '');
+    setValue('api-key', provider?.api_key || '');
+    setValue('api-url', provider?.api_url || '');
+    setValue('temperature', provider?.temperature ?? 0.9);
+    setValue('provider-model-search', '');
+
+    const title = document.getElementById('provider-editor-title');
+    if (title) title.textContent = provider?.name || provider?.id || '未选择提供商';
+    const subtitle = document.getElementById('provider-editor-subtitle');
+    if (subtitle) subtitle.textContent = provider?.api_url || '填写当前提供商的 API 访问配置';
+
+    ['provider-enabled', 'provider-id', 'provider-name', 'api-key', 'api-url', 'temperature', 'model-input', 'provider-model-search', 'system-prompt'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = disabled;
+    });
+}
+
+function renderLLMProviderModels() {
+    const provider = getSelectedLLMProvider();
+    const container = document.getElementById('provider-model-list');
+    const activeLabel = document.getElementById('active-provider-model-label');
+    if (!container || !activeLabel) return;
+
+    container.innerHTML = '';
+    if (!provider || !Array.isArray(provider.models) || provider.models.length === 0) {
+        container.innerHTML = '<div class="provider-model-empty">暂无已配置模型，可在上方输入模型 ID 后新增。</div>';
+        activeLabel.textContent = '当前使用: 未设置';
+        return;
+    }
+
+    if (!provider.models.some(model => model.model_id === llmProviderState.selectedModelId)) {
+        llmProviderState.selectedModelId = getFirstProviderModelId(provider);
+    }
+
+    const keyword = (document.getElementById('provider-model-search')?.value || '').trim().toLowerCase();
+    const visibleModels = provider.models.filter((model) => {
+        if (!keyword) return true;
+        return (model.model_id || '').toLowerCase().includes(keyword) || (model.name || '').toLowerCase().includes(keyword);
+    });
+
+    if (visibleModels.length === 0) {
+        container.innerHTML = '<div class="provider-model-empty">没有匹配的模型。</div>';
+        activeLabel.textContent = `当前使用: ${llmProviderState.selectedModelId || '未设置'}`;
+        return;
+    }
+
+    visibleModels.forEach((model) => {
+        const row = document.createElement('div');
+        row.className = `provider-model-row${model.model_id === llmProviderState.selectedModelId ? ' active' : ''}`;
+
+        const name = document.createElement('div');
+        name.className = 'provider-model-main';
+        name.innerHTML = `
+            <span class="provider-model-name">${model.name || model.model_id}</span>
+            <span class="provider-model-id">${model.model_id}</span>
+        `;
+
+        const actionBar = document.createElement('div');
+        actionBar.className = 'provider-model-actions';
+
+        const activeBtn = document.createElement('button');
+        activeBtn.type = 'button';
+        activeBtn.className = 'provider-model-set-active';
+        activeBtn.textContent = model.model_id === llmProviderState.selectedModelId ? '当前' : '设为当前';
+        activeBtn.onclick = () => setActiveProviderModel(model.model_id);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'provider-model-remove';
+        removeBtn.textContent = '删除';
+        removeBtn.onclick = () => removeProviderModel(model.model_id);
+
+        actionBar.appendChild(activeBtn);
+        actionBar.appendChild(removeBtn);
+        row.appendChild(name);
+        row.appendChild(actionBar);
+        container.appendChild(row);
+    });
+
+    activeLabel.textContent = `当前使用: ${llmProviderState.selectedModelId || '未设置'}`;
+}
+
+function renderLLMProviderUI() {
+    renderLLMProviderList();
+    renderLLMProviderEditor();
+    renderLLMProviderModels();
+}
+
+function selectLLMProvider(providerId) {
+    syncCurrentLLMProviderForm();
+    llmProviderState.selectedProviderId = providerId;
+    llmProviderState.selectedModelId = getFirstProviderModelId(getSelectedLLMProvider());
+    renderLLMProviderUI();
+}
+
+function addLLMProvider() {
+    syncCurrentLLMProviderForm();
+    const provider = createEmptyLLMProvider();
+    llmProviderState.providers.push(provider);
+    llmProviderState.selectedProviderId = provider.id;
+    llmProviderState.selectedModelId = '';
+    renderLLMProviderUI();
+}
+
+function deleteLLMProvider(providerId = llmProviderState.selectedProviderId) {
+    if (llmProviderState.providers.length <= 1) {
+        showError('至少保留一个提供商');
+        return;
+    }
+    llmProviderState.providers = llmProviderState.providers.filter(provider => provider.id !== providerId);
+    llmProviderState.selectedProviderId = llmProviderState.providers[0]?.id || '';
+    llmProviderState.selectedModelId = getFirstProviderModelId(getSelectedLLMProvider());
+    renderLLMProviderUI();
+}
+
+function addProviderModel() {
+    syncCurrentLLMProviderForm();
+    const provider = getSelectedLLMProvider();
+    const input = document.getElementById('model-input');
+    if (!provider || !input) return;
+
+    const modelId = (input.value || '').trim();
+    if (!modelId) return;
+
+    if (!provider.models.some(model => model.model_id === modelId)) {
+        provider.models.push({ model_id: modelId, name: modelId, enabled: true });
+    }
+    llmProviderState.selectedModelId = modelId;
+    input.value = '';
+    renderLLMProviderModels();
+}
+
+function removeProviderModel(modelId) {
+    const provider = getSelectedLLMProvider();
+    if (!provider) return;
+    provider.models = provider.models.filter(model => model.model_id !== modelId);
+    if (llmProviderState.selectedModelId === modelId) {
+        llmProviderState.selectedModelId = getFirstProviderModelId(provider);
+    }
+    renderLLMProviderModels();
+}
+
+function setActiveProviderModel(modelId) {
+    llmProviderState.selectedModelId = modelId;
+    renderLLMProviderModels();
+}
