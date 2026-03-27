@@ -77,8 +77,6 @@ function createWindow () {
     setInterval(() => {
         ensureTopMost(win)
     }, 1000)
-
-
     return win
 }
 

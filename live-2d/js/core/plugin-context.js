@@ -197,6 +197,17 @@ class PluginContext {
         await voiceChat.sendToLLM(content);
     }
 
+    /**
+     * 直接让 TTS 朗读一段文字，不经过 LLM
+     * @param {string} text
+     */
+    speakText(text) {
+        const voiceChat = global.voiceChat;
+        if (!voiceChat?.ttsProcessor) return;
+        voiceChat.ttsProcessor.reset();
+        voiceChat.ttsProcessor.processTextToSpeech(text);
+    }
+
     // ===== 配置 =====
 
     /** 获取整个 config.json */

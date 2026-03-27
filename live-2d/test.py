@@ -3164,7 +3164,7 @@ class set_pyqt(QWidget):
             print("正在启动RAG终端.....")
 
             base_path = get_base_path()
-            bat_file = os.path.join(base_path, "MEMOS-API.bat")
+            bat_file = os.path.join(base_path, "plugins-dlc", "memos", "MEMOS-API.bat")
 
             if not os.path.exists(bat_file):
                 error_msg = f"找不到文件：{bat_file}"
@@ -3814,6 +3814,18 @@ class set_pyqt(QWidget):
             chk.setChecked(rel_path in enabled_set)
             chk.stateChanged.connect(lambda state, pt=plugin_type, pn=plugin_name: self._on_plugin_enabled_changed(pt, pn, state))
             card_layout.addWidget(chk)
+            bat_file = meta.get('bat')
+            if bat_file:
+                bat_btn = QPushButton('启动')
+                bat_btn.setFont(self._ui_font())
+                bat_btn.setMinimumSize(60, 30)
+                bat_btn.setStyleSheet("""
+                    QPushButton { background-color: #4CAF50; color: white; border-radius: 6px; border: none; padding: 4px 8px; }
+                    QPushButton:hover { background-color: #388E3C; }
+                    QPushButton:pressed { background-color: #2E7D32; }
+                """)
+                bat_btn.clicked.connect(lambda checked=False, pn=plugin_name, bf=bat_file: self._launch_plugin_bat(pn, bf))
+                card_layout.addWidget(bat_btn)
             if extra_keys:
                 btn = QPushButton('配置')
                 btn.setFont(self._ui_font())
@@ -4327,6 +4339,20 @@ class set_pyqt(QWidget):
         self._save_enabled_plugins(enabled_set)
 
     # ===== DLC 安装 =====
+
+    def _launch_plugin_bat(self, plugin_name, bat_file):
+        """启动插件DLC目录下的bat文件，弹出独立cmd窗口"""
+        dlc_path = os.path.join(get_base_path(), 'plugins-dlc', plugin_name)
+        bat_path = os.path.join(dlc_path, bat_file)
+        if not os.path.isfile(bat_path):
+            QMessageBox.warning(self, '启动失败', f'找不到启动文件：{bat_path}')
+            return
+        import subprocess
+        subprocess.Popen(
+            [bat_path],
+            cwd=os.path.dirname(bat_path),
+            creationflags=subprocess.CREATE_NEW_CONSOLE
+        )
 
     def _install_plugin_dlc(self, url, plugin_name, dlc_btn, card_layout, plugin_type, extra_keys, info):
         """后台下载并解压插件DLC"""
