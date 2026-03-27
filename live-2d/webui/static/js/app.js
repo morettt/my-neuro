@@ -4345,55 +4345,60 @@ function ensureLLMProviderLayout() {
 
     section.innerHTML = `
         <div class="provider-manager">
-            <div class="provider-list-panel">
-                <div class="provider-panel-title">LLM 提供商管理</div>
-                <div id="provider-list" class="provider-list"></div>
-                <div class="provider-actions">
+            <div class="provider-toolbar form-row">
+                <div class="form-group">
+                    <label for="provider-select">提供商</label>
+                    <select id="provider-select"></select>
+                </div>
+                <div class="provider-actions provider-actions-inline">
                     <button type="button" class="provider-add-button" onclick="addLLMProvider()">+ 新增</button>
                     <button type="button" class="provider-delete-button" onclick="deleteLLMProvider()">删除</button>
                 </div>
             </div>
-            <div class="provider-editor-panel">
-                <div class="provider-enabled-row">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="provider-name">提供商名称</label>
+                    <input type="text" id="provider-name" placeholder="提供商名称">
+                </div>
+                <div class="form-group provider-enabled-group">
                     <label class="provider-enabled-label">
                         <input type="checkbox" id="provider-enabled">
                         启用此提供商
                     </label>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="provider-name">名称</label>
-                        <input type="text" id="provider-name" placeholder="提供商名称">
-                    </div>
-                    <div class="form-group">
-                        <label for="temperature">Temperature</label>
-                        <input type="number" id="temperature" min="0" max="2" step="0.1" placeholder="0.9">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="api-key">API Key</label>
-                        <div style="display: flex; gap: 10px;">
-                            <input type="password" id="api-key" placeholder="输入 API Key" style="flex: 1;">
-                            <button type="button" onclick="toggleApiKeyVisibility()" style="width: auto; padding: 12px 20px;">查看</button>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="api-url">API URL</label>
-                        <input type="text" id="api-url" placeholder="https://api.example.com/v1">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="api-key">API Key</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="password" id="api-key" placeholder="输入 API Key" style="flex: 1;">
+                        <button type="button" onclick="toggleApiKeyVisibility()" style="width: auto; padding: 12px 20px;">查看</button>
                     </div>
                 </div>
-                <div class="provider-models-panel">
-                    <div class="provider-models-header">
-                        <span>模型列表</span>
-                        <span class="provider-model-active" id="active-provider-model-label">当前使用：未设置</span>
-                    </div>
-                    <div id="provider-model-list" class="provider-model-list"></div>
+                <div class="form-group">
+                    <label for="api-url">API URL</label>
+                    <input type="text" id="api-url" placeholder="https://api.example.com/v1">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="model-input">模型</label>
                     <div class="provider-model-input-row">
-                        <input type="text" id="model-input" placeholder="输入模型 ID 或粘贴后添加">
+                        <input type="text" id="model-input" placeholder="输入模型 ID 后添加">
                         <button type="button" class="provider-add-button" onclick="addProviderModel()">+ 添加</button>
                     </div>
                 </div>
+                <div class="form-group">
+                    <label for="temperature">Temperature</label>
+                    <input type="number" id="temperature" min="0" max="2" step="0.1" placeholder="0.9">
+                </div>
+            </div>
+            <div class="provider-models-panel">
+                <div class="provider-models-header">
+                    <span>模型列表</span>
+                    <span class="provider-model-active" id="active-provider-model-label">当前使用：未设置</span>
+                </div>
+                <div id="provider-model-list" class="provider-model-list"></div>
             </div>
         </div>
         <div class="form-group">
@@ -4409,6 +4414,10 @@ function ensureLLMProviderLayout() {
         if (!el) return;
         el.addEventListener(id === 'provider-enabled' ? 'change' : 'input', syncCurrentLLMProviderForm);
     });
+    const providerSelect = document.getElementById('provider-select');
+    if (providerSelect) {
+        providerSelect.addEventListener('change', (event) => selectLLMProvider(event.target.value));
+    }
 }
 
 function syncCurrentLLMProviderForm() {
@@ -4424,21 +4433,19 @@ function syncCurrentLLMProviderForm() {
 }
 
 function renderLLMProviderList() {
-    const list = document.getElementById('provider-list');
-    if (!list) return;
-    list.innerHTML = '';
+    const select = document.getElementById('provider-select');
+    if (!select) return;
+    const currentValue = llmProviderState.selectedProviderId;
+    select.innerHTML = '';
 
     llmProviderState.providers.forEach((provider) => {
-        const item = document.createElement('button');
-        item.type = 'button';
-        item.className = `provider-list-item${provider.id === llmProviderState.selectedProviderId ? ' active' : ''}`;
-        item.innerHTML = `
-            <span class="provider-list-name">${provider.name || provider.id}</span>
-            <span class="provider-list-tag">${provider.enabled !== false ? '启用' : '停用'}</span>
-        `;
-        item.onclick = () => selectLLMProvider(provider.id);
-        list.appendChild(item);
+        const option = document.createElement('option');
+        option.value = provider.id;
+        option.textContent = `${provider.name || provider.id}${provider.enabled !== false ? '' : '（已停用）'}`;
+        select.appendChild(option);
     });
+
+    select.value = currentValue || llmProviderState.providers[0]?.id || '';
 }
 
 function renderLLMProviderEditor() {
@@ -4483,14 +4490,21 @@ function renderLLMProviderModels() {
         const row = document.createElement('div');
         row.className = `provider-model-row${model.model_id === llmProviderState.selectedModelId ? ' active' : ''}`;
 
-        const mainBtn = document.createElement('button');
-        mainBtn.type = 'button';
-        mainBtn.className = 'provider-model-main';
-        mainBtn.onclick = () => setActiveProviderModel(model.model_id);
-        mainBtn.innerHTML = `
+        const name = document.createElement('div');
+        name.className = 'provider-model-main';
+        name.innerHTML = `
             <span class="provider-model-name">${model.name || model.model_id}</span>
             <span class="provider-model-id">${model.model_id}</span>
         `;
+
+        const actionBar = document.createElement('div');
+        actionBar.className = 'provider-model-actions';
+
+        const activeBtn = document.createElement('button');
+        activeBtn.type = 'button';
+        activeBtn.className = 'provider-model-set-active';
+        activeBtn.textContent = model.model_id === llmProviderState.selectedModelId ? '当前' : '设为当前';
+        activeBtn.onclick = () => setActiveProviderModel(model.model_id);
 
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
@@ -4498,8 +4512,10 @@ function renderLLMProviderModels() {
         removeBtn.textContent = '删除';
         removeBtn.onclick = () => removeProviderModel(model.model_id);
 
-        row.appendChild(mainBtn);
-        row.appendChild(removeBtn);
+        actionBar.appendChild(activeBtn);
+        actionBar.appendChild(removeBtn);
+        row.appendChild(name);
+        row.appendChild(actionBar);
         container.appendChild(row);
     });
 
