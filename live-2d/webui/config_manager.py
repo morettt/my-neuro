@@ -13,6 +13,7 @@ from .utils import PROJECT_ROOT, logger
 
 # 创建配置管理蓝图
 config_bp = Blueprint('config', __name__)
+PROVIDER_STORE_PATH = PROJECT_ROOT / 'llm_providers.json'
 
 
 def load_config():
@@ -40,32 +41,269 @@ def save_config(config):
 
 # ============ LLM 配置 ============
 
+def load_provider_store():
+    """Load llm_providers.json if present."""
+    if not PROVIDER_STORE_PATH.exists():
+        return []
+    try:
+        with open(PROVIDER_STORE_PATH, 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+        if isinstance(raw, dict):
+            providers = raw.get('providers', [])
+            return providers if isinstance(providers, list) else []
+        return raw if isinstance(raw, list) else []
+    except Exception as e:
+        logger.warning(f'加载 llm_providers.json 失败：{str(e)}')
+        return []
+
+
+def save_provider_store(providers):
+    """Persist llm_providers.json using the current object layout."""
+    try:
+        with open(PROVIDER_STORE_PATH, 'w', encoding='utf-8') as f:
+            json.dump({'providers': providers}, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f'保存 llm_providers.json 失败：{str(e)}')
+        return False
+
+
+def normalize_model_id_for_provider(provider, model_id):
+    raw_model_id = (model_id or '').strip()
+    if not raw_model_id:
+        return ''
+
+    prefixes = []
+    provider_id = str(provider.get('id', '')).strip().rstrip('/')
+    provider_name = str(provider.get('name', '')).strip().rstrip('/')
+    if provider_id:
+        prefixes.append(provider_id)
+    if provider_name and provider_name not in prefixes:
+        prefixes.append(provider_name)
+
+    for prefix in prefixes:
+        marker = f'{prefix}/'
+        if raw_model_id.startswith(marker):
+            return raw_model_id[len(marker):]
+
+    api_url = str(provider.get('api_url', '')).strip().lower()
+    if 'dashscope.aliyuncs.com/compatible-mode' in api_url and raw_model_id.count('/') == 1:
+        return raw_model_id.split('/', 1)[1]
+
+    return raw_model_id
+
+
+def normalize_provider(provider):
+    if not isinstance(provider, dict):
+        return provider
+
+    normalized = dict(provider)
+    raw_models = normalized.get('models')
+    models = raw_models if isinstance(raw_models, list) else []
+    normalized_models = []
+
+    for model in models:
+        if isinstance(model, dict):
+            normalized_model_id = normalize_model_id_for_provider(
+                normalized,
+                model.get('model_id') or model.get('id') or model.get('name') or ''
+            )
+            normalized_models.append({
+                **model,
+                'model_id': normalized_model_id,
+                'name': model.get('name') if model.get('name') and model.get('name') not in {
+                    model.get('model_id'),
+                    model.get('id')
+                } else normalized_model_id
+            })
+        else:
+            normalized_model_id = normalize_model_id_for_provider(normalized, str(model or ''))
+            normalized_models.append({
+                'model_id': normalized_model_id,
+                'name': normalized_model_id,
+                'enabled': True
+            })
+
+    normalized['models'] = normalized_models
+    if isinstance(normalized.get('model'), str) and normalized.get('model'):
+        normalized['model'] = normalize_model_id_for_provider(normalized, normalized['model'])
+    return normalized
+
+
+def normalize_providers(providers):
+    return [normalize_provider(provider) for provider in providers if isinstance(provider, dict)]
+
+
+def build_provider_from_legacy(llm_config):
+    model_id = (llm_config.get('model_id') or llm_config.get('model') or '').strip()
+    provider = {
+        'id': 'main',
+        'name': '主模型',
+        'api_key': llm_config.get('api_key', ''),
+        'api_url': llm_config.get('api_url', ''),
+        'models': [{'model_id': model_id, 'name': model_id, 'enabled': True}] if model_id else [],
+        'enabled': True
+    }
+    if 'temperature' in llm_config:
+        provider['temperature'] = llm_config.get('temperature')
+    return provider
+
+
+def get_first_model_id(provider):
+    for model in provider.get('models', []):
+        if isinstance(model, dict) and model.get('model_id'):
+            return model['model_id']
+    return ''
+
+
+def choose_llm_provider(config, providers):
+    llm_config = config.get('llm', {})
+    selected_id = str(llm_config.get('provider_id', '')).strip()
+    provider_map = {
+        provider.get('id'): provider
+        for provider in providers
+        if isinstance(provider, dict) and provider.get('id')
+    }
+
+    selected_provider = provider_map.get(selected_id)
+    if selected_provider and selected_provider.get('enabled', True):
+        return selected_provider
+
+    main_provider = provider_map.get('main')
+    if main_provider and main_provider.get('enabled', True):
+        return main_provider
+
+    for provider in providers:
+        if provider.get('enabled', True):
+            return provider
+
+    return providers[0] if providers else None
+
+
+def resolve_llm_config_state(config):
+    providers = normalize_providers(load_provider_store())
+    llm_config = config.setdefault('llm', {})
+
+    if not providers:
+        has_legacy = any(str(llm_config.get(key, '')).strip() for key in ('api_key', 'api_url'))
+        if has_legacy:
+            providers = [normalize_provider(build_provider_from_legacy(llm_config))]
+
+    provider = choose_llm_provider(config, providers)
+    if provider:
+        normalized_selected_model = normalize_model_id_for_provider(
+            provider,
+            llm_config.get('model_id') or llm_config.get('model') or get_first_model_id(provider)
+        )
+        return {
+            'provider': provider,
+            'providers': providers,
+            'response': {
+                'provider_id': provider.get('id', ''),
+                'api_key': provider.get('api_key', ''),
+                'api_url': provider.get('api_url', ''),
+                'model': normalized_selected_model,
+                'model_id': normalized_selected_model,
+                'temperature': provider.get('temperature', llm_config.get('temperature', 0.9)),
+                'system_prompt': llm_config.get('system_prompt', '')
+            }
+        }
+
+    raw_model = (llm_config.get('model_id') or llm_config.get('model') or '').strip()
+    return {
+        'provider': None,
+        'providers': providers,
+        'response': {
+            'provider_id': llm_config.get('provider_id', ''),
+            'api_key': llm_config.get('api_key', ''),
+            'api_url': llm_config.get('api_url', ''),
+            'model': raw_model,
+            'model_id': raw_model,
+            'temperature': llm_config.get('temperature', 0.9),
+            'system_prompt': llm_config.get('system_prompt', '')
+        }
+    }
+
+
+def persist_llm_config(data):
+    config = load_config()
+    llm_config = config.setdefault('llm', {})
+    state = resolve_llm_config_state(config)
+    providers = list(state['providers'])
+
+    provider_id = (data.get('provider_id') or llm_config.get('provider_id') or '').strip()
+    provider = None
+
+    if provider_id:
+        for item in providers:
+            if item.get('id') == provider_id:
+                provider = item
+                break
+
+    if provider is None:
+        provider = state['provider']
+
+    if provider is None:
+        provider = {
+            'id': provider_id or 'main',
+            'name': '主模型',
+            'api_key': '',
+            'api_url': '',
+            'models': [],
+            'enabled': True
+        }
+        providers.append(provider)
+
+    provider['api_key'] = data.get('api_key', '')
+    provider['api_url'] = data.get('api_url', '')
+    provider['temperature'] = data.get('temperature', 0.9)
+
+    model_id = normalize_model_id_for_provider(provider, data.get('model', ''))
+    provider['models'] = provider.get('models') if isinstance(provider.get('models'), list) else []
+    if model_id:
+        matched = False
+        for model in provider['models']:
+            if not isinstance(model, dict):
+                continue
+            if model.get('model_id') == model_id:
+                model['enabled'] = model.get('enabled', True)
+                if not model.get('name'):
+                    model['name'] = model_id
+                matched = True
+                break
+        if not matched:
+            provider['models'].append({
+                'model_id': model_id,
+                'name': model_id,
+                'enabled': True
+            })
+
+    llm_config['provider_id'] = provider.get('id', '')
+    llm_config['model_id'] = model_id
+    llm_config['temperature'] = data.get('temperature', 0.9)
+    llm_config['system_prompt'] = data.get('system_prompt', '')
+    llm_config['api_key'] = ''
+    llm_config['api_url'] = ''
+    llm_config.pop('model', None)
+
+    normalized_providers = normalize_providers(providers)
+    if not save_provider_store(normalized_providers):
+        return False
+
+    return save_config(config)
+
+
 @config_bp.route('/api/config/llm', methods=['GET', 'POST'])
 def handle_llm_config():
     """处理 LLM 配置"""
     config = load_config()
     if request.method == 'GET':
-        llm_config = config.get('llm', {})
-        return jsonify({
-            'api_key': llm_config.get('api_key', ''),
-            'api_url': llm_config.get('api_url', ''),
-            'model': llm_config.get('model', ''),
-            'temperature': llm_config.get('temperature', 0.9),
-            'system_prompt': llm_config.get('system_prompt', '')
-        })
+        state = resolve_llm_config_state(config)
+        return jsonify(state['response'])
     elif request.method == 'POST':
         try:
             data = request.get_json()
-            if 'llm' not in config:
-                config['llm'] = {}
-            config['llm'].update({
-                'api_key': data.get('api_key', ''),
-                'api_url': data.get('api_url', ''),
-                'model': data.get('model', ''),
-                'temperature': data.get('temperature', 0.9),
-                'system_prompt': data.get('system_prompt', '')
-            })
-            if save_config(config):
+            if persist_llm_config(data or {}):
                 return jsonify({'success': True})
             return jsonify({'error': '保存失败'}), 500
         except Exception as e:
