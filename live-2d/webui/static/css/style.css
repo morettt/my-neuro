@@ -318,6 +318,197 @@ button:disabled { background: #6b7280; cursor: not-allowed; transform: none; box
 h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
 .section { margin-bottom: 30px; }
 .model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-top: 20px; }
+
+.provider-manager {
+    display: grid;
+    grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+    gap: 18px;
+    margin-bottom: 24px;
+}
+
+.provider-list-panel,
+.provider-editor-panel,
+.provider-models-panel {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 12px;
+}
+
+.provider-list-panel {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.provider-panel-title {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.provider-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 220px;
+}
+
+.provider-list-item {
+    width: 100%;
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-align: left;
+}
+
+.provider-list-item.active {
+    border-color: rgba(102, 126, 234, 0.7);
+    background: rgba(102, 126, 234, 0.22);
+}
+
+.provider-list-name {
+    font-weight: 700;
+}
+
+.provider-list-tag {
+    font-size: 12px;
+    opacity: 0.82;
+}
+
+.provider-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.provider-add-button,
+.provider-delete-button {
+    margin: 0;
+    padding: 10px 14px;
+    font-weight: 700;
+}
+
+.provider-add-button {
+    background: linear-gradient(135deg, #4caf50, #388e3c);
+}
+
+.provider-delete-button {
+    background: linear-gradient(135deg, #ef5350, #c62828);
+}
+
+.provider-editor-panel {
+    padding: 14px;
+}
+
+.provider-enabled-row {
+    margin-bottom: 10px;
+}
+
+.provider-enabled-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+}
+
+.provider-enabled-label input {
+    width: auto;
+}
+
+.provider-models-panel {
+    padding: 12px;
+}
+
+.provider-models-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    font-weight: 700;
+}
+
+.provider-model-active {
+    font-size: 13px;
+    color: #c7d2fe;
+}
+
+.provider-model-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 130px;
+}
+
+.provider-model-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.provider-model-main {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    text-align: left;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.provider-model-row.active .provider-model-main {
+    border-color: rgba(102, 126, 234, 0.7);
+    background: rgba(102, 126, 234, 0.18);
+}
+
+.provider-model-name {
+    font-weight: 700;
+}
+
+.provider-model-id {
+    font-size: 12px;
+    opacity: 0.85;
+    word-break: break-all;
+}
+
+.provider-model-remove {
+    margin: 0;
+    padding: 0 16px;
+    background: linear-gradient(135deg, #ef5350, #c62828);
+}
+
+.provider-model-empty {
+    padding: 18px 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.76);
+}
+
+.provider-model-input-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.provider-model-input-row input {
+    width: 100%;
+}
+
+@media (max-width: 1024px) {
+    .provider-manager {
+        grid-template-columns: 1fr;
+    }
+}
 .model-card {
     background: rgba(255,255,255,0.1); border-radius: 10px; padding: 15px;
     text-align: center; cursor: pointer; transition: all 0.3s; border: 2px solid transparent;

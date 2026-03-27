@@ -200,12 +200,15 @@ def resolve_llm_config_state(config):
             'providers': providers,
             'response': {
                 'provider_id': provider.get('id', ''),
+                'selected_provider_id': provider.get('id', ''),
                 'api_key': provider.get('api_key', ''),
                 'api_url': provider.get('api_url', ''),
                 'model': normalized_selected_model,
                 'model_id': normalized_selected_model,
+                'selected_model_id': normalized_selected_model,
                 'temperature': provider.get('temperature', llm_config.get('temperature', 0.9)),
-                'system_prompt': llm_config.get('system_prompt', '')
+                'system_prompt': llm_config.get('system_prompt', ''),
+                'providers': providers
             }
         }
 
@@ -215,12 +218,15 @@ def resolve_llm_config_state(config):
         'providers': providers,
         'response': {
             'provider_id': llm_config.get('provider_id', ''),
+            'selected_provider_id': llm_config.get('provider_id', ''),
             'api_key': llm_config.get('api_key', ''),
             'api_url': llm_config.get('api_url', ''),
             'model': raw_model,
             'model_id': raw_model,
+            'selected_model_id': raw_model,
             'temperature': llm_config.get('temperature', 0.9),
-            'system_prompt': llm_config.get('system_prompt', '')
+            'system_prompt': llm_config.get('system_prompt', ''),
+            'providers': providers
         }
     }
 
@@ -229,9 +235,13 @@ def persist_llm_config(data):
     config = load_config()
     llm_config = config.setdefault('llm', {})
     state = resolve_llm_config_state(config)
-    providers = list(state['providers'])
+    incoming_providers = data.get('providers')
+    if isinstance(incoming_providers, list):
+        providers = normalize_providers(incoming_providers)
+    else:
+        providers = list(state['providers'])
 
-    provider_id = (data.get('provider_id') or llm_config.get('provider_id') or '').strip()
+    provider_id = (data.get('provider_id') or data.get('selected_provider_id') or llm_config.get('provider_id') or '').strip()
     provider = None
 
     if provider_id:
@@ -258,7 +268,12 @@ def persist_llm_config(data):
     provider['api_url'] = data.get('api_url', '')
     provider['temperature'] = data.get('temperature', 0.9)
 
-    model_id = normalize_model_id_for_provider(provider, data.get('model', ''))
+    requested_model = data.get('model_id')
+    if requested_model is None:
+        requested_model = data.get('selected_model_id')
+    if requested_model is None:
+        requested_model = data.get('model', '')
+    model_id = normalize_model_id_for_provider(provider, requested_model)
     provider['models'] = provider.get('models') if isinstance(provider.get('models'), list) else []
     if model_id:
         matched = False

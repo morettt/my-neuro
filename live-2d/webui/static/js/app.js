@@ -4286,3 +4286,361 @@ function toggleHeaderCollapse() {
         }
     }
 }
+
+// ============ LLM 提供商 WebUI 覆盖实现 ============
+
+let llmProviderState = {
+    providers: [],
+    selectedProviderId: '',
+    selectedModelId: ''
+};
+
+function createEmptyLLMProvider() {
+    return {
+        id: `provider_${Math.random().toString(16).slice(2, 8)}`,
+        name: '新提供商',
+        api_key: '',
+        api_url: '',
+        models: [],
+        temperature: 0.9,
+        enabled: true
+    };
+}
+
+function normalizeLLMProvider(provider, index) {
+    return {
+        id: provider?.id || `provider_${index + 1}`,
+        name: provider?.name || provider?.id || `提供商 ${index + 1}`,
+        api_key: provider?.api_key || '',
+        api_url: provider?.api_url || '',
+        models: Array.isArray(provider?.models)
+            ? provider.models
+                .filter(model => model && (model.model_id || model.id || model.name))
+                .map(model => ({
+                    model_id: model.model_id || model.id || model.name,
+                    name: model.name || model.model_id || model.id,
+                    enabled: model.enabled !== false
+                }))
+            : [],
+        temperature: Number.isFinite(Number(provider?.temperature)) ? Number(provider.temperature) : 0.9,
+        enabled: provider?.enabled !== false
+    };
+}
+
+function getSelectedLLMProvider() {
+    return llmProviderState.providers.find(provider => provider.id === llmProviderState.selectedProviderId) || null;
+}
+
+function getFirstProviderModelId(provider) {
+    if (!provider || !Array.isArray(provider.models)) return '';
+    const enabledModel = provider.models.find(model => model && model.enabled !== false && model.model_id);
+    if (enabledModel) return enabledModel.model_id;
+    const firstModel = provider.models.find(model => model && model.model_id);
+    return firstModel ? firstModel.model_id : '';
+}
+
+function ensureLLMProviderLayout() {
+    const section = document.querySelector('#llm-config .section');
+    if (!section || section.dataset.providerLayoutReady === 'true') return;
+
+    section.innerHTML = `
+        <div class="provider-manager">
+            <div class="provider-list-panel">
+                <div class="provider-panel-title">LLM 提供商管理</div>
+                <div id="provider-list" class="provider-list"></div>
+                <div class="provider-actions">
+                    <button type="button" class="provider-add-button" onclick="addLLMProvider()">+ 新增</button>
+                    <button type="button" class="provider-delete-button" onclick="deleteLLMProvider()">删除</button>
+                </div>
+            </div>
+            <div class="provider-editor-panel">
+                <div class="provider-enabled-row">
+                    <label class="provider-enabled-label">
+                        <input type="checkbox" id="provider-enabled">
+                        启用此提供商
+                    </label>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="provider-name">名称</label>
+                        <input type="text" id="provider-name" placeholder="提供商名称">
+                    </div>
+                    <div class="form-group">
+                        <label for="temperature">Temperature</label>
+                        <input type="number" id="temperature" min="0" max="2" step="0.1" placeholder="0.9">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="api-key">API Key</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="password" id="api-key" placeholder="输入 API Key" style="flex: 1;">
+                            <button type="button" onclick="toggleApiKeyVisibility()" style="width: auto; padding: 12px 20px;">查看</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="api-url">API URL</label>
+                        <input type="text" id="api-url" placeholder="https://api.example.com/v1">
+                    </div>
+                </div>
+                <div class="provider-models-panel">
+                    <div class="provider-models-header">
+                        <span>模型列表</span>
+                        <span class="provider-model-active" id="active-provider-model-label">当前使用：未设置</span>
+                    </div>
+                    <div id="provider-model-list" class="provider-model-list"></div>
+                    <div class="provider-model-input-row">
+                        <input type="text" id="model-input" placeholder="输入模型 ID 或粘贴后添加">
+                        <button type="button" class="provider-add-button" onclick="addProviderModel()">+ 添加</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="system-prompt">AI 人设</label>
+            <textarea id="system-prompt" class="system-prompt-textarea" placeholder="在这里输入 AI 人设..."></textarea>
+        </div>
+    `;
+
+    section.dataset.providerLayoutReady = 'true';
+
+    ['provider-enabled', 'provider-name', 'api-key', 'api-url', 'temperature'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener(id === 'provider-enabled' ? 'change' : 'input', syncCurrentLLMProviderForm);
+    });
+}
+
+function syncCurrentLLMProviderForm() {
+    const provider = getSelectedLLMProvider();
+    if (!provider) return;
+    provider.enabled = !!document.getElementById('provider-enabled')?.checked;
+    provider.name = document.getElementById('provider-name')?.value?.trim() || provider.name || provider.id;
+    provider.api_key = document.getElementById('api-key')?.value || '';
+    provider.api_url = document.getElementById('api-url')?.value || '';
+    const parsedTemperature = parseFloat(document.getElementById('temperature')?.value);
+    provider.temperature = Number.isFinite(parsedTemperature) ? parsedTemperature : 0.9;
+    renderLLMProviderList();
+}
+
+function renderLLMProviderList() {
+    const list = document.getElementById('provider-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    llmProviderState.providers.forEach((provider) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = `provider-list-item${provider.id === llmProviderState.selectedProviderId ? ' active' : ''}`;
+        item.innerHTML = `
+            <span class="provider-list-name">${provider.name || provider.id}</span>
+            <span class="provider-list-tag">${provider.enabled !== false ? '启用' : '停用'}</span>
+        `;
+        item.onclick = () => selectLLMProvider(provider.id);
+        list.appendChild(item);
+    });
+}
+
+function renderLLMProviderEditor() {
+    const provider = getSelectedLLMProvider();
+    const disabled = !provider;
+    const setValue = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.value = value;
+    };
+
+    const enabledEl = document.getElementById('provider-enabled');
+    if (enabledEl) enabledEl.checked = provider ? provider.enabled !== false : true;
+    setValue('provider-name', provider?.name || '');
+    setValue('api-key', provider?.api_key || '');
+    setValue('api-url', provider?.api_url || '');
+    setValue('temperature', provider?.temperature ?? 0.9);
+
+    ['provider-enabled', 'provider-name', 'api-key', 'api-url', 'temperature', 'model-input'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = disabled;
+    });
+}
+
+function renderLLMProviderModels() {
+    const provider = getSelectedLLMProvider();
+    const container = document.getElementById('provider-model-list');
+    const activeLabel = document.getElementById('active-provider-model-label');
+    if (!container || !activeLabel) return;
+
+    container.innerHTML = '';
+    if (!provider || !Array.isArray(provider.models) || provider.models.length === 0) {
+        container.innerHTML = '<div class="provider-model-empty">还没有模型，先添加一个模型 ID。</div>';
+        activeLabel.textContent = '当前使用：未设置';
+        return;
+    }
+
+    if (!provider.models.some(model => model.model_id === llmProviderState.selectedModelId)) {
+        llmProviderState.selectedModelId = getFirstProviderModelId(provider);
+    }
+
+    provider.models.forEach((model) => {
+        const row = document.createElement('div');
+        row.className = `provider-model-row${model.model_id === llmProviderState.selectedModelId ? ' active' : ''}`;
+
+        const mainBtn = document.createElement('button');
+        mainBtn.type = 'button';
+        mainBtn.className = 'provider-model-main';
+        mainBtn.onclick = () => setActiveProviderModel(model.model_id);
+        mainBtn.innerHTML = `
+            <span class="provider-model-name">${model.name || model.model_id}</span>
+            <span class="provider-model-id">${model.model_id}</span>
+        `;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'provider-model-remove';
+        removeBtn.textContent = '删除';
+        removeBtn.onclick = () => removeProviderModel(model.model_id);
+
+        row.appendChild(mainBtn);
+        row.appendChild(removeBtn);
+        container.appendChild(row);
+    });
+
+    activeLabel.textContent = `当前使用：${llmProviderState.selectedModelId || '未设置'}`;
+}
+
+function renderLLMProviderUI() {
+    renderLLMProviderList();
+    renderLLMProviderEditor();
+    renderLLMProviderModels();
+}
+
+function selectLLMProvider(providerId) {
+    syncCurrentLLMProviderForm();
+    llmProviderState.selectedProviderId = providerId;
+    llmProviderState.selectedModelId = getFirstProviderModelId(getSelectedLLMProvider());
+    renderLLMProviderUI();
+}
+
+function addLLMProvider() {
+    syncCurrentLLMProviderForm();
+    const provider = createEmptyLLMProvider();
+    llmProviderState.providers.push(provider);
+    llmProviderState.selectedProviderId = provider.id;
+    llmProviderState.selectedModelId = '';
+    renderLLMProviderUI();
+}
+
+function deleteLLMProvider() {
+    if (llmProviderState.providers.length <= 1) {
+        showError('至少保留一个提供商');
+        return;
+    }
+    const currentId = llmProviderState.selectedProviderId;
+    llmProviderState.providers = llmProviderState.providers.filter(provider => provider.id !== currentId);
+    llmProviderState.selectedProviderId = llmProviderState.providers[0]?.id || '';
+    llmProviderState.selectedModelId = getFirstProviderModelId(getSelectedLLMProvider());
+    renderLLMProviderUI();
+}
+
+function addProviderModel() {
+    syncCurrentLLMProviderForm();
+    const provider = getSelectedLLMProvider();
+    const input = document.getElementById('model-input');
+    if (!provider || !input) return;
+
+    const modelId = (input.value || '').trim();
+    if (!modelId) return;
+
+    if (!provider.models.some(model => model.model_id === modelId)) {
+        provider.models.push({ model_id: modelId, name: modelId, enabled: true });
+    }
+    llmProviderState.selectedModelId = modelId;
+    input.value = '';
+    renderLLMProviderModels();
+}
+
+function removeProviderModel(modelId) {
+    const provider = getSelectedLLMProvider();
+    if (!provider) return;
+    provider.models = provider.models.filter(model => model.model_id !== modelId);
+    if (llmProviderState.selectedModelId === modelId) {
+        llmProviderState.selectedModelId = getFirstProviderModelId(provider);
+    }
+    renderLLMProviderModels();
+}
+
+function setActiveProviderModel(modelId) {
+    llmProviderState.selectedModelId = modelId;
+    renderLLMProviderModels();
+}
+
+async function saveLLMConfig() {
+    ensureLLMProviderLayout();
+    syncCurrentLLMProviderForm();
+
+    const selectedProvider = getSelectedLLMProvider();
+    const activeModelId = llmProviderState.selectedModelId || getFirstProviderModelId(selectedProvider);
+    const config = {
+        provider_id: llmProviderState.selectedProviderId || '',
+        selected_provider_id: llmProviderState.selectedProviderId || '',
+        api_key: selectedProvider?.api_key || '',
+        api_url: selectedProvider?.api_url || '',
+        model: activeModelId,
+        model_id: activeModelId,
+        selected_model_id: activeModelId,
+        temperature: parseFloat(document.getElementById('temperature')?.value) || 0.9,
+        system_prompt: document.getElementById('system-prompt')?.value || '',
+        providers: llmProviderState.providers.map((provider) => ({
+            ...provider,
+            models: (provider.models || []).map((model) => ({
+                model_id: model.model_id,
+                name: model.name || model.model_id,
+                enabled: model.enabled !== false
+            }))
+        }))
+    };
+
+    try {
+        const response = await fetch('/api/config/llm', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(config)
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            addLog('LLM 提供商配置保存成功', 'success', 'system');
+            showSuccess('LLM 提供商配置保存成功');
+        } else {
+            addLog('LLM 提供商配置保存失败：' + (result.error || '未知错误'), 'error', 'system');
+            showError('LLM 提供商配置保存失败：' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        addLog('LLM 提供商配置保存出错：' + error.message, 'error', 'system');
+        showError('LLM 提供商配置保存出错：' + error.message);
+    }
+}
+
+async function loadLLMConfig() {
+    ensureLLMProviderLayout();
+    try {
+        const response = await fetch('/api/config/llm');
+        if (response.ok) {
+            const data = await response.json();
+            llmProviderState.providers = Array.isArray(data.providers) && data.providers.length > 0
+                ? data.providers.map((provider, index) => normalizeLLMProvider(provider, index))
+                : [normalizeLLMProvider({
+                    id: data.provider_id || 'main',
+                    name: data.provider_id || '主模型',
+                    api_key: data.api_key || '',
+                    api_url: data.api_url || '',
+                    temperature: data.temperature || 0.9,
+                    models: data.model ? [{ model_id: data.model, name: data.model, enabled: true }] : []
+                }, 0)];
+
+            llmProviderState.selectedProviderId = data.selected_provider_id || data.provider_id || llmProviderState.providers[0]?.id || '';
+            llmProviderState.selectedModelId = data.selected_model_id || data.model_id || data.model || getFirstProviderModelId(getSelectedLLMProvider());
+            _setVal('system-prompt', data.system_prompt || '');
+            renderLLMProviderUI();
+        }
+    } catch (error) {
+        console.error('加载 LLM 配置失败:', error);
+    }
+}
