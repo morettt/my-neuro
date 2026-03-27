@@ -4982,3 +4982,187 @@ function setActiveProviderModel(modelId) {
     llmProviderState.selectedModelId = modelId;
     renderLLMProviderModels();
 }
+
+const LLM_PROVIDER_UI_TEXT = {
+    panelTitle: '\u63d0\u4f9b\u5546\u6e90',
+    panelSubtitle: '\u7ba1\u7406\u5f53\u524d\u53ef\u7528\u7684\u6a21\u578b\u670d\u52a1\u6765\u6e90',
+    addProvider: '+ \u65b0\u589e',
+    saveConfig: '\u4fdd\u5b58\u914d\u7f6e',
+    idLabel: 'ID',
+    idHelp: '\u63d0\u4f9b\u5546\u552f\u4e00 ID\uff0c\u7528\u4e8e\u914d\u7f6e\u843d\u76d8',
+    nameLabel: '\u540d\u79f0',
+    nameHelp: '\u5c55\u793a\u540d\u79f0\uff0c\u7528\u4e8e\u5217\u8868\u548c\u9009\u62e9\u5668\u663e\u793a',
+    keyHelp: '\u5f53\u524d\u670d\u52a1\u7684\u8bbf\u95ee\u5bc6\u94a5',
+    urlHelp: '\u81ea\u5b9a\u4e49 API \u7aef\u70b9 URL',
+    tempHelp: '\u63a7\u5236\u56de\u590d\u53d1\u6563\u7a0b\u5ea6',
+    promptLabel: 'AI \u4eba\u8bbe',
+    promptHelp: '\u5f53\u524d provider \u5bf9\u5e94\u7684\u9ed8\u8ba4\u7cfb\u7edf\u63d0\u793a\u8bcd',
+    enableLabel: '\u542f\u7528\u6b64\u63d0\u4f9b\u5546',
+    apiBase: 'API Base URL',
+    advanced: '\u9ad8\u7ea7\u914d\u7f6e',
+    modelsTitle: '\u5df2\u914d\u7f6e\u7684\u6a21\u578b',
+    modelSearch: '\u641c\u7d22\u6a21\u578b ID',
+    addModel: '\u65b0\u589e\u6a21\u578b',
+    modelInput: '\u8f93\u5165\u6a21\u578b ID\uff0c\u5982 gpt-4o-mini',
+    deleteText: '\u5220\u9664',
+    currentText: '\u5f53\u524d',
+    setCurrentText: '\u8bbe\u4e3a\u5f53\u524d',
+    disabledTag: '\u5df2\u505c\u7528',
+    noApiUrl: '\u672a\u914d\u7f6e API URL',
+    titleFallback: '\u672a\u9009\u62e9\u63d0\u4f9b\u5546',
+    subtitleFallback: '\u586b\u5199\u5f53\u524d\u63d0\u4f9b\u5546\u7684 API \u8bbf\u95ee\u914d\u7f6e',
+    activePrefix: '\u5f53\u524d\u4f7f\u7528: ',
+    unset: '\u672a\u8bbe\u7f6e',
+    noModels: '\u6682\u65e0\u5df2\u914d\u7f6e\u6a21\u578b\uff0c\u53ef\u5728\u4e0a\u65b9\u8f93\u5165\u6a21\u578b ID \u540e\u65b0\u589e\u3002',
+    noMatches: '\u6ca1\u6709\u5339\u914d\u7684\u6a21\u578b\u3002',
+    showText: '\u663e\u793a'
+};
+
+function applyLLMProviderStaticText() {
+    const scope = document.querySelector('#llm-config .section');
+    if (!scope || !scope.querySelector('.provider-manager-v2')) return;
+
+    const setText = (selector, text) => {
+        const el = scope.querySelector(selector);
+        if (el) el.textContent = text;
+    };
+    const setPlaceholder = (selector, text) => {
+        const el = scope.querySelector(selector);
+        if (el) el.placeholder = text;
+    };
+
+    setText('.provider-panel-title', LLM_PROVIDER_UI_TEXT.panelTitle);
+    setText('.provider-panel-subtitle', LLM_PROVIDER_UI_TEXT.panelSubtitle);
+    setText('.provider-list-add-button', LLM_PROVIDER_UI_TEXT.addProvider);
+    setText('.provider-save-button', LLM_PROVIDER_UI_TEXT.saveConfig);
+    setText('label[for="provider-id"]', LLM_PROVIDER_UI_TEXT.idLabel);
+    setText('label[for="provider-name"]', LLM_PROVIDER_UI_TEXT.nameLabel);
+    setText('label[for="api-url"]', LLM_PROVIDER_UI_TEXT.apiBase);
+    setText('label[for="system-prompt"]', LLM_PROVIDER_UI_TEXT.promptLabel);
+    setText('.provider-advanced-panel summary', LLM_PROVIDER_UI_TEXT.advanced);
+    setText('.provider-models-title', LLM_PROVIDER_UI_TEXT.modelsTitle);
+
+    const helps = scope.querySelectorAll('.field-help');
+    const helpTexts = [
+        LLM_PROVIDER_UI_TEXT.idHelp,
+        LLM_PROVIDER_UI_TEXT.nameHelp,
+        LLM_PROVIDER_UI_TEXT.keyHelp,
+        LLM_PROVIDER_UI_TEXT.urlHelp,
+        LLM_PROVIDER_UI_TEXT.tempHelp,
+        LLM_PROVIDER_UI_TEXT.promptHelp
+    ];
+    helps.forEach((el, index) => {
+        if (helpTexts[index]) el.textContent = helpTexts[index];
+    });
+
+    setPlaceholder('#provider-id', 'openai_main');
+    setPlaceholder('#provider-name', 'OpenAI \u4e3b\u670d\u52a1');
+    setPlaceholder('#api-key', '\u8f93\u5165 API Key');
+    setPlaceholder('#api-url', 'https://api.example.com/v1');
+    setPlaceholder('#provider-model-search', LLM_PROVIDER_UI_TEXT.modelSearch);
+    setPlaceholder('#model-input', LLM_PROVIDER_UI_TEXT.modelInput);
+    setPlaceholder('#system-prompt', '\u5728\u8fd9\u91cc\u8f93\u5165 AI \u4eba\u8bbe...');
+
+    const enabledLabel = scope.querySelector('.provider-enabled-label');
+    if (enabledLabel) {
+        const textNode = Array.from(enabledLabel.childNodes).find((node) => node.nodeType === Node.TEXT_NODE);
+        if (textNode) {
+            textNode.nodeValue = ` ${LLM_PROVIDER_UI_TEXT.enableLabel}`;
+        } else {
+            enabledLabel.appendChild(document.createTextNode(` ${LLM_PROVIDER_UI_TEXT.enableLabel}`));
+        }
+    }
+
+    const passwordButton = scope.querySelector('.provider-password-row .provider-inline-button');
+    if (passwordButton) passwordButton.textContent = LLM_PROVIDER_UI_TEXT.showText;
+
+    const addModelButton = scope.querySelector('.provider-model-toolbar .provider-inline-button');
+    if (addModelButton) addModelButton.textContent = LLM_PROVIDER_UI_TEXT.addModel;
+
+    scope.querySelectorAll('.provider-list-delete').forEach((button) => {
+        button.textContent = LLM_PROVIDER_UI_TEXT.deleteText;
+    });
+
+    scope.querySelectorAll('.provider-list-item').forEach((item) => {
+        const tag = item.querySelector('.provider-list-tag');
+        if (tag) tag.textContent = LLM_PROVIDER_UI_TEXT.disabledTag;
+        const url = item.querySelector('.provider-list-url');
+        if (url && !url.textContent.trim()) url.textContent = LLM_PROVIDER_UI_TEXT.noApiUrl;
+    });
+
+    const provider = typeof getSelectedLLMProvider === 'function' ? getSelectedLLMProvider() : null;
+    const activeLabel = scope.querySelector('#active-provider-model-label');
+    if (activeLabel) {
+        activeLabel.textContent = `${LLM_PROVIDER_UI_TEXT.activePrefix}${llmProviderState.selectedModelId || LLM_PROVIDER_UI_TEXT.unset}`;
+    }
+
+    const title = scope.querySelector('#provider-editor-title');
+    if (title && (!title.textContent || title.textContent === '-')) {
+        title.textContent = provider?.name || provider?.id || LLM_PROVIDER_UI_TEXT.titleFallback;
+    }
+    const subtitle = scope.querySelector('#provider-editor-subtitle');
+    if (subtitle && (!subtitle.textContent || subtitle.textContent === '-')) {
+        subtitle.textContent = provider?.api_url || LLM_PROVIDER_UI_TEXT.subtitleFallback;
+    }
+
+    scope.querySelectorAll('.provider-model-row').forEach((row) => {
+        const setCurrentButton = row.querySelector('.provider-model-set-active');
+        if (setCurrentButton) {
+            setCurrentButton.textContent = row.classList.contains('active')
+                ? LLM_PROVIDER_UI_TEXT.currentText
+                : LLM_PROVIDER_UI_TEXT.setCurrentText;
+        }
+        const removeButton = row.querySelector('.provider-model-remove');
+        if (removeButton) removeButton.textContent = LLM_PROVIDER_UI_TEXT.deleteText;
+    });
+
+    const empty = scope.querySelector('.provider-model-empty');
+    if (empty) {
+        const keyword = (scope.querySelector('#provider-model-search')?.value || '').trim();
+        const hasModels = !!(provider && Array.isArray(provider.models) && provider.models.length > 0);
+        empty.textContent = keyword && hasModels ? LLM_PROVIDER_UI_TEXT.noMatches : LLM_PROVIDER_UI_TEXT.noModels;
+    }
+}
+
+const __ensureLLMProviderLayout = ensureLLMProviderLayout;
+ensureLLMProviderLayout = function() {
+    __ensureLLMProviderLayout();
+    applyLLMProviderStaticText();
+};
+
+const __renderLLMProviderList = renderLLMProviderList;
+renderLLMProviderList = function() {
+    __renderLLMProviderList();
+    applyLLMProviderStaticText();
+};
+
+const __renderLLMProviderEditor = renderLLMProviderEditor;
+renderLLMProviderEditor = function() {
+    __renderLLMProviderEditor();
+    applyLLMProviderStaticText();
+};
+
+const __renderLLMProviderModels = renderLLMProviderModels;
+renderLLMProviderModels = function() {
+    __renderLLMProviderModels();
+    applyLLMProviderStaticText();
+};
+
+const __renderLLMProviderUI = renderLLMProviderUI;
+renderLLMProviderUI = function() {
+    __renderLLMProviderUI();
+    applyLLMProviderStaticText();
+};
+
+const __applyLLMProviderStaticTextBase = applyLLMProviderStaticText;
+applyLLMProviderStaticText = function() {
+    __applyLLMProviderStaticTextBase();
+    const scope = document.querySelector('#llm-config .section');
+    if (!scope) return;
+    const enabledLabel = scope.querySelector('.provider-enabled-label');
+    if (!enabledLabel) return;
+    const input = enabledLabel.querySelector('input');
+    enabledLabel.textContent = '';
+    if (input) enabledLabel.appendChild(input);
+    enabledLabel.appendChild(document.createTextNode(` ${LLM_PROVIDER_UI_TEXT.enableLabel}`));
+};
