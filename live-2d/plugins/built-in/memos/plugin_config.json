@@ -1,24 +1,10 @@
 {
-  "enabled": {
-    "title": "启用 MemOS",
-    "description": "是否启用 MemOS 长期记忆系统",
-    "type": "bool",
-    "default": true,
-    "value": true
-  },
   "api_url": {
     "title": "MemOS API 地址",
     "description": "MemOS 后端服务的地址，默认 http://127.0.0.1:8003",
     "type": "string",
     "default": "http://127.0.0.1:8003",
     "value": "http://127.0.0.1:8003"
-  },
-  "auto_inject": {
-    "title": "自动注入记忆",
-    "description": "对话时自动检索相关记忆并注入到系统提示词",
-    "type": "bool",
-    "default": true,
-    "value": true
   },
   "inject_top_k": {
     "title": "注入记忆条数",
@@ -32,14 +18,7 @@
     "description": "记忆检索的最低相似度（0~1），低于此值不注入",
     "type": "float",
     "default": 0.6,
-    "value": 0.6
-  },
-  "auto_save": {
-    "title": "自动保存对话",
-    "description": "LLM 回复后自动累积保存对话到长期记忆",
-    "type": "bool",
-    "default": true,
-    "value": true
+    "value": 0.4
   },
   "save_interval": {
     "title": "保存间隔（轮）",
@@ -58,58 +37,44 @@
         "description": "后端记忆处理使用的 LLM 模型",
         "type": "string",
         "default": "deepseek-ai/DeepSeek-V3.2",
-        "value": "gemini-2.0-flash"
+        "value": ""
       },
       "api_key": {
         "title": "API Key",
         "description": "后端 LLM 的 API 密钥",
         "type": "string",
         "default": "",
-        "value": "sk-zk285d1137be5edfe44a994040962c1c7e1699037a4d7309"
+        "value": ""
       },
       "base_url": {
         "title": "Base URL",
         "description": "后端 LLM 的 API 地址",
         "type": "string",
         "default": "https://api.siliconflow.cn/v1",
-        "value": "https://api.zhizengzeng.com/v1"
+        "value": ""
       }
     }
   },
-  "backend_llm_fallback": {
-    "title": "后端备用 LLM",
-    "description": "主 LLM 失败时的备用模型配置",
-    "type": "object",
-    "fields": {
-      "enabled": {
-        "title": "启用备用 LLM",
-        "description": "主 LLM 调用失败时自动切换到备用模型",
-        "type": "bool",
-        "default": true,
-        "value": true
-      },
-      "model": {
-        "title": "备用模型名称",
-        "description": "备用 LLM 模型",
-        "type": "string",
-        "default": "google/gemini-3-pro-preview",
-        "value": "gemini-2.0-flash"
-      },
-      "api_key": {
-        "title": "备用 API Key",
-        "description": "备用 LLM 的 API 密钥",
-        "type": "string",
-        "default": "",
-        "value": "sk-zk285d1137be5edfe44a994040962c1c7e1699037a4d7309"
-      },
-      "base_url": {
-        "title": "备用 Base URL",
-        "description": "备用 LLM 的 API 地址",
-        "type": "string",
-        "default": "https://openrouter.ai/api/v1",
-        "value": "https://api.zhizengzeng.com/v1"
-      }
-    }
+  "use_api_embedding": {
+    "title": "使用云端 Embedding API",
+    "description": "默认关闭，使用本地模型（需显卡）。开启后改用 OpenAI 兼容的 Embedding API（复用后端 LLM 的 key 和地址），无显卡也可用。切换时旧记忆会自动备份并清空。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "api_embedding_model": {
+    "title": "云端 Embedding 模型名",
+    "description": "开启云端 Embedding 时使用的模型名，需与后端 LLM 的 base_url 兼容",
+    "type": "string",
+    "default": "text-embedding-3-large",
+    "value": "text-embedding-3-large"
+  },
+  "api_embedding_dimensions": {
+    "title": "云端 Embedding 向量维度",
+    "description": "请求的向量维度，建议 1024，切换后旧记忆自动清空",
+    "type": "int",
+    "default": 1024,
+    "value": 1024
   },
   "backend_search": {
     "title": "后端检索配置",

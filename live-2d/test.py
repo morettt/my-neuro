@@ -280,12 +280,28 @@ class ToastNotification(QLabel):
         self.effect = QGraphicsOpacityEffect()
         self.setGraphicsEffect(self.effect)
 
-        self.slide_animation = QPropertyAnimation(self, b"pos")
-        self.slide_animation.setDuration(300)
-        self.slide_animation.setEasingCurve(QEasingCurve.OutCubic)
+        # 滑入动画
+        self.slide_in_animation = QPropertyAnimation(self, b"pos")
+        self.slide_in_animation.setDuration(300)
+        self.slide_in_animation.setEasingCurve(QEasingCurve.OutCubic)
 
-        self.opacity_animation = QPropertyAnimation(self.effect, b"opacity")
-        self.opacity_animation.setDuration(300)
+        # 滑出动画（使用独立对象）
+        self.slide_out_animation = QPropertyAnimation(self, b"pos")
+        self.slide_out_animation.setDuration(300)
+        self.slide_out_animation.setEasingCurve(QEasingCurve.InCubic)
+
+        # 透明度动画
+        self.opacity_in_animation = QPropertyAnimation(self.effect, b"opacity")
+        self.opacity_in_animation.setDuration(300)
+
+        self.opacity_out_animation = QPropertyAnimation(self.effect, b"opacity")
+        self.opacity_out_animation.setDuration(300)
+        self.opacity_out_animation.finished.connect(self.hide)
+
+        # 定时器
+        self._hide_timer = QTimer(self)
+        self._hide_timer.setSingleShot(True)
+        self._hide_timer.timeout.connect(self.hide_with_animation)
 
     def show_message(self, message, duration=2000):
         """显示消息，duration为显示时长（毫秒）"""
@@ -305,41 +321,34 @@ class ToastNotification(QLabel):
             self.raise_()
 
             # 滑入动画
-            self.slide_animation.setStartValue(QPoint(x, start_y))
-            self.slide_animation.setEndValue(QPoint(x, end_y))
+            self.slide_in_animation.setStartValue(QPoint(x, start_y))
+            self.slide_in_animation.setEndValue(QPoint(x, end_y))
+            self.slide_in_animation.start()
 
             # 透明度渐入
-            self.opacity_animation.setStartValue(0.0)
-            self.opacity_animation.setEndValue(1.0)
+            self.opacity_in_animation.setStartValue(0.0)
+            self.opacity_in_animation.setEndValue(1.0)
+            self.opacity_in_animation.start()
 
-            # 开始动画
-            self.slide_animation.start()
-            self.opacity_animation.start()
-
-            # 延迟后滑出
-            QTimer.singleShot(duration, self.hide_with_animation)
+            # 启动隐藏定时器
+            self._hide_timer.start(duration)
 
     def hide_with_animation(self):
         """带动画的隐藏"""
         parent = self.parent()
-        if parent:
+        if parent and self.isVisible():
             current_pos = self.pos()
             end_y = -self.height()
 
-            # 滑出动画
-            self.slide_animation.setStartValue(current_pos)
-            self.slide_animation.setEndValue(QPoint(current_pos.x(), end_y))
+            # 滑出动画（使用独立对象）
+            self.slide_out_animation.setStartValue(current_pos)
+            self.slide_out_animation.setEndValue(QPoint(current_pos.x(), end_y))
+            self.slide_out_animation.start()
 
             # 透明度渐出
-            self.opacity_animation.setStartValue(1.0)
-            self.opacity_animation.setEndValue(0.0)
-
-            # 动画完成后隐藏
-            self.slide_animation.finished.connect(self.hide)
-
-            # 开始动画
-            self.slide_animation.start()
-            self.opacity_animation.start()
+            self.opacity_out_animation.setStartValue(1.0)
+            self.opacity_out_animation.setEndValue(0.0)
+            self.opacity_out_animation.start()
 
 
 class _CloneWorker(QThread):
@@ -1332,6 +1341,55 @@ class set_pyqt(QWidget):
         
         main_layout.addWidget(singing_section)
         
+        # === VMC协议控制区域（仅设置目标地址与端口，启用/关闭由桌宠按钮控制） ===
+        vmc_section = QWidget()
+        vmc_section.setFixedHeight(130)
+        vmc_layout = QVBoxLayout(vmc_section)
+        
+        vmc_label = QLabel("📡 VMC协议目标设置")
+        vmc_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        vmc_layout.addWidget(vmc_label)
+        
+        # VMC 地址和端口
+        vmc_addr_layout = QHBoxLayout()
+        vmc_config = self.config.get('vmc', {})
+        vmc_addr_layout.addWidget(QLabel("目标地址:"))
+        self.lineEdit_vmc_host = QLineEdit(vmc_config.get('host', '127.0.0.1'))
+        self.lineEdit_vmc_host.setPlaceholderText("127.0.0.1")
+        self.lineEdit_vmc_host.setFixedWidth(150)
+        vmc_addr_layout.addWidget(self.lineEdit_vmc_host)
+        
+        vmc_addr_layout.addWidget(QLabel("端口:"))
+        self.lineEdit_vmc_port = QLineEdit(str(vmc_config.get('port', 39539)))
+        self.lineEdit_vmc_port.setPlaceholderText("39539")
+        self.lineEdit_vmc_port.setFixedWidth(80)
+        vmc_addr_layout.addWidget(self.lineEdit_vmc_port)
+        vmc_addr_layout.addStretch()
+        vmc_layout.addLayout(vmc_addr_layout)
+        
+        # VMC 应用按钮
+        vmc_btn_layout = QHBoxLayout()
+        vmc_apply_btn = QPushButton("✅ 应用地址")
+        vmc_apply_btn.setFixedWidth(120)
+        vmc_apply_btn.clicked.connect(self.apply_vmc_settings)
+        vmc_btn_layout.addWidget(vmc_apply_btn)
+        
+        vmc_hint = QLabel("提示: 启用/关闭VMC请使用桌宠上的📡按钮")
+        vmc_hint.setStyleSheet("color: #999; font-size: 11px;")
+        vmc_btn_layout.addWidget(vmc_hint)
+        vmc_btn_layout.addStretch()
+        vmc_layout.addLayout(vmc_btn_layout)
+        
+        # 分隔线
+        vmc_separator = QFrame()
+        vmc_separator.setFrameShape(QFrame.HLine)
+        vmc_separator.setFrameShadow(QFrame.Sunken)
+        vmc_separator.setStyleSheet("background-color: #ccc; margin: 10px 0;")
+        vmc_separator.setFixedHeight(2)
+        vmc_layout.addWidget(vmc_separator)
+        
+        main_layout.addWidget(vmc_section)
+        
         # === 第二部分：表情区块 ===
         expression_section = QWidget()
         expression_layout = QVBoxLayout(expression_section)
@@ -2241,6 +2299,56 @@ class set_pyqt(QWidget):
         # 这个方法会在刷新界面时自动调用，暂时留空
         pass
 
+    def _update_vmc_status_label(self):
+        """VMC状态标签已移除，此方法保留为空以兼容"""
+        pass
+
+    def apply_vmc_settings(self):
+        """立即应用VMC目标地址和端口（不控制启用/关闭）"""
+        host = self.lineEdit_vmc_host.text() or '127.0.0.1'
+        port_text = self.lineEdit_vmc_port.text()
+        port = int(port_text) if port_text.isdigit() else 39539
+
+        # 先保存到config.json
+        try:
+            current_config = self.load_config()
+            if 'vmc' not in current_config:
+                current_config['vmc'] = {}
+            current_config['vmc']['host'] = host
+            current_config['vmc']['port'] = port
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(current_config, f, ensure_ascii=False, indent=2)
+            self.config = current_config
+        except Exception as e:
+            print(f"保存VMC配置失败: {e}")
+
+        # 发送HTTP请求到Electron实时更新VMC目标地址
+        if not (hasattr(self, 'live2d_process') and self.live2d_process and self.live2d_process.poll() is None):
+            self.toast.show_message("VMC目标已保存，桌宠启动后生效", 2000)
+            return
+
+        try:
+            data = json.dumps({
+                "host": host,
+                "port": port
+            }).encode('utf-8')
+
+            req = urllib.request.Request(
+                'http://localhost:3002/control-vmc',
+                data=data,
+                headers={'Content-Type': 'application/json'}
+            )
+
+            with urllib.request.urlopen(req, timeout=2) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                if result.get('success'):
+                    self.toast.show_message(f"VMC目标已更新 → {host}:{port}", 2000)
+                else:
+                    self.toast.show_message(f"VMC更新失败: {result.get('message', '未知错误')}", 2000)
+        except Exception as e:
+            print(f"VMC实时更新失败: {e}")
+            self.toast.show_message("VMC目标已保存，重启桌宠后生效", 2000)
+
     def trigger_emotion_motion(self, emotion_name):
         """
         最终版：通过HTTP请求直接调用前端底层的情绪触发逻辑。
@@ -3096,7 +3204,7 @@ class set_pyqt(QWidget):
             print("正在启动RAG终端.....")
 
             base_path = get_base_path()
-            bat_file = os.path.join(base_path, "MEMOS-API.bat")
+            bat_file = os.path.join(base_path, "plugins-dlc", "memos", "MEMOS-API.bat")
 
             if not os.path.exists(bat_file):
                 error_msg = f"找不到文件：{bat_file}"
@@ -3370,6 +3478,12 @@ class set_pyqt(QWidget):
         self.ui.lineEdit_vision_api_url.setText(vision_model_config.get('api_url', ''))
         self.ui.lineEdit_vision_model.setText(vision_model_config.get('model', ''))
 
+        # 新增：设置VMC配置（如果控件已创建）
+        if hasattr(self, 'checkBox_vmc_enabled'):
+            vmc_config = self.config.get('vmc', {})
+            self.checkBox_vmc_enabled.setChecked(vmc_config.get('enabled', False))
+            self.lineEdit_vmc_host.setText(vmc_config.get('host', '127.0.0.1'))
+            self.lineEdit_vmc_port.setText(str(vmc_config.get('port', 39539)))
 
 
     # ===== 插件配置文件读写 =====
@@ -3703,6 +3817,18 @@ class set_pyqt(QWidget):
             chk.setChecked(rel_path in enabled_set)
             chk.stateChanged.connect(lambda state, pt=plugin_type, pn=plugin_name: self._on_plugin_enabled_changed(pt, pn, state))
             card_layout.addWidget(chk)
+            bat_file = meta.get('bat')
+            if bat_file:
+                bat_btn = QPushButton('启动')
+                bat_btn.setFont(self._ui_font())
+                bat_btn.setMinimumSize(60, 30)
+                bat_btn.setStyleSheet("""
+                    QPushButton { background-color: #4CAF50; color: white; border-radius: 6px; border: none; padding: 4px 8px; }
+                    QPushButton:hover { background-color: #388E3C; }
+                    QPushButton:pressed { background-color: #2E7D32; }
+                """)
+                bat_btn.clicked.connect(lambda checked=False, pn=plugin_name, bf=bat_file: self._launch_plugin_bat(pn, bf))
+                card_layout.addWidget(bat_btn)
             if extra_keys:
                 btn = QPushButton('配置')
                 btn.setFont(self._ui_font())
@@ -4085,6 +4211,20 @@ class set_pyqt(QWidget):
 
     # ===== DLC 安装 =====
 
+    def _launch_plugin_bat(self, plugin_name, bat_file):
+        """启动插件DLC目录下的bat文件，弹出独立cmd窗口"""
+        dlc_path = os.path.join(get_base_path(), 'plugins-dlc', plugin_name)
+        bat_path = os.path.join(dlc_path, bat_file)
+        if not os.path.isfile(bat_path):
+            QMessageBox.warning(self, '启动失败', f'找不到启动文件：{bat_path}')
+            return
+        import subprocess
+        subprocess.Popen(
+            [bat_path],
+            cwd=os.path.dirname(bat_path),
+            creationflags=subprocess.CREATE_NEW_CONSOLE
+        )
+
     def _install_plugin_dlc(self, url, plugin_name, dlc_btn, card_layout, plugin_type, extra_keys, info):
         """后台下载并解压插件DLC"""
         dlc_path = os.path.join(get_base_path(), 'plugins-dlc', plugin_name)
@@ -4414,6 +4554,7 @@ class set_pyqt(QWidget):
                 config = json.load(f)
 
             # 设置默认位置（与 model-interaction.js 中的默认值一致）
+            # 模型热复位在http-server.js中采用同样的相对比例
             default_x = 1.35  # 屏幕宽度的 135%（右边）
             default_y = 0.8   # 屏幕高度的 80%（下方）
 
@@ -4425,6 +4566,7 @@ class set_pyqt(QWidget):
             config['ui']['model_position']['x'] = default_x
             config['ui']['model_position']['y'] = default_y
             config['ui']['model_position']['remember_position'] = True
+            config['ui']['model_scale'] = 0.65
 
             # 保存配置文件
             with open(self.config_path, 'w', encoding='utf-8') as f:
@@ -4564,61 +4706,90 @@ class set_pyqt(QWidget):
             current_config['auto_close_services'] = {}
         current_config['auto_close_services']['enabled'] = self.ui.checkBox_auto_close_services.isChecked()
 
-        # 新增：保存Live2D模型选择
+        # 新增：保存VMC配置
+        if hasattr(self, 'checkBox_vmc_enabled'):
+            if 'vmc' not in current_config:
+                current_config['vmc'] = {}
+            current_config['vmc']['enabled'] = self.checkBox_vmc_enabled.isChecked()
+            current_config['vmc']['host'] = self.lineEdit_vmc_host.text() or '127.0.0.1'
+            port_text = self.lineEdit_vmc_port.text()
+            current_config['vmc']['port'] = int(port_text) if port_text.isdigit() else 39539
+
+        # 新增：保存模型选择（支持Live2D和VRM）
         selected_model = self.ui.comboBox_live2d_models.currentText()
         if selected_model and selected_model != "未找到任何模型":
-            try:
-                import re
-                app_path = get_app_path()
+            is_vrm = selected_model.startswith("[VRM] ")
 
-                # 1. 更新main.js的优先级
-                main_js_path = os.path.join(app_path, "main.js")
-                with open(main_js_path, 'r', encoding='utf-8') as f:
-                    main_content = f.read()
+            if is_vrm:
+                # VRM模型：保存VRM配置
+                vrm_file = selected_model.replace("[VRM] ", "")
+                if 'ui' not in current_config:
+                    current_config['ui'] = {}
+                current_config['ui']['model_type'] = 'vrm'
+                current_config['ui']['vrm_model'] = vrm_file
+                current_config['ui']['vrm_model_path'] = f"3D/{vrm_file}"
+                print(f"已应用VRM模型: {vrm_file}")
 
-                new_priority = f"const priorityFolders = ['{selected_model}', 'Hiyouri', 'Default', 'Main']"
-                main_content = re.sub(r"const priorityFolders = \[.*?\]", new_priority, main_content)
+            else:
+                # Live2D模型：保存Live2D配置
+                if 'ui' not in current_config:
+                    current_config['ui'] = {}
+                current_config['ui']['model_type'] = 'live2d'
+                current_config['ui']['vrm_model'] = ''
+                current_config['ui']['vrm_model_path'] = ''
 
-                with open(main_js_path, 'w', encoding='utf-8') as f:
-                    f.write(main_content)
-
-                # 2. 更新app.js中的角色名设置
-                app_js_path = os.path.join(app_path, "app.js")
-                with open(app_js_path, 'r', encoding='utf-8') as f:
-                    app_content = f.read()
-
-                # 先删除所有旧的角色名设置行
-                app_content = re.sub(r'\s*global\.currentCharacterName = [\'"].*?[\'"];?\n?', '', app_content)
-
-                # 设置全局角色名
-                insert_line = f"global.currentCharacterName = '{selected_model}';"
-
-                # 在emotionMapper创建后插入(只替换第一次匹配)
-                pattern = r"(emotionMapper = new EmotionMotionMapper\(model\);)"
-                if re.search(pattern, app_content):
-                    replacement = f"\\1\n        {insert_line}"
-                    app_content = re.sub(pattern, replacement, app_content, count=1)
-                else:
-                    # 备选位置：在模型设置后
-                    pattern = r"(currentModel = model;)"
-                    replacement = f"\\1\n        {insert_line}"
-                    app_content = re.sub(pattern, replacement, app_content, count=1)
-
-                with open(app_js_path, 'w', encoding='utf-8') as f:
-                    f.write(app_content)
-
-                print(f"已应用Live2D模型和角色: {selected_model}")
-
-                # 重新加载动作配置以匹配新选择的角色
                 try:
-                    self.load_motion_config()
-                    self.refresh_drag_drop_interface()
-                    print(f"已更新动作界面为角色: {selected_model}")
-                except Exception as refresh_error:
-                    print(f"更新动作界面失败: {refresh_error}")
+                    import re
+                    app_path = get_app_path()
 
-            except Exception as e:
-                print(f"应用Live2D模型失败: {str(e)}")
+                    # 1. 更新main.js的优先级
+                    main_js_path = os.path.join(app_path, "main.js")
+                    with open(main_js_path, 'r', encoding='utf-8') as f:
+                        main_content = f.read()
+
+                    new_priority = f"const priorityFolders = ['{selected_model}', 'Hiyouri', 'Default', 'Main']"
+                    main_content = re.sub(r"const priorityFolders = \[.*?\]", new_priority, main_content)
+
+                    with open(main_js_path, 'w', encoding='utf-8') as f:
+                        f.write(main_content)
+
+                    # 2. 更新app.js中的角色名设置
+                    app_js_path = os.path.join(app_path, "app.js")
+                    with open(app_js_path, 'r', encoding='utf-8') as f:
+                        app_content = f.read()
+
+                    # 先删除所有旧的角色名设置行
+                    app_content = re.sub(r'\s*global\.currentCharacterName = [\'"].*?[\'"];?\n?', '', app_content)
+
+                    # 设置全局角色名
+                    insert_line = f"global.currentCharacterName = '{selected_model}';"
+
+                    # 在emotionMapper创建后插入(只替换第一次匹配)
+                    pattern = r"(emotionMapper = new EmotionMotionMapper\(model\);)"
+                    if re.search(pattern, app_content):
+                        replacement = f"\\1\n        {insert_line}"
+                        app_content = re.sub(pattern, replacement, app_content, count=1)
+                    else:
+                        # 备选位置：在模型设置后
+                        pattern = r"(currentModel = model;)"
+                        replacement = f"\\1\n        {insert_line}"
+                        app_content = re.sub(pattern, replacement, app_content, count=1)
+
+                    with open(app_js_path, 'w', encoding='utf-8') as f:
+                        f.write(app_content)
+
+                    print(f"已应用Live2D模型和角色: {selected_model}")
+
+                    # 重新加载动作配置以匹配新选择的角色
+                    try:
+                        self.load_motion_config()
+                        self.refresh_drag_drop_interface()
+                        print(f"已更新动作界面为角色: {selected_model}")
+                    except Exception as refresh_error:
+                        print(f"更新动作界面失败: {refresh_error}")
+
+                except Exception as e:
+                    print(f"应用Live2D模型失败: {str(e)}")
 
         with open(self.config_path, 'w', encoding='utf-8') as f:
             json.dump(current_config, f, ensure_ascii=False, indent=2)
@@ -4671,44 +4842,106 @@ class set_pyqt(QWidget):
                             break
         return models
 
+    def scan_vrm_models(self):
+        """扫描3D文件夹下的VRM 0.x模型（过滤掉VRM 1.0）"""
+        vrm_models = []
+        app_path = get_app_path()
+        models_dir = os.path.join(app_path, "3D")
+
+        if os.path.exists(models_dir):
+            for file in os.listdir(models_dir):
+                if file.lower().endswith('.vrm'):
+                    filepath = os.path.join(models_dir, file)
+                    if not self._is_vrm_1_0(filepath):
+                        vrm_models.append(file)
+                    else:
+                        print(f"跳过VRM 1.0模型: {file}")
+        return vrm_models
+
+    @staticmethod
+    def _is_vrm_1_0(filepath):
+        """检测VRM文件是否为VRM 1.0格式（通过检查glTF JSON中的VRMC_vrm扩展）"""
+        try:
+            import struct
+            with open(filepath, 'rb') as f:
+                header = f.read(12)
+                if len(header) < 12 or header[:4] != b'glTF':
+                    return False
+                chunk_header = f.read(8)
+                if len(chunk_header) < 8:
+                    return False
+                chunk_length = struct.unpack('<I', chunk_header[:4])[0]
+                chunk_type = struct.unpack('<I', chunk_header[4:8])[0]
+                if chunk_type != 0x4E4F534A:  # "JSON"
+                    return False
+                json_bytes = f.read(chunk_length)
+                return b'VRMC_vrm' in json_bytes
+        except Exception:
+            return False
+
     def refresh_model_list(self):
-        """刷新模型列表"""
+        """刷新模型列表（包含Live2D和VRM模型）"""
         self.is_loading_model_list = True  # 开始加载，忽略选择改变事件
 
-        models = self.scan_live2d_models()
+        live2d_models = self.scan_live2d_models()
+        vrm_models = self.scan_vrm_models()
         self.ui.comboBox_live2d_models.clear()
 
-        if not models:
+        if not live2d_models and not vrm_models:
             self.ui.comboBox_live2d_models.addItem("未找到任何模型")
             self.is_loading_model_list = False
             return
 
-        for model in models:
+        # 添加Live2D模型
+        for model in live2d_models:
             self.ui.comboBox_live2d_models.addItem(model)
 
-        # 新增：读取main.js中当前的优先级设置
+        # 添加VRM模型（带[VRM]前缀区分）
+        for vrm in vrm_models:
+            display_name = f"[VRM] {vrm}"
+            self.ui.comboBox_live2d_models.addItem(display_name)
+
+        # 读取当前配置，恢复上次选择
         try:
             app_path = get_app_path()
-            main_js_path = os.path.join(app_path, "main.js")
+            config_path = os.path.join(app_path, "config.json")
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
 
-            with open(main_js_path, 'r', encoding='utf-8') as f:
-                content = f.read()
+            model_type = config_data.get('ui', {}).get('model_type', 'live2d')
 
-            # 提取当前的优先级列表
-            match = re.search(r"const priorityFolders = \[(.*?)\]", content)
-            if match:
-                priorities = [p.strip().strip("'\"") for p in match.group(1).split(',')]
-                if priorities:
-                    current_model = priorities[0]  # 第一个就是当前使用的模型
-
-                    # 在下拉框中选择对应的模型
-                    index = self.ui.comboBox_live2d_models.findText(current_model)
+            if model_type == 'vrm':
+                # VRM模式：选中对应的VRM模型
+                vrm_model = config_data.get('ui', {}).get('vrm_model', '')
+                if vrm_model:
+                    vrm_display = f"[VRM] {vrm_model}"
+                    index = self.ui.comboBox_live2d_models.findText(vrm_display)
                     if index >= 0:
                         self.ui.comboBox_live2d_models.setCurrentIndex(index)
+            else:
+                # Live2D模式：读取main.js中的优先级设置
+                main_js_path = os.path.join(app_path, "main.js")
+                with open(main_js_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+
+                match = re.search(r"const priorityFolders = \[(.*?)\]", content)
+                if match:
+                    priorities = [p.strip().strip("'\"") for p in match.group(1).split(',')]
+                    if priorities:
+                        current_model = priorities[0]
+                        index = self.ui.comboBox_live2d_models.findText(current_model)
+                        if index >= 0:
+                            self.ui.comboBox_live2d_models.setCurrentIndex(index)
         except Exception as e:
             print(f"读取当前模型设置失败: {str(e)}")
 
-        self.toast.show_message(f"找到 {len(models)} 个Live2D模型", 2000)
+        total = len(live2d_models) + len(vrm_models)
+        msg_parts = []
+        if live2d_models:
+            msg_parts.append(f"{len(live2d_models)} 个Live2D模型")
+        if vrm_models:
+            msg_parts.append(f"{len(vrm_models)} 个VRM模型")
+        self.toast.show_message(f"找到 {'，'.join(msg_parts)}", 2000)
         self.is_loading_model_list = False  # 加载完成
 
     def update_current_model_display(self):
@@ -4716,7 +4949,7 @@ class set_pyqt(QWidget):
         pass  # 暂时留空
 
     def on_model_selection_changed(self, index):
-        """Live2D模型选择改变事件"""
+        """模型选择改变事件（支持Live2D和VRM）"""
         # 如果正在加载模型列表，忽略此事件
         if self.is_loading_model_list:
             return
@@ -4744,33 +4977,55 @@ class set_pyqt(QWidget):
             self.is_loading_model_list = False
             return
 
-        try:
-            # 调用API立即切换模型
-            import requests
-            response = requests.post(
-                'http://127.0.0.1:3002/switch-model',
-                json={'model_name': model_name},
-                timeout=10  # 增加超时时间到10秒
-            )
+        # 判断是VRM模型还是Live2D模型
+        is_vrm = model_name.startswith("[VRM] ")
 
-            if response.status_code == 200:
-                result = response.json()
-                if result.get('success'):
-                    self.toast.show_message(f"正在切换到 {model_name} 模型...", 2000)
-                    print(f"模型切换成功: {model_name}")
-                    # 更新上次切换时间和索引
-                    self.last_model_switch_time = current_time
-                    self.last_model_index = index
+        if is_vrm:
+            vrm_file = model_name.replace("[VRM] ", "")
+            try:
+                import requests
+                response = requests.post(
+                    'http://127.0.0.1:3002/switch-model',
+                    json={'model_name': vrm_file, 'model_type': 'vrm'},
+                    timeout=10
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('success'):
+                        self.toast.show_message(f"正在切换到VRM模型 {vrm_file}...", 2000)
+                        self.last_model_switch_time = current_time
+                        self.last_model_index = index
+                    else:
+                        self.toast.show_message("VRM模型切换失败，桌宠未运行", 2000)
+                else:
+                    self.toast.show_message("VRM模型切换失败，桌宠未运行", 2000)
+            except Exception as e:
+                self.toast.show_message("桌宠未运行或正在重启，请稍候", 2000)
+                print(f"VRM模型切换API调用异常: {e}")
+        else:
+            try:
+                # Live2D模型：调用原有API
+                import requests
+                response = requests.post(
+                    'http://127.0.0.1:3002/switch-model',
+                    json={'model_name': model_name},
+                    timeout=10
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('success'):
+                        self.toast.show_message(f"正在切换到 {model_name} 模型...", 2000)
+                        self.last_model_switch_time = current_time
+                        self.last_model_index = index
+                    else:
+                        self.toast.show_message("模型切换失败，Live2D未运行", 2000)
                 else:
                     self.toast.show_message("模型切换失败，Live2D未运行", 2000)
-                    print(f"模型切换失败: {result.get('message')}")
-            else:
-                self.toast.show_message("模型切换失败，Live2D未运行", 2000)
-                print(f"模型切换API调用失败: HTTP {response.status_code}")
-        except Exception as e:
-            # 如果API调用失败，说明Live2D未运行
-            self.toast.show_message("Live2D未运行或正在重启，请稍候", 2000)
-            print(f"模型切换API调用异常: {e}")
+            except Exception as e:
+                self.toast.show_message("桌宠未运行或正在重启，请稍候", 2000)
+                print(f"模型切换API调用异常: {e}")
 
     def check_all_service_status(self):
         """启动时检查所有服务状态并更新UI - 使用多线程并发检查"""

@@ -59,7 +59,7 @@
       "model": "FunAudioLLM/CosyVoice2-0.5B",
       "voice": "speech:fake-neuro:j3qz9ij4k2:kquiiycgizgaoxeujypx",
       "response_format": "wav",
-      "speed": 1.0
+      "speed": 1
     },
     "baidu_asr": {
       "enabled": false,
@@ -78,15 +78,18 @@
   },
   "ui": {
     "intro_text": "你好啊",
-    "model_scale": 0.6592945326814194,
+    "model_type": "live2d",
+    "vrm_model": "",
+    "vrm_model_path": "",
+    "model_scale": 0.8,
     "show_chat_box": true,
     "show_model": true,
     "text_only_mode": false,
     "auto_show_chat_on_text_mode": true,
     "hide_from_screenshot": true,
     "model_position": {
-      "x": 1.3192581489183488,
-      "y": 0.5715708406376147,
+      "x": 1.35,
+      "y": 0.8,
       "remember_position": true
     }
   },
@@ -95,6 +98,11 @@
     "max_messages": 18,
     "persistent_history": false,
     "history_file": "AI记录室/对话历史.json"
+  },
+  "vmc": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 39539
   },
   "tools": {
     "enabled": true,
@@ -109,11 +117,11 @@
   "subtitle_labels": {
     "enabled": true,
     "user": "用户",
-    "ai": "Fake Neuro"
+    "ai": "fake neuro"
   },
   "auto_close_services": {
     "enabled": false
   },
   "language": "zh_CN",
-  "version": "v6.3.7"
+  "version": "v6.4"
 }
