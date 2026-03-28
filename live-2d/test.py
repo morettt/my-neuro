@@ -2820,6 +2820,15 @@ class set_pyqt(QWidget):
         self.ui.tableWidget_models.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.ui.tableWidget_models.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.ui.tableWidget_models.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self._provider_model_catalogs = {}
+        self._setup_model_catalog_panel()
+        self.ui.comboBox_models.clear()
+        self.ui.comboBox_models.clearEditText()
+        self.ui.comboBox_models.setToolTip('先点“获取模型”，再从下拉框选择；也可以直接手动输入模型 ID。')
+        self.ui.comboBox_models.lineEdit().setPlaceholderText('先点“获取模型”或直接输入模型 ID')
+        self.ui.comboBox_models.lineEdit().textEdited.connect(self._on_model_catalog_filter_changed)
+        self.ui.pushButton_fetch_models.setToolTip('从当前提供商拉取可用模型列表')
+        self.ui.pushButton_add_model.setToolTip('把当前输入或选中的模型添加到下面的已配置列表')
         self.ui.comboBox_llm_provider.currentIndexChanged.connect(self._on_llm_model_combo_changed)
         self.ui.comboBox_vision_provider.currentIndexChanged.connect(self._on_vision_model_combo_changed)
         # 新增按钮绑定
@@ -5046,12 +5055,159 @@ class set_pyqt(QWidget):
         self.ui.checkBox_provider_enabled.setChecked(True)
         self.ui.tableWidget_models.clearContents()
         self.ui.tableWidget_models.setRowCount(0)
+        self.ui.comboBox_models.clear()
         self.ui.comboBox_models.clearEditText()
+        self.ui.comboBox_models.lineEdit().setPlaceholderText('先点“获取模型”或直接输入模型 ID')
         self._update_model_action_buttons(None)
         try:
-            self.ui.label_active_model.setText('')
+            self._update_model_summary_label([])
         except Exception:
             pass
+        self._set_model_catalog_visible(False)
+
+    def _update_model_summary_label(self, models):
+        enabled_count = sum(1 for model in models if model.get('enabled', True))
+        if models:
+            self.ui.label_active_model.setText(f'已启用 {enabled_count} / 共 {len(models)}')
+        else:
+            self.ui.label_active_model.setText('先获取模型，再从上方下拉框选择并添加')
+        self.ui.label_active_model.setStyleSheet('color: rgb(90, 90, 90);')
+
+    def _refresh_provider_model_views(self, provider, selected_model_id=None):
+        models = provider.get('models', []) if isinstance(provider, dict) else []
+        self._ensure_valid_selected_model_refs()
+        self._populate_model_combos()
+        self._refresh_model_list(models, selected_model_id=selected_model_id)
+        self._refresh_model_catalog()
+
+    def _setup_model_catalog_panel(self):
+        layout = getattr(self.ui, 'verticalLayout_models_section', None)
+        if layout is None or hasattr(self, '_model_catalog_panel'):
+            return
+
+        panel = QFrame(self, Qt.Popup | Qt.FramelessWindowHint)
+        panel.setObjectName('modelCatalogPanel')
+        panel.setStyleSheet(
+            """
+            QFrame#modelCatalogPanel {
+                border: 1px solid #d9d9d9;
+                border-radius: 8px;
+                background: #ffffff;
+            }
+            """
+        )
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(10, 10, 10, 10)
+        panel_layout.setSpacing(6)
+
+        header_layout = QHBoxLayout()
+        self._label_model_catalog = QLabel('可用模型')
+        self._label_model_catalog.setStyleSheet('font-weight: 600; color: #333;')
+        self._button_model_catalog_close = QToolButton()
+        self._button_model_catalog_close.setText('收起')
+        self._button_model_catalog_close.setCursor(Qt.PointingHandCursor)
+        self._button_model_catalog_close.setStyleSheet(
+            'QToolButton { border: none; color: #666; font-weight: 600; padding: 4px 6px; }'
+            'QToolButton:hover { color: #333; }'
+        )
+        self._button_model_catalog_close.clicked.connect(lambda: self._set_model_catalog_visible(False))
+        header_layout.addWidget(self._label_model_catalog)
+        header_layout.addStretch()
+        header_layout.addWidget(self._button_model_catalog_close)
+
+        table = QTableWidget(0, 2)
+        table.setObjectName('tableWidget_model_catalog')
+        table.setHorizontalHeaderLabels(['可用模型', '操作'])
+        table.verticalHeader().setVisible(False)
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        table.setSelectionMode(QAbstractItemView.NoSelection)
+        table.setFocusPolicy(Qt.NoFocus)
+        table.setShowGrid(False)
+        table.setAlternatingRowColors(True)
+        table.setMinimumHeight(180)
+        table.setMaximumHeight(280)
+        table.setStyleSheet(
+            """
+            QTableWidget {
+                border: 1px solid #e6e6e6;
+                border-radius: 6px;
+                background: #ffffff;
+                alternate-background-color: #fafafa;
+            }
+            QHeaderView::section {
+                background: #f5f5f5;
+                border: none;
+                border-bottom: 1px solid #e6e6e6;
+                padding: 8px 10px;
+                font-weight: bold;
+                color: #333;
+            }
+            """
+        )
+        table.cellDoubleClicked.connect(self._on_model_catalog_double_clicked)
+
+        self._model_catalog_panel = panel
+        self._table_model_catalog = table
+        self._model_catalog_popup_size = QSize(560, 320)
+        panel_layout.addLayout(header_layout)
+        panel_layout.addWidget(table)
+        panel.hide()
+        panel.setVisible(False)
+
+    def _set_model_catalog_visible(self, visible):
+        if not hasattr(self, '_model_catalog_panel'):
+            return
+        self._model_catalog_panel.hide()
+
+    def _current_provider_catalog(self):
+        row = self.ui.listWidget_providers.currentRow()
+        if row < 0 or row >= len(getattr(self, '_providers', [])):
+            return None, []
+        provider = self._providers[row]
+        catalog = self._provider_model_catalogs.get(provider.get('id', ''), [])
+        return provider, catalog
+
+    def _refresh_model_catalog(self):
+        self._set_model_catalog_visible(False)
+
+    def _on_model_catalog_filter_changed(self, _text):
+        self._refresh_model_catalog()
+
+    def _set_model_input_text(self, text):
+        self.ui.comboBox_models.blockSignals(True)
+        self.ui.comboBox_models.setCurrentText(text or '')
+        self.ui.comboBox_models.blockSignals(False)
+
+    def _add_model_by_id(self, model_id):
+        model_id = (model_id or '').strip()
+        if not model_id:
+            return False
+        row = self.ui.listWidget_providers.currentRow()
+        if row < 0 or row >= len(self._providers):
+            return False
+        p = self._providers[row]
+        normalized_model_id = self._normalize_model_id_for_provider(p, model_id)
+        models = p.setdefault('models', [])
+        for m in models:
+            if m.get('model_id') == normalized_model_id:
+                self.toast.show_message(f'模型 {normalized_model_id} 已存在', 2000)
+                return False
+        models.append({'model_id': normalized_model_id, 'name': normalized_model_id, 'enabled': True})
+        self._refresh_provider_model_views(p, selected_model_id=normalized_model_id)
+        self._set_model_input_text('')
+        self.toast.show_message(f'已添加模型：{normalized_model_id}', 2000)
+        return True
+
+    def _add_catalog_model(self, model_id):
+        if not model_id:
+            return
+        if self._add_model_by_id(model_id):
+            self._set_model_catalog_visible(False)
+
+    def _on_model_catalog_double_clicked(self, row, _column):
+        return
 
     def _on_provider_selected(self, row):
         '''列表选中某个 provider 时，把字段填入右侧编辑区'''
@@ -5065,6 +5221,7 @@ class set_pyqt(QWidget):
         self.ui.doubleSpinBox_temperature.setValue(p.get('temperature', 1.0))
         self.ui.checkBox_provider_enabled.setChecked(p.get('enabled', True))
         self._refresh_model_list(p.get('models', []))
+        self._refresh_model_catalog()
 
     def _sync_current_provider(self):
         '''把右侧编辑区的值同步回 _providers[当前行]'''
@@ -5078,7 +5235,8 @@ class set_pyqt(QWidget):
         p['temperature'] = self.ui.doubleSpinBox_temperature.value()
         p['enabled'] = self.ui.checkBox_provider_enabled.isChecked()
         tag = '' if p['enabled'] else '  [已禁用]'
-        self.ui.listWidget_providers.item(row).setText(f"{p['name']}{tag}")
+        display_name = p['name'] or p.get('id', f'provider_{row}')
+        self.ui.listWidget_providers.item(row).setText(f"{display_name}{tag}")
         self._populate_model_combos()
 
     def _add_provider(self):
@@ -5107,10 +5265,13 @@ class set_pyqt(QWidget):
         if len(self._providers) == 1:
             self.toast.show_message('至少保留一个提供商', 2000)
             return
-        self._providers.pop(row)
+        removed = self._providers.pop(row)
+        self._provider_model_catalogs.pop(removed.get('id', ''), None)
         self.ui.listWidget_providers.takeItem(row)
         new_row = min(row, len(self._providers) - 1)
         self.ui.listWidget_providers.setCurrentRow(new_row)
+        self._ensure_valid_selected_model_refs()
+        self._populate_model_combos()
 
     def _fetch_models(self):
         '''调用 /v1/models 接口获取模型列表，填入 comboBox_models'''
@@ -5171,17 +5332,15 @@ class set_pyqt(QWidget):
         normalized_model_ids = [
             self._normalize_model_id_for_provider(provider, model_id) for model_id in model_ids
         ]
-        current = self._normalize_model_id_for_provider(provider, self.ui.comboBox_models.currentText())
+        self._provider_model_catalogs[provider.get('id', '')] = normalized_model_ids
         self.ui.comboBox_models.blockSignals(True)
         self.ui.comboBox_models.clear()
         self.ui.comboBox_models.addItems(normalized_model_ids)
-        idx = self.ui.comboBox_models.findText(current)
-        if idx >= 0:
-            self.ui.comboBox_models.setCurrentIndex(idx)
-        else:
-            self.ui.comboBox_models.setCurrentText(current)
+        self.ui.comboBox_models.clearEditText()
         self.ui.comboBox_models.blockSignals(False)
-        self.toast.show_message(f'已获取 {len(normalized_model_ids)} 个模型', 2000)
+        self._refresh_model_catalog()
+        self.ui.comboBox_models.lineEdit().setPlaceholderText('已获取模型，可展开下拉框选择或继续手动输入')
+        self.toast.show_message(f'已获取 {len(normalized_model_ids)} 个模型，可在上方下拉框中选择后点击“添加”', 2600)
 
     def _get_selected_model_id(self):
         table = self.ui.tableWidget_models
@@ -5226,7 +5385,6 @@ class set_pyqt(QWidget):
 
     def _refresh_model_list(self, models, selected_model_id=None):
         """用表格刷新当前提供商的模型列表。"""
-        active_model_id = self.config.get('llm', {}).get('model_id', '')
         table = self.ui.tableWidget_models
         table.blockSignals(True)
         table.clearContents()
@@ -5239,6 +5397,8 @@ class set_pyqt(QWidget):
         table.setColumnWidth(1, 72)
         table.setColumnWidth(2, 72)
         table.setColumnWidth(3, 72)
+
+        configured_ids = [m.get('model_id', '') for m in models if m.get('model_id')]
 
         for m in models:
             mid = m.get('model_id', '')
@@ -5255,11 +5415,6 @@ class set_pyqt(QWidget):
             model_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             if not enabled:
                 model_item.setForeground(QColor(130, 130, 130))
-            if mid == active_model_id:
-                font = model_item.font()
-                font.setBold(True)
-                model_item.setFont(font)
-                model_item.setForeground(QColor(0, 100, 200))
             table.setItem(row_index, 0, model_item)
 
             status_btn = self._create_model_table_button(
@@ -5299,48 +5454,21 @@ class set_pyqt(QWidget):
         self._updating_model_list = False
         table.blockSignals(False)
 
-        selection_target = selected_model_id or active_model_id
+        selection_target = selected_model_id or (configured_ids[0] if configured_ids else '')
         self._select_model_table_row(selection_target)
         self._update_model_action_buttons(selection_target)
         try:
-            if active_model_id:
-                active_provider = provider
-                active_provider_id = self.config.get('llm', {}).get('provider_id', '')
-                for candidate in getattr(self, '_providers', []):
-                    if candidate.get('id', '') == active_provider_id:
-                        active_provider = candidate
-                        break
-                self.ui.label_active_model.setText(
-                    f'当前模型: {self._format_provider_model_display(active_provider, active_model_id)}'
-                )
-                self.ui.label_active_model.setStyleSheet('color: rgb(0, 100, 200);')
-            else:
-                self.ui.label_active_model.setText('')
+            self._update_model_summary_label(models)
         except Exception:
             pass
 
     def _add_model(self):
         '''从 comboBox_models 读取模型 ID，添加到当前 provider 的 models 数组'''
-        row = self.ui.listWidget_providers.currentRow()
-        if row < 0 or row >= len(self._providers):
-            return
         model_input = self.ui.comboBox_models.currentText().strip()
         if not model_input:
             self.toast.show_message('请先选择或输入模型 ID', 2000)
             return
-        p = self._providers[row]
-        model_id = self._normalize_model_id_for_provider(p, model_input)
-        models = p.setdefault('models', [])
-        for m in models:
-            if m.get('model_id') == model_id:
-                self.toast.show_message(f'模型 {model_id} 已存在', 2000)
-                return
-        models.append({'model_id': model_id, 'name': model_id, 'enabled': True})
-        self._refresh_model_list(models)
-        self._ensure_valid_selected_model_refs()
-        self._populate_model_combos()
-        self.ui.comboBox_models.setCurrentText(model_id)
-        self.toast.show_message(f'已添加模型：{model_id}', 2000)
+        self._add_model_by_id(model_input)
 
     def _del_model(self, model_id=None):
         """删除当前提供商下的模型。"""
@@ -5358,9 +5486,8 @@ class set_pyqt(QWidget):
         models.remove(removed)
         if removed.get('model_id') == self.config.get('llm', {}).get('model_id', ''):
             self.config.setdefault('llm', {})['model_id'] = ''
-        self._ensure_valid_selected_model_refs()
-        self._populate_model_combos()
-        self._refresh_model_list(models)
+        next_selected = models[0].get('model_id', '') if models else ''
+        self._refresh_provider_model_views(p, selected_model_id=next_selected)
         self.toast.show_message(f'已删除模型: {self._format_provider_model_display(p, model_id)}', 2000)
 
     def _update_model_action_buttons(self, model_id=None):
@@ -5383,9 +5510,7 @@ class set_pyqt(QWidget):
                 m['enabled'] = not m.get('enabled', True)
                 enabled = m['enabled']
                 break
-        self._ensure_valid_selected_model_refs()
-        self._populate_model_combos()
-        self._refresh_model_list(p.get('models', []), selected_model_id=model_id)
+        self._refresh_provider_model_views(p, selected_model_id=model_id)
         if enabled is not None:
             action = '已启用' if enabled else '已禁用'
             self.toast.show_message(f'{action}: {self._format_provider_model_display(p, model_id)}', 2000)
@@ -5458,8 +5583,6 @@ class set_pyqt(QWidget):
         if getattr(self, '_updating_model_list', False):
             return
         model_id = self._get_selected_model_id()
-        if model_id:
-            self.ui.comboBox_models.setCurrentText(model_id)
         self._update_model_action_buttons(model_id)
 
     @pyqtSlot(bool, str, str, str, str)

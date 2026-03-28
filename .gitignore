@@ -33,4 +33,7 @@ full-hub/tts-hub
 runtime.logfull-hub/ 
 
 
-live-2d/config.json  
+live-2d/config.json
+live-2d/package-lock.json
+_electron.out
+_electron.err
