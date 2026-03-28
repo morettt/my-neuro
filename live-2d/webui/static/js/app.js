@@ -4504,7 +4504,7 @@ function createConfiguredProviderModelRow(provider, model, options = {}) {
     const displayMeta = getProviderModelDisplayMeta(provider, model || {});
     const row = document.createElement('div');
     row.className = `provider-model-row${model && model.enabled === false ? ' disabled' : ''}`;
-    row.title = '管理该模型';
+    row.title = '管理模型';
 
     const name = document.createElement('div');
     name.className = 'provider-model-main';
@@ -4543,7 +4543,7 @@ function createConfiguredProviderModelRow(provider, model, options = {}) {
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'provider-model-remove';
-    removeBtn.textContent = '×';
+    removeBtn.textContent = '删除';
     removeBtn.title = '删除模型';
     removeBtn.onclick = (event) => {
         event.stopPropagation();
@@ -4575,7 +4575,7 @@ function createFetchedProviderModelRow(provider, modelId) {
     addBtn.type = 'button';
     addBtn.className = 'provider-inline-button';
     addBtn.textContent = '+';
-    addBtn.title = '添加并切换到该模型';
+    addBtn.title = '添加模型';
     addBtn.onclick = (event) => {
         event.stopPropagation();
         addFetchedModelToProvider(modelId);
@@ -4914,7 +4914,7 @@ function ensureLLMProviderLayout() {
                 <div class="provider-list-header">
                     <div>
                         <div class="provider-panel-title">提供商源</div>
-                        <div class="provider-panel-subtitle">管理当前可用的模型服务来源</div>
+                        <div class="provider-panel-subtitle">管理可用的模型服务来源</div>
                     </div>
                     <button type="button" class="provider-add-button provider-list-add-button" onclick="addLLMProvider()">+ 新增</button>
                 </div>
@@ -5585,7 +5585,7 @@ applyLLMProviderStaticText = function() {
                     <div class="provider-list-header">
                         <div>
                             <div class="provider-panel-title">提供商源</div>
-                            <div class="provider-panel-subtitle">管理当前可用的模型服务来源</div>
+                            <div class="provider-panel-subtitle">管理可用的模型服务来源</div>
                         </div>
                         <button type="button" class="provider-add-button provider-list-add-button" onclick="addLLMProvider()">+ 新增</button>
                     </div>
@@ -5797,7 +5797,7 @@ applyLLMProviderStaticText = function() {
         const displayMeta = getProviderModelDisplayMeta(provider, model || {});
         const row = document.createElement('div');
         row.className = `provider-model-row${model && model.enabled === false ? ' disabled' : ''}`;
-        row.title = '管理该模型';
+        row.title = '管理模型';
 
         const name = document.createElement('div');
         name.className = 'provider-model-main';
@@ -5836,7 +5836,7 @@ applyLLMProviderStaticText = function() {
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'provider-model-remove';
-        removeBtn.textContent = '×';
+        removeBtn.textContent = '删除';
         removeBtn.title = '删除模型';
         removeBtn.onclick = (event) => {
             event.stopPropagation();
@@ -5868,7 +5868,7 @@ applyLLMProviderStaticText = function() {
         addBtn.type = 'button';
         addBtn.className = 'provider-inline-button';
         addBtn.textContent = '+';
-        addBtn.title = '添加并切换到该模型';
+        addBtn.title = '添加模型';
         addBtn.onclick = (event) => {
             event.stopPropagation();
             addFetchedModelToProvider(modelId);

@@ -1983,10 +1983,11 @@ body.header-collapsed header {
 .provider-manager.provider-manager-v2 .provider-editor-panel,
 .provider-manager.provider-manager-v2 .provider-models-panel {
     display: block;
-    background: rgba(255, 255, 255, 0.96);
-    border: 1px solid rgba(148, 163, 184, 0.28);
+    background: linear-gradient(180deg, rgba(32, 62, 118, 0.82), rgba(24, 48, 96, 0.78));
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 18px;
-    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 14px 32px rgba(7, 16, 37, 0.22);
 }
 
 .provider-manager.provider-manager-v2 .provider-list-panel {
@@ -2008,7 +2009,7 @@ body.header-collapsed header {
     margin-top: 4px;
     font-size: 12px;
     line-height: 1.4;
-    color: #64748b;
+    color: rgba(226, 232, 240, 0.72);
 }
 
 .provider-manager.provider-manager-v2 .provider-list {
@@ -2026,8 +2027,8 @@ body.header-collapsed header {
     margin: 0;
     padding: 14px 14px 14px 16px;
     border-radius: 14px;
-    border: 1px solid rgba(148, 163, 184, 0.22);
-    background: #f8fbff;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2038,16 +2039,16 @@ body.header-collapsed header {
 }
 
 .provider-manager.provider-manager-v2 .provider-list-item:hover {
-    border-color: rgba(59, 130, 246, 0.34);
-    background: #f1f7ff;
-    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.08);
+    border-color: rgba(129, 140, 248, 0.38);
+    background: rgba(129, 140, 248, 0.12);
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.18);
     transform: translateY(-1px);
 }
 
 .provider-manager.provider-manager-v2 .provider-list-item.active {
-    border-color: rgba(59, 130, 246, 0.55);
-    background: linear-gradient(180deg, #f5f9ff, #eaf3ff);
-    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.12);
+    border-color: rgba(129, 140, 248, 0.55);
+    background: linear-gradient(180deg, rgba(102, 126, 234, 0.3), rgba(118, 75, 162, 0.24));
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.22);
 }
 
 .provider-list-content {
@@ -2065,12 +2066,12 @@ body.header-collapsed header {
 .provider-manager.provider-manager-v2 .provider-list-name {
     font-size: 15px;
     font-weight: 700;
-    color: #1e293b;
+    color: #f8fafc;
 }
 
 .provider-list-url {
     font-size: 12px;
-    color: #64748b;
+    color: rgba(226, 232, 240, 0.78);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2093,26 +2094,26 @@ body.header-collapsed header {
 .provider-list-delete,
 .provider-model-remove {
     padding: 8px 12px;
-    background: #fff5f5;
-    border: 1px solid rgba(239, 68, 68, 0.24);
-    color: #dc2626;
+    background: rgba(239, 68, 68, 0.14);
+    border: 1px solid rgba(248, 113, 113, 0.28);
+    color: #fecaca;
 }
 
 .provider-inline-button,
 .provider-list-add-button,
 .provider-model-set-active {
     padding: 8px 14px;
-    background: linear-gradient(180deg, #4da3ff, #2f80ed);
-    border: 1px solid rgba(37, 99, 235, 0.32);
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: 1px solid rgba(167, 139, 250, 0.3);
     color: #ffffff;
 }
 
 .provider-inline-button:hover,
 .provider-list-add-button:hover,
 .provider-model-set-active:hover {
-    background: linear-gradient(180deg, #60adff, #256fda);
-    border-color: rgba(37, 99, 235, 0.45);
-    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.16);
+    background: linear-gradient(135deg, #7c8cf8, #8b5fc7);
+    border-color: rgba(196, 181, 253, 0.42);
+    box-shadow: 0 10px 20px rgba(88, 84, 180, 0.28);
 }
 
 .provider-save-button {
@@ -2129,9 +2130,9 @@ body.header-collapsed header {
 
 .provider-list-delete:hover,
 .provider-model-remove:hover {
-    background: #fee2e2;
-    border-color: rgba(220, 38, 38, 0.34);
-    color: #b91c1c;
+    background: rgba(239, 68, 68, 0.22);
+    border-color: rgba(252, 165, 165, 0.34);
+    color: #fee2e2;
 }
 
 .provider-manager.provider-manager-v2 .provider-editor-panel {
@@ -2142,7 +2143,7 @@ body.header-collapsed header {
     font-size: 26px;
     font-weight: 800;
     line-height: 1.1;
-    color: #0f172a;
+    color: #f8fafc;
 }
 
 .provider-manager.provider-manager-v2 .provider-top-row {
@@ -2161,15 +2162,15 @@ body.header-collapsed header {
     align-items: center;
     gap: 10px;
     padding: 12px 14px;
-    background: #f8fbff;
-    border: 1px solid rgba(148, 163, 184, 0.24);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 12px;
-    color: #1e293b;
+    color: #f8fafc;
 }
 
 .provider-manager.provider-manager-v2 .provider-enabled-label input {
     width: auto;
-    accent-color: #2f80ed;
+    accent-color: #818cf8;
 }
 
 .provider-manager.provider-manager-v2 input[type="text"],
@@ -2178,10 +2179,10 @@ body.header-collapsed header {
 .provider-manager.provider-manager-v2 textarea,
 .provider-manager.provider-manager-v2 select {
     border-radius: 12px;
-    border: 1px solid rgba(148, 163, 184, 0.28);
-    background: #ffffff;
-    color: #0f172a;
-    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(9, 20, 43, 0.24);
+    color: #f8fafc;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .provider-manager.provider-manager-v2 input[type="text"]:focus,
@@ -2189,14 +2190,14 @@ body.header-collapsed header {
 .provider-manager.provider-manager-v2 input[type="number"]:focus,
 .provider-manager.provider-manager-v2 textarea:focus,
 .provider-manager.provider-manager-v2 select:focus {
-    border-color: rgba(59, 130, 246, 0.52);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
-    background: #ffffff;
+    border-color: rgba(129, 140, 248, 0.5);
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.16);
+    background: rgba(9, 20, 43, 0.32);
 }
 
 .provider-manager.provider-manager-v2 input::placeholder,
 .provider-manager.provider-manager-v2 textarea::placeholder {
-    color: #94a3b8;
+    color: rgba(226, 232, 240, 0.4);
 }
 
 .provider-password-row {
@@ -2207,9 +2208,9 @@ body.header-collapsed header {
 
 .provider-manager.provider-manager-v2 .provider-advanced-panel {
     margin: 12px 0 16px;
-    border: 1px solid rgba(148, 163, 184, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 14px;
-    background: #f8fbff;
+    background: rgba(255, 255, 255, 0.04);
     overflow: hidden;
 }
 
@@ -2218,7 +2219,7 @@ body.header-collapsed header {
     cursor: pointer;
     padding: 16px 18px;
     font-weight: 700;
-    color: #1e293b;
+    color: #f8fafc;
 }
 
 .provider-manager.provider-manager-v2 .provider-advanced-panel summary::-webkit-details-marker {
@@ -2247,12 +2248,12 @@ body.header-collapsed header {
 .provider-models-title {
     font-size: 18px;
     font-weight: 700;
-    color: #0f172a;
+    color: #f8fafc;
 }
 
 .provider-model-active {
     font-size: 12px;
-    color: #64748b;
+    color: rgba(226, 232, 240, 0.72);
 }
 
 .provider-model-toolbar {
@@ -2302,21 +2303,21 @@ body.header-collapsed header {
     gap: 12px;
     padding: 14px 16px;
     border-radius: 14px;
-    border: 1px solid rgba(148, 163, 184, 0.18);
-    background: #fbfdff;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
     transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
 .provider-manager.provider-manager-v2 .provider-model-row:hover {
-    border-color: rgba(59, 130, 246, 0.28);
-    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.08);
+    border-color: rgba(129, 140, 248, 0.32);
+    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.18);
     transform: translateY(-1px);
 }
 
 .provider-manager.provider-manager-v2 .provider-model-row.disabled {
     opacity: 0.74;
-    border-color: rgba(148, 163, 184, 0.14);
-    background: #f8fafc;
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(15, 23, 42, 0.14);
 }
 
 .provider-manager.provider-manager-v2 .provider-model-main {
@@ -2330,12 +2331,12 @@ body.header-collapsed header {
     margin-bottom: 6px;
     font-size: 15px;
     font-weight: 700;
-    color: #1e293b;
+    color: #f8fafc;
 }
 
 .provider-manager.provider-manager-v2 .provider-model-id {
     font-size: 12px;
-    color: #64748b;
+    color: rgba(226, 232, 240, 0.7);
     word-break: break-all;
 }
 
@@ -2344,9 +2345,9 @@ body.header-collapsed header {
     align-items: center;
     padding: 2px 8px;
     border-radius: 999px;
-    background: #eef2ff;
-    border: 1px solid rgba(99, 102, 241, 0.16);
-    color: #4f46e5;
+    background: rgba(148, 163, 184, 0.16);
+    border: 1px solid rgba(203, 213, 225, 0.18);
+    color: #e2e8f0;
     font-size: 11px;
     font-weight: 700;
     opacity: 1;
@@ -2370,15 +2371,15 @@ body.header-collapsed header {
 }
 
 .provider-model-toggle.is-enabled {
-    background: #ecfdf3;
-    border-color: rgba(34, 197, 94, 0.28);
-    color: #15803d;
+    background: rgba(16, 185, 129, 0.18);
+    border-color: rgba(74, 222, 128, 0.28);
+    color: #bbf7d0;
 }
 
 .provider-model-toggle.is-disabled {
-    background: #f1f5f9;
-    border-color: rgba(148, 163, 184, 0.24);
-    color: #64748b;
+    background: rgba(148, 163, 184, 0.12);
+    border-color: rgba(203, 213, 225, 0.16);
+    color: #cbd5e1;
 }
 
 .provider-manager.provider-manager-v2 .provider-model-empty {
@@ -2389,9 +2390,9 @@ body.header-collapsed header {
     text-align: center;
     padding: 24px;
     border-radius: 14px;
-    border: 1px dashed rgba(148, 163, 184, 0.3);
-    background: #f8fbff;
-    color: #64748b;
+    border: 1px dashed rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(226, 232, 240, 0.76);
 }
 
 @media (max-width: 1100px) {
