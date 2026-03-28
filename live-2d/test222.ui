@@ -120,7 +120,7 @@ QPushButton {
 color: rgb(114, 95, 77);
 	border: 1px solid rgba(160, 155, 145, 180);
 	border-radius: 8px;
-	padding: 10px 20px;
+	padding: 8px 10px;
 }
 
 QPushButton:hover {
@@ -261,7 +261,7 @@ color: rgb(114, 95, 77);
 	border-bottom: none;
 	border-top-left-radius: 10px;
 	border-top-right-radius: 10px;
-	padding: 10px 30px;
+	padding: 8px 15px;
 	margin-right: 5px;
 
 }
@@ -515,11 +515,11 @@ QTabWidget#tabWidget_tools QTabBar::tab {
 	border-bottom: none;
 	border-top-left-radius: 10px;
 	border-top-right-radius: 10px;
-	padding: 12px 35px;
+	padding: 8px 15px;
 	margin: 0px 1px;
 	font-family: 微软雅黑;
 	font-size: 16px;
-	min-width: 120px;
+	min-width: 0px;
 }
 
 QTabWidget#tabWidget_tools QTabBar::tab:selected {
@@ -561,7 +561,7 @@ QTabWidget#tabWidget_tools QTabBar {
      <widget class="QFrame" name="sidebar">
       <property name="maximumSize">
        <size>
-        <width>16777215</width>
+        <width>160</width>
         <height>16777215</height>
        </size>
       </property>
@@ -940,6 +940,31 @@ QTabWidget#tabWidget_tools QTabBar {
                 </size>
                </property>
               </spacer>
+             </item>
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_7">
+               <item>
+                <widget class="QLabel" name="label_8">
+                 <property name="text">
+                  <string>语言/Language:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QComboBox" name="comboBox_language_switch">
+                 <item>
+                  <property name="text">
+                   <string>中文（zh_CN）</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>English（en_US）</string>
+                  </property>
+                 </item>
+                </widget>
+               </item>
+              </layout>
              </item>
              <item>
               <widget class="QPushButton" name="pushButton_tutorial">
@@ -3466,34 +3491,6 @@ QPushButton:pressed {
               <bool>true</bool>
              </property>
             </widget>
-           </item>
-           <item>
-            <layout class="QHBoxLayout" name="horizontalLayout_7">
-             <property name="bottomMargin">
-              <number>0</number>
-             </property>
-             <item>
-              <widget class="QLabel" name="label_8">
-               <property name="text">
-                <string>语言/Language:</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QComboBox" name="comboBox_language_switch">
-               <item>
-                <property name="text">
-                 <string>中文（zh_CN）</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>English（en_US）</string>
-                </property>
-               </item>
-              </widget>
-             </item>
-            </layout>
            </item>
            <item>
             <spacer name="verticalSpacer_ui_settings">
