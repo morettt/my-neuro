@@ -16,6 +16,28 @@ from .utils import PROJECT_ROOT, logger
 plugin_bp = Blueprint('plugin', __name__)
 
 
+def apply_config_values_to_schema(schema_node, value):
+    """Recursively write submitted values into schema config while preserving metadata."""
+    if not isinstance(schema_node, dict) or 'type' not in schema_node:
+        return value
+
+    updated = OrderedDict(schema_node)
+    field_type = updated.get('type')
+
+    if field_type == 'object' and isinstance(updated.get('fields'), dict):
+        submitted = value if isinstance(value, dict) else {}
+        updated_fields = OrderedDict()
+        for field_key, field_schema in updated['fields'].items():
+            field_value = submitted.get(field_key) if isinstance(submitted, dict) else None
+            updated_fields[field_key] = apply_config_values_to_schema(field_schema, field_value)
+        updated['fields'] = updated_fields
+        return updated
+
+    if value is not None:
+        updated['value'] = value
+    return updated
+
+
 def load_enabled_plugins():
     """从 enabled_plugins.json 加载已启用的插件列表"""
     enabled_path = PROJECT_ROOT / 'plugins' / 'enabled_plugins.json'
@@ -393,10 +415,10 @@ def save_plugin_config(plugin_name):
             
             # 检查是否是带元数据的配置项（有 title, type 等字段）
             if isinstance(original_item, dict) and 'type' in original_item:
-                # 这是带元数据的配置项，只更新 value 字段
-                ordered_config[key] = OrderedDict(original_item)
-                if key in config_data:
-                    ordered_config[key]['value'] = config_data[key]
+                ordered_config[key] = apply_config_values_to_schema(
+                    original_item,
+                    config_data.get(key)
+                )
             else:
                 # 这是简单值配置，直接更新
                 if key in config_data:

@@ -7,6 +7,7 @@ WebUI 模块化重构 - 配置管理模块
 
 import json
 import urllib.request
+import urllib.error
 from flask import Blueprint, request, jsonify
 
 from .utils import PROJECT_ROOT, logger
@@ -134,6 +135,18 @@ def normalize_providers(providers):
     return [normalize_provider(provider) for provider in providers if isinstance(provider, dict)]
 
 
+def build_provider_from_vision_legacy(vision_config):
+    model_id = (vision_config.get('model_id') or vision_config.get('model') or '').strip()
+    return {
+        'id': 'vision',
+        'name': 'vision',
+        'api_key': vision_config.get('api_key', ''),
+        'api_url': vision_config.get('api_url', ''),
+        'models': [{'model_id': model_id, 'name': model_id, 'enabled': True}] if model_id else [],
+        'enabled': True
+    }
+
+
 def build_provider_from_legacy(llm_config):
     model_id = (llm_config.get('model_id') or llm_config.get('model') or '').strip()
     provider = {
@@ -154,6 +167,109 @@ def get_first_model_id(provider):
         if isinstance(model, dict) and model.get('model_id'):
             return model['model_id']
     return ''
+
+
+def load_effective_providers(config):
+    providers = normalize_providers(load_provider_store())
+    if providers:
+        return providers
+
+    providers = []
+    llm_config = config.setdefault('llm', {})
+    vision_root = config.setdefault('vision', {})
+    vision_config = vision_root.get('vision_model', {})
+
+    has_llm_legacy = any(str(llm_config.get(key, '')).strip() for key in ('api_key', 'api_url'))
+    has_vision_legacy = any(str(vision_config.get(key, '')).strip() for key in ('api_key', 'api_url'))
+
+    if has_llm_legacy:
+        providers.append(normalize_provider(build_provider_from_legacy(llm_config)))
+    if has_vision_legacy:
+        providers.append(normalize_provider(build_provider_from_vision_legacy(vision_config)))
+    return providers
+
+
+def iter_enabled_models(providers):
+    for provider in providers:
+        if not isinstance(provider, dict) or not provider.get('enabled', True):
+            continue
+        provider_id = provider.get('id', '')
+        for model in provider.get('models', []):
+            if isinstance(model, dict) and model.get('enabled', True) and model.get('model_id'):
+                yield provider, provider_id, model
+
+
+def format_provider_model_display(provider, model_id):
+    provider_name = str(provider.get('name') or provider.get('id') or '').strip()
+    normalized_model_id = normalize_model_id_for_provider(provider, model_id)
+    if not provider_name:
+        return normalized_model_id
+    if not normalized_model_id:
+        return provider_name
+    if normalized_model_id == provider_name or normalized_model_id.startswith(f'{provider_name}/'):
+        return normalized_model_id
+    return f'{provider_name}/{normalized_model_id}'
+
+
+def get_enabled_model_choices(providers, include_empty=False):
+    choices = []
+    if include_empty:
+        choices.append({
+            'value': '',
+            'provider_id': '',
+            'model_id': '',
+            'label': '（不使用）'
+        })
+
+    for provider, provider_id, model in iter_enabled_models(providers):
+        model_id = model.get('model_id', '')
+        choices.append({
+            'value': f'{provider_id}|{model_id}',
+            'provider_id': provider_id,
+            'model_id': model_id,
+            'label': format_provider_model_display(provider, model_id)
+        })
+    return choices
+
+
+def ensure_valid_provider_model_refs(config, providers):
+    enabled_pairs = [
+        (provider_id, model.get('model_id', ''))
+        for _, provider_id, model in iter_enabled_models(providers)
+    ]
+
+    llm_config = config.setdefault('llm', {})
+    current_llm_pair = (llm_config.get('provider_id', ''), llm_config.get('model_id', ''))
+    if current_llm_pair not in enabled_pairs:
+        if enabled_pairs:
+            llm_config['provider_id'], llm_config['model_id'] = enabled_pairs[0]
+        else:
+            llm_config['provider_id'] = ''
+            llm_config['model_id'] = ''
+
+    vision_config = config.setdefault('vision', {})
+    current_vision_pair = (vision_config.get('provider_id', ''), vision_config.get('model_id', ''))
+    if current_vision_pair not in enabled_pairs:
+        vision_config['provider_id'] = ''
+        vision_config['model_id'] = ''
+
+
+def resolve_provider_model_payload(providers, provider_id, model_id):
+    provider_id = str(provider_id or '').strip()
+    model_id = str(model_id or '').strip()
+    if not provider_id or not model_id:
+        return None
+
+    for provider, current_provider_id, model in iter_enabled_models(providers):
+        if current_provider_id != provider_id or model.get('model_id', '') != model_id:
+            continue
+        return {
+            'api_key': provider.get('api_key', ''),
+            'api_url': provider.get('api_url', ''),
+            'model': model_id,
+            'model_id': model_id
+        }
+    return None
 
 
 def choose_llm_provider(config, providers):
@@ -181,13 +297,9 @@ def choose_llm_provider(config, providers):
 
 
 def resolve_llm_config_state(config):
-    providers = normalize_providers(load_provider_store())
+    providers = load_effective_providers(config)
     llm_config = config.setdefault('llm', {})
-
-    if not providers:
-        has_legacy = any(str(llm_config.get(key, '')).strip() for key in ('api_key', 'api_url'))
-        if has_legacy:
-            providers = [normalize_provider(build_provider_from_legacy(llm_config))]
+    ensure_valid_provider_model_refs(config, providers)
 
     provider = choose_llm_provider(config, providers)
     if provider:
@@ -241,7 +353,15 @@ def persist_llm_config(data):
     else:
         providers = list(state['providers'])
 
-    provider_id = (data.get('provider_id') or data.get('selected_provider_id') or llm_config.get('provider_id') or '').strip()
+    has_provider_selection = any(key in data for key in ('provider_id', 'selected_provider_id'))
+    has_model_selection = any(key in data for key in ('model_id', 'selected_model_id', 'model'))
+
+    provider_id = (
+        data.get('provider_id')
+        or data.get('selected_provider_id')
+        or llm_config.get('provider_id')
+        or ''
+    ).strip()
     provider = None
 
     if provider_id:
@@ -264,18 +384,23 @@ def persist_llm_config(data):
         }
         providers.append(provider)
 
-    provider['api_key'] = data.get('api_key', '')
-    provider['api_url'] = data.get('api_url', '')
-    provider['temperature'] = data.get('temperature', 0.9)
+    if 'api_key' in data:
+        provider['api_key'] = data.get('api_key', '')
+    if 'api_url' in data:
+        provider['api_url'] = data.get('api_url', '')
+    if 'temperature' in data:
+        provider['temperature'] = data.get('temperature', 0.9)
 
     requested_model = data.get('model_id')
     if requested_model is None:
         requested_model = data.get('selected_model_id')
     if requested_model is None:
-        requested_model = data.get('model', '')
+        requested_model = data.get('model')
+    if requested_model is None:
+        requested_model = llm_config.get('model_id') or llm_config.get('model') or ''
     model_id = normalize_model_id_for_provider(provider, requested_model)
     provider['models'] = provider.get('models') if isinstance(provider.get('models'), list) else []
-    if model_id:
+    if has_model_selection and model_id:
         matched = False
         for model in provider['models']:
             if not isinstance(model, dict):
@@ -293,19 +418,78 @@ def persist_llm_config(data):
                 'enabled': True
             })
 
-    llm_config['provider_id'] = provider.get('id', '')
-    llm_config['model_id'] = model_id
-    llm_config['temperature'] = data.get('temperature', 0.9)
-    llm_config['system_prompt'] = data.get('system_prompt', '')
+    if has_provider_selection:
+        llm_config['provider_id'] = provider.get('id', '')
+    if has_model_selection:
+        llm_config['model_id'] = model_id
+    if 'temperature' in data:
+        llm_config['temperature'] = data.get('temperature', 0.9)
+    if 'system_prompt' in data:
+        llm_config['system_prompt'] = data.get('system_prompt', '')
     llm_config['api_key'] = ''
     llm_config['api_url'] = ''
     llm_config.pop('model', None)
 
     normalized_providers = normalize_providers(providers)
+    ensure_valid_provider_model_refs(config, normalized_providers)
     if not save_provider_store(normalized_providers):
         return False
 
     return save_config(config)
+
+
+def fetch_provider_model_ids(api_url, api_key):
+    normalized_api_url = str(api_url or '').strip().rstrip('/')
+    normalized_api_key = str(api_key or '').strip()
+    if not normalized_api_url or not normalized_api_key:
+        raise ValueError('请先填写 API URL 和 API KEY')
+
+    req = urllib.request.Request(
+        f'{normalized_api_url}/models',
+        headers={'Authorization': f'Bearer {normalized_api_key}'}
+    )
+    with urllib.request.urlopen(req, timeout=10) as response:
+        data = json.loads(response.read().decode('utf-8'))
+
+    model_ids = sorted(
+        [item.get('id') for item in data.get('data', []) if isinstance(item, dict) and item.get('id')],
+        key=lambda item: str(item).lower()
+    )
+    return model_ids
+
+
+def test_provider_model(api_url, api_key, model_id):
+    normalized_api_url = str(api_url or '').strip().rstrip('/')
+    normalized_api_key = str(api_key or '').strip()
+    normalized_model_id = str(model_id or '').strip()
+    if not normalized_api_url or not normalized_api_key or not normalized_model_id:
+        raise ValueError('请先配置提供商的 API URL、API Key 和模型')
+
+    payload = json.dumps({
+        'model': normalized_model_id,
+        'messages': [{'role': 'user', 'content': 'ping'}],
+        'max_tokens': 1,
+        'temperature': 0,
+        'stream': False
+    }).encode('utf-8')
+
+    req = urllib.request.Request(
+        f'{normalized_api_url}/chat/completions',
+        data=payload,
+        headers={
+            'Authorization': f'Bearer {normalized_api_key}',
+            'Content-Type': 'application/json'
+        },
+        method='POST'
+    )
+    with urllib.request.urlopen(req, timeout=20) as response:
+        response.read()
+
+    return {
+        'success': True,
+        'summary': '测活成功',
+        'detail': '接口已正常响应。'
+    }
 
 
 @config_bp.route('/api/config/llm', methods=['GET', 'POST'])
@@ -323,6 +507,92 @@ def handle_llm_config():
             return jsonify({'error': '保存失败'}), 500
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
+
+@config_bp.route('/api/config/llm/providers/models/fetch', methods=['POST'])
+def fetch_llm_provider_models():
+    """Fetch models from provider /v1/models endpoint."""
+    try:
+        data = request.get_json() or {}
+        model_ids = fetch_provider_model_ids(
+            data.get('api_url', ''),
+            data.get('api_key', '')
+        )
+        provider = normalize_provider({
+            'id': data.get('provider_id', ''),
+            'name': data.get('provider_name', ''),
+            'api_url': data.get('api_url', '')
+        })
+        normalized_model_ids = [
+            normalize_model_id_for_provider(provider, model_id)
+            for model_id in model_ids
+        ]
+        return jsonify({
+            'success': True,
+            'models': normalized_model_ids
+        })
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except urllib.error.HTTPError as e:
+        return jsonify({'success': False, 'error': f'获取模型列表失败：HTTP {e.code}'}), 502
+    except urllib.error.URLError as e:
+        reason = getattr(e, 'reason', e)
+        return jsonify({'success': False, 'error': f'获取模型列表失败：{reason}'}), 502
+    except Exception as e:
+        logger.error(f'获取 provider 模型列表失败：{e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@config_bp.route('/api/config/llm/providers/models/test', methods=['POST'])
+def test_llm_provider_model():
+    """Run a minimal chat completion request to verify a provider model."""
+    try:
+        data = request.get_json() or {}
+        provider = normalize_provider({
+            'id': data.get('provider_id', ''),
+            'name': data.get('provider_name', ''),
+            'api_url': data.get('api_url', '')
+        })
+        normalized_model_id = normalize_model_id_for_provider(provider, data.get('model_id', ''))
+        result = test_provider_model(
+            data.get('api_url', ''),
+            data.get('api_key', ''),
+            normalized_model_id
+        )
+        return jsonify({
+            'success': True,
+            'summary': result.get('summary', '测活成功'),
+            'detail': result.get('detail', ''),
+            'provider_name': provider.get('name') or provider.get('id', ''),
+            'model_id': normalized_model_id,
+            'display': format_provider_model_display(provider, normalized_model_id)
+        })
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except urllib.error.HTTPError as e:
+        detail = f'HTTP {e.code}'
+        return jsonify({
+            'success': False,
+            'summary': '测活失败',
+            'error': detail,
+            'detail': detail
+        }), 502
+    except urllib.error.URLError as e:
+        reason = str(getattr(e, 'reason', e))
+        return jsonify({
+            'success': False,
+            'summary': '测活失败',
+            'error': reason,
+            'detail': reason
+        }), 502
+    except Exception as e:
+        logger.error(f'provider 模型测活失败：{e}')
+        return jsonify({
+            'success': False,
+            'summary': '测活失败',
+            'error': str(e),
+            'detail': str(e)
+        }), 500
 
 
 # ============ 对话设置 ============
@@ -543,7 +813,14 @@ def handle_advanced_settings():
     """处理基础配置（视觉、UI、工具开关等）"""
     config = load_config()
     if request.method == 'GET':
+        providers = load_effective_providers(config)
+        ensure_valid_provider_model_refs(config, providers)
         vision_config = config.get('vision', {})
+        provider_managed_vision = resolve_provider_model_payload(
+            providers,
+            vision_config.get('provider_id', ''),
+            vision_config.get('model_id', '')
+        )
         auto_close_config = config.get('auto_close_services', {})
         ui_config = config.get('ui', {})
         tools_config = config.get('tools', {})
@@ -554,7 +831,11 @@ def handle_advanced_settings():
             # vision_enabled 已移除，不再使用
             'auto_screenshot': vision_config.get('auto_screenshot', False),
             'use_vision_model': vision_config.get('use_vision_model', False),
-            'vision_model': vision_config.get('vision_model', {}),
+            'vision_model': provider_managed_vision or vision_config.get('vision_model', {}),
+            'vision_model_managed_by_provider': provider_managed_vision is not None,
+            'provider_id': vision_config.get('provider_id', ''),
+            'model_id': vision_config.get('model_id', ''),
+            'model_options': get_enabled_model_choices(providers, include_empty=True),
             'auto_close_services': auto_close_config.get('enabled', False),
             'show_chat_box': ui_config.get('show_chat_box', True),
             'show_model': ui_config.get('show_model', True),
@@ -564,7 +845,9 @@ def handle_advanced_settings():
         })
     elif request.method == 'POST':
         try:
-            data = request.get_json()
+            data = request.get_json() or {}
+            providers = load_effective_providers(config)
+            ensure_valid_provider_model_refs(config, providers)
             if 'vision' not in config:
                 config['vision'] = {}
             if 'auto_close_services' not in config:
@@ -587,8 +870,17 @@ def handle_advanced_settings():
             config['asr']['voice_barge_in'] = data.get('voice_barge_in', True)
             config['tools']['enabled'] = data.get('tools_enabled', True)
             config['mcp']['enabled'] = data.get('mcp_enabled', True)
-            
-            if 'vision_model' in data:
+            config['vision']['provider_id'] = data.get('provider_id', '')
+            config['vision']['model_id'] = data.get('model_id', '')
+
+            provider_managed_vision = resolve_provider_model_payload(
+                providers,
+                config['vision']['provider_id'],
+                config['vision']['model_id']
+            )
+            if provider_managed_vision is not None:
+                config['vision']['vision_model'] = provider_managed_vision
+            elif 'vision_model' in data:
                 config['vision']['vision_model'] = data['vision_model']
             
             if save_config(config):
@@ -605,16 +897,22 @@ def handle_dialog_settings():
     """处理对话配置"""
     config = load_config()
     if request.method == 'GET':
+        providers = load_effective_providers(config)
+        ensure_valid_provider_model_refs(config, providers)
         ui_config = config.get('ui', {})
         context_config = config.get('context', {})
         tts_config = config.get('tts', {})
         asr_config = config.get('asr', {})
+        llm_config = config.get('llm', {})
 
         return jsonify({
             'intro_text': ui_config.get('intro_text', '你好啊'),
             'max_messages': context_config.get('max_messages', 30),
             'enable_limit': context_config.get('enable_limit', True),
             'persistent_history': context_config.get('persistent_history', False),
+            'provider_id': llm_config.get('provider_id', ''),
+            'model_id': llm_config.get('model_id', ''),
+            'model_options': get_enabled_model_choices(providers),
             'tts_enabled': tts_config.get('enabled', True),
             'asr_enabled': asr_config.get('enabled', True),
             'voice_barge_in': asr_config.get('voice_barge_in', True),
@@ -631,11 +929,15 @@ def handle_dialog_settings():
                 config['tts'] = {}
             if 'asr' not in config:
                 config['asr'] = {}
+            if 'llm' not in config:
+                config['llm'] = {}
 
             config['ui']['intro_text'] = data.get('intro_text', '你好啊')
             config['context']['max_messages'] = data.get('max_messages', 30)
             config['context']['enable_limit'] = data.get('enable_limit', True)
             config['context']['persistent_history'] = data.get('persistent_history', False)
+            config['llm']['provider_id'] = data.get('provider_id', '')
+            config['llm']['model_id'] = data.get('model_id', '')
             config['tts']['enabled'] = data.get('tts_enabled', True)
             config['asr']['enabled'] = data.get('asr_enabled', True)
             config['asr']['voice_barge_in'] = data.get('voice_barge_in', True)
@@ -649,6 +951,27 @@ def handle_dialog_settings():
 
 
 # ============ 工具设置 ============
+
+@config_bp.route('/api/settings/persona', methods=['GET', 'POST'])
+def handle_persona_settings():
+    """处理人格设置"""
+    config = load_config()
+    llm_config = config.setdefault('llm', {})
+
+    if request.method == 'GET':
+        return jsonify({
+            'system_prompt': llm_config.get('system_prompt', '')
+        })
+
+    try:
+        data = request.get_json() or {}
+        llm_config['system_prompt'] = data.get('system_prompt', '')
+        if save_config(config):
+            return jsonify({'success': True})
+        return jsonify({'error': '淇濆瓨澶辫触'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @config_bp.route('/api/settings/tools', methods=['GET', 'POST'])
 def handle_tools_settings():

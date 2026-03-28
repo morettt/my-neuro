@@ -36,6 +36,7 @@
             <button class="tab-button active" onclick="switchTab('dashboard')">服务控制</button>
             <button class="tab-button" onclick="switchTab('basic-config')">基础配置</button>
             <button class="tab-button" onclick="switchTab('dialog-config')">对话配置</button>
+            <button class="tab-button" onclick="switchTab('persona-config')">人格设置</button>
             <button class="tab-button" onclick="switchTab('llm-config')">LLM 配置</button>
             <button class="tab-button" onclick="switchTab('voice-settings')">云端配置</button>
             <button class="tab-button" onclick="switchTab('ui-settings')">Live2D设置</button>
@@ -219,32 +220,15 @@
         <div id="llm-config" class="tab-content">
             <h3>LLM 配置</h3>
             <div class="section">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="api-key">API Key</label>
-                        <div style="display: flex; gap: 10px;">
-                            <input type="password" id="api-key" placeholder="输入您的 API 密钥" style="flex: 1;">
-                            <button type="button" onclick="toggleApiKeyVisibility()" style="width: auto; padding: 12px 20px;">👁️</button>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="api-url">API URL</label>
-                        <input type="text" id="api-url" placeholder="https://api.example.com/v1">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="model">模型</label>
-                        <input type="text" id="model" placeholder="gpt-4, qwen3.5-27b 等">
-                    </div>
-                    <div class="form-group">
-                        <label for="temperature">Temperature</label>
-                        <input type="number" id="temperature" min="0" max="2" step="0.1" placeholder="0.9">
-                    </div>
-                </div>
+            </div>
+        </div>
+
+        <div id="persona-config" class="tab-content">
+            <h3>人格设置</h3>
+            <div class="section">
                 <div class="form-group">
-                    <label for="system-prompt">AI 人设</label>
-                    <textarea id="system-prompt" class="system-prompt-textarea" placeholder="在这里输入 AI 人设..."></textarea>
+                    <label for="persona-system-prompt">系统提示词 / AI 人设</label>
+                    <textarea id="persona-system-prompt" class="system-prompt-textarea" placeholder="在这里输入 AI 人设..."></textarea>
                 </div>
             </div>
         </div>
@@ -751,19 +735,16 @@
                     <input type="checkbox" id="use-vision-model">
                     <label for="use-vision-model">启用辅助视觉模型</label>
                 </div>
+                <div class="form-group" style="margin-top: 15px;">
+                    <label for="vision-model-select">视觉模型</label>
+                    <select id="vision-model-select">
+                        <option value="">（不使用）</option>
+                    </select>
+                </div>
                 <div class="form-group" style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px;">
                     <label style="display: block; margin-bottom: 10px; font-weight: bold; color: #66b3ff;">
                         💡 说明：当主模型（LLM）不支持图片识别时，可以启用此配置。在需要视觉功能时，系统会自动使用此辅助模型处理
                     </label>
-                    <label style="font-size: 13px; opacity: 0.8;">视觉模型 API Key:</label>
-                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                        <input type="password" id="vision-model-api-key" placeholder="sk-..." style="flex: 1;">
-                        <button type="button" onclick="togglePasswordVisibility('vision-model-api-key')" style="width: 40px;">👁️</button>
-                    </div>
-                    <label style="font-size: 13px; opacity: 0.8;">视觉模型 API URL:</label>
-                    <input type="text" id="vision-model-api-url" placeholder="https://..." style="margin-bottom: 10px;">
-                    <label style="font-size: 13px; opacity: 0.8;">视觉模型名称:</label>
-                    <input type="text" id="vision-model-name" placeholder="qwen-vl-max 等">
                 </div>
             </div>
             
@@ -787,6 +768,10 @@
             <h3>对话配置</h3>
             <div class="section">
                 <h4>基础设置</h4>
+                <div class="form-group">
+                    <label for="dialog-model-select">对话模型</label>
+                    <select id="dialog-model-select"></select>
+                </div>
                 <div class="form-group">
                     <label for="intro-text">开场白:</label>
                     <textarea id="intro-text" placeholder="你好啊" rows="1"></textarea>
