@@ -4497,6 +4497,7 @@ class set_pyqt(QWidget):
                 config = json.load(f)
 
             # 设置默认位置（与 model-interaction.js 中的默认值一致）
+            # 模型热复位在http-server.js中采用同样的相对比例
             default_x = 1.35  # 屏幕宽度的 135%（右边）
             default_y = 0.8   # 屏幕高度的 80%（下方）
 
@@ -4508,6 +4509,7 @@ class set_pyqt(QWidget):
             config['ui']['model_position']['x'] = default_x
             config['ui']['model_position']['y'] = default_y
             config['ui']['model_position']['remember_position'] = True
+            config['ui']['model_scale'] = 0.65
 
             # 保存配置文件
             with open(self.config_path, 'w', encoding='utf-8') as f:
