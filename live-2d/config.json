@@ -60,7 +60,7 @@
       "model": "FunAudioLLM/CosyVoice2-0.5B",
       "voice": "speech:fake-neuro:j3qz9ij4k2:kquiiycgizgaoxeujypx",
       "response_format": "wav",
-      "speed": 1.0
+      "speed": 1
     },
     "baidu_asr": {
       "enabled": false,
@@ -82,11 +82,7 @@
     "model_type": "live2d",
     "vrm_model": "",
     "vrm_model_path": "",
-<<<<<<< Updated upstream
-    "model_scale": 0.6592945326814194,
-=======
     "model_scale": 0.7270283889753179,
->>>>>>> Stashed changes
     "show_chat_box": true,
     "show_model": true,
     "text_only_mode": false,
