@@ -20,7 +20,8 @@
     "enabled": true,
     "vad_url": "ws://127.0.0.1:1000/v1/ws/vad",
     "asr_url": "http://127.0.0.1:1000/v1/upload_audio",
-    "voice_barge_in": true
+    "voice_barge_in": true,
+    "merge_window_ms": 1000
   },
   "bert": {
     "enabled": true,
