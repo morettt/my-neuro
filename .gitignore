@@ -40,3 +40,4 @@ _electron.err
 live-2d/plugins/enabled_plugins.json
 live-2d/plugins/built-in/bilibili-live/plugin_config.json
 live-2d/plugins/built-in/context-compressor/plugin_config.json
+.vscode/settings.json

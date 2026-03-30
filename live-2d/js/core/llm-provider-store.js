@@ -91,6 +91,38 @@ function getFirstModelId(provider) {
     return ((provider?.models || []).find(model => model && model.model_id)?.model_id || '');
 }
 
+function ensureSelectedModelPresent(provider, modelId) {
+    if (!provider || !modelId) {
+        return false;
+    }
+
+    const normalizedModelId = normalizeModelIdForProvider(provider, modelId);
+    if (!normalizedModelId) {
+        return false;
+    }
+
+    provider.models = Array.isArray(provider.models) ? provider.models : [];
+    const existing = provider.models.find(model => model && model.model_id === normalizedModelId);
+    if (existing) {
+        if (existing.enabled === false) {
+            existing.enabled = true;
+            return true;
+        }
+        if (!existing.name) {
+            existing.name = normalizedModelId;
+            return true;
+        }
+        return false;
+    }
+
+    provider.models.push({
+        model_id: normalizedModelId,
+        name: normalizedModelId,
+        enabled: true
+    });
+    return true;
+}
+
 function loadProvidersFromStore(baseDir) {
     const providersPath = getProviderStorePath(baseDir);
     if (!fs.existsSync(providersPath)) {
@@ -194,13 +226,16 @@ function scrubLegacyProviderConfig(config) {
     }
 
     const providerById = new Map(
-        normalizeProvidersData(config.llm_providers)
+        (Array.isArray(config.llm_providers) ? config.llm_providers : [])
             .filter(provider => provider && provider.id)
             .map(provider => [provider.id, provider])
     );
 
     const selectedLlmProvider = providerById.get(config.llm.provider_id || '');
     const llmModelId = normalizeModelIdForProvider(selectedLlmProvider, config.llm.model_id || '');
+    if (ensureSelectedModelPresent(selectedLlmProvider, llmModelId)) {
+        changed = true;
+    }
     if (config.llm.model_id !== llmModelId) {
         config.llm.model_id = llmModelId;
         changed = true;
@@ -229,6 +264,9 @@ function scrubLegacyProviderConfig(config) {
         selectedVisionProvider,
         config.vision.model_id || ''
     );
+    if (ensureSelectedModelPresent(selectedVisionProvider, normalizedVisionModelId)) {
+        changed = true;
+    }
     if (config.vision.model_id !== normalizedVisionModelId) {
         config.vision.model_id = normalizedVisionModelId;
         changed = true;
@@ -260,13 +298,15 @@ function ensureProviderStore(baseDir, config) {
     }
 
     const normalizedProviders = normalizeProvidersData(providers);
-    applyLegacyProviderSelection(config, providers);
+    applyLegacyProviderSelection(config, normalizedProviders);
     config.llm_providers = normalizedProviders;
     const configChanged = scrubLegacyProviderConfig(config);
+    const finalProviders = normalizeProvidersData(config.llm_providers);
+    const providerStateChanged = JSON.stringify(normalizedProviders) !== JSON.stringify(finalProviders);
 
     return {
-        providers: normalizedProviders,
-        storeChanged,
+        providers: finalProviders,
+        storeChanged: storeChanged || providerStateChanged,
         configChanged
     };
 }
@@ -279,7 +319,7 @@ function saveProviders(baseDir, providers) {
 
 function persistProviderStore(baseDir, configPath, config) {
     const result = ensureProviderStore(baseDir, config);
-    if (result.storeChanged) {
+    if (result.storeChanged || result.configChanged) {
         saveProviders(baseDir, result.providers);
     }
     if (configPath && (result.storeChanged || result.configChanged)) {

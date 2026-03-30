@@ -169,6 +169,39 @@ def get_first_model_id(provider):
     return ''
 
 
+def ensure_selected_model_present(provider, model_id):
+    if not isinstance(provider, dict):
+        return False
+
+    normalized_model_id = normalize_model_id_for_provider(provider, model_id)
+    if not normalized_model_id:
+        return False
+
+    models = provider.get('models')
+    if not isinstance(models, list):
+        models = []
+        provider['models'] = models
+
+    for model in models:
+        if not isinstance(model, dict) or model.get('model_id') != normalized_model_id:
+            continue
+        changed = False
+        if model.get('enabled', True) is False:
+            model['enabled'] = True
+            changed = True
+        if not model.get('name'):
+            model['name'] = normalized_model_id
+            changed = True
+        return changed
+
+    models.append({
+        'model_id': normalized_model_id,
+        'name': normalized_model_id,
+        'enabled': True
+    })
+    return True
+
+
 def load_effective_providers(config):
     providers = normalize_providers(load_provider_store())
     if providers:
@@ -270,6 +303,19 @@ def resolve_provider_model_payload(providers, provider_id, model_id):
             'model_id': model_id
         }
     return None
+
+
+def upsert_provider_model_selection(providers, provider_id, model_id):
+    provider_id = str(provider_id or '').strip()
+    model_id = str(model_id or '').strip()
+    if not provider_id or not model_id:
+        return False
+
+    for provider in providers:
+        if not isinstance(provider, dict) or provider.get('id') != provider_id:
+            continue
+        return ensure_selected_model_present(provider, model_id)
+    return False
 
 
 def choose_llm_provider(config, providers):
@@ -872,6 +918,11 @@ def handle_advanced_settings():
             config['mcp']['enabled'] = data.get('mcp_enabled', True)
             config['vision']['provider_id'] = data.get('provider_id', '')
             config['vision']['model_id'] = data.get('model_id', '')
+            provider_store_changed = upsert_provider_model_selection(
+                providers,
+                config['vision']['provider_id'],
+                config['vision']['model_id']
+            )
 
             provider_managed_vision = resolve_provider_model_payload(
                 providers,
@@ -882,7 +933,13 @@ def handle_advanced_settings():
                 config['vision']['vision_model'] = provider_managed_vision
             elif 'vision_model' in data:
                 config['vision']['vision_model'] = data['vision_model']
-            
+
+            if provider_store_changed:
+                providers = normalize_providers(providers)
+                ensure_valid_provider_model_refs(config, providers)
+                if not save_provider_store(providers):
+                    return jsonify({'error': '保存视觉模型配置失败'}), 500
+
             if save_config(config):
                 return jsonify({'success': True})
             return jsonify({'error': '保存失败'}), 500
