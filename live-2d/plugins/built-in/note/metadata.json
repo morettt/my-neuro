@@ -1,0 +1,10 @@
+{
+  "name": "note",
+  "displayName": "用户记忆",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "记录/读取/搜索/删除用户核心记忆，提供 record_memory / read_memory / delete_memory / search_memory 工具",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

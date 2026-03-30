@@ -1,0 +1,10 @@
+{
+  "name": "web-navigator",
+  "displayName": "打开网页",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "在默认浏览器中打开指定网址，提供 open_webpage 工具",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}
