@@ -1,7 +1,0 @@
-{
-  "plugins": [
-    "built-in/code-executor",
-    "built-in/screenshot",
-    "built-in/web-search"
-  ]
-}
