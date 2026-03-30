@@ -1,0 +1,10 @@
+{
+  "name": "typing",
+  "displayName": "自动打字",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "在当前焦点位置模拟输入文字，提供 type_text 工具",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}
