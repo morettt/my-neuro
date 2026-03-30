@@ -11,6 +11,7 @@ class LLMClient {
         this.apiUrl = config.llm.api_url;
         this.model = config.llm.model;
         this.temperature = config.llm.temperature || 1.0;  // 🔥 读取temperature配置，默认1.0
+        this.temperatureEnabled = config.llm.temperature_enabled ?? false;
     }
 
     /**
@@ -28,9 +29,11 @@ class LLMClient {
         const requestBody = {
             model: this.model,
             messages: cleanedMessages,
-            temperature: this.temperature,  // 🔥 添加temperature参数
             stream: stream
         };
+        if (this.temperatureEnabled) {
+            requestBody.temperature = this.temperature;
+        }
 
         // 添加工具列表(如果提供)
         if (tools && tools.length > 0) {
@@ -484,6 +487,7 @@ class LLMClient {
             this.apiUrl = newConfig.llm.api_url || this.apiUrl;
             this.model = newConfig.llm.model || this.model;
             this.temperature = newConfig.llm.temperature !== undefined ? newConfig.llm.temperature : this.temperature;  // 🔥 支持temperature更新
+            this.temperatureEnabled = newConfig.llm.temperature_enabled !== undefined ? newConfig.llm.temperature_enabled : this.temperatureEnabled;
             logToTerminal('info', 'LLM客户端配置已更新');
         }
     }

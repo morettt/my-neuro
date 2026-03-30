@@ -1644,6 +1644,19 @@ QTabWidget#tabWidget_tools QTabBar {
                     </widget>
                    </item>
                    <item>
+                    <widget class="QCheckBox" name="checkBox_temperature_enabled">
+                     <property name="font">
+                      <font>
+                       <family>微软雅黑</family>
+                       <pointsize>10</pointsize>
+                      </font>
+                     </property>
+                     <property name="text">
+                      <string>启用温度</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
                     <spacer name="horizontalSpacer_temperature">
                      <property name="orientation">
                       <enum>Qt::Horizontal</enum>
