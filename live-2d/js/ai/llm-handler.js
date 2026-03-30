@@ -151,6 +151,7 @@ class LLMHandler {
                 let iteration = 0;
                 let finalResponseContent = null;
                 let isStreamingToTTS = false; // 标记是否正在流式播放TTS
+                let _streamBuf = '';
 
                 // 🔥 清除之前的中断标志，开始新的对话流程
                 appState.clearInterrupted();
@@ -241,8 +242,11 @@ class LLMHandler {
                         }
 
                         // 🔥 正常使用主模型 - 使用流式响应（提升响应速度）
+                        _streamBuf = '';
+                        if (iteration === 0) ttsProcessor.reset();
                         result = await llmClient.chatCompletion(messagesForAPI, allTools, true, (text) => {
-                            // 流式接收文本，暂不播放TTS（等确认是否有工具调用后再决定）
+                            if (iteration > 0) return;
+                            ttsProcessor.addStreamingText(text);
                         });
                     }
 
@@ -691,17 +695,23 @@ class LLMHandler {
                         await global.pluginManager.runLLMResponseHooks(responseObj).catch(() => {});
                     }
 
-                    if (iteration === 0) {
-                        // 如果没有中间过程,才reset
-                        ttsProcessor.reset();
-                    }
-
                     // 触发插件 onTTSStart 钩子
                     if (global.pluginManager) {
                         await global.pluginManager.runTTSStartHooks(responseObj.text).catch(() => {});
                     }
 
-                    ttsProcessor.processTextToSpeech(responseObj.text);
+                    if (iteration === 0) {
+                        // streaming already started - finalize
+                        if (typeof ttsProcessor.finalizeStreamingText === 'function') {
+                            ttsProcessor.finalizeStreamingText();
+                        } else {
+                            if (_streamBuf.trim()) ttsProcessor.textSegmentQueue.push(_streamBuf.trim());
+                            _streamBuf = '';
+                        }
+                    } else {
+                        ttsProcessor.reset();
+                        ttsProcessor.processTextToSpeech(responseObj.text);
+                    }
                 } else {
                     logToTerminal('error', '❌ 未获取到有效的AI回复');
 

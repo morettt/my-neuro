@@ -1,0 +1,9 @@
+{
+  "tavily_api_key": {
+    "title": "Tavily API Key",
+    "description": "Tavily 搜索服务的 API Key，前往 https://tavily.com 获取",
+    "type": "string",
+    "default": "",
+    "value": "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"
+  }
+}

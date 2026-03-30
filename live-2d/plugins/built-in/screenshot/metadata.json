@@ -1,0 +1,10 @@
+{
+  "name": "screenshot",
+  "displayName": "截图",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "截取当前屏幕供 AI 分析，提供 take_screenshot 工具",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

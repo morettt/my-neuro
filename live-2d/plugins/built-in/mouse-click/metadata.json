@@ -1,0 +1,10 @@
+{
+  "name": "mouse-click",
+  "displayName": "鼠标点击",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "点击鼠标当前位置，提供 click_mouse 工具",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

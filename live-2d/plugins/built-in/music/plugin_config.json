@@ -1,0 +1,9 @@
+{
+  "port": {
+    "title": "音乐控制服务端口",
+    "description": "song-library 音乐控制 HTTP 服务的端口号",
+    "type": "int",
+    "default": 3001,
+    "value": 3001
+  }
+}

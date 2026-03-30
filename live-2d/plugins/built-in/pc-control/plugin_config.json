@@ -1,0 +1,23 @@
+{
+  "api_key": {
+    "title": "视觉模型 API Key",
+    "description": "用于屏幕元素识别的视觉模型 API Key",
+    "type": "string",
+    "default": "",
+    "value": ""
+  },
+  "api_url": {
+    "title": "视觉模型 API URL",
+    "description": "视觉模型的 API 接口地址",
+    "type": "string",
+    "default": "https://api.siliconflow.cn/v1",
+    "value": ""
+  },
+  "model": {
+    "title": "视觉模型名称",
+    "description": "用于识别屏幕元素的视觉模型",
+    "type": "string",
+    "default": "Qwen/Qwen2.5-VL-72B-Instruct",
+    "value": ""
+  }
+}
