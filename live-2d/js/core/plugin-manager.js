@@ -124,12 +124,12 @@ class PluginManager {
         this._loadEnabledList();
         const relPath = path.relative(this._pluginsDir, pluginDir).replace(/\\/g, '/');
         if (!this._enabledPlugins.has(relPath)) {
-            logToTerminal('info', `⏭️ 插件未启用，跳过: ${name}`);
+            //logToTerminal('info', `⏭️ 插件未启用，跳过: ${name}`);
             return;
         }
 
         if (this._plugins.has(name)) {
-            logToTerminal('info', `⏭️ 插件已加载，跳过: ${name}`);
+            //logToTerminal('info', `⏭️ 插件已加载，跳过: ${name}`);
             return;
         }
 
