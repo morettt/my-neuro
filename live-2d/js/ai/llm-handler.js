@@ -140,6 +140,7 @@ class LLMHandler {
                 let finalResponseContent = null;
                 let isStreamingToTTS = false; // 标记是否正在流式播放TTS
                 let _streamBuf = '';
+                let consecutiveEmptyResponses = 0; // 连续空响应计数
 
                 // 🔥 清除之前的中断标志，开始新的对话流程
                 appState.clearInterrupted();
@@ -630,10 +631,9 @@ class LLMHandler {
                         break;
                     }
 
-                    // 既没有工具调用也没有内容,异常情况
-                    logToTerminal('warn', '⚠️ LLM返回了空响应');
-                    // 🔥 空响应时设置固定回复
-                    finalResponseContent = "Filtered";
+                    // 既没有工具调用也没有内容，部分模型在工具调用后会返回空响应
+                    consecutiveEmptyResponses++;
+                    logToTerminal('warn', `⚠️ LLM返回了空响应 (连续第 ${consecutiveEmptyResponses} 次)`);
 
                     // 🔥 检查是否因为图片导致的空响应
                     if (screenshotBase64 || useVisionModelForFirstRound) {
@@ -641,7 +641,18 @@ class LLMHandler {
                         throw new Error('模型不支持图片：LLM返回了空响应，可能是因为模型不支持 image_url 参数');
                     }
 
-                    break;
+                    // 连续空响应超过3次，主动催模型回复，避免无限循环
+                    if (consecutiveEmptyResponses >= 2) {
+                        logToTerminal('warn', '⚠️ 连续空响应超过2次，添加提示消息催促模型回复');
+                        voiceChat.messages.push({
+                            role: 'user',
+                            content: '请根据工具执行结果，回复用户。'
+                        });
+                        consecutiveEmptyResponses = 0;
+                    }
+
+                    iteration++;
+                    continue;
                 }
 
                 // 检查是否达到最大轮数限制
