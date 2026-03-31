@@ -1,5 +1,5 @@
 {
-  "playwright": {
+  "playwright_disabled": {
     "command": "npx",
     "args": [
       "@playwright/mcp@latest"

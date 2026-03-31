@@ -1,7 +1,6 @@
 {
   "plugins": [
     "built-in/code-executor",
-    "built-in/mouse-click",
     "built-in/screenshot",
     "built-in/web-search"
   ]
