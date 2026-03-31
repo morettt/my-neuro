@@ -4342,9 +4342,8 @@ class set_pyqt(QWidget):
 
             tools_path = ".\\server-tools"
 
-            # 检查工具目录是否存在
+            # 检查工具目录是否存在（已迁移到插件系统，目录不存在时静默跳过）
             if not os.path.exists(tools_path):
-                self.mcp_log_signal.emit("❌ server-tools目录不存在")
                 return
 
             # 扫描工具模块
