@@ -33,6 +33,43 @@ market_bp = Blueprint('market', __name__)
 # 存储正在进行的安装任务
 installing_tasks = {}
 
+# 与桌面版 test.py.refresh_plugin_market 一致：上游插件目录索引
+PLUGIN_HUB_RAW_URL = (
+    'https://raw.githubusercontent.com/morettt/my-neuro/main/'
+    'live-2d/plugins/plugin-house/plugin_hub.json'
+)
+
+
+def load_plugin_hub_catalog():
+    """优先从 GitHub Raw 拉取 plugin_hub.json，失败则读取本地（与桌面版逻辑一致）。"""
+    plugin_hub_path = PROJECT_ROOT / 'plugins' / 'plugin-house' / 'plugin_hub.json'
+    remote_err = None
+
+    if HAS_REQUESTS:
+        try:
+            resp = requests.get(PLUGIN_HUB_RAW_URL, timeout=15)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            remote_err = str(e)
+            logger.warning('远程 plugin_hub.json 拉取失败，将尝试本地：%s', e)
+    else:
+        try:
+            req = urllib.request.Request(PLUGIN_HUB_RAW_URL)
+            with urllib.request.urlopen(req, timeout=15) as response:
+                return json.loads(response.read().decode('utf-8'))
+        except Exception as e:
+            remote_err = str(e)
+            logger.warning('远程 plugin_hub.json 拉取失败，将尝试本地：%s', e)
+
+    if plugin_hub_path.exists():
+        with open(plugin_hub_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+    raise FileNotFoundError(
+        f'无法加载插件商店：远程不可用 ({remote_err})，且本地不存在 {plugin_hub_path}'
+    )
+
 
 # ============ 提示词广场 ============
 
@@ -79,18 +116,9 @@ def apply_prompt():
 
 @market_bp.route('/api/market/plugins', methods=['GET'])
 def get_plugin_market():
-    """获取插件广场列表（从本地 plugin-house.json 文件）"""
+    """获取插件广场列表（优先远程 Raw，与桌面版一致；失败则用本地 plugin_hub.json）"""
     try:
-        plugin_hub_path = PROJECT_ROOT / 'plugins' / 'plugin-house' / 'plugin_hub.json'
-
-        if not plugin_hub_path.exists():
-            return jsonify({
-                'success': False,
-                'error': '插件商店数据文件不存在'
-            }), 500
-
-        with open(plugin_hub_path, 'r', encoding='utf-8') as f:
-            plugins_data = json.load(f)
+        plugins_data = load_plugin_hub_catalog()
 
         # 转换为列表格式，并检测安装状态
         plugins = []

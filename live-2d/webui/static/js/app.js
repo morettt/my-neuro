@@ -2940,7 +2940,7 @@ async function refreshToolMarket() {
         } else if (data.success) {
             listElement.innerHTML = '<div class="log-entry log-info">暂无工具</div>';
         } else {
-            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载���败') + '</div>';
+            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载失败') + '</div>';
         }
     } catch (error) {
         document.getElementById('tool-market-list').innerHTML = 
@@ -3072,7 +3072,7 @@ async function refreshPluginMarket() {
         } else if (data.success) {
             listElement.innerHTML = '<div class="log-entry log-info">暂无插件</div>';
         } else {
-            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载��败') + '</div>';
+            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载失败') + '</div>';
         }
     } catch (error) {
         document.getElementById('plugin-market-list').innerHTML =
@@ -3111,9 +3111,18 @@ function createPluginMarketCard(plugin) {
         btnDisabled = '';
     }
 
+    const authorLine = escapeHtml(author);
+    const repoHref = repo ? escapeHtml(repo) : '';
+    const metaBlock = repo
+        ? `<div class="market-card-meta">
+            <span class="market-card-author">👤 作者：${authorLine}</span>
+            <a class="market-card-source-link" href="${repoHref}" target="_blank" rel="noopener noreferrer">📎 查看来源</a>
+           </div>`
+        : `<p class="market-card-author">👤 作者：${authorLine}</p>`;
+
     const html = `<div class="market-card-header">
         <h4 class="market-card-title">🧩 ${displayName}</h4>
-        <p class="market-card-author">作者：${author}</p>
+        ${metaBlock}
         <p class="market-card-summary">${desc}</p>
         <div class="install-progress" id="progress-${pluginName}" style="display: none;">
             <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
