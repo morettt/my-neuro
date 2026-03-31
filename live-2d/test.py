@@ -48,46 +48,11 @@ def get_app_path():
 def load_tool_descriptions():
     """加载所有工具的名称和描述"""
     tool_descriptions = {}
-    fc_tools = set()  # Function Call工具集合
     mcp_tools = set()  # MCP工具集合
 
     try:
         # 获取server-tools目录路径
         app_path = get_app_path()
-        server_tools_path = os.path.join(app_path, "server-tools")
-
-        if not os.path.exists(server_tools_path):
-            print(f"server-tools目录不存在: {server_tools_path}")
-            return tool_descriptions, fc_tools, mcp_tools
-
-        # 加载Function Call工具描述（server-tools目录）
-        js_files = glob.glob(os.path.join(server_tools_path, "*.js"))
-        js_files = [f for f in js_files if not f.endswith("index.js")]
-
-        for file_path in js_files:
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-
-                # 使用更灵活的正则表达式提取工具定义
-                # 支持跨行和不同的引号格式
-                pattern = r'name:\s*["\']([^"\']+)["\']\s*,\s*description:\s*["\']([^"\']*(?:[^"\'\\]|\\.)*)["\']'
-                matches = re.findall(pattern, content, re.DOTALL)
-
-                file_tools = []
-                for name, description in matches:
-                    # 清理描述文本，移除多余的空白
-                    clean_description = re.sub(r'\s+', ' ', description.strip())
-                    tool_descriptions[name] = clean_description
-                    fc_tools.add(name)  # 记录为Function Call工具
-                    file_tools.append(name)
-
-                if file_tools:
-                    filename = os.path.basename(file_path)
-                    print(f"文件 {filename} 包含工具: {', '.join(file_tools)}")
-
-            except Exception as e:
-                print(f"读取工具文件失败 {file_path}: {e}")
 
         # 加载MCP工具描述（mcp/tools目录）
         mcp_tools_path = os.path.join(app_path, "mcp", "tools")
@@ -155,7 +120,7 @@ def load_tool_descriptions():
     except Exception as e:
         print(f"加载工具描述失败: {e}")
 
-    return tool_descriptions, fc_tools, mcp_tools
+    return tool_descriptions, mcp_tools
 
 
 class LogReader(QThread):
@@ -510,7 +475,6 @@ class set_pyqt(QWidget):
     def __init__(self):
         super().__init__()
         self.live2d_process = None
-        self.tools_enabled = False  # 工具调用功能状态，默认关闭
         self.mcp_enabled = False    # MCP功能状态，默认关闭
         self.terminal_process = None  # 新增：后台终端进程
         self.asr_process = None  # 新增：ASR进程
@@ -535,7 +499,7 @@ class set_pyqt(QWidget):
         self.log_thread_running = False
 
         # 加载工具描述
-        self.tool_descriptions, self.fc_tools, self.mcp_tools = load_tool_descriptions()
+        self.tool_descriptions, self.mcp_tools = load_tool_descriptions()
 
         # 调整大小相关变量
         self.resizing = False
@@ -670,12 +634,10 @@ class set_pyqt(QWidget):
         self.toast = ToastNotification(self)
 
         # 初始化时刷新工具列表
-        self.refresh_tools_list()
         self.refresh_mcp_tools_list()
 
         # 根据UI复选框状态初始化开关（必须在日志信号连接之前设置）
         self.mcp_enabled = self.ui.checkBox_mcp_enable.isChecked()  # MCP功能开关
-        self.tools_enabled = self.ui.checkBox_mcp.isChecked()       # 工具调用功能开关
 
         # 加载最近的日志记录
         self.load_recent_logs()
@@ -2538,7 +2500,6 @@ class set_pyqt(QWidget):
 
         # 只有实际工具调用相关的日志才路由到工具日志
         actual_tool_keywords = [
-            'Function Call', 'function call',
             '工具调用', '函数调用',
             'tool_calls', 'function_name',
             'tool executed', 'tool execution',
@@ -2548,40 +2509,6 @@ class set_pyqt(QWidget):
         ]
 
         return any(keyword in log_line for keyword in actual_tool_keywords)
-
-    # ===== 以下函数已废弃，使用 [TOOL] 标记替代关键词匹配 =====
-    # def contains_mcp_content(self, log_line):
-    #     """判断日志是否包含MCP相关内容（已废弃）"""
-    #     mcp_status_keywords = [
-    #         'MCP系统初始化完成，耗时',
-    #         'MCP状态:',
-    #         'MCPManager创建成功，启用状态'
-    #     ]
-    #     if any(keyword in log_line for keyword in mcp_status_keywords):
-    #         return True
-    #     tool_call_keywords = ['检测到工具调用', '开始执行工具调用', '工具调用结果', '发送工具结果到LLM']
-    #     if any(keyword in log_line for keyword in tool_call_keywords):
-    #         fc_tool_names = list(self.fc_tools) if hasattr(self, 'fc_tools') else []
-    #         if any(tool_name in log_line for tool_name in fc_tool_names):
-    #             return False
-    #         return True
-    #     return False
-    #
-    # def contains_function_call_content(self, log_line):
-    #     """判断日志是否包含Function Call相关内容（已废弃）"""
-    #     fc_status_keywords = [
-    #         'Function Call', 'function call',
-    #         'server-tools', '工具服务器', '正在执行工具', '工具执行'
-    #     ]
-    #     if any(keyword in log_line for keyword in fc_status_keywords):
-    #         return True
-    #     tool_call_keywords = ['检测到工具调用', '开始执行工具调用', '工具调用结果', '发送工具结果到LLM']
-    #     if any(keyword in log_line for keyword in tool_call_keywords):
-    #         fc_tool_names = list(self.fc_tools) if hasattr(self, 'fc_tools') else []
-    #         if any(tool_name in log_line for tool_name in fc_tool_names):
-    #             return True
-    #         return False
-    #     return False
 
     def eventFilter(self, obj, event):
         """全局事件过滤器 - 捕获所有鼠标事件"""
@@ -2628,19 +2555,16 @@ class set_pyqt(QWidget):
         page_layout = page.layout()
 
         # 移除原来的垂直布局中的复选框
-        checkbox_mcp = self.ui.checkBox_mcp
         checkbox_mcp_enable = self.ui.checkBox_mcp_enable
         checkbox_vision = self.ui.checkBox_5
 
         # 从原布局中移除
-        page_layout.removeWidget(checkbox_mcp)
         page_layout.removeWidget(checkbox_mcp_enable)
         page_layout.removeWidget(checkbox_vision)
 
         # 创建新的水平布局
         checkbox_layout = QHBoxLayout()
         checkbox_layout.setSpacing(30)
-        checkbox_layout.addWidget(checkbox_mcp)
         checkbox_layout.addWidget(checkbox_mcp_enable)
         checkbox_layout.addWidget(checkbox_vision)
         checkbox_layout.addStretch()  # 添加弹性空间
@@ -2824,13 +2748,6 @@ class set_pyqt(QWidget):
         # 工具广场相关按钮绑定
         self.ui.pushButton_refresh_tools.clicked.connect(self.refresh_tool_market)
         self.init_tool_market_table()
-
-        # FC广场相关按钮绑定
-        try:
-            self.ui.pushButton_refresh_fc_tools.clicked.connect(self.refresh_fc_market)
-            self.init_fc_market_table()
-        except Exception as e:
-            print(f"FC广场初始化失败: {e}")
 
         # 提示词广场相关按钮绑定
         self.ui.pushButton_refresh_prompts.clicked.connect(self.refresh_prompt_market)
@@ -3340,7 +3257,6 @@ class set_pyqt(QWidget):
         self.ui.checkBox_temperature_enabled.setChecked(self.config['llm'].get('temperature_enabled', False))
         self.ui.lineEdit_4.setText(self.config['ui']['intro_text'])
         self.ui.lineEdit_5.setText(str(self.config['context']['max_messages']))
-        self.ui.checkBox_mcp.setChecked(self.config.get('tools', {}).get('enabled', True))
         self.ui.checkBox_mcp_enable.setChecked(self.config.get('mcp', {}).get('enabled', True))
         self.ui.checkBox_5.setChecked(self.config['vision']['auto_screenshot'])
         self.ui.checkBox_3.setChecked(self.config['ui']['show_chat_box'])
@@ -4403,10 +4319,9 @@ class set_pyqt(QWidget):
 
         # 检查复选框状态（必须在启动日志线程之前设置）
         self.mcp_enabled = self.ui.checkBox_mcp_enable.isChecked()  # MCP功能
-        self.tools_enabled = self.ui.checkBox_mcp.isChecked()       # 工具调用功能
 
         # 重新加载工具描述，确保显示最新的工具列表
-        self.tool_descriptions, self.fc_tools, self.mcp_tools = load_tool_descriptions()
+        self.tool_descriptions, self.mcp_tools = load_tool_descriptions()
 
         # 检查工具状态
         self.check_tools_status()
@@ -4421,8 +4336,8 @@ class set_pyqt(QWidget):
     def check_tools_status(self):
         """检查工具状态和模块"""
         try:
-            # 只有任何一个工具功能启用时才显示详细信息
-            if not self.tools_enabled and not self.mcp_enabled:
+            # 只有MCP功能启用时才显示详细信息
+            if not self.mcp_enabled:
                 return
 
             tools_path = ".\\server-tools"
@@ -4435,22 +4350,8 @@ class set_pyqt(QWidget):
             # 扫描工具模块
             js_files = [f for f in os.listdir(tools_path) if f.endswith('.js') and f != 'server.js']
 
-            # 显示Function Call工具状态
-            # if self.tools_enabled:
-            #     self.mcp_log_signal.emit("🔧 工具调用功能: 已启用")  # 不显示，直接显示工具列表即可
-
-            # 分别统计和显示Function Call和MCP工具
+            # 显示MCP工具状态
             if hasattr(self, 'tool_descriptions') and self.tool_descriptions:
-                # 只有启用对应功能时才显示
-                if self.tools_enabled and hasattr(self, 'fc_tools') and self.fc_tools:
-                    self.mcp_log_signal.emit("🧪 Function Call工具:")
-                    for tool_name in self.fc_tools:
-                        if tool_name in self.tool_descriptions:
-                            description = self.tool_descriptions[tool_name]
-                            self.mcp_log_signal.emit(f"【{tool_name}】→ {description}")
-                        else:
-                            self.mcp_log_signal.emit(f"【{tool_name}】")
-
                 if self.mcp_enabled and hasattr(self, 'mcp_tools') and self.mcp_tools:
                     self.mcp_log_signal.emit("🧪 MCP工具:")
                     for tool_name in self.mcp_tools:
@@ -4559,10 +4460,6 @@ class set_pyqt(QWidget):
 
         current_config["ui"]["intro_text"] = self.ui.lineEdit_4.text()
         current_config['context']['max_messages'] = int(self.ui.lineEdit_5.text())
-        # 确保tools配置存在
-        if 'tools' not in current_config:
-            current_config['tools'] = {}
-        current_config['tools']['enabled'] = self.ui.checkBox_mcp.isChecked()
         # 确保mcp配置存在
         if 'mcp' not in current_config:
             current_config['mcp'] = {}
@@ -5156,255 +5053,6 @@ class set_pyqt(QWidget):
             print(f"错误：{error_msg}")
             self.toast.show_message(error_msg, 3000)
 
-    def refresh_tools_list(self):
-        """刷新工具列表 - 卡片布局"""
-        try:
-            # 获取server-tools文件夹路径
-            base_path = get_app_path()
-            tools_path = os.path.join(base_path, "server-tools")
-
-            # 检查文件夹是否存在
-            if not os.path.exists(tools_path):
-                self.toast.show_message("server-tools文件夹不存在", 3000)
-                return
-
-            # 获取容器布局
-            container_layout = self.ui.scrollAreaWidgetContents_function_call.layout()
-
-            # 清空现有的卡片
-            while container_layout.count() > 0:
-                item = container_layout.takeAt(0)
-                if item.widget():
-                    item.widget().deleteLater()
-                elif item.spacerItem():
-                    pass
-
-            # 读取文件夹中的文件
-            files = os.listdir(tools_path)
-
-            for file in files:
-                file_path = os.path.join(tools_path, file)
-
-                # 只处理文件，跳过文件夹
-                if os.path.isfile(file_path):
-                    status = ""
-
-                    if file.endswith('.js'):
-                        # js文件，跳过index.js
-                        if file.lower() == 'index.js':
-                            continue
-                        # 去掉.js后缀显示
-                        display_name = file[:-3]  # 移除.js
-                        status_icon = "●"  # 绿色实心圆圈
-                        status = "已启动"
-                    elif file.endswith('.txt'):
-                        # txt文件，去掉.txt后缀显示
-                        display_name = file[:-4]  # 移除.txt
-                        status_icon = "○"  # 空白圆圈
-                        status = "未启动"
-                    else:
-                        # 其他文件类型，跳过
-                        continue
-
-                    # 提取工具描述
-                    description = ""
-                    try:
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            content = f.read(500)  # 只读前500字符
-                            # 匹配 /** ... */ 注释
-                            match = re.search(r'/\*\*\s*\n?\s*\*?\s*([^\n*]+)', content)
-                            if match:
-                                description = match.group(1).strip()
-                    except:
-                        pass
-
-                    # 解析工具子功能
-                    sub_functions = []
-                    try:
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            match = re.search(r'function\s+getToolDefinitions\s*\(\)\s*\{[^}]*return\s*\[(.*?)\];', content, re.DOTALL)
-                            if match:
-                                funcs_text = match.group(1)
-                                name_matches = re.findall(r'name:\s*["\']([^"\']+)["\']', funcs_text)
-                                desc_matches = re.findall(r'description:\s*["\']([^"\']+)["\']', funcs_text)
-                                for i, name in enumerate(name_matches):
-                                    if i < len(desc_matches):
-                                        sub_functions.append(f"{name}: {desc_matches[i]}")
-                    except:
-                        pass
-
-                    # 创建主容器
-                    main_container = QWidget()
-                    main_container.setStyleSheet("""
-                        QWidget {
-                            background-color: white;
-                            border-radius: 8px;
-                            border: 1px solid #e0e0e0;
-                        }
-                    """)
-
-                    container_v_layout = QVBoxLayout(main_container)
-                    container_v_layout.setContentsMargins(0, 0, 0, 0)
-                    container_v_layout.setSpacing(0)
-
-                    # 头部区域
-                    header = QWidget()
-                    header.setStyleSheet("background-color: transparent; border: none;")
-                    header_layout = QHBoxLayout(header)
-                    header_layout.setContentsMargins(15, 12, 15, 12)
-                    header_layout.setSpacing(15)
-
-                    # 工具信息标签
-                    if description:
-                        label_text = f"<b>{display_name}</b>  <span style='color: #777; font-size: 9pt;'>{description}</span>"
-                    else:
-                        label_text = f"<b>{display_name}</b>"
-
-                    info_label = QLabel(label_text)
-                    info_label.setFont(QFont("微软雅黑", 10))
-                    info_label.setWordWrap(True)
-                    header_layout.addWidget(info_label, 1)
-
-                    # 展开按钮（如果有子功能）
-                    if sub_functions:
-                        expand_btn = QPushButton("展开")
-                        expand_btn.setMinimumSize(60, 35)
-                        expand_btn.setFont(QFont("微软雅黑", 9))
-                        expand_btn.setStyleSheet("""
-                            QPushButton {
-                                background-color: #3498db;
-                                color: white;
-                                border-radius: 6px;
-                                border: none;
-                            }
-                            QPushButton:hover {
-                                background-color: #5dade2;
-                            }
-                            QPushButton:pressed {
-                                background-color: #2874a6;
-                            }
-                        """)
-                        header_layout.addWidget(expand_btn)
-
-                    # 右侧状态按钮
-                    status_btn = QPushButton("使用中" if status == "已启动" else "未使用")
-                    status_btn.setMinimumSize(80, 35)
-                    status_btn.setFont(QFont("微软雅黑", 9, QFont.Bold))
-                    if status == "已启动":
-                        # 使用中 - 绿色
-                        status_btn.setStyleSheet("""
-                            QPushButton {
-                                background-color: #27ae60;
-                                color: white;
-                                border-radius: 6px;
-                                border: none;
-                            }
-                            QPushButton:hover {
-                                background-color: #2ecc71;
-                            }
-                            QPushButton:pressed {
-                                background-color: #1e8449;
-                            }
-                        """)
-                    else:
-                        # 未使用 - 白色(带边框)
-                        status_btn.setStyleSheet("""
-                            QPushButton {
-                                background-color: white;
-                                color: #666;
-                                border-radius: 6px;
-                                border: 2px solid #ddd;
-                            }
-                            QPushButton:hover {
-                                background-color: #f5f5f5;
-                                border-color: #ccc;
-                            }
-                            QPushButton:pressed {
-                                background-color: #e8e8e8;
-                            }
-                        """)
-                    status_btn.setProperty("tool_file", file)
-                    status_btn.setProperty("tool_status", status)
-                    status_btn.setProperty("tools_path", tools_path)
-                    status_btn.clicked.connect(lambda checked, btn=status_btn: self.toggle_tool_from_button(btn))
-                    header_layout.addWidget(status_btn)
-
-                    container_v_layout.addWidget(header)
-
-                    # 详情区域（子功能列表，默认隐藏）
-                    if sub_functions:
-                        detail_widget = QWidget()
-                        detail_widget.setStyleSheet("background-color: #f8f9fa; border: none; border-top: 1px solid #e0e0e0;")
-                        detail_widget.setVisible(False)
-                        detail_layout = QVBoxLayout(detail_widget)
-                        detail_layout.setContentsMargins(15, 15, 15, 15)
-                        detail_layout.setSpacing(10)
-
-                        # 子功能列表
-                        for func in sub_functions:
-                            func_label = QLabel(f"• {func}")
-                            func_label.setFont(QFont("微软雅黑", 9))
-                            func_label.setStyleSheet("color: #555; padding: 5px; background-color: white; border-radius: 4px;")
-                            func_label.setWordWrap(True)
-                            detail_layout.addWidget(func_label)
-
-                        container_v_layout.addWidget(detail_widget)
-
-                        # 点击展开按钮切换展开/折叠
-                        expand_btn.clicked.connect(lambda checked, dw=detail_widget, btn=expand_btn: self.toggle_tool_detail(dw, btn))
-
-                    # 添加到容器
-                    container_layout.addWidget(main_container)
-
-            # 添加底部spacer
-            spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-            container_layout.addItem(spacer)
-
-            self.toast.show_message("工具列表已刷新", 2000)
-
-        except Exception as e:
-            error_msg = f"刷新工具列表失败：{str(e)}"
-            print(f"错误：{error_msg}")
-            self.toast.show_message(error_msg, 3000)
-
-    def toggle_tool_detail(self, detail_widget, button):
-        """切换工具详情的展开/折叠"""
-        if detail_widget.isVisible():
-            detail_widget.setVisible(False)
-            button.setText("展开")
-        else:
-            detail_widget.setVisible(True)
-            button.setText("收起")
-
-    def toggle_tool_from_button(self, button):
-        """从按钮切换工具状态"""
-        try:
-            file = button.property("tool_file")
-            status = button.property("tool_status")
-            tools_path = button.property("tools_path")
-
-            current_file_path = os.path.join(tools_path, file)
-
-            if status == "已启动" and file.endswith('.js'):
-                new_file = file[:-3] + '.txt'
-                new_file_path = os.path.join(tools_path, new_file)
-                os.rename(current_file_path, new_file_path)
-                self.toast.show_message(f"{file[:-3]} 已禁用", 2000)
-            elif status == "未启动" and file.endswith('.txt'):
-                new_file = file[:-4] + '.js'
-                new_file_path = os.path.join(tools_path, new_file)
-                os.rename(current_file_path, new_file_path)
-                self.toast.show_message(f"{file[:-4]} 已启用", 2000)
-            else:
-                self.toast.show_message("文件状态异常", 3000)
-                return
-
-            # 刷新工具列表
-            self.refresh_tools_list()
-
-        except Exception as e:
-            self.toast.show_message(f"切换失败: {str(e)}", 3000)
 
     def refresh_mcp_tools_list(self):
         """刷新MCP工具列表 - 卡片布局"""
@@ -6143,184 +5791,6 @@ class set_pyqt(QWidget):
             self.toast.show_message(f"✗ 下载失败: {str(e)}", 3000)
             print(f"下载工具失败: {e}")
 
-    # ==================== FC广场相关功能 ====================
-    def init_fc_market_table(self):
-        """初始化FC广场卡片容器"""
-        try:
-            # 清空现有的卡片
-            layout = self.ui.scrollAreaWidgetContents_fc_market.layout()
-            while layout.count():
-                child = layout.takeAt(0)
-                if child.widget():
-                    child.widget().deleteLater()
-
-            # 添加一个占位spacer
-            spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-            layout.addItem(spacer)
-
-            print("FC广场卡片容器初始化成功")
-        except Exception as e:
-            print(f"初始化FC广场失败: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def refresh_fc_market(self):
-        """刷新FC广场列表"""
-        print("开始刷新FC广场...")
-        try:
-            print("正在请求FC工具API...")
-            response = requests.get("http://mynewbot.com/api/get-fc-tools", timeout=10)
-            print(f"FC工具API响应状态码: {response.status_code}")
-            data = response.json()
-            print(f"FC工具API返回数据: {data}")
-
-            if data.get('success'):
-                fc_tools = data.get('fc_tools', [])
-                print(f"获取到 {len(fc_tools)} 个FC工具")
-                self.display_fc_tools(fc_tools)
-                self.toast.show_message(f"成功获取 {len(fc_tools)} 个FC工具", 2000)
-            else:
-                print("FC工具API返回success=False")
-                self.toast.show_message("获取FC工具列表失败", 3000)
-        except Exception as e:
-            self.toast.show_message(f"刷新FC广场失败: {str(e)}", 3000)
-            print(f"刷新FC广场失败: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def display_fc_tools(self, fc_tools):
-        """显示FC工具列表 - 卡片式布局"""
-        print(f"开始显示 {len(fc_tools)} 个FC工具")
-        try:
-            # 获取容器布局
-            container_layout = self.ui.scrollAreaWidgetContents_fc_market.layout()
-
-            # 清空现有的卡片(保留最后的spacer)
-            while container_layout.count() > 0:
-                item = container_layout.takeAt(0)
-                if item.widget():
-                    item.widget().deleteLater()
-                elif item.spacerItem():
-                    pass
-
-            # 为每个FC工具创建卡片
-            for i, tool in enumerate(fc_tools):
-                print(f"创建第 {i+1} 个FC工具卡片: {tool.get('tool_name', '')}")
-
-                # 创建卡片widget
-                card = QWidget()
-                card.setStyleSheet("""
-                    QWidget {
-                        background-color: white;
-                        border-radius: 12px;
-                        border: 2px solid #e0e0e0;
-                    }
-                    QWidget:hover {
-                        border: 2px solid #FF9800;
-                    }
-                """)
-                card.setMinimumHeight(120)
-
-                # 卡片布局
-                card_layout = QVBoxLayout(card)
-                card_layout.setContentsMargins(20, 15, 20, 15)
-                card_layout.setSpacing(10)
-
-                # 标题行
-                title_layout = QHBoxLayout()
-
-                # FC工具名称（使用不同的图标）
-                name_label = QLabel(f"🔧 {tool.get('tool_name', '')}")
-                name_label.setFont(QFont("微软雅黑", 12, QFont.Bold))
-                name_label.setStyleSheet("color: #2c3e50; border: none;")
-                title_layout.addWidget(name_label)
-
-                title_layout.addStretch()
-
-                # 下载按钮
-                download_btn = QPushButton("⬇ 下载")
-                download_btn.setMinimumSize(100, 35)
-                download_btn.setFont(QFont("微软雅黑", 10, QFont.Bold))
-                download_btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #FF9800;
-                        color: white;
-                        border-radius: 6px;
-                        padding: 6px 15px;
-                        border: none;
-                    }
-                    QPushButton:hover {
-                        background-color: #F57C00;
-                    }
-                    QPushButton:pressed {
-                        background-color: #E65100;
-                    }
-                """)
-                download_btn.clicked.connect(lambda checked, t=tool: self.download_fc_tool(t))
-                title_layout.addWidget(download_btn)
-
-                card_layout.addLayout(title_layout)
-
-                # 描述
-                desc_label = QLabel(tool.get('description', ''))
-                desc_label.setFont(QFont("微软雅黑", 10))
-                desc_label.setStyleSheet("color: #555; border: none;")
-                desc_label.setWordWrap(True)
-                card_layout.addWidget(desc_label)
-
-                # 底部信息行
-                info_layout = QHBoxLayout()
-
-                # 作者信息
-                author_label = QLabel(f"👤 作者: {tool.get('uploader_email', '')}")
-                author_label.setFont(QFont("微软雅黑", 9))
-                author_label.setStyleSheet("color: #888; border: none;")
-                info_layout.addWidget(author_label)
-
-                info_layout.addStretch()
-
-                card_layout.addLayout(info_layout)
-
-                # 添加卡片到容器
-                container_layout.addWidget(card)
-
-            # 添加底部spacer
-            spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-            container_layout.addItem(spacer)
-
-            print(f"FC工具卡片显示完成,共 {len(fc_tools)} 个")
-
-        except Exception as e:
-            print(f"显示FC工具列表失败: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def download_fc_tool(self, tool):
-        """下载FC工具到server-tools目录"""
-        try:
-            tool_id = tool.get('id')
-            filename = tool.get('file_name')
-
-            self.toast.show_message(f"正在下载 {tool.get('tool_name')}...", 2000)
-
-            url = f"http://mynewbot.com/api/download-fc-tool/{tool_id}"
-            response = requests.get(url, timeout=30)
-            response.raise_for_status()
-
-            # 保存到server-tools目录
-            save_dir = Path("server-tools")
-            save_dir.mkdir(parents=True, exist_ok=True)
-            file_path = save_dir / filename
-
-            with open(file_path, 'wb') as f:
-                f.write(response.content)
-
-            self.toast.show_message(f"✓ 下载成功: {filename}", 3000)
-            print(f"FC工具已保存到: {file_path}")
-
-        except Exception as e:
-            self.toast.show_message(f"✗ 下载FC工具失败: {str(e)}", 3000)
-            print(f"下载FC工具失败: {e}")
 
     # ==================== 提示词广场相关功能 ====================
     def init_prompt_market_table(self):
