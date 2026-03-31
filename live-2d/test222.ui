@@ -968,19 +968,6 @@ QTabWidget#tabWidget_tools QTabBar {
               <number>15</number>
              </property>
              <item>
-              <widget class="QCheckBox" name="checkBox_mcp">
-               <property name="font">
-                <font>
-                 <family>微软雅黑</family>
-                 <pointsize>10</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>开启function call</string>
-               </property>
-              </widget>
-             </item>
-             <item>
               <widget class="QCheckBox" name="checkBox_mcp_enable">
                <property name="font">
                 <font>
@@ -3076,56 +3063,6 @@ QTextBrowser img {
              <property name="currentIndex">
               <number>0</number>
              </property>
-             <widget class="QWidget" name="tab_function_call">
-              <attribute name="title">
-               <string>Function Call</string>
-              </attribute>
-              <layout class="QVBoxLayout" name="verticalLayout_function_call">
-               <property name="spacing">
-                <number>20</number>
-               </property>
-               <property name="leftMargin">
-                <number>20</number>
-               </property>
-               <property name="topMargin">
-                <number>20</number>
-               </property>
-               <property name="rightMargin">
-                <number>20</number>
-               </property>
-               <property name="bottomMargin">
-                <number>20</number>
-               </property>
-               <item>
-                <widget class="QScrollArea" name="scrollArea_function_call">
-                 <property name="widgetResizable">
-                  <bool>true</bool>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">QScrollArea {
-    border: none;
-    background-color: transparent;
-}</string>
-                 </property>
-                 <widget class="QWidget" name="scrollAreaWidgetContents_function_call">
-                  <property name="geometry">
-                   <rect>
-                    <x>0</x>
-                    <y>0</y>
-                    <width>587</width>
-                    <height>367</height>
-                   </rect>
-                  </property>
-                  <layout class="QVBoxLayout" name="verticalLayout_fc_cards">
-                   <property name="spacing">
-                    <number>15</number>
-                   </property>
-                  </layout>
-                 </widget>
-                </widget>
-               </item>
-              </layout>
-             </widget>
              <widget class="QWidget" name="tab_mcp">
               <attribute name="title">
                <string>MCP Tools</string>
@@ -3252,91 +3189,6 @@ QPushButton:pressed {
                    </rect>
                   </property>
                   <layout class="QVBoxLayout" name="verticalLayout_tool_cards">
-                   <property name="spacing">
-                    <number>15</number>
-                   </property>
-                  </layout>
-                 </widget>
-                </widget>
-               </item>
-              </layout>
-             </widget>
-             <widget class="QWidget" name="tab_fc_market">
-              <attribute name="title">
-               <string>FC广场</string>
-              </attribute>
-              <layout class="QVBoxLayout" name="verticalLayout_fc_market">
-               <property name="spacing">
-                <number>20</number>
-               </property>
-               <property name="leftMargin">
-                <number>20</number>
-               </property>
-               <property name="topMargin">
-                <number>20</number>
-               </property>
-               <property name="rightMargin">
-                <number>20</number>
-               </property>
-               <property name="bottomMargin">
-                <number>20</number>
-               </property>
-               <item>
-                <widget class="QPushButton" name="pushButton_refresh_fc_tools">
-                 <property name="minimumSize">
-                  <size>
-                   <width>0</width>
-                   <height>40</height>
-                  </size>
-                 </property>
-                 <property name="font">
-                  <font>
-                   <family>微软雅黑</family>
-                   <pointsize>11</pointsize>
-                   <weight>75</weight>
-                   <bold>true</bold>
-                  </font>
-                 </property>
-                 <property name="text">
-                  <string>🔄 刷新FC工具列表</string>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">QPushButton {
-    background-color: #FF9800;
-    color: white;
-    border-radius: 8px;
-    padding: 8px;
-}
-QPushButton:hover {
-    background-color: #F57C00;
-}
-QPushButton:pressed {
-    background-color: #E65100;
-}</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QScrollArea" name="scrollArea_fc_market">
-                 <property name="widgetResizable">
-                  <bool>true</bool>
-                 </property>
-                 <property name="styleSheet">
-                  <string notr="true">QScrollArea {
-    border: none;
-    background-color: transparent;
-}</string>
-                 </property>
-                 <widget class="QWidget" name="scrollAreaWidgetContents_fc_market">
-                  <property name="geometry">
-                   <rect>
-                    <x>0</x>
-                    <y>0</y>
-                    <width>587</width>
-                    <height>367</height>
-                   </rect>
-                  </property>
-                  <layout class="QVBoxLayout" name="verticalLayout_fc_cards">
                    <property name="spacing">
                     <number>15</number>
                    </property>

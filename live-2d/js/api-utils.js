@@ -93,14 +93,6 @@ async function handleAPIError(response) {
 function getMergedToolsList() {
     let allTools = [];
 
-    // 添加本地Function Call工具
-    if (global.localToolManager && global.localToolManager.isEnabled) {
-        const localTools = global.localToolManager.getToolsForLLM();
-        if (localTools && localTools.length > 0) {
-            allTools.push(...localTools);
-        }
-    }
-
     // 添加MCP工具
     if (global.mcpManager && global.mcpManager.isEnabled) {
         const mcpTools = global.mcpManager.getToolsForLLM();

@@ -59,20 +59,7 @@ class ToolExecutor {
                 }
             }
 
-            // 如果MCP没有处理，尝试本地工具
-            if (!toolResult && global.localToolManager && global.localToolManager.isEnabled) {
-                try {
-                    const localResult = await global.localToolManager.handleToolCalls([toolCall]);
-                    if (localResult) {
-                        toolResult = localResult;
-                        hasToolExecuted = true;
-                    }
-                } catch (error) {
-                    logToolAction('error', `本地工具 ${functionName} 执行失败: ${error.message}`);
-                }
-            }
-
-            // 如果MCP和本地都没处理，尝试插件工具
+            // 如果MCP没有处理，尝试插件工具
             if (!toolResult && global.pluginManager) {
                 try {
                     const pluginResult = await global.pluginManager.executeTool(functionName, parameters);
@@ -156,8 +143,7 @@ class ToolExecutor {
      */
     hasToolManagers() {
         const hasMCP = global.mcpManager && global.mcpManager.isEnabled;
-        const hasLocal = global.localToolManager && global.localToolManager.isEnabled;
-        return hasMCP || hasLocal;
+        return hasMCP;
     }
 
     /**
@@ -168,8 +154,6 @@ class ToolExecutor {
         const stats = {
             mcpEnabled: false,
             mcpToolCount: 0,
-            localEnabled: false,
-            localToolCount: 0,
             totalTools: 0
         };
 
@@ -179,13 +163,7 @@ class ToolExecutor {
             stats.mcpToolCount = mcpStats.tools || 0;
         }
 
-        if (global.localToolManager && global.localToolManager.isEnabled) {
-            stats.localEnabled = true;
-            const localStats = global.localToolManager.getStats();
-            stats.localToolCount = localStats.tools || 0;
-        }
-
-        stats.totalTools = stats.mcpToolCount + stats.localToolCount;
+        stats.totalTools = stats.mcpToolCount;
 
         return stats;
     }
