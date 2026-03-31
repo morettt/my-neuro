@@ -3,8 +3,8 @@
 const serviceStates = {};
 let currentLogTab = 'system-log';
 let logPollingInterval = null;
-let lastPetLogCount = 0;  // 记录上次桌宠日志数量
-let lastToolLogCount = 0; // 记录上次工具日志数量
+let lastPetLogContent = '';  // 记录上次桌宠日志内容指纹
+let lastToolLogContent = ''; // 记录上次工具日志内容指纹
 
 // 对话历史状态
 let chatHistoryState = {
@@ -271,6 +271,10 @@ function clearCurrentLog() {
     }
     const logOutput = document.getElementById(outputId);
     logOutput.innerHTML = '<div class="log-entry log-info">日志已清空</div>';
+
+    // 重置内容指纹，使下次轮询能重新渲染
+    if (currentLogTab === 'pet-log') lastPetLogContent = '';
+    if (currentLogTab === 'tool-log') lastToolLogContent = '';
 }
 
 // 拆分/合并日志窗口
@@ -812,48 +816,32 @@ function syncLogToPanel2() {
     }
 }
 
-// 加载日志（增量更新）
+// 加载日志（基于内容指纹检测变化）
 async function loadLogs(logType) {
     try {
         const response = await fetch('/api/logs/' + logType);
         if (response.ok) {
             const data = await response.json();
-            if (data.logs && data.logs.length > 0) {
-                const outputId = logType + '-log-output';
-                const logOutput = document.getElementById(outputId);
-                
-                // 检查日志数量是否变化
-                const currentCount = logType === 'pet' ? lastPetLogCount : lastToolLogCount;
-                const newCount = data.logs.length;
-                
-                // 只有当日志数量增加时才添加新日志
-                if (newCount > currentCount) {
-                    const newLogs = data.logs.slice(currentCount);  // 只取新增的日志
-                    appendNewLogs(logType, newLogs);
-                    
-                    // 更新计数
-                    if (logType === 'pet') {
-                        lastPetLogCount = newCount;
-                    } else {
-                        lastToolLogCount = newCount;
-                    }
-                }
-                // 如果日志数量减少（文件被清空），重置并重新加载
-                else if (newCount < currentCount) {
-                    logOutput.innerHTML = '';
-                    if (logType === 'pet') {
-                        lastPetLogCount = 0;
-                    } else {
-                        lastToolLogCount = 0;
-                    }
-                    // 重新加载所有日志
-                    appendNewLogs(logType, data.logs);
-                    if (logType === 'pet') {
-                        lastPetLogCount = data.logs.length;
-                    } else {
-                        lastToolLogCount = data.logs.length;
-                    }
-                }
+            const outputId = logType + '-log-output';
+            const logOutput = document.getElementById(outputId);
+            const logs = data.logs || [];
+
+            // 用拼接内容作为指纹，检测日志是否真正变化
+            const contentFingerprint = logs.join('\n');
+            const lastContent = logType === 'pet' ? lastPetLogContent : lastToolLogContent;
+
+            if (contentFingerprint === lastContent) return;
+
+            // 内容有变化，整体重新渲染
+            logOutput.innerHTML = '';
+            if (logs.length > 0) {
+                appendNewLogs(logType, logs);
+            }
+
+            if (logType === 'pet') {
+                lastPetLogContent = contentFingerprint;
+            } else {
+                lastToolLogContent = contentFingerprint;
             }
         }
     } catch (error) {
@@ -1466,9 +1454,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // 初始化文件拖拽
     initFileDragDrop();
 
-    // 重置日志计数器
-    lastPetLogCount = 0;
-    lastToolLogCount = 0;
+    // 重置日志内容指纹
+    lastPetLogContent = '';
+    lastToolLogContent = '';
 
     addLog('WebUI 控制面板已就绪', 'success', 'system');
 
