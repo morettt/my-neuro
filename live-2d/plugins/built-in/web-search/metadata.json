@@ -3,7 +3,7 @@
   "displayName": "网络搜索",
   "version": "1.0.0",
   "author": "official",
-  "description": "多关键词并发联网搜索，用下级智能体整合结果，提供 web_search 工具供 LLM 使用",
+  "description": "游览器搜索，桌宠可使用此插件获取最新的互联网内容",
   "framework_version": ">=1.0.0",
   "main": "index.js",
   "lang": "js"
