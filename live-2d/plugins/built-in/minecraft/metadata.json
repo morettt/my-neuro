@@ -7,6 +7,6 @@
   "framework_version": ">=1.0.0",
   "main": "index.js",
   "lang": "js",
-  "download_dlc": "https://github.com/morettt/my-neuro/releases/download/v4/Minecraft.zip",
+  "download_dlc": "https://github.com/morettt/my-neuro/releases/download/v5/Minecraft.zip",
   "bat": "Minecraft/run.bat"
 }
