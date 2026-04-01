@@ -125,8 +125,8 @@ def save_model_position():
         from .config_manager import load_config, save_config
 
         data = request.get_json()
-        x = data.get('x', 1.35)
-        y = data.get('y', 0.8)
+        x = data.get('x')
+        y = data.get('y')
 
         config = load_config()
         if 'ui' not in config:
@@ -153,16 +153,13 @@ def reset_model_position():
 
         config = load_config()
 
-        default_x = 1.35
-        default_y = 0.8
-
         if 'ui' not in config:
             config['ui'] = {}
         if 'model_position' not in config['ui']:
             config['ui']['model_position'] = {}
 
-        config['ui']['model_position']['x'] = default_x
-        config['ui']['model_position']['y'] = default_y
+        config['ui']['model_position']['x'] = None
+        config['ui']['model_position']['y'] = None
         config['ui']['model_position']['remember_position'] = True
 
         if save_config(config):
