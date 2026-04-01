@@ -2660,7 +2660,7 @@ class set_pyqt(QWidget):
         try:
             # 读取心情分文件
             app_path = get_app_path()
-            mood_file = os.path.join(app_path, "AI记录室", "mood_status.json")
+            mood_file = os.path.join(app_path, "..", "AI记录室", "mood_status.json")
 
             if not os.path.exists(mood_file):
                 self.ui.label_mood_value.setText("--")
@@ -6081,7 +6081,7 @@ class set_pyqt(QWidget):
         print("开始加载对话记录...")
         try:
             # 对话历史文件路径
-            history_file = os.path.join("AI记录室", "对话历史.jsonl")
+            history_file = os.path.join("..", "AI记录室", "对话历史.jsonl")
 
             if not os.path.exists(history_file):
                 empty_html = "<p style='text-align:center; color:#666; padding:50px;'>对话历史文件不存在</p>"

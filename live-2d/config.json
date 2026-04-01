@@ -90,8 +90,8 @@
     "auto_show_chat_on_text_mode": true,
     "hide_from_screenshot": true,
     "model_position": {
-      "x": 1.0659885982529538,
-      "y": 0.6273282380140232,
+      "x": 1.2433324436203854,
+      "y": 0.637400136549882,
       "remember_position": true
     }
   },
@@ -99,7 +99,7 @@
     "enable_limit": true,
     "max_messages": 18,
     "persistent_history": false,
-    "history_file": "AI记录室/对话历史.json"
+    "history_file": "../AI记录室/对话历史.json"
   },
   "vmc": {
     "enabled": false,
@@ -124,5 +124,5 @@
   "auto_close_services": {
     "enabled": false
   },
-  "version": "v6.4.6"
+  "version": "v6.4.7"
 }
