@@ -15,7 +15,7 @@ class NotesPlugin(Plugin):
 
     def _notes_path(self):
         cfg = self.context.get_plugin_config()
-        return cfg.get('file', 'AI记录室/备忘录.json')
+        return cfg.get('file', '../AI记录室/备忘录.json')
 
     def _load(self):
         path = self._notes_path()

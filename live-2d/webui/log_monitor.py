@@ -11,7 +11,7 @@ import urllib.request
 from collections import deque
 from flask import Blueprint, request, jsonify
 
-from .utils import PROJECT_ROOT, logger
+from .utils import PROJECT_ROOT, DATA_ROOT, logger
 
 # 创建日志监控蓝图
 log_bp = Blueprint('log', __name__)
@@ -275,7 +275,7 @@ def get_chat_history():
         page_size = request.args.get('page_size', 50, type=int)
         
         # 对话历史文件路径
-        history_file = PROJECT_ROOT / 'AI记录室' / '对话历史.jsonl'
+        history_file = DATA_ROOT / 'AI记录室' / '对话历史.jsonl'
         
         if not history_file.exists():
             return jsonify({'messages': [], 'has_more': False, 'has_prev': False, 'total': 0})
@@ -313,7 +313,7 @@ def get_chat_history():
 def clear_chat_history():
     """清空对话历史记录"""
     try:
-        history_file = PROJECT_ROOT / 'AI记录室' / '对话历史.jsonl'
+        history_file = DATA_ROOT / 'AI记录室' / '对话历史.jsonl'
         
         if history_file.exists():
             # 清空文件内容

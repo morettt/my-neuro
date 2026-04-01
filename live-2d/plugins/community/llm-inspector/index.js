@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 // 日志文件路径
-const LOG_FILE = path.join(__dirname, '..', '..', '..', '..', 'AI记录室', 'LLM抓包.jsonl');
+const LOG_FILE = path.join(__dirname, '..', '..', '..', '..', '..', 'AI记录室', 'LLM抓包.jsonl');
 
 // role 对应的显示前缀
 const ROLE_LABEL = {
