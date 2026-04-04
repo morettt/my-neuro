@@ -74,7 +74,7 @@ if not os.path.exists(MODEL_DIR):
 # 全局变量
 SAMPLE_RATE = 16000
 WINDOW_SIZE = 512
-VAD_THRESHOLD = 0.5
+VAD_THRESHOLD = 0.7
 
 # VAD状态
 vad_state = {
