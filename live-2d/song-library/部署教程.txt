@@ -3,7 +3,7 @@
 pip install -r requirements.txt
 
 然后运行：
-pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cu118
+pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cu128
 
 最后启动：
 python test.py
