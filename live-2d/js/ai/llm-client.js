@@ -126,7 +126,13 @@ class LLMClient {
             return message;
 
         } catch (error) {
-            logToTerminal('error', `LLM API调用失败: ${error.message}`);
+            // 多模态不支持错误由上层 llm-handler 统一处理和记录，这里不重复打 ERROR
+            const isMultimodalError = error.message.toLowerCase().includes('multimodal') ||
+                error.message.toLowerCase().includes('不支持图片') ||
+                error.message.toLowerCase().includes('模型不支持图片');
+            if (!isMultimodalError) {
+                logToTerminal('error', `LLM API调用失败: ${error.message}`);
+            }
             throw error;
         }
     }

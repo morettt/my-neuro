@@ -268,12 +268,14 @@ async def upload_audio(file: UploadFile = File(...)):
             import soundfile as sf
             # 直接从内存中读取音频数据
             audio_data, sample_rate = sf.read(io.BytesIO(audio_bytes))
+            audio_data = audio_data.astype(np.float32)  # sf.read 默认返回 float64，强制转 float32 防止 DoubleTensor 错误
             print(f"音频数据形状: {audio_data.shape}, 采样率: {sample_rate}")
         except ImportError:
             print("soundfile 不可用，尝试使用 librosa")
             try:
                 import librosa
                 audio_data, sample_rate = librosa.load(io.BytesIO(audio_bytes), sr=16000)
+                audio_data = audio_data.astype(np.float32)  # 确保类型一致
                 print(f"音频数据形状: {audio_data.shape}, 采样率: {sample_rate}")
             except ImportError:
                 return {
