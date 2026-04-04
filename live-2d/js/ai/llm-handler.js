@@ -131,7 +131,20 @@ class LLMHandler {
                 isFirstAttempt = false;
 
                 // 合并本地Function Call工具和MCP工具
-                const allTools = getMergedToolsList();
+                let allTools = getMergedToolsList();
+
+                // 模型不支持图片时，过滤掉截图相关工具，避免 AI 调用后又触发多模态错误
+                if (hasRetriedWithoutImage) {
+                    const screenshotKeywords = ['screenshot', 'take_screenshot', '截图', 'screen_capture'];
+                    const before = allTools.length;
+                    allTools = allTools.filter(tool => {
+                        const name = (tool.function?.name || tool.name || '').toLowerCase();
+                        return !screenshotKeywords.some(kw => name.includes(kw));
+                    });
+                    if (allTools.length < before) {
+                        logToTerminal('info', `📷 当前模型不支持图片，已从工具列表中移除截图工具`);
+                    }
+                }
 
                 // ===== 🔄 连续工具调用逻辑 =====
                 // 支持AI连续多轮调用工具,直到完成完整任务链
@@ -167,6 +180,11 @@ class LLMHandler {
                     }
                     // 准备发送给API的消息列表
                     let messagesForAPI = JSON.parse(JSON.stringify(voiceChat.messages));
+
+                    // 模型不支持图片时，在最后一条用户消息后追加一条说明，让 AI 用自己的语气告知用户
+                    if (hasRetriedWithoutImage && iteration === 0) {
+                        messagesForAPI.push({ role: 'user', content: '（系统提示：当前模型不支持识图，请用你自己的语气告诉用户需要换成支持多模态视觉的模型才能使用截图功能）' });
+                    }
 
                     // 如果是第一轮且需要截图,添加截图到最后一条用户消息
                     if (iteration === 0 && screenshotBase64) {
@@ -641,14 +659,18 @@ class LLMHandler {
                         throw new Error('模型不支持图片：LLM返回了空响应，可能是因为模型不支持 image_url 参数');
                     }
 
-                    // 连续空响应超过3次，主动催模型回复，避免无限循环
-                    if (consecutiveEmptyResponses >= 2) {
-                        logToTerminal('warn', '⚠️ 连续空响应超过2次，添加提示消息催促模型回复');
+                    // 第一次空响应就催模型回复（只催一次，避免堆积催促消息）
+                    if (consecutiveEmptyResponses === 1) {
+                        logToTerminal('warn', '⚠️ 空响应，添加提示消息催促模型回复');
                         voiceChat.messages.push({
                             role: 'user',
                             content: '请根据工具执行结果，回复用户。'
                         });
-                        consecutiveEmptyResponses = 0;
+                    } else {
+                        // 连续多次空响应，模型无法恢复，直接退出
+                        logToTerminal('error', `❌ 连续 ${consecutiveEmptyResponses} 次空响应，放弃等待`);
+                        finalResponseContent = '抱歉，我好像卡住了，请重新问我吧~';
+                        break;
                     }
 
                     iteration++;
@@ -747,6 +769,8 @@ class LLMHandler {
                         errorMsg.includes("模型不支持图片") ||
                         errorMsg.includes("image param") ||
                         errorMsg.includes("image_url") ||
+                        errorMsg.includes("multimodal") ||
+                        errorMsg.includes("does not support multimodal") ||
                         (errorMsg.includes("image") && errorMsg.includes("not support")) ||
                         (errorMsg.includes("image") && errorMsg.includes("unsupported")) ||
                         (errorMsg.includes("image") && errorMsg.includes("invalid"))
@@ -755,7 +779,7 @@ class LLMHandler {
                     if (isImageUnsupportedError) {
 
                         console.log('⚠️ 检测到模型不支持视觉，自动移除图片并重试');
-                        logToTerminal('warn', '⚠️ 模型不支持视觉功能，自动切换为纯文本模式重试');
+                        logToTerminal('info', '📷 截图已触发，但当前模型不支持图片，已自动过滤图片内容，以纯文本模式重试');
 
                         // 标记已经重试过，避免无限循环
                         hasRetriedWithoutImage = true;
