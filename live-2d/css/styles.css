@@ -67,7 +67,6 @@ body {
     z-index: 1001;
     display: none;
     pointer-events: auto;
-    display: flex;
     flex-direction: column;
     align-items: center;
     gap: 12px;
