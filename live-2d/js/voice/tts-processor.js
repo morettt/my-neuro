@@ -3,6 +3,7 @@ const { eventBus } = require('../core/event-bus.js');
 const { Events } = require('../core/events.js');
 const { TTSPlaybackEngine } = require('./tts-playback-engine.js');
 const { TTSRequestHandler } = require('./tts-request-handler.js');
+const { VolcengineStreamingSession } = require('./volcengine-streaming.js');
 
 class EnhancedTextProcessor {
     constructor(ttsUrl, onAudioDataCallback, onStartCallback, onEndCallback, config = null) {
@@ -11,6 +12,15 @@ class EnhancedTextProcessor {
         // 初始化两个大模块
         this.playbackEngine = new TTSPlaybackEngine(config, onAudioDataCallback, onStartCallback, onEndCallback);
         this.requestHandler = new TTSRequestHandler(config, ttsUrl);
+
+        // 字节流式session所需回调（直接存下来，不经过playbackEngine）
+        this._onMouthValue    = onAudioDataCallback;
+        this._onStartCallback = onStartCallback;
+        this._onEndCallback   = onEndCallback;
+
+        // 字节TTS流式session
+        this.volcSession = null;
+        this._volcChain  = Promise.resolve();  // 串行化所有 volcSession 操作
 
         // 队列
         this.textSegmentQueue = [];
@@ -43,11 +53,13 @@ class EnhancedTextProcessor {
     // 设置情绪映射器
     setEmotionMapper(emotionMapper) {
         this.playbackEngine.setEmotionMapper(emotionMapper);
+        this._emotionMapper = emotionMapper;
     }
 
-        // 表情映射器
+    // 表情映射器
     setExpressionMapper(expressionMapper) {
         this.playbackEngine.setExpressionMapper(expressionMapper);
+        this._expressionMapper = expressionMapper;
     }
 
 
@@ -159,6 +171,9 @@ class EnhancedTextProcessor {
 
     // 检查是否全部完成
     isAllComplete() {
+        if (this.requestHandler.volcTtsEnabled) {
+            return !this.volcSession || !this.volcSession.isPlaying();
+        }
         return this.audioDataQueue.length === 0 &&
                this.textSegmentQueue.length === 0 &&
                !this.isProcessing &&
@@ -235,7 +250,33 @@ class EnhancedTextProcessor {
     addStreamingText(text) {
         if (this.shouldStop) return;
         this.llmFullResponse += text;
-        this.requestHandler.segmentStreamingText(text, this.textSegmentQueue);
+
+        if (this.requestHandler.volcTtsEnabled) {
+            // 字节流式路径：用 Promise 链保证 open → sendToken 严格串行
+            if (!this.volcSession) {
+                this.volcSession = new VolcengineStreamingSession(this.config, {
+                    onMouthValue:     this._onMouthValue,
+                    onStartCallback:  this._onStartCallback,
+                    onEndCallback:    this._onEndCallback,
+                    onComplete:       () => this.handleAllComplete(),
+                    emotionMapper:    this._emotionMapper,
+                    expressionMapper: this._expressionMapper,
+                });
+                // 链头：先建立连接
+                this._volcChain = this.volcSession.open().catch((err) => {
+                    console.error('字节TTS连接失败:', err);
+                    this.volcSession = null;
+                });
+            }
+            // 每个 token 都追加在链尾，保证顺序
+            const session = this.volcSession;
+            this._volcChain = this._volcChain.then(() => {
+                if (session && !session.stopped) return session.sendToken(text);
+            }).catch((err) => console.error('字节TTS sendToken失败:', err));
+        } else {
+            // 原有分段路径
+            this.requestHandler.segmentStreamingText(text, this.textSegmentQueue);
+        }
     }
 
     // 完成流式文本
@@ -248,7 +289,14 @@ class EnhancedTextProcessor {
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        this.requestHandler.finalizeSegmentation(this.textSegmentQueue);
+        if (this.requestHandler.volcTtsEnabled) {
+            const session = this.volcSession;
+            this._volcChain = this._volcChain.then(() => {
+                if (session && !session.stopped) return session.finalize();
+            }).catch((err) => console.error('字节TTS finalize失败:', err));
+        } else {
+            this.requestHandler.finalizeSegmentation(this.textSegmentQueue);
+        }
     }
 
     // 处理完整文本
@@ -281,9 +329,14 @@ class EnhancedTextProcessor {
         this.isProcessing = false;
         this.shouldStop = false;
         this.ttsUnavailable = false;
-        // 递增中止代数，确保 reset 后还在飞行的旧请求返回时被正确丢弃
-        // 防止 abortAllRequests() abort 的请求因代数未变而错误设置 ttsUnavailable
         this.abortGeneration++;
+
+        // 字节流式session
+        if (this.volcSession) {
+            this.volcSession.stop();
+            this.volcSession = null;
+        }
+        this._volcChain = Promise.resolve();
 
         // 🔥 取消之前的完成Promise
         if (this.completionResolve) {
@@ -300,7 +353,6 @@ class EnhancedTextProcessor {
     interrupt() {
         console.log('打断TTS播放...');
 
-        // 🔥 关键修改：发射中断事件（这会自动触发 appState 的中断标志）
         eventBus.emit(Events.TTS_INTERRUPTED);
 
         this.shouldStop = true;
@@ -308,6 +360,12 @@ class EnhancedTextProcessor {
         this.abortGeneration++;
         this.requestHandler.abortAllRequests();
         this.playbackEngine.stop();
+
+        // 字节流式session
+        if (this.volcSession) {
+            this.volcSession.stop();
+            this.volcSession = null;
+        }
 
         this.textSegmentQueue = [];
         this.audioDataQueue = [];
@@ -343,6 +401,9 @@ class EnhancedTextProcessor {
 
     // 判断是否正在播放
     isPlaying() {
+        if (this.requestHandler.volcTtsEnabled) {
+            return this.volcSession ? this.volcSession.isPlaying() : false;
+        }
         return this.playbackEngine.getPlayingState() ||
                this.isProcessing ||
                this.textSegmentQueue.length > 0 ||

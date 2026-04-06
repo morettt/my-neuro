@@ -65,6 +65,10 @@ class TTSRequestHandler {
         // 请求管理
         this.activeRequests = new Set();
         this.requestIdCounter = 0;
+
+        // 字节TTS长连接（连接复用）
+        this.volcWs = null;
+        this.volcWsReady = null;
     }
 
     // 翻译文本
@@ -229,18 +233,17 @@ class TTSRequestHandler {
         }
     }
 
-    // 字节跳动TTS WebSocket合成
-    volcengineSynthesize(text, abortSignal) {
-        const {
-            EventType, MsgType,
-            receiveMessage, waitForEvent,
-            startConnection, finishConnection,
-            startSession, finishSession, taskRequest,
-        } = require('./volcengine-protocols.js');
+    // 确保字节TTS长连接可用
+    async _ensureVolcConnection() {
+        const { EventType, MsgType, startConnection, waitForEvent } = require('./volcengine-protocols.js');
 
-        return new Promise((resolve, reject) => {
-            if (abortSignal?.aborted) return resolve(null);
+        // 连接已就绪
+        if (this.volcWs && this.volcWs.readyState === WebSocket.OPEN && this.volcWsReady) {
+            await this.volcWsReady;
+            return;
+        }
 
+        this.volcWsReady = new Promise((resolve, reject) => {
             const ws = new WebSocket(this.volcEndpoint, {
                 headers: {
                     'X-Api-App-Key': this.volcAppid,
@@ -251,77 +254,122 @@ class TTSRequestHandler {
                 skipUTF8Validation: true,
             });
 
-            let settled = false;
-            const done = (val) => { if (!settled) { settled = true; resolve(val); } };
-            const fail = (err) => { if (!settled) { settled = true; reject(err); } };
+            ws.on('error', (err) => reject(err));
 
-            const onAbort = () => { ws.close(); done(null); };
-            if (abortSignal) abortSignal.addEventListener('abort', onAbort, { once: true });
-            const cleanup = () => abortSignal?.removeEventListener('abort', onAbort);
-
-            ws.on('error', (err) => { cleanup(); fail(err); });
+            ws.on('close', () => {
+                if (this.volcWs === ws) {
+                    this.volcWs = null;
+                    this.volcWsReady = null;
+                }
+            });
 
             ws.on('open', async () => {
                 try {
                     await startConnection(ws);
                     await waitForEvent(ws, MsgType.FullServerResponse, EventType.ConnectionStarted);
-
-                    const sessionId = randomUUID();
-                    const baseReq = {
-                        user: { uid: randomUUID() },
-                        namespace: 'BidirectionalTTS',
-                        req_params: {
-                            speaker: this.volcVoiceType,
-                            audio_params: { format: 'wav', sample_rate: 24000 },
-                        },
-                    };
-
-                    await startSession(
-                        ws,
-                        Buffer.from(JSON.stringify({ ...baseReq, event: EventType.StartSession })),
-                        sessionId,
-                    );
-                    await waitForEvent(ws, MsgType.FullServerResponse, EventType.SessionStarted);
-
-                    // 逐字发送文本
-                    for (const char of text) {
-                        if (abortSignal?.aborted) { ws.close(); cleanup(); return done(null); }
-                        await taskRequest(
-                            ws,
-                            Buffer.from(JSON.stringify({
-                                ...baseReq,
-                                event: EventType.TaskRequest,
-                                req_params: { ...baseReq.req_params, text: char },
-                            })),
-                            sessionId,
-                        );
-                    }
-                    await finishSession(ws, sessionId);
-
-                    // 收集所有音频块
-                    const chunks = [];
-                    while (true) {
-                        const msg = await receiveMessage(ws);
-                        if (msg.type === MsgType.AudioOnlyServer) {
-                            chunks.push(msg.payload);
-                        } else if (msg.type === MsgType.FullServerResponse && msg.event === EventType.SessionFinished) {
-                            break;
-                        }
-                    }
-
-                    await finishConnection(ws);
-                    ws.close();
-                    cleanup();
-
-                    if (chunks.length === 0) return done(null);
-                    done(Buffer.concat(chunks));
+                    this.volcWs = ws;
+                    resolve();
                 } catch (err) {
-                    cleanup();
                     ws.close();
-                    fail(err);
+                    reject(err);
                 }
             });
         });
+
+        await this.volcWsReady;
+    }
+
+    // 关闭字节TTS长连接
+    _closeVolcConnection() {
+        if (this.volcWs) {
+            try { this.volcWs.close(); } catch (_) {}
+            this.volcWs = null;
+            this.volcWsReady = null;
+        }
+    }
+
+    // 字节跳动TTS WebSocket合成（连接复用，每段开新 session）
+    async volcengineSynthesize(text, abortSignal) {
+        const {
+            EventType, MsgType,
+            receiveMessage, waitForEvent,
+            startSession, finishSession, taskRequest,
+        } = require('./volcengine-protocols.js');
+
+        if (abortSignal?.aborted) return null;
+
+        try {
+            await this._ensureVolcConnection();
+        } catch (err) {
+            logToTerminal('error', `字节TTS连接失败: ${err.message}`);
+            return null;
+        }
+
+        if (abortSignal?.aborted) return null;
+
+        const ws = this.volcWs;
+
+        // 打断时关闭连接，解除所有 await receiveMessage 的阻塞
+        const onAbort = () => this._closeVolcConnection();
+        abortSignal?.addEventListener('abort', onAbort, { once: true });
+
+        try {
+            const sessionId = randomUUID();
+            const baseReq = {
+                user: { uid: randomUUID() },
+                namespace: 'BidirectionalTTS',
+                req_params: {
+                    speaker: this.volcVoiceType,
+                    audio_params: { format: 'wav', sample_rate: 24000 },
+                },
+            };
+
+            await startSession(
+                ws,
+                Buffer.from(JSON.stringify({ ...baseReq, event: EventType.StartSession })),
+                sessionId,
+            );
+            await waitForEvent(ws, MsgType.FullServerResponse, EventType.SessionStarted);
+
+            // 逐字发送文本
+            for (const char of text) {
+                if (abortSignal?.aborted) return null;
+                await taskRequest(
+                    ws,
+                    Buffer.from(JSON.stringify({
+                        ...baseReq,
+                        event: EventType.TaskRequest,
+                        req_params: { ...baseReq.req_params, text: char },
+                    })),
+                    sessionId,
+                );
+            }
+            await finishSession(ws, sessionId);
+
+            // 收集所有音频块
+            const chunks = [];
+            while (true) {
+                const msg = await receiveMessage(ws);
+                if (msg.type === MsgType.AudioOnlyServer) {
+                    chunks.push(msg.payload);
+                } else if (msg.type === MsgType.FullServerResponse && msg.event === EventType.SessionFinished) {
+                    break;
+                }
+            }
+
+            // 连接继续保留，供下一个句子复用
+            return chunks.length > 0 ? Buffer.concat(chunks) : null;
+
+        } catch (err) {
+            if (!abortSignal?.aborted) {
+                logToTerminal('error', `字节TTS合成失败: ${err.message}`);
+            }
+            // 连接可能已损坏，清除让下次重连
+            this._closeVolcConnection();
+            return null;
+        } finally {
+            abortSignal?.removeEventListener('abort', onAbort);
+        }
     }
 
     // 阿里云TTS WebSocket合成
@@ -422,6 +470,7 @@ class TTSRequestHandler {
     abortAllRequests() {
         this.activeRequests.forEach(req => req.controller.abort());
         this.activeRequests.clear();
+        this._closeVolcConnection();
     }
 
     // 重置状态
