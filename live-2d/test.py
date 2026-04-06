@@ -2800,6 +2800,7 @@ class set_pyqt(QWidget):
         self.ui.pushButton_select_model.clicked.connect(self.select_model_file)
         self.ui.pushButton_select_audio.clicked.connect(self.select_audio_file)
         self.ui.pushButton_tutorial.clicked.connect(self.show_tutorial)
+        self.ui.pushButton_volcengine_tts_tutorial.clicked.connect(lambda: webbrowser.open('http://mynewbot.com/tutorials/ByteDance-TTS'))
 
         self.ui.pushButton_back_to_home.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(0))
 
@@ -3373,6 +3374,13 @@ class set_pyqt(QWidget):
         self.ui.lineEdit_aliyun_tts_api_key.setText(aliyun_tts.get('api_key', ''))
         self.ui.lineEdit_aliyun_tts_model.setText(aliyun_tts.get('model', 'cosyvoice-v3-flash'))
         self.ui.lineEdit_aliyun_tts_voice.setText(aliyun_tts.get('voice', ''))
+
+        # 字节TTS配置
+        volcengine_tts = cloud_config.get('volcengine_tts', {})
+        self.ui.checkBox_volcengine_tts_enabled.setChecked(volcengine_tts.get('enabled', False))
+        self.ui.lineEdit_volcengine_tts_appid.setText(volcengine_tts.get('appid', ''))
+        self.ui.lineEdit_volcengine_tts_access_token.setText(volcengine_tts.get('access_token', ''))
+        self.ui.lineEdit_volcengine_tts_voice_type.setText(volcengine_tts.get('voice_type', 'saturn_zh_female_keainvsheng_tob'))
 
         # 百度流式ASR配置
         baidu_asr = cloud_config.get('baidu_asr', {})
@@ -4569,6 +4577,14 @@ class set_pyqt(QWidget):
         current_config['cloud']['aliyun_tts']['api_key'] = self.ui.lineEdit_aliyun_tts_api_key.text()
         current_config['cloud']['aliyun_tts']['model'] = self.ui.lineEdit_aliyun_tts_model.text() or 'cosyvoice-v3-flash'
         current_config['cloud']['aliyun_tts']['voice'] = self.ui.lineEdit_aliyun_tts_voice.text()
+
+        # 保存字节TTS配置
+        if 'volcengine_tts' not in current_config['cloud']:
+            current_config['cloud']['volcengine_tts'] = {}
+        current_config['cloud']['volcengine_tts']['enabled'] = self.ui.checkBox_volcengine_tts_enabled.isChecked()
+        current_config['cloud']['volcengine_tts']['appid'] = self.ui.lineEdit_volcengine_tts_appid.text()
+        current_config['cloud']['volcengine_tts']['access_token'] = self.ui.lineEdit_volcengine_tts_access_token.text()
+        current_config['cloud']['volcengine_tts']['voice_type'] = self.ui.lineEdit_volcengine_tts_voice_type.text() or 'saturn_zh_female_keainvsheng_tob'
 
         # 保存百度流式ASR配置
         if 'baidu_asr' not in current_config['cloud']:
