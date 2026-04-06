@@ -172,7 +172,9 @@ class EnhancedTextProcessor {
     // 检查是否全部完成
     isAllComplete() {
         if (this.requestHandler.volcTtsEnabled) {
-            return !this.volcSession || !this.volcSession.isPlaying();
+            // 流式路径：volcSession 存在时以它为准
+            if (this.volcSession) return !this.volcSession.isPlaying();
+            // 非流式路径（如 processTextToSpeech）：走普通队列判断
         }
         return this.audioDataQueue.length === 0 &&
                this.textSegmentQueue.length === 0 &&
@@ -402,7 +404,8 @@ class EnhancedTextProcessor {
     // 判断是否正在播放
     isPlaying() {
         if (this.requestHandler.volcTtsEnabled) {
-            return this.volcSession ? this.volcSession.isPlaying() : false;
+            if (this.volcSession) return this.volcSession.isPlaying();
+            // 非流式路径走普通判断
         }
         return this.playbackEngine.getPlayingState() ||
                this.isProcessing ||
