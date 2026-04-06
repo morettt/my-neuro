@@ -76,5 +76,11 @@
     "desc": "网易云音乐集成：搜索、播放、歌单管理、每日推荐、智能推荐（私人漫游/心动模式/雷达歌单）、偏好分析、随机播放；完整 Live2D 联动（嘴型同步、歌词气泡、麦克风动作）。仓库内已打包 ncm-cli 依赖，用户运行 setup.bat 配置开放平台 API Key 并扫码登录即可开箱即用。",
     "author": "LikeNightRabbit",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-rebirth-feiniu-music"
+  },
+  "bilibili-tools": {
+    "display_name": "bilibili-tools",
+    "desc": "B 站集成插件：扫码登录；关键词搜视频、分区排行榜；获取视频综合信息（标题/简介/评论/弹幕，字幕经 bilibili-api-python 获取，无字幕时降级 Whisper 转录，可选 OpenAI 兼容 API 做内容总结）；发评论与弹幕；点赞、投币、收藏、一键三连；含 WBI/设备标识等反风控处理。仓库提供 node_modules.zip 解压即用，亦可 npm ci；需自备 bili_config 与 Python/Whisper/总结 API 等按 README 配置。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-bilibili-mcp"
   }
 }
