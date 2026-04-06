@@ -220,16 +220,14 @@ class VolcengineStreamingSession {
             while (!this.stopped) {
                 const msg = await receiveMessage(this.ws);
                 if (msg.type === MsgType.AudioOnlyServer) {
-                    logToTerminal('[PCM] nextStart=' + this.nextStartTime.toFixed(3) + ' payloadBytes=' + msg.payload.length);
                     this._schedulePCM(msg.payload);
                 } else if (msg.type === MsgType.FullServerResponse && msg.event === 350) {
-                    logToTerminal('[350] nextStart=' + this.nextStartTime.toFixed(3));
+                    // TaskStarted，忽略
                 } else if (msg.type === MsgType.FullServerResponse && msg.event === 351) {
                     // TaskFinished：用上一段的结束时刻作为本段起点
                     try {
                         const data = JSON.parse(msg.payload.toString('utf8'));
                         const text = data.text || data.TEXT || '';
-                        logToTerminal('[351] text="' + text + '" nextStart=' + this.nextStartTime.toFixed(3) + ' audioStartedAt=' + this._audioStartedAt.toFixed(3));
                         if (text) {
                             const segStart = this._lastSegmentEnd !== null
                                 ? this._lastSegmentEnd
