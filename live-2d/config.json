@@ -46,7 +46,7 @@
     "provider": "siliconflow",
     "api_key": "",
     "volcengine_tts": {
-      "enabled": true,
+      "enabled": false,
       "appid": "9282626043",
       "access_token": "DlShlNhCUQd19bW3S-cAsD4Yc0WpLUpj",
       "voice_type": "saturn_zh_female_tiaopigongzhu_tob"
