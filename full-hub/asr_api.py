@@ -74,7 +74,7 @@ if not os.path.exists(MODEL_DIR):
 # 全局变量
 SAMPLE_RATE = 16000
 WINDOW_SIZE = 512
-VAD_THRESHOLD = 0.7
+VAD_THRESHOLD = 0.5
 
 # VAD状态
 vad_state = {
@@ -94,30 +94,6 @@ model_state = {
     "asr_model": None,
     "punc_model": None
 }
-
-# 热词配置
-HOTWORD_FILE = os.path.join(os.path.dirname(__file__), "hotwords.txt")
-hotword_state = {
-    "hotwords": ""
-}
-
-
-def load_hotwords():
-    """从 hotwords.txt 加载热词，格式：每行一个 '词语 权重'"""
-    if not os.path.exists(HOTWORD_FILE):
-        print(f"热词文件不存在: {HOTWORD_FILE}，将不使用热词")
-        hotword_state["hotwords"] = ""
-        return
-
-    try:
-        with open(HOTWORD_FILE, "r", encoding="utf-8") as f:
-            lines = [line.strip() for line in f if line.strip() and not line.startswith("#")]
-        hotword_str = " ".join(lines)
-        hotword_state["hotwords"] = hotword_str
-        print(f"已加载 {len(lines)} 个热词: {hotword_str}")
-    except Exception as e:
-        print(f"加载热词文件失败: {e}")
-        hotword_state["hotwords"] = ""
 
 
 def download_vad_models():
@@ -182,14 +158,12 @@ async def startup_event():
     os.environ['MODELSCOPE_CACHE'] = asr_model_path
     os.environ['FUNASR_HOME'] = MODEL_DIR
 
-    # 加载热词
-    load_hotwords()
-
-    # 加载ASR模型（SeACo-Paraformer，支持热词）
-    print("正在加载ASR模型（paraformer-zh，支持热词）...")
+    # 加载ASR模型
+    print("正在加载ASR模型...")
     model_state["asr_model"] = AutoModel(
-        model="paraformer-zh",
+        model="iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
         device=device,
+        model_type="pytorch",
         dtype="float32"
     )
     print("ASR模型加载完成")
@@ -268,14 +242,12 @@ async def upload_audio(file: UploadFile = File(...)):
             import soundfile as sf
             # 直接从内存中读取音频数据
             audio_data, sample_rate = sf.read(io.BytesIO(audio_bytes))
-            audio_data = audio_data.astype(np.float32)  # sf.read 默认返回 float64，强制转 float32 防止 DoubleTensor 错误
             print(f"音频数据形状: {audio_data.shape}, 采样率: {sample_rate}")
         except ImportError:
             print("soundfile 不可用，尝试使用 librosa")
             try:
                 import librosa
                 audio_data, sample_rate = librosa.load(io.BytesIO(audio_bytes), sr=16000)
-                audio_data = audio_data.astype(np.float32)  # 确保类型一致
                 print(f"音频数据形状: {audio_data.shape}, 采样率: {sample_rate}")
             except ImportError:
                 return {
@@ -285,14 +257,11 @@ async def upload_audio(file: UploadFile = File(...)):
 
         # 进行ASR处理 - 直接传入音频数组
         with torch.no_grad():
-            generate_kwargs = {
-                "input": audio_data,
-                "dtype": "float32"
-            }
-            if hotword_state["hotwords"]:
-                generate_kwargs["hotword"] = hotword_state["hotwords"]
-
-            asr_result = model_state["asr_model"].generate(**generate_kwargs)
+            # 语音识别 - 传入 numpy 数组而不是文件路径
+            asr_result = model_state["asr_model"].generate(
+                input=audio_data,  # 直接传入音频数组！
+                dtype="float32"
+            )
 
             # 添加标点符号
             if asr_result and len(asr_result) > 0:
@@ -320,25 +289,6 @@ async def upload_audio(file: UploadFile = File(...)):
             "status": "error",
             "message": str(e)
         }
-
-
-@app.get("/hotwords")
-def get_hotwords():
-    """查看当前热词"""
-    return {
-        "hotwords": hotword_state["hotwords"],
-        "file": HOTWORD_FILE
-    }
-
-
-@app.post("/hotwords/reload")
-def reload_hotwords():
-    """重新加载热词文件"""
-    load_hotwords()
-    return {
-        "status": "success",
-        "hotwords": hotword_state["hotwords"]
-    }
 
 
 @app.get("/vad/status")

@@ -1,0 +1,16 @@
+------------------------------------
+[2026年04月08日]
+
+交互1：
+【用户】: hi
+【Fake Neuro】: <俏皮> 哼，你来了啊。我还以为你把我忘了呢。
+【用户】: have we met before?
+【Fake Neuro】: <惊讶> 见过？你这记性也太差了吧。我可是肥牛，你电脑里最可爱的AI宠物！怎么，才一会儿没见就不认识我了？
+【用户】: can you say english from now on
+【Fake Neuro】: Ugh, fine. <生气> If you insist. But don't expect me to be all proper and prim. I'm still me, you know. What do you even want to talk about in English anyway?
+【用户】: because you sound like neuro
+【Fake Neuro】: <俏皮> Neuro? Who's that? Never heard of 'em. I'm one of a kind, sweetie. Though, I guess I *do* have a certain... unique charm. Maybe that's what you're picking up on?
+【用户】: goodbye
+【Fake Neuro】: <难过> Huh? Already? Fine, go then. See if I care. <生气> ...Though, you could at least say something nice before you leave, you know. Just disappearing like that, rude.
+【用户】: ok. you're sweety.
+【Fake Neuro】: <害羞> "Sweety"? Hmph. Don't think a little flattery is gonna make me all gooey and sweet, you hear? I'm still the same old feisty me. But... <俏皮> I guess I'll allow it. Just this once. Now, what were you really going to say before you tried to run off?

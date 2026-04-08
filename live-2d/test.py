@@ -936,6 +936,25 @@ class set_pyqt(QWidget):
         except Exception as e:
             self.toast.show_message(f"选择音频文件失败：{str(e)}", 3000)
 
+    def select_multiple_audio_files(self):  
+        """选择多个音频文件"""  
+        try:  
+            from PyQt5.QtWidgets import QFileDialog  
+            file_paths, _ = QFileDialog.getOpenFileNames(  
+                self,  
+                "选择参考音频文件",  
+                "",  
+                "音频文件 (*.wav);;所有文件 (*)"  
+            )  
+            
+            if file_paths:  
+                self.selected_audio_paths = file_paths  
+                self.ui.label_audio_status.setText(f"已选择：{len(file_paths)} 个副参考音频文件")
+                self.toast.show_message(f"副参考音频文件已保存到Voice_Model_Factory", 2000)
+        
+        except Exception as e:
+            self.toast.show_message(f"选择多个音频文件失败：{str(e)}", 3000)
+
     def generate_voice_clone_bat(self):
         """使用上传文件生成声音克隆的bat文件"""
         try:
