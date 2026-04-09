@@ -108,6 +108,7 @@
 
 QQ群:感谢 菊花茶洋参 帮忙制作肥牛app的封面
 
+## 赞助 可前往爱发电赞助项目：[my neuro爱发电](https://ifdian.net/a/xxxiu)
 
 感谢以下用户的资金赞助：
 - [jonnytri53](https://github.com/jonnytri53) - 感谢您的支持！ 为本项目捐赠的50美元
