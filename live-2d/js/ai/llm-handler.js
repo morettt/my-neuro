@@ -226,8 +226,12 @@ class LLMHandler {
                     if (iteration === 0 && useVisionModelForFirstRound) {
                         console.log('🎨 使用视觉模型进行图像理解...');
                         logToTerminal('info', '🎨 调用视觉模型API进行图像分析');
-                        // 视觉模型不传工具列表，纯粹用于图像理解
-                        result = await visionClient.chatCompletion(messagesForAPI, null);
+                        // 视觉模型不传工具列表，纯粹用于图像理解，走流式降低延迟
+                        _streamBuf = '';
+                        ttsProcessor.reset();
+                        result = await visionClient.chatCompletion(messagesForAPI, null, true, (text) => {
+                            ttsProcessor.addStreamingText(text);
+                        });
                     } else {
                         // 🔥 如果没有启用独立视觉模型，但有截图，说明主模型需要支持视觉
                         // 只有在没有截图的情况下才清理图片
