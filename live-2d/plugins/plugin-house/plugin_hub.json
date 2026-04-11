@@ -82,5 +82,11 @@
     "desc": "B 站集成插件：扫码登录；关键词搜视频、分区排行榜；获取视频综合信息（标题/简介/评论/弹幕，字幕经 bilibili-api-python 获取，无字幕时降级 Whisper 转录，可选 OpenAI 兼容 API 做内容总结）；发评论与弹幕；点赞、投币、收藏、一键三连；含 WBI/设备标识等反风控处理。仓库提供 node_modules.zip 解压即用，亦可 npm ci；需自备 bili_config 与 Python/Whisper/总结 API 等按 README 配置。",
     "author": "爱熬夜的人形兔",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-bilibili-mcp"
+  },
+  "multi-search": {
+    "display_name": "multi-search",
+    "desc": "Live2D 内置风格插件：整合 Tavily 与 SerpApi（Google/Bing/DuckDuckGo/Google Scholar），搜索结果经 OpenAI 兼容 Chat Completions（默认示例 SiliconFlow）提炼摘要。提供 vsearch 语义并发深度搜索、web_search 快速搜索（Tavily 失败回退 SerpApi）、以及各单引擎搜索工具。仓库含 node_modules 与 plugin_config.example.json；需自备 Tavily、SerpApi 与提炼 LLM 的 API Key，按 README 填写 plugin_config.json。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/live2d-multi-search-plugin"
   }
 }
