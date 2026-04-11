@@ -1,7 +1,10 @@
 {
   "plugins": [
     "built-in/code-executor",
-    "built-in/screenshot",
+    "built-in/context-compressor",
+    "built-in/memos",
+    "built-in/mood-chat",
+    "built-in/note",
     "built-in/web-search"
   ]
 }

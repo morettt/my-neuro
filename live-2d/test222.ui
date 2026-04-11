@@ -2061,6 +2061,58 @@ QPushButton:pressed {
                    </property>
                   </widget>
                  </item>
+                 <item row="1" column="2">
+                  <widget class="QPushButton" name="pushButton_select_gpt_model">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="minimumSize">
+                    <size>
+                     <width>0</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="font">
+                    <font>
+                     <family>微软雅黑</family>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="text">
+                    <string>选择GPT模型文件(.ckpt)
+或拖拽文件到此处</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <!-- <item row="1" column="3">
+                  <widget class="QPushButton" name="pushButton_select_multiple_audios">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="minimumSize">
+                    <size>
+                     <width>0</width>
+                     <height>0</height>
+                    </size>
+                   </property>
+                   <property name="font">
+                    <font>
+                     <family>微软雅黑</family>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="text">
+                    <string>选择辅助音频文件
+或拖拽文件到此处</string>
+                   </property>
+                  </widget>
+                 </item> -->
                  <item row="2" column="0">
                   <widget class="QLabel" name="label_model_status">
                    <property name="font">
@@ -2093,6 +2145,38 @@ QPushButton:pressed {
                    </property>
                   </widget>
                  </item>
+                 <item row="2" column="2">
+                  <widget class="QLabel" name="label_gpt_model_status">
+                   <property name="font">
+                    <font>
+                     <family>微软雅黑</family>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="text">
+                    <string>（可选）上传GPT模型文件 (.ckpt)</string>
+                   </property>
+                   <property name="alignment">
+                    <set>Qt::AlignCenter</set>
+                   </property>
+                  </widget>
+                 </item>
+                 <!-- <item row="2" column="3">
+                  <widget class="QLabel" name="label_ref_audios_status">
+                   <property name="font">
+                    <font>
+                     <family>微软雅黑</family>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="text">
+                    <string>未上传辅助参考音频 (.wav)</string>
+                   </property>
+                   <property name="alignment">
+                    <set>Qt::AlignCenter</set>
+                   </property>
+                  </widget>
+                 </item> -->
                 </layout>
                </item>
                <item>

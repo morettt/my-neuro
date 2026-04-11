@@ -541,6 +541,8 @@ class set_pyqt(QWidget):
         self.voice_clone_process = None  # 新增：声音克隆进程
         self.selected_model_path = None  # 选择的模型文件路径
         self.selected_audio_path = None  # 选择的音频文件路径
+        self.selected_gpt_model_path = None  # 选择的gpt模型文件路径
+        self.selected_refaudio_paths = []  # 选择的参考音频文件路径列表
         self.config_path = 'config.json'
         self.config = self.load_config()
 
@@ -903,6 +905,38 @@ class set_pyqt(QWidget):
 
         except Exception as e:
             self.toast.show_message(f"选择模型文件失败：{str(e)}", 3000)
+    
+    def select_gpt_model_file(self):
+        """选择GPT模型文件"""
+        try:
+            from PyQt5.QtWidgets import QFileDialog
+            file_path, _ = QFileDialog.getOpenFileName(
+                self,
+                "选择GPT模型文件",
+                "",
+                "PyTorch模型文件 (*.ckpt);;所有文件 (*)"
+            )
+
+            if file_path:
+                # 确保Voice_Model_Factory文件夹存在
+                app_path = get_app_path()
+                voice_model_dir = os.path.join(app_path, "Voice_Model_Factory")
+                if not os.path.exists(voice_model_dir):
+                    os.makedirs(voice_model_dir)
+
+                # 获取文件名并构建目标路径
+                filename = os.path.basename(file_path)
+                dest_path = os.path.join(voice_model_dir, filename)
+
+                # 复制文件到Voice_Model_Factory文件夹
+                shutil.copy2(file_path, dest_path)
+
+                self.selected_gpt_model_path = dest_path
+                self.ui.label_gpt_model_status.setText(f"已上传：{filename}")
+                self.toast.show_message(f"模型文件已保存到Voice_Model_Factory", 2000)
+
+        except Exception as e:
+            self.toast.show_message(f"选择模型文件失败：{str(e)}", 3000)
 
     def select_audio_file(self):
         """选择音频文件"""
@@ -947,10 +981,25 @@ class set_pyqt(QWidget):
                 "音频文件 (*.wav);;所有文件 (*)"  
             )  
             
-            if file_paths:  
-                self.selected_audio_paths = file_paths  
-                self.ui.label_audio_status.setText(f"已选择：{len(file_paths)} 个副参考音频文件")
-                self.toast.show_message(f"副参考音频文件已保存到Voice_Model_Factory", 2000)
+            self.selected_refaudio_paths = []  # 存储选择的参考音频文件路径列表
+            if file_paths:
+                for file_path in file_paths:
+                    # 确保Voice_Model_Factory文件夹存在
+                    app_path = get_app_path()
+                    voice_model_dir = os.path.join(app_path, "Voice_Model_Factory")
+                    if not os.path.exists(voice_model_dir):
+                        os.makedirs(voice_model_dir)
+
+                    # 获取文件名并构建目标路径
+                    filename = os.path.basename(file_path)
+                    dest_path = os.path.join(voice_model_dir, filename)
+
+                    # 复制文件到Voice_Model_Factory文件夹
+                    shutil.copy2(file_path, dest_path)
+
+                    self.selected_refaudio_paths.append(dest_path)
+                    self.ui.label_ref_audios_status.setText(f"已上传：{filename}")
+                    self.toast.show_message(f"音频文件已保存到Voice_Model_Factory", 2000)
         
         except Exception as e:
             self.toast.show_message(f"选择多个音频文件失败：{str(e)}", 3000)
@@ -961,7 +1010,7 @@ class set_pyqt(QWidget):
             # 获取用户输入
             text = self.ui.textEdit_voice_text.toPlainText().strip()
             if not text:
-                self.toast.show_message("请输入要合成的文本内容", 2000)
+                self.toast.show_message("请输入参考音频对应的文本内容", 2000)
                 return
 
             character_name = self.ui.lineEdit_character_name.text().strip()
@@ -984,10 +1033,14 @@ class set_pyqt(QWidget):
             # 使用绝对路径来引用模型和音频文件
             model_path = os.path.abspath(self.selected_model_path)
             audio_path = os.path.abspath(self.selected_audio_path)
+            # 可选：指定gpt模型和辅助参考音频
+            gpt_model_path = os.path.abspath(self.selected_gpt_model_path) if self.selected_gpt_model_path else ""
+            refaudio_paths = [os.path.abspath(path) for path in self.selected_refaudio_paths]
 
             # 生成命令 - 使用绝对路径
             cmd = (f"python api.py -p 5000 -d cuda "
-                   f"-s \"{model_path}\" -dr \"{audio_path}\" -dt \"{text}\" -dl {language}")
+                f"-s \"{model_path}\" -g \"{gpt_model_path}\" "
+                f"-dr \"{audio_path}\" -dt \"{text}\" -dl {language}")
 
             # 创建bat文件在Voice_Model_Factory文件夹里
             app_path = get_app_path()
@@ -2817,7 +2870,9 @@ class set_pyqt(QWidget):
         # 添加声音克隆按钮绑定
         self.ui.pushButton_generate_bat.clicked.connect(self.generate_voice_clone_bat)
         self.ui.pushButton_select_model.clicked.connect(self.select_model_file)
+        self.ui.pushButton_select_gpt_model.clicked.connect(self.select_gpt_model_file)
         self.ui.pushButton_select_audio.clicked.connect(self.select_audio_file)
+        # self.ui.pushButton_select_multiple_audios.clicked.connect(self.select_multiple_audio_files)
         self.ui.pushButton_tutorial.clicked.connect(self.show_tutorial)
         self.ui.pushButton_volcengine_tts_tutorial.clicked.connect(lambda: webbrowser.open('http://mynewbot.com/tutorials/ByteDance-TTS'))
 
