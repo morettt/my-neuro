@@ -88,5 +88,11 @@
     "desc": "Live2D 内置风格插件：整合 Tavily 与 SerpApi（Google/Bing/DuckDuckGo/Google Scholar），搜索结果经 OpenAI 兼容 Chat Completions（默认示例 SiliconFlow）提炼摘要。提供 vsearch 语义并发深度搜索、web_search 快速搜索（Tavily 失败回退 SerpApi）、以及各单引擎搜索工具。仓库含 node_modules 与 plugin_config.example.json；需自备 Tavily、SerpApi 与提炼 LLM 的 API Key，按 README 填写 plugin_config.json。",
     "author": "爱熬夜的人形兔",
     "repo": "https://github.com/A-night-owl-Rabbit/live2d-multi-search-plugin"
+  },
+  "openrouter-image": {
+    "display_name": "openrouter-image",
+    "desc": "通过 OpenRouter OpenAI 兼容接口调用图像模型（默认 google/gemini-3-pro-image-preview）生成图片；提供工具 generate_image_final，支持负面提示、批量 1–4 张、自定义文件名、尺寸档位与宽高比映射；保存为本地文件并在 Windows 上自动打开预览。可在插件配置填写 OpenRouter API Key 与输出目录，或复用全局 llm.api_key。对非真人/写实类提示会附加日系二次元画风约束。详见仓库 README。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-openrouter-image"
   }
 }
