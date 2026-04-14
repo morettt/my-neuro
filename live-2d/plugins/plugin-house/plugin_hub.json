@@ -94,5 +94,11 @@
     "desc": "通过 OpenRouter OpenAI 兼容接口调用图像模型（默认 google/gemini-3-pro-image-preview）生成图片；提供工具 generate_image_final，支持负面提示、批量 1–4 张、自定义文件名、尺寸档位与宽高比映射；保存为本地文件并在 Windows 上自动打开预览。可在插件配置填写 OpenRouter API Key 与输出目录，或复用全局 llm.api_key。对非真人/写实类提示会附加日系二次元画风约束。详见仓库 README。",
     "author": "爱熬夜的人形兔",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-openrouter-image"
+  },
+  "windows-app-launcher": {
+    "display_name": "windows-app-launcher",
+    "desc": "Windows 本地应用启动插件：首次加载扫描用户/公共桌面的 .exe/.lnk/.url，合并维护 apps.json；解析快捷方式目标与 Internet 快捷方式 URL，支持 HTTP、HTTPS 与 steam 自定义协议拉起；提供工具 launch_application（按应用名、不区分大小写启动）。仓库含完整 node_modules 与 package-lock，开箱一般无需 npm install；不包含用户 apps.json（防隐私泄露），提供 apps.example.json。需 Windows；安装路径需保持与主程序 plugin-base 的相对层级（见仓库 README）。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-windows-app-launcher"
   }
 }
