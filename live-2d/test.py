@@ -634,6 +634,9 @@ class set_pyqt(QWidget):
         # self.ui.label_audio_status.setText("未上传参考音频 (.wav)")
         # self.ui.label_bat_status.setText("状态：请上传文件并生成配置")
 
+        # 检测tts-hub模型内容并控制按钮显示
+        self.check_cloud_version()
+        
         # 添加下面这行代码来让声音克隆页面支持拖放
         self.ui.tab_tts_switch.setAcceptDrops(True)
         self.ui.tab_tts_switch.dragEnterEvent = self.voice_clone_dragEnterEvent
@@ -6476,6 +6479,46 @@ class set_pyqt(QWidget):
             print(f"加载对话记录失败: {e}")
             import traceback
             traceback.print_exc()
+            
+    def check_cloud_version(self):
+        """通过检测tts-hub是否有文件，无则隐藏本地端按钮"""
+        try:
+            parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            tts_hub_path = os.path.join(parent_dir, 'full-hub', 'tts-hub')
+          
+            if not os.path.exists(tts_hub_path):
+                self.hide_terminal_and_voice_clone_buttons()
+                print("以云端肥牛启动，隐藏部分功能，如需调试请在'full-hub\\tts-hub'下放入任意文件")
+                return
+          
+            # 检查是否有实际文件
+            has_model = any(
+                item not in ('占位.txt',)
+                for item in os.listdir(tts_hub_path)
+            )
+          
+            if not has_model:
+                self.hide_terminal_and_voice_clone_buttons()
+                print("以云端肥牛启动，隐藏部分功能，如需调试请在'full-hub\\tts-hub'下放入任意文件")
+            else:
+                print("以本地端肥牛启动")
+              
+        except Exception:
+            pass
+
+    def hide_terminal_and_voice_clone_buttons(self):
+        """隐藏终端控制室和声音克隆按钮"""
+        try:
+            if hasattr(self.ui, 'pushButton_terminal'):
+                self.ui.pushButton_terminal.setVisible(False)
+                self.ui.pushButton_terminal.setEnabled(False)
+          
+            if hasattr(self.ui, 'pushButton_voice_clone'):
+                self.ui.pushButton_voice_clone.setVisible(False)
+                self.ui.pushButton_voice_clone.setEnabled(False)
+              
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':
