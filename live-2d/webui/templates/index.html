@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark light">
+    <meta name="theme-color" content="#1a1a2e">
     <title>My Neuro - 控制中心</title>
     <link rel="icon" href="/live-2d/fake_neuro.ico" type="image/x-icon">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,8 +28,8 @@
         <!-- 折叠控制栏和保存按钮栏 - 位于 header 和选项卡之间，同一行显示 -->
         <div class="header-collapse-control">
             <div class="config-save-buttons" id="configSaveButtons"></div>
+            <div class="collapsed-mini-title" id="collapsedMiniTitle">My Neuro - 控制中心</div>
             <div class="collapse-right-group">
-                <div class="collapsed-mini-title" id="collapsedMiniTitle">My Neuro - 控制中心</div>
                 <button class="btn-collapse-header" onclick="toggleHeaderCollapse()">
                     <span class="collapse-icon">▼</span>
                     <span class="collapse-text">折叠</span>
@@ -44,7 +46,7 @@
             <button class="tab-button" onclick="switchTab('ui-settings')">Live2D设置</button>
             <button class="tab-button" onclick="switchTab('model-manager')">声音克隆</button>
             <button class="tab-button" onclick="switchTab('market')">广场</button>
-            <button class="tab-button" onclick="switchTab('tools')">工具屋</button>
+            <button class="tab-button" onclick="switchTab('tools')">MCP管理</button>
             <button class="tab-button" onclick="switchTab('plugins')">插件管理</button>
         </div>
 
@@ -52,6 +54,10 @@
         <div id="dashboard" class="tab-content active">
             <!-- 系统信息栏 -->
             <div class="system-info-bar">
+                <div class="info-item">
+                    <span class="info-label">My Neuro 版本:</span>
+                    <span class="info-value" id="neuro-version">加载中...</span>
+                </div>
                 <div class="info-item">
                     <span class="info-label">WebUI 版本:</span>
                     <span class="info-value" id="webui-version">加载中...</span>
@@ -123,6 +129,7 @@
                 <!-- 拆分按钮栏 -->
                 <div class="log-split-bar">
                     <button class="split-log-button" onclick="toggleLogSplit()" id="splitLogButton">拆分</button>
+                    <button onclick="resetModelPosition()" class="btn-reset-position">复位皮套位置</button>
                 </div>
 
                 <div class="log-wrapper" id="logWrapper">
@@ -167,7 +174,7 @@
                         <div id="chat-history" class="log-panel">
                             <div class="log-container" data-log-type="main">
                                 <div id="chat-history-output">
-                                    <div class="log-entry log-info">点击刷新按钮加载对话历史...</div>
+                                    <div class="log-entry log-info">对话历史为空</div>
                                 </div>
                             </div>
                         </div>
@@ -238,11 +245,17 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="model">模型</label>
-                        <input type="text" id="model" placeholder="gpt-4, qwen3.5-27b 等">
+                        <input type="text" id="model" placeholder="LLM模型名">
                     </div>
                     <div class="form-group">
                         <label for="temperature">Temperature</label>
-                        <input type="number" id="temperature" min="0" max="2" step="0.1" placeholder="0.9">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="number" id="temperature" min="0" max="2" step="0.1" placeholder="0.9" style="flex: 1;">
+                            <div class="checkbox-group" style="margin: 0; white-space: nowrap;">
+                                <input type="checkbox" id="temperature-enabled">
+                                <label for="temperature-enabled">启用温度</label>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="form-group">
@@ -464,25 +477,11 @@
             </div>
         </div>
 
-        <!-- 工具屋面板 -->
+        <!-- MCP管理面板 -->
         <div id="tools" class="tab-content">
-            <h3>工具屋</h3>
+            <h3>MCP管理</h3>
 
-            <!-- 工具子选项卡 -->
-            <div class="sub-tabs">
-                <button class="sub-tab-button active" onclick="switchToolTab('fc')">Function Call 工具</button>
-                <button class="sub-tab-button" onclick="switchToolTab('mcp')">MCP Tools</button>
-            </div>
-
-            <!-- Function Call 工具列表 -->
-            <div id="fc-tools-panel" class="tool-panel active">
-                <div class="tool-list" id="fc-tools-list">
-                    <div class="log-entry log-info">加载 Function Call 工具中...</div>
-                </div>
-            </div>
-
-            <!-- MCP 工具列表 -->
-            <div id="mcp-tools-panel" class="tool-panel">
+            <div class="tool-panel active">
                 <div class="tool-list" id="mcp-tools-list">
                     <div class="log-entry log-info">加载 MCP 工具中...</div>
                 </div>
@@ -497,7 +496,6 @@
             <div class="sub-tabs">
                 <button class="sub-tab-button active" onclick="switchMarketTab('prompt')">提示词广场</button>
                 <button class="sub-tab-button" onclick="switchMarketTab('tool')">工具广场</button>
-                <button class="sub-tab-button" onclick="switchMarketTab('fc')">FC 广场</button>
                 <button class="sub-tab-button" onclick="switchMarketTab('plugin')">插件广场</button>
             </div>
 
@@ -518,16 +516,6 @@
                 </div>
                 <div class="market-list" id="tool-market-list">
                     <div class="log-entry log-info">点击刷新按钮加载工具列表...</div>
-                </div>
-            </div>
-
-            <!-- FC 广场 -->
-            <div id="fc-market-panel" class="market-panel">
-                <div class="market-header">
-                    <button onclick="refreshFCMarket()" class="btn-start">🔄 刷新 FC 工具列表</button>
-                </div>
-                <div class="market-list" id="fc-market-list">
-                    <div class="log-entry log-info">点击刷新按钮加载 FC 工具列表...</div>
                 </div>
             </div>
 
@@ -572,7 +560,6 @@
                         </select>
                     </div>
                     <button onclick="saveLive2DModel()" class="btn-start" style="margin-top: 10px;">应用模型</button>
-                    <button onclick="resetModelPosition()" class="btn-start" style="margin-top: 10px; background: linear-gradient(135deg, #f59e0b, #d97706);">复位皮套位置</button>
                 </div>
                 <div class="section">
                     <div class="checkbox-group">
@@ -770,13 +757,9 @@
                 </div>
             </div>
             
-            <!-- 工具开关 -->
+            <!-- MCP 配置 -->
             <div class="section">
-                <h4>工具配置</h4>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="tools-enabled">
-                    <label for="tools-enabled">启用 Function Call 工具</label>
-                </div>
+                <h4>MCP 配置</h4>
                 <div class="checkbox-group">
                     <input type="checkbox" id="mcp-enabled">
                     <label for="mcp-enabled">启用 MCP 工具</label>
@@ -901,7 +884,7 @@
 
     </div>
 
-    <script src="static/js/app.js?v=20260322"></script>
+    <script src="static/js/app.js?v=20260416b"></script>
     
     <!-- 调试脚本：广场下载问题排查 -->
     <script>

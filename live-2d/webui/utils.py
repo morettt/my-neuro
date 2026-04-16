@@ -7,6 +7,7 @@ WebUI 模块化重构 - 共享工具函数
 
 import os
 import sys
+import json
 import logging
 from pathlib import Path
 
@@ -15,8 +16,17 @@ PROJECT_ROOT = Path(__file__).parent.parent.absolute()
 # 数据根目录（my-neuro/），AI记录室等持久化数据存放于此
 DATA_ROOT = PROJECT_ROOT.parent
 
-# WebUI 版本
-WEBUI_VERSION = 'v2.5'
+# WebUI 版本 - 从 config.json 读取
+def _load_webui_version():
+    config_path = PROJECT_ROOT / 'config.json'
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            return config.get('webui_version', '未知')
+    except Exception:
+        return '未知'
+
+WEBUI_VERSION = _load_webui_version()
 
 # 配置日志 - 使用 WARNING 级别减少输出
 logging.basicConfig(

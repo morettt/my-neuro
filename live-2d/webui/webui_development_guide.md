@@ -2,9 +2,9 @@
 
 > 本文档旨在帮助新加入的开发者（包括 AI 助手）快速了解 My Neuro WebUI 项目的结构、功能和开发进度。
 
-**文档版本**: v2.5.0  
-**最后更新**: 2026-03-22 
-**项目版本**: v2.5.0 (测试阶段)
+**文档版本**: v2.6  
+**最后更新**: 2026-04-16  
+**项目版本**: v2.6 
 
 ---
 
@@ -35,17 +35,17 @@ My Neuro WebUI 是一个基于 Flask 的 Web 控制面板，用于统一管理 L
 - 基本目标：实现肥牛.exe（test.py 打包）的所有功能
 - 进阶目标：成为本项目可扩展的图形化控制中心
 
-**当前状态**：🎉 **v2.0.0 正式进入测试阶段**
+**当前状态**：🎉 **v2.6 稳定版本**
 
-所有核心功能已完善，包括服务控制、配置管理、日志系统、声音克隆、工具屋、广场、Live2D 动作管理、插件系统等。
+核心功能已完善，界面布局优化完成，移除 FC 功能，新增启用温度开关、版本显示优化等。
 
 **核心功能**:
 - 服务控制（启动/停止/重启）
 - 配置管理（LLM、对话、声音、云端、直播等）
 - 实时日志查看（系统/桌宠/工具）
 - 声音克隆（模型文件上传、TTS 生成）
-- 工具屋（Function Call / MCP Tools）
-- 广场（提示词/工具/FC 工具资源市场）
+- MCP管理（MCP 工具列表）
+- 广场（提示词/工具/插件资源市场）
 - Live2D 动作管理（情绪分类、唱歌控制）
 
 ---
@@ -84,7 +84,7 @@ my-neuro-main/
 │   └── ...
 └── .github/
     ├── webui_development_guide.md      # 开发指南（本文档）
-    └── webui_development_log.md        # 开发日志
+    └── webui_development_log.md        # 开发日志（略）
 
 ```
 
@@ -106,19 +106,20 @@ my-neuro-main/
 
 ## 开发进度概要
 
-### 已完成功能 (v2.0.0)
+### 已完成功能 (v2.6)
 
 | 功能模块 | 状态 | 说明 |
 |----------|------|------|
 | 服务控制 | ✅ 完成 | 启动/停止/重启/状态检测 |
-| 配置管理 | ✅ 完成 | LLM/对话/云端/UI/高级配置 |
+| 配置管理 | ✅ 完成 | LLM/对话/云端/UI/高级配置，新增启用温度开关 |
 | 日志系统 | ✅ 完成 | 系统/桌宠/工具三日志系统 |
 | 声音克隆 | ✅ 完成 | 模型文件上传、TTS 生成、bat 文件生成 |
-| 工具屋 | ✅ 完成 | Function Call / MCP Tools |
-| 广场 | ✅ 完成 | 提示词/工具/FC 工具/插件资源市场 |
+| MCP管理 | ✅ 完成 | MCP 工具列表（已移除 Function Call） |
+| 广场 | ✅ 完成 | 提示词/工具/插件资源市场（已移除 FC 广场） |
 | Live2D 动作管理 | ✅ 完成 | 6 情绪分类、拖拽绑定、唱歌控制 |
 | 插件系统 | ✅ 完成 | 自动扫描、启用/禁用、插件广场异步安装 |
 | 网页图标 | ✅ 完成 | favicon + 标题圆形图标 |
+| 暗夜模式标识 | ✅ 完成 | 添加 color-scheme 和 theme-color 元标签 |
 
 ---
 
@@ -230,140 +231,8 @@ my-neuro-main/
 
 ---
 
-## 服务管理逻辑
-
-### 启动流程
-```python
-def start_service(service_name):
-    # 1. 检查是否已在运行
-    if service_name in service_pids:
-        return "服务已在运行"
-    
-    # 2. 执行对应的.bat 脚本
-    bat_path = find_bat_file(service_name)
-    subprocess.Popen(bat_path, shell=True)
-    
-    # 3. 等待并记录 PID
-    time.sleep(2)
-    pid = find_process_pid(service_name)
-    service_pids[service_name] = pid
-```
-
-### 停止流程
-```python
-def stop_service(service_name):
-    # 1. 获取 PID
-    pid = service_pids.get(service_name)
-    if not pid:
-        pid = find_process_pid(service_name)
-    
-    # 2. 终止进程树
-    subprocess.run(f'taskkill /F /T /PID {pid}', shell=True)
-    
-    # 3. 清理记录
-    service_pids.pop(service_name, None)
-```
-
----
-
-## 日志系统
-
-### 日志轮询
-```javascript
-async function pollLogs() {
-    const response = await fetch(`/api/logs/tail/${currentLogType}`);
-    const newLogs = await response.json();
-    
-    // 增量添加日志
-    newLogs.forEach(log => {
-        if (!seenLogs.has(log.id)) {
-            addLogToPanel(log);
-            seenLogs.add(log.id);
-        }
-    });
-}
-
-// 每 2 秒轮询一次
-setInterval(pollLogs, 2000);
-```
-
----
-
-## 配置管理
-
-### 配置文件结构
-```json
-{
-  "llm": { "api_key": "", "api_url": "", "model": "", "temperature": 0.9 },
-  "cloud": {
-    "provider": "siliconflow",
-    "api_key": "",
-    "tts": { "enabled": false, "url": "", "model": "" },
-    "aliyun_tts": { "enabled": false, "api_key": "" },
-    "baidu_asr": { "enabled": false, "appid": 0, "dev_pid": 0 }
-  },
-  "ui": { "model_scale": 2.3, "show_chat_box": true },
-  "tools": { "enabled": true },
-  "mcp": { "enabled": false }
-}
-```
-
----
-
-## 插件系统
-
-### 插件扫描
-```python
-def scan_plugins():
-    plugins = []
-    for category in ['built-in', 'community']:
-        category_path = PLUGINS_DIR / category
-        for plugin_dir in category_path.iterdir():
-            meta_path = plugin_dir / 'metadata.json'
-            if meta_path.exists():
-                metadata = json.load(open(meta_path))
-                enabled = is_plugin_enabled(metadata['name'])
-                plugins.append({
-                    'name': metadata['name'],
-                    'display_name': metadata.get('displayName'),
-                    'description': metadata.get('description'),
-                    'category': category,
-                    'enabled': enabled
-                })
-    return plugins
-```
-
-### 插件安装（后端）
-```python
-def _install_plugin_worker(plugin_name, plugin_url, plugin_dir):
-    # 1. 下载 zip
-    response = requests.get(plugin_url, stream=True)
-    zip_path = plugin_dir / f'{plugin_name}.zip'
-    with open(zip_path, 'wb') as f:
-        for chunk in response.iter_content(8192):
-            f.write(chunk)
-    
-    # 2. 解压
-    with zipfile.ZipFile(zip_path) as zip_ref:
-        zip_ref.extractall(temp_dir)
-        move_files(temp_dir / root, plugin_dir)
-    
-    # 3. 删除 zip
-    zip_path.unlink()
-    
-    # 4. 安装依赖
-    req_path = plugin_dir / 'requirements.txt'
-    if req_path.exists():
-        subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', req_path])
-    
-    # 5. 清理任务记录
-    del installing_tasks[plugin_name]
-```
-
----
-
 ## 开发规范
-
+（略）
 
 ---
 
@@ -391,23 +260,17 @@ def _install_plugin_worker(plugin_name, plugin_url, plugin_dir):
 
 ## 开发待办
 
-### 高优先级
+### 优先级从高往低
 
+- [ ] **VRM、DLC、字节TTS适配**: 
+- [ ] **英文界面**: 
+- [ ] **拆分js，进一步模块化**: 
+- [ ] **自动日志滚动选项**: 
 - [ ] **插件卸载功能**: 支持从插件管理卸载社区插件
 - [ ] **插件版本管理**: 显示插件版本，支持更新检测
-- [ ] **配置备份/恢复**: 支持配置文件导出导入
-
-### 中优先级
-
-- [ ] **深色主题切换**: 添加深色/浅色主题切换功能
-- [ ] **日志导出功能**: 支持下载日志文件
-- [ ] **动作管理拖拽**: 实现动作文件的拖拽排序
-
-### 低优先级
-
+- [ ] **LLM提供商管理**: 支持管理多个LLM配置
 - [ ] **移动端适配**: 响应式布局优化
-- [ ] **WebSocket 实时日志**: 替代轮询机制
-- [ ] **插件依赖管理**: 自动检测并提示缺失依赖
+
 
 ---
 
@@ -415,6 +278,7 @@ def _install_plugin_worker(plugin_name, plugin_url, plugin_dir):
 
 | 版本 | 日期 | 主要变更 |
 |------|------|----------|
+| v2.6 | 2026-04-16 | 界面重构：移除FC、工具屋改名MCP管理、新增启用温度开关、版本显示优化、暗夜模式标识、复位皮套按钮迁移、样式调整 |
 | v2.5.0 | 2026-03-22 | bug修复、新增历史对话 |
 | v2.0.0 | 2026-03-10 | 插件安装系统完善、正式进入测试阶段 |
 | v1.11.0 | 2026-03-10 | 图标支持、云端配置修复、去硬编码化 |

@@ -130,5 +130,6 @@
   "auto_close_services": {
     "enabled": false
   },
-  "version": "v6.4.8"
+  "version": "v6.4.8",
+  "webui_version": "v2.6"
 }

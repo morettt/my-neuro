@@ -18,6 +18,7 @@ full-hub/logs
 full-hub/model
 full-hub/rag-hub
 full-hub/tts-hub
+live-2d/webui/__pycache__
 
 
 # 忽略所有 node_modules（无论在哪）

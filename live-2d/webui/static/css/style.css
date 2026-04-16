@@ -106,8 +106,8 @@ h1 {
 }
 
 .header-logo {
-    width: 80px;
-    height: 80px;
+    width: 100px;
+    height: 100px;
     border-radius: 50%;
     object-fit: cover;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3), 0 0 24px rgba(99, 102, 241, 0.2);
@@ -397,8 +397,9 @@ button:disabled {
 .log-split-bar {
     display: flex;
     align-items: center;
+    justify-content: center;
+    gap: 12px;
     margin-bottom: 8px;
-    padding-left: 8px;
 }
 
 .log-wrapper { display: flex; gap: 10px; }
@@ -465,13 +466,14 @@ button:disabled {
     background: var(--accent);
     color: white;
     border: none;
-    padding: 8px 18px;
+    padding: 12px 27px;
     border-radius: var(--radius-sm);
     cursor: pointer;
     transition: var(--transition);
     font-family: inherit;
     font-weight: 600;
-    font-size: 13px;
+    font-size: 15px;
+    min-width: 100px;
     box-shadow: 0 2px 8px var(--accent-glow);
 }
 
@@ -483,6 +485,27 @@ button:disabled {
 .split-log-button.active {
     background: linear-gradient(135deg, var(--green), #16a34a);
     box-shadow: 0 2px 8px var(--green-glow);
+}
+
+.btn-reset-position {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+    border: none;
+    padding: 12px 27px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: var(--transition);
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 15px;
+    min-width: 140px;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.btn-reset-position:hover {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
 }
 
 .clear-log-button {
@@ -625,7 +648,7 @@ button:disabled {
 }
 
 .form-group textarea { min-height: 48px; max-height: 80px; resize: vertical; }
-.system-prompt-textarea { min-height: 150px !important; max-height: none !important; }
+.system-prompt-textarea { min-height: 300px !important; max-height: none !important; }
 .form-row { display: flex; gap: 16px; flex-wrap: wrap; }
 .form-row .form-group { flex: 1; min-width: 200px; }
 
@@ -1773,7 +1796,6 @@ h4 { font-size: 15px; color: var(--text-secondary); }
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-right: auto;
 }
 
 .header-collapse-control .collapse-right-group {
@@ -1829,6 +1851,8 @@ body.header-collapsed .collapse-icon { transform: rotate(180deg); }
     white-space: nowrap;
     height: 40px;
     line-height: 40px;
+    flex-grow: 1;
+    text-align: center;
 }
 
 body.header-collapsed .collapsed-mini-title { display: block; }
