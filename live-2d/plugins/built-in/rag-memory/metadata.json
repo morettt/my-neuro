@@ -1,0 +1,10 @@
+{
+  "name": "rag-memory",
+  "displayName": "RAG 记忆检索",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "从 RAG 记忆系统中检索相关历史对话，提供 search_memory 工具",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

@@ -1,0 +1,78 @@
+{
+  "storage": {
+    "vector": {
+      "type": "qdrant",
+      "path": "./data/qdrant",
+      "collection_name": "memories",
+      "vector_size": 1024
+    },
+    "graph": {
+      "type": "networkx",
+      "path": "./data/graph_store.json",
+      "enabled": true
+    },
+    "legacy_json": {
+      "path": "./data/memory_store.json",
+      "enabled": true
+    }
+  },
+  "embedding": {
+    "model_path": "../full-hub/rag-hub",
+    "vector_size": 1024,
+    "use_api": true,
+    "api_model": "text-embedding-3-large",
+    "api_dimensions": 1024
+  },
+  "search": {
+    "default_top_k": 5,
+    "similarity_threshold": 0.3,
+    "enable_reranker": false,
+    "enable_bm25": true,
+    "bm25_weight": 0.3,
+    "enable_graph_query": true,
+    "graph_max_depth": 2,
+    "importance_weight": 0.3,
+    "type_weight_factor": 0.2
+  },
+  "entity_extraction": {
+    "enabled": true,
+    "auto_extract_on_add": true
+  },
+  "scheduler": {
+    "enabled": true,
+    "use_redis": false,
+    "redis_url": "redis://localhost:6379",
+    "max_workers": 4,
+    "quota_per_user": 100
+  },
+  "image": {
+    "enabled": true,
+    "storage_path": "./data/images",
+    "use_clip": false,
+    "max_size_mb": 5,
+    "auto_describe": true
+  },
+  "kb": {
+    "chunk_size": 500,
+    "chunk_overlap": 50
+  },
+  "llm": {
+    "config": {
+      "model": "gemini-2.0-flash",
+      "api_key": "sk-zk225e73a53a5996adbf6bbb7c7a5594b4f69bedbc0be708",
+      "base_url": "https://api.zhizengzeng.com/v1"
+    }
+  },
+  "llm_fallback": {
+    "enabled": true,
+    "config": {
+      "model": "gemini-2.0-flash",
+      "api_key": "sk-zk225e73a53a5996adbf6bbb7c7a5594b4f69bedbc0be708",
+      "base_url": "https://api.zhizengzeng.com/v1"
+    }
+  },
+  "users": {
+    "default_user": "feiniu_default",
+    "enable_multi_user": false
+  }
+}

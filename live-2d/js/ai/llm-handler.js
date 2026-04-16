@@ -131,7 +131,20 @@ class LLMHandler {
                 isFirstAttempt = false;
 
                 // 合并本地Function Call工具和MCP工具
-                const allTools = getMergedToolsList();
+                let allTools = getMergedToolsList();
+
+                // 模型不支持图片时，过滤掉截图相关工具，避免 AI 调用后又触发多模态错误
+                if (hasRetriedWithoutImage) {
+                    const screenshotKeywords = ['screenshot', 'take_screenshot', '截图', 'screen_capture'];
+                    const before = allTools.length;
+                    allTools = allTools.filter(tool => {
+                        const name = (tool.function?.name || tool.name || '').toLowerCase();
+                        return !screenshotKeywords.some(kw => name.includes(kw));
+                    });
+                    if (allTools.length < before) {
+                        logToTerminal('info', `📷 当前模型不支持图片，已从工具列表中移除截图工具`);
+                    }
+                }
 
                 // ===== 🔄 连续工具调用逻辑 =====
                 // 支持AI连续多轮调用工具,直到完成完整任务链
@@ -139,6 +152,8 @@ class LLMHandler {
                 let iteration = 0;
                 let finalResponseContent = null;
                 let isStreamingToTTS = false; // 标记是否正在流式播放TTS
+                let _streamBuf = '';
+                let consecutiveEmptyResponses = 0; // 连续空响应计数
 
                 // 🔥 清除之前的中断标志，开始新的对话流程
                 appState.clearInterrupted();
@@ -165,6 +180,11 @@ class LLMHandler {
                     }
                     // 准备发送给API的消息列表
                     let messagesForAPI = JSON.parse(JSON.stringify(voiceChat.messages));
+
+                    // 模型不支持图片时，在最后一条用户消息后追加一条说明，让 AI 用自己的语气告知用户
+                    if (hasRetriedWithoutImage && iteration === 0) {
+                        messagesForAPI.push({ role: 'user', content: '（系统提示：当前模型不支持识图，请用你自己的语气告诉用户需要换成支持多模态视觉的模型才能使用截图功能）' });
+                    }
 
                     // 如果是第一轮且需要截图,添加截图到最后一条用户消息
                     if (iteration === 0 && screenshotBase64) {
@@ -206,8 +226,12 @@ class LLMHandler {
                     if (iteration === 0 && useVisionModelForFirstRound) {
                         console.log('🎨 使用视觉模型进行图像理解...');
                         logToTerminal('info', '🎨 调用视觉模型API进行图像分析');
-                        // 视觉模型不传工具列表，纯粹用于图像理解
-                        result = await visionClient.chatCompletion(messagesForAPI, null);
+                        // 视觉模型不传工具列表，纯粹用于图像理解，走流式降低延迟
+                        _streamBuf = '';
+                        ttsProcessor.reset();
+                        result = await visionClient.chatCompletion(messagesForAPI, null, true, (text) => {
+                            ttsProcessor.addStreamingText(text);
+                        });
                     } else {
                         // 🔥 如果没有启用独立视觉模型，但有截图，说明主模型需要支持视觉
                         // 只有在没有截图的情况下才清理图片
@@ -229,8 +253,11 @@ class LLMHandler {
                         }
 
                         // 🔥 正常使用主模型 - 使用流式响应（提升响应速度）
+                        _streamBuf = '';
+                        if (iteration === 0) ttsProcessor.reset();
                         result = await llmClient.chatCompletion(messagesForAPI, allTools, true, (text) => {
-                            // 流式接收文本，暂不播放TTS（等确认是否有工具调用后再决定）
+                            if (iteration > 0) return;
+                            ttsProcessor.addStreamingText(text);
                         });
                     }
 
@@ -626,10 +653,9 @@ class LLMHandler {
                         break;
                     }
 
-                    // 既没有工具调用也没有内容,异常情况
-                    logToTerminal('warn', '⚠️ LLM返回了空响应');
-                    // 🔥 空响应时设置固定回复
-                    finalResponseContent = "Filtered";
+                    // 既没有工具调用也没有内容，部分模型在工具调用后会返回空响应
+                    consecutiveEmptyResponses++;
+                    logToTerminal('warn', `⚠️ LLM返回了空响应 (连续第 ${consecutiveEmptyResponses} 次)`);
 
                     // 🔥 检查是否因为图片导致的空响应
                     if (screenshotBase64 || useVisionModelForFirstRound) {
@@ -637,7 +663,22 @@ class LLMHandler {
                         throw new Error('模型不支持图片：LLM返回了空响应，可能是因为模型不支持 image_url 参数');
                     }
 
-                    break;
+                    // 第一次空响应就催模型回复（只催一次，避免堆积催促消息）
+                    if (consecutiveEmptyResponses === 1) {
+                        logToTerminal('warn', '⚠️ 空响应，添加提示消息催促模型回复');
+                        voiceChat.messages.push({
+                            role: 'user',
+                            content: '请根据工具执行结果，回复用户。'
+                        });
+                    } else {
+                        // 连续多次空响应，模型无法恢复，直接退出
+                        logToTerminal('error', `❌ 连续 ${consecutiveEmptyResponses} 次空响应，放弃等待`);
+                        finalResponseContent = '抱歉，我好像卡住了，请重新问我吧~';
+                        break;
+                    }
+
+                    iteration++;
+                    continue;
                 }
 
                 // 检查是否达到最大轮数限制
@@ -679,17 +720,23 @@ class LLMHandler {
                         await global.pluginManager.runLLMResponseHooks(responseObj).catch(() => {});
                     }
 
-                    if (iteration === 0) {
-                        // 如果没有中间过程,才reset
-                        ttsProcessor.reset();
-                    }
-
                     // 触发插件 onTTSStart 钩子
                     if (global.pluginManager) {
                         await global.pluginManager.runTTSStartHooks(responseObj.text).catch(() => {});
                     }
 
-                    ttsProcessor.processTextToSpeech(responseObj.text);
+                    if (iteration === 0) {
+                        // streaming already started - finalize
+                        if (typeof ttsProcessor.finalizeStreamingText === 'function') {
+                            ttsProcessor.finalizeStreamingText();
+                        } else {
+                            if (_streamBuf.trim()) ttsProcessor.textSegmentQueue.push(_streamBuf.trim());
+                            _streamBuf = '';
+                        }
+                    } else {
+                        ttsProcessor.reset();
+                        ttsProcessor.processTextToSpeech(responseObj.text);
+                    }
                 } else {
                     logToTerminal('error', '❌ 未获取到有效的AI回复');
 
@@ -726,6 +773,8 @@ class LLMHandler {
                         errorMsg.includes("模型不支持图片") ||
                         errorMsg.includes("image param") ||
                         errorMsg.includes("image_url") ||
+                        errorMsg.includes("multimodal") ||
+                        errorMsg.includes("does not support multimodal") ||
                         (errorMsg.includes("image") && errorMsg.includes("not support")) ||
                         (errorMsg.includes("image") && errorMsg.includes("unsupported")) ||
                         (errorMsg.includes("image") && errorMsg.includes("invalid"))
@@ -734,7 +783,7 @@ class LLMHandler {
                     if (isImageUnsupportedError) {
 
                         console.log('⚠️ 检测到模型不支持视觉，自动移除图片并重试');
-                        logToTerminal('warn', '⚠️ 模型不支持视觉功能，自动切换为纯文本模式重试');
+                        logToTerminal('info', '📷 截图已触发，但当前模型不支持图片，已自动过滤图片内容，以纯文本模式重试');
 
                         // 标记已经重试过，避免无限循环
                         hasRetriedWithoutImage = true;

@@ -1,0 +1,10 @@
+{
+  "name": "keyboard",
+  "displayName": "键盘控制",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "按方向键控制，提供 press_arrow 工具",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

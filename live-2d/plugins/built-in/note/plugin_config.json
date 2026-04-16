@@ -1,0 +1,9 @@
+{
+  "memory_file": {
+    "title": "记忆文件名",
+    "description": "存储用户记忆的 JSON 文件名，保存在程序根目录下",
+    "type": "string",
+    "default": "用户记忆.json",
+    "value": "用户记忆.json"
+  }
+}

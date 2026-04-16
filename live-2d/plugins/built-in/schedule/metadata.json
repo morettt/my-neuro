@@ -1,0 +1,10 @@
+{
+  "name": "schedule",
+  "displayName": "日程管理",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "记录、查看、完成、删除、修改日程，数据持久化保存到本地 JSON 文件，重启后依然有效",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

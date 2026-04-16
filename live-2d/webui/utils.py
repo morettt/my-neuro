@@ -10,8 +10,10 @@ import sys
 import logging
 from pathlib import Path
 
-# 项目根目录
+# 项目根目录（live-2d/）
 PROJECT_ROOT = Path(__file__).parent.parent.absolute()
+# 数据根目录（my-neuro/），AI记录室等持久化数据存放于此
+DATA_ROOT = PROJECT_ROOT.parent
 
 # WebUI 版本
 WEBUI_VERSION = 'v2.5'

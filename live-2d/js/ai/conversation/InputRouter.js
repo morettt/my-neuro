@@ -171,7 +171,7 @@ class InputRouter {
 
             try {
                 fs.appendFileSync(
-                    path.join(__dirname, '..', '..', '..', 'AI记录室', '记忆库.txt'),
+                    path.join(__dirname, '..', '..', '..', '..', 'AI记录室', '记忆库.txt'),
                     newContent,
                     'utf8'
                 );

@@ -38,7 +38,7 @@ class MessageInitializer {
      * 初始化AI记录室文件夹和记忆库文件
      */
     initializeRecordsDir() {
-        const recordsDir = path.join(__dirname, '..', '..', '..', 'AI记录室');
+        const recordsDir = path.join(__dirname, '..', '..', '..', '..', 'AI记录室');
         const dialogLogPath = path.join(recordsDir, '记忆库.txt');
 
         try {
@@ -90,7 +90,7 @@ class MessageInitializer {
      * 加载持久化对话历史（JSONL格式）
      */
     loadConversationHistory() {
-        const conversationHistoryPath = path.join(__dirname, '..', '..', '..', 'AI记录室', '对话历史.jsonl');
+        const conversationHistoryPath = path.join(__dirname, '..', '..', '..', '..', 'AI记录室', '对话历史.jsonl');
         let conversationHistory = [];
 
         // 总是尝试读取历史文件（用于保存时的完整性）
@@ -139,7 +139,7 @@ class MessageInitializer {
      */
     getNextInteractionNumber() {
         try {
-            const dialogLogPath = path.join(__dirname, '..', '..', '..', 'AI记录室', '记忆库.txt');
+            const dialogLogPath = path.join(__dirname, '..', '..', '..', '..', 'AI记录室', '记忆库.txt');
             if (!fs.existsSync(dialogLogPath)) {
                 return 1;
             }

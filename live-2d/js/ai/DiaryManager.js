@@ -47,7 +47,7 @@ class DiaryManager {
             }
 
             // 检查条件2: 记忆库里面有"交互"关键词
-            const memoryPath = path.join(__dirname, '..', '..', 'AI记录室', '记忆库.txt');
+            const memoryPath = path.join(__dirname, '..', '..', '..', 'AI记录室', '记忆库.txt');
             if (!fs.existsSync(memoryPath)) {
                 console.log('记忆库文件不存在，跳过日记写入');
                 return;
@@ -60,7 +60,7 @@ class DiaryManager {
             }
 
             // 检查条件3: 当天还未记录日记
-            const diaryPath = path.join(__dirname, '..', '..', this.aiDiaryFile);
+            const diaryPath = path.join(__dirname, '..', '..', '..', this.aiDiaryFile);
             const today = new Date();
             const todayStr = `${today.getFullYear()}年${String(today.getMonth() + 1).padStart(2, '0')}月${String(today.getDate()).padStart(2, '0')}日`;
 
@@ -162,7 +162,7 @@ ${todayInteractions}
     // 保存日记
     async saveDiary(diaryContent, dateStr) {
         try {
-            const diaryPath = path.join(__dirname, '..', '..', this.aiDiaryFile);
+            const diaryPath = path.join(__dirname, '..', '..', '..', this.aiDiaryFile);
 
             // 确保AI记录室文件夹存在
             const diaryDir = path.dirname(diaryPath);

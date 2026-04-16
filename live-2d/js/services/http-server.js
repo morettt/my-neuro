@@ -193,6 +193,42 @@ class HttpServer {
                 .catch(error => res.json({ success: false, message: error.toString() }));
         });
 
+        // 热复位模型端点
+		this.emotionApp.post('/reset-model-position', async (req, res) => {
+		    const mainWindow = BrowserWindow.getAllWindows()[0];
+		    if (!mainWindow) {
+		        return res.json({ success: false});
+		    }
+		
+		    const jsCode = `
+		        (() => {
+		            // 获取全局的模型控制器
+		            const mc = global.modelController;
+		            if (!mc?.model) return { success: false};
+		
+		            const { ipcRenderer } = require('electron');
+		            const model = mc.model;
+		            const defaultX = window.innerWidth * 1.35;
+		            const defaultY = window.innerHeight * 0.8;
+		            const scale = 0.65;
+                    // 复位到默认位置
+		            model.x = defaultX;
+		            model.y = defaultY;
+		            model.scale.set(scale);
+		            mc.updateInteractionArea();
+		
+		            ipcRenderer.send('save-model-position', { x: 1.35, y: 0.8, scale });
+		            return { success: true};
+		        })()
+		    `;
+		
+		    try {
+		        const result = await mainWindow.webContents.executeJavaScript(jsCode);
+		        res.json(result);
+		    } catch (error) {
+		        res.json({ success: false, message: error.toString() });
+		    }
+		});
         // 模型切换接口（供QT前端调用）
         this.emotionApp.post('/switch-model', (req, res) => {
             const { model_name, model_type } = req.body;

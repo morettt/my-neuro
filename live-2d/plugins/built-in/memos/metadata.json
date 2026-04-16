@@ -6,5 +6,6 @@
   "description": "MemOS 长期记忆系统插件：自动检索注入记忆、自动保存对话、提供 12 个 Function Call 工具（搜索/添加记忆、图片记忆、工具记录、知识库导入、记忆修正、偏好查询）",
   "framework_version": ">=1.0.0",
   "main": "index.js",
-  "lang": "js"
+  "lang": "js",
+  "bat": "MEMOS-API.bat"
 }

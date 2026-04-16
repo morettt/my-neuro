@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, desktopCapturer, dialog } = require('electron')
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, desktopCapturer, dialog, nativeImage } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { HttpServer } = require('./js/services/http-server')
@@ -211,10 +211,16 @@ ipcMain.handle('take-screenshot', async (event) => {
 
         const imgBuffer = await screenshot({
             screen: targetNativeDisplay.id,
-            format: 'jpg'
+            format: 'png'
         });
 
-        return imgBuffer.toString('base64');
+        // 缩放到 720p（1280×720），保持宽高比
+        const img = nativeImage.createFromBuffer(imgBuffer);
+        const { width, height } = img.getSize();
+        const targetHeight = 720;
+        const targetWidth = Math.round(width * targetHeight / height);
+        const resized = img.resize({ width: targetWidth, height: targetHeight, quality: 'good' });
+        return resized.toJPEG(85).toString('base64');
     } catch (error) {
         console.error('截图错误:', error)
         throw error;

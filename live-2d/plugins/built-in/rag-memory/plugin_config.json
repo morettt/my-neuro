@@ -1,0 +1,9 @@
+{
+  "rag_url": {
+    "title": "RAG 服务地址",
+    "description": "RAG 记忆检索服务的 HTTP 接口地址",
+    "type": "string",
+    "default": "http://127.0.0.1:8002/ask",
+    "value": "http://127.0.0.1:8002/ask"
+  }
+}

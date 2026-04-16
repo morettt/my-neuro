@@ -49,7 +49,7 @@ class ContextManager {
     // 保存对话历史 - 改用追加模式（JSONL格式）
     saveConversationHistory() {
         try {
-            const recordsDir = path.join(__dirname, '..', '..', 'AI记录室');
+            const recordsDir = path.join(__dirname, '..', '..', '..', 'AI记录室');
             const conversationHistoryPath = path.join(recordsDir, '对话历史.jsonl');
 
             // 确保AI记录室文件夹存在

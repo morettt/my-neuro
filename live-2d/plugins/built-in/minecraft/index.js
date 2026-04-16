@@ -24,6 +24,17 @@ class MinecraftPlugin extends Plugin {
             this.socket.on('connect', () => {
                 this.context.log('info', `已连接到 Mindcraft 服务器: ${serverUrl}`);
                 this.socket.emit('listen-to-agents');
+
+                const { Events } = require('../../../js/core/events.js');
+                this.context.on(Events.TTS_START, () => {
+                    this.socket.emit('tts-playing', this.agentName, true);
+                });
+                this.context.on(Events.TTS_END, () => {
+                    this.socket.emit('tts-playing', this.agentName, false);
+                });
+                this.context.on(Events.TTS_INTERRUPTED, () => {
+                    this.socket.emit('tts-playing', this.agentName, false);
+                });
             });
 
             this.socket.on('connect_error', (error) => {
@@ -32,6 +43,7 @@ class MinecraftPlugin extends Plugin {
 
             this.socket.on('bot-output', (agentName, message) => {
                 this.context.log('info', `[MC机器人] ${agentName}: ${message}`);
+                this.context.speakText(message);
             });
 
         } catch (error) {
