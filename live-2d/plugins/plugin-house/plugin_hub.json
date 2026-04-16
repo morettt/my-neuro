@@ -106,5 +106,11 @@
     "desc": "基于 MCP Filesystem Server 思路的文件系统插件：在用户配置的「允许访问目录」内提供读/写、列目录、递归目录树、glob 搜索、文件元信息等工具；写操作可通过配置开关；含单文件读取大小上限与路径/符号链接安全校验。仓库已内置 node_modules（minimatch 等），克隆到 live-2d/plugins/community/mcp-filesystem 后一般无需再 npm install；敏感路径与 API 密钥不入库，详见 README。",
     "author": "爱熬夜的人形兔",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-mcp-filesystem"
+  },
+  "remote-sync": {
+    "display_name": "remote-sync",
+    "desc": "远程同步插件，支持在网页上与桌宠互动。",
+    "author": "txzhao",
+    "repo": "https://github.com/txzhao2023/my-neuro-remote-sync"
   }
 }
