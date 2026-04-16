@@ -100,5 +100,11 @@
     "desc": "Windows 本地应用启动插件：首次加载扫描用户/公共桌面的 .exe/.lnk/.url，合并维护 apps.json；解析快捷方式目标与 Internet 快捷方式 URL，支持 HTTP、HTTPS 与 steam 自定义协议拉起；提供工具 launch_application（按应用名、不区分大小写启动）。仓库含完整 node_modules 与 package-lock，开箱一般无需 npm install；不包含用户 apps.json（防隐私泄露），提供 apps.example.json。需 Windows；安装路径需保持与主程序 plugin-base 的相对层级（见仓库 README）。",
     "author": "爱熬夜的人形兔",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-windows-app-launcher"
+  },
+  "mcp-filesystem": {
+    "display_name": "mcp-filesystem",
+    "desc": "基于 MCP Filesystem Server 思路的文件系统插件：在用户配置的「允许访问目录」内提供读/写、列目录、递归目录树、glob 搜索、文件元信息等工具；写操作可通过配置开关；含单文件读取大小上限与路径/符号链接安全校验。仓库已内置 node_modules（minimatch 等），克隆到 live-2d/plugins/community/mcp-filesystem 后一般无需再 npm install；敏感路径与 API 密钥不入库，详见 README。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-mcp-filesystem"
   }
 }
