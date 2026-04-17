@@ -51,6 +51,7 @@ def handle_llm_config():
             'api_url': llm_config.get('api_url', ''),
             'model': llm_config.get('model', ''),
             'temperature': llm_config.get('temperature', 0.9),
+            'temperature_enabled': llm_config.get('temperature_enabled', False),
             'system_prompt': llm_config.get('system_prompt', '')
         })
     elif request.method == 'POST':
@@ -63,6 +64,7 @@ def handle_llm_config():
                 'api_url': data.get('api_url', ''),
                 'model': data.get('model', ''),
                 'temperature': data.get('temperature', 0.9),
+                'temperature_enabled': data.get('temperature_enabled', False),
                 'system_prompt': data.get('system_prompt', '')
             })
             if save_config(config):
@@ -293,12 +295,10 @@ def handle_advanced_settings():
         vision_config = config.get('vision', {})
         auto_close_config = config.get('auto_close_services', {})
         ui_config = config.get('ui', {})
-        tools_config = config.get('tools', {})
         mcp_config = config.get('mcp', {})
         asr_config = config.get('asr', {})
         
         return jsonify({
-            # vision_enabled 已移除，不再使用
             'auto_screenshot': vision_config.get('auto_screenshot', False),
             'use_vision_model': vision_config.get('use_vision_model', False),
             'vision_model': vision_config.get('vision_model', {}),
@@ -306,7 +306,6 @@ def handle_advanced_settings():
             'show_chat_box': ui_config.get('show_chat_box', True),
             'show_model': ui_config.get('show_model', True),
             'voice_barge_in': asr_config.get('voice_barge_in', True),
-            'tools_enabled': tools_config.get('enabled', True),
             'mcp_enabled': mcp_config.get('enabled', True)
         })
     elif request.method == 'POST':
@@ -318,21 +317,17 @@ def handle_advanced_settings():
                 config['auto_close_services'] = {}
             if 'ui' not in config:
                 config['ui'] = {}
-            if 'tools' not in config:
-                config['tools'] = {}
             if 'mcp' not in config:
                 config['mcp'] = {}
             if 'asr' not in config:
                 config['asr'] = {}
             
-            # vision_enabled 已移除，不再使用
             config['vision']['auto_screenshot'] = data.get('auto_screenshot', False)
             config['vision']['use_vision_model'] = data.get('use_vision_model', False)
             config['auto_close_services']['enabled'] = data.get('auto_close_services', False)
             config['ui']['show_chat_box'] = data.get('show_chat_box', True)
             config['ui']['show_model'] = data.get('show_model', True)
             config['asr']['voice_barge_in'] = data.get('voice_barge_in', True)
-            config['tools']['enabled'] = data.get('tools_enabled', True)
             config['mcp']['enabled'] = data.get('mcp_enabled', True)
             
             if 'vision_model' in data:

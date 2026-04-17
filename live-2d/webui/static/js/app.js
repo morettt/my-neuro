@@ -3,8 +3,8 @@
 const serviceStates = {};
 let currentLogTab = 'system-log';
 let logPollingInterval = null;
-let lastPetLogCount = 0;  // 记录上次桌宠日志数量
-let lastToolLogCount = 0; // 记录上次工具日志数量
+let lastPetLogContent = '';  // 记录上次桌宠日志内容指纹
+let lastToolLogContent = ''; // 记录上次工具日志内容指纹
 
 // 对话历史状态
 let chatHistoryState = {
@@ -271,6 +271,10 @@ function clearCurrentLog() {
     }
     const logOutput = document.getElementById(outputId);
     logOutput.innerHTML = '<div class="log-entry log-info">日志已清空</div>';
+
+    // 重置内容指纹，使下次轮询能重新渲染
+    if (currentLogTab === 'pet-log') lastPetLogContent = '';
+    if (currentLogTab === 'tool-log') lastToolLogContent = '';
 }
 
 // 拆分/合并日志窗口
@@ -812,48 +816,32 @@ function syncLogToPanel2() {
     }
 }
 
-// 加载日志（增量更新）
+// 加载日志（基于内容指纹检测变化）
 async function loadLogs(logType) {
     try {
         const response = await fetch('/api/logs/' + logType);
         if (response.ok) {
             const data = await response.json();
-            if (data.logs && data.logs.length > 0) {
-                const outputId = logType + '-log-output';
-                const logOutput = document.getElementById(outputId);
-                
-                // 检查日志数量是否变化
-                const currentCount = logType === 'pet' ? lastPetLogCount : lastToolLogCount;
-                const newCount = data.logs.length;
-                
-                // 只有当日志数量增加时才添加新日志
-                if (newCount > currentCount) {
-                    const newLogs = data.logs.slice(currentCount);  // 只取新增的日志
-                    appendNewLogs(logType, newLogs);
-                    
-                    // 更新计数
-                    if (logType === 'pet') {
-                        lastPetLogCount = newCount;
-                    } else {
-                        lastToolLogCount = newCount;
-                    }
-                }
-                // 如果日志数量减少（文件被清空），重置并重新加载
-                else if (newCount < currentCount) {
-                    logOutput.innerHTML = '';
-                    if (logType === 'pet') {
-                        lastPetLogCount = 0;
-                    } else {
-                        lastToolLogCount = 0;
-                    }
-                    // 重新加载所有日志
-                    appendNewLogs(logType, data.logs);
-                    if (logType === 'pet') {
-                        lastPetLogCount = data.logs.length;
-                    } else {
-                        lastToolLogCount = data.logs.length;
-                    }
-                }
+            const outputId = logType + '-log-output';
+            const logOutput = document.getElementById(outputId);
+            const logs = data.logs || [];
+
+            // 用拼接内容作为指纹，检测日志是否真正变化
+            const contentFingerprint = logs.join('\n');
+            const lastContent = logType === 'pet' ? lastPetLogContent : lastToolLogContent;
+
+            if (contentFingerprint === lastContent) return;
+
+            // 内容有变化，整体重新渲染
+            logOutput.innerHTML = '';
+            if (logs.length > 0) {
+                appendNewLogs(logType, logs);
+            }
+
+            if (logType === 'pet') {
+                lastPetLogContent = contentFingerprint;
+            } else {
+                lastToolLogContent = contentFingerprint;
             }
         }
     } catch (error) {
@@ -1106,6 +1094,7 @@ async function saveLLMConfig() {
         api_url: document.getElementById('api-url').value,
         model: document.getElementById('model').value,
         temperature: parseFloat(document.getElementById('temperature').value),
+        temperature_enabled: document.getElementById('temperature-enabled').checked,
         system_prompt: document.getElementById('system-prompt').value
     };
     try {
@@ -1138,6 +1127,7 @@ async function loadLLMConfig() {
             _setVal('api-url', data.api_url || '');
             _setVal('model', data.model || '');
             _setVal('temperature', data.temperature || 0.9);
+            _setChk('temperature-enabled', data.temperature_enabled === true);
             _setVal('system-prompt', data.system_prompt || '');
         }
     } catch (error) {
@@ -1466,9 +1456,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // 初始化文件拖拽
     initFileDragDrop();
 
-    // 重置日志计数器
-    lastPetLogCount = 0;
-    lastToolLogCount = 0;
+    // 重置日志内容指纹
+    lastPetLogContent = '';
+    lastToolLogContent = '';
 
     addLog('WebUI 控制面板已就绪', 'success', 'system');
 
@@ -1618,75 +1608,11 @@ async function saveAdvancedSettings() {
 
 // ============ 工具和模型 ============
 
-// ============ 工具屋管理 ============
-
-// 当前工具选项卡
-let currentToolTab = 'fc';
-
-// 切换工具子选项卡
-function switchToolTab(tab) {
-    currentToolTab = tab;
-
-    // 更新选项卡按钮状态
-    document.querySelectorAll('#tools .sub-tab-button').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    if (event && event.target) {
-        event.target.classList.add('active');
-    }
-
-    // 更新面板显示
-    document.querySelectorAll('#tools .tool-panel').forEach(panel => {
-        panel.classList.remove('active');
-    });
-    const targetPanel = document.getElementById(tab + '-tools-panel');
-    if (targetPanel) {
-        targetPanel.classList.add('active');
-    }
-}
+// ============ MCP 工具管理 ============
 
 // 刷新所有工具列表
 async function refreshAllTools() {
-    await refreshFCTools();
     await refreshMCPTools();
-}
-
-// 刷新 Function Call 工具列表
-async function refreshFCTools() {
-    try {
-        const response = await fetch('/api/tools/list/fc');
-        if (!response.ok) {
-            console.error('FC 工具列表请求失败:', response.status);
-            return;
-        }
-        
-        const data = await response.json();
-        const fcToolsList = document.getElementById('fc-tools-list');
-        
-        if (!fcToolsList) {
-            console.error('fc-tools-list 元素不存在');
-            return;
-        }
-        
-        fcToolsList.innerHTML = '';
-
-        const tools = data.tools || [];
-        if (tools.length === 0) {
-            fcToolsList.innerHTML = '<div class="log-entry log-info">没有找到 Function Call 工具</div>';
-            return;
-        }
-
-        tools.forEach(tool => {
-            const card = createToolCard(tool);
-            fcToolsList.appendChild(card);
-        });
-    } catch (error) {
-        console.error('获取 FC 工具列表失败:', error);
-        const fcToolsList = document.getElementById('fc-tools-list');
-        if (fcToolsList) {
-            fcToolsList.innerHTML = `<div class="log-entry log-error">加载失败：${error.message}</div>`;
-        }
-    }
 }
 
 // 刷新 MCP 工具列表
@@ -1927,6 +1853,7 @@ async function loadConfigs() {
             _setVal('api-url', config.api_url || '');
             _setVal('model', config.model || '');
             _setVal('temperature', config.temperature || 0.9);
+            _setChk('temperature-enabled', config.temperature_enabled === true);
             _setVal('system-prompt', config.system_prompt || '');
         }
     } catch (error) {
@@ -1956,9 +1883,8 @@ async function loadSystemInfo() {
         if (response.ok) {
             const data = await response.json();
             document.getElementById('webui-version').textContent = data.version;
-            // 保存启动时间戳用于计算运行时间
+            document.getElementById('neuro-version').textContent = data.neuro_version;
             window.startTimestamp = data.start_timestamp;
-            // 立即更新一次运行时间
             updateUptime();
         }
     } catch (error) {
@@ -2609,9 +2535,8 @@ async function saveBasicSettings() {
             auto_screenshot: document.getElementById('auto-screenshot').checked,
             use_vision_model: document.getElementById('use-vision-model').checked,
             show_chat_box: document.getElementById('show-chat-box').checked,
-            show_model: !document.getElementById('hide-model').checked,  // 勾选表示隐藏，所以取反
+            show_model: !document.getElementById('hide-model').checked,
             voice_barge_in: document.getElementById('voice-barge-in').checked,
-            tools_enabled: document.getElementById('tools-enabled').checked,
             mcp_enabled: document.getElementById('mcp-enabled').checked,
             vision_model: {
                 api_key: document.getElementById('vision-model-api-key').value,
@@ -2653,10 +2578,8 @@ async function loadBasicConfig() {
             _setChk('show-chat-box', config.show_chat_box === true);
             _setChk('show-model', config.show_model === true);
             _setChk('voice-barge-in', config.voice_barge_in === true);
-            _setChk('tools-enabled', config.tools_enabled === true);
             _setChk('mcp-enabled', config.mcp_enabled === true);
 
-            // 加载视觉模型配置
             if (config.vision_model) {
                 _setVal('vision-model-api-key', config.vision_model.api_key || '');
                 _setVal('vision-model-api-url', config.vision_model.api_url || '');
@@ -2952,7 +2875,7 @@ async function refreshToolMarket() {
         } else if (data.success) {
             listElement.innerHTML = '<div class="log-entry log-info">暂无工具</div>';
         } else {
-            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载���败') + '</div>';
+            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载失败') + '</div>';
         }
     } catch (error) {
         document.getElementById('tool-market-list').innerHTML = 
@@ -3004,68 +2927,6 @@ async function downloadTool(toolName, downloadUrl, fileName) {
     }
 }
 
-// 刷新 FC 广场
-async function refreshFCMarket() {
-    try {
-        const listElement = document.getElementById('fc-market-list');
-        listElement.innerHTML = '<div class="log-entry log-info">正在加载 FC 工具列表...</div>';
-
-        const response = await fetch('/api/market/fc-tools');
-        const data = await response.json();
-
-        if (data.success && data.fc_tools && data.fc_tools.length > 0) {
-            listElement.innerHTML = '';
-            data.fc_tools.forEach((tool) => {
-                const card = createFCCard(tool);
-                listElement.appendChild(card);
-            });
-        } else if (data.success) {
-            listElement.innerHTML = '<div class="log-entry log-info">暂无 FC 工具</div>';
-        } else {
-            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载失败') + '</div>';
-        }
-    } catch (error) {
-        document.getElementById('fc-market-list').innerHTML =
-            '<div class="log-entry log-error">加载出错：' + error.message + '</div>';
-    }
-}
-
-// 创建 FC 工具卡片
-function createFCCard(tool) {
-    const card = document.createElement('div');
-    card.className = 'market-card';
-
-    const toolName = tool.tool_name || tool.name || '未命名工具';
-    const downloadUrl = tool.download_url || '';
-
-    const html = `<div class="market-card-header">
-        <h4 class="market-card-title">🔧 ${toolName}</h4>
-    </div>
-    <button onclick="downloadFCtool('${toolName.replace(/'/g, "\\'")}', '${downloadUrl}')" class="btn-sm" style="margin-top: 10px;">⬇ 下载</button>`;
-
-    card.innerHTML = html;
-    return card;
-}
-
-// 下载 FC 工具
-async function downloadFCtool(toolName, downloadUrl) {
-    try {
-        const result = await fetch('/api/market/fc-tools/download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tool_name: toolName, download_url: downloadUrl })
-        });
-        const res = await result.json();
-        if (res.success) {
-            showSuccess(`FC 工具 ${toolName} 已下载！`);
-        } else {
-            showError('下载失败：' + (res.error || '未知错误'));
-        }
-    } catch (error) {
-        showError('下载时出错：' + error.message);
-    }
-}
-
 // 刷新插件广场
 async function refreshPluginMarket() {
     try {
@@ -3084,7 +2945,7 @@ async function refreshPluginMarket() {
         } else if (data.success) {
             listElement.innerHTML = '<div class="log-entry log-info">暂无插件</div>';
         } else {
-            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载��败') + '</div>';
+            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载失败') + '</div>';
         }
     } catch (error) {
         document.getElementById('plugin-market-list').innerHTML =
@@ -3123,9 +2984,18 @@ function createPluginMarketCard(plugin) {
         btnDisabled = '';
     }
 
+    const authorLine = escapeHtml(author);
+    const repoHref = repo ? escapeHtml(repo) : '';
+    const metaBlock = repo
+        ? `<div class="market-card-meta">
+            <span class="market-card-author">👤 作者：${authorLine}</span>
+            <a class="market-card-source-link" href="${repoHref}" target="_blank" rel="noopener noreferrer">📎 查看来源</a>
+           </div>`
+        : `<p class="market-card-author">👤 作者：${authorLine}</p>`;
+
     const html = `<div class="market-card-header">
         <h4 class="market-card-title">🧩 ${displayName}</h4>
-        <p class="market-card-author">作者：${author}</p>
+        ${metaBlock}
         <p class="market-card-summary">${desc}</p>
         <div class="install-progress" id="progress-${pluginName}" style="display: none;">
             <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
