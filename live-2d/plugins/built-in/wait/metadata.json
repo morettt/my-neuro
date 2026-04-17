@@ -1,0 +1,10 @@
+{
+  "name": "wait",
+  "displayName": "等待",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "让 AI 等待指定时间，提供 wait 工具",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

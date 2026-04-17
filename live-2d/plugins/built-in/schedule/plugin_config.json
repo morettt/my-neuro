@@ -1,0 +1,9 @@
+{
+  "schedule_file": {
+    "title": "日程文件名",
+    "description": "存储日程数据的 JSON 文件名，保存在程序根目录下",
+    "type": "string",
+    "default": "../AI记录室/日程表.json",
+    "value": "../AI记录室/日程表.json"
+  }
+}

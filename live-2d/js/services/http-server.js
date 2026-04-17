@@ -193,6 +193,75 @@ class HttpServer {
                 .catch(error => res.json({ success: false, message: error.toString() }));
         });
 
+        // 热复位模型端点
+		this.emotionApp.post('/reset-model-position', async (req, res) => {
+		    const mainWindow = BrowserWindow.getAllWindows()[0];
+		    if (!mainWindow) {
+		        return res.json({ success: false});
+		    }
+		
+		    const jsCode = `
+		        (() => {
+		            // 获取全局的模型控制器
+		            const mc = global.modelController;
+		            if (!mc?.model) return { success: false};
+		
+		            const { ipcRenderer } = require('electron');
+		            const model = mc.model;
+		            const defaultX = window.innerWidth * 1.35;
+		            const defaultY = window.innerHeight * 0.8;
+		            const scale = 0.65;
+                    // 复位到默认位置
+		            model.x = defaultX;
+		            model.y = defaultY;
+		            model.scale.set(scale);
+		            mc.updateInteractionArea();
+		
+		            ipcRenderer.send('save-model-position', { x: 1.35, y: 0.8, scale });
+		            return { success: true};
+		        })()
+		    `;
+		
+		    try {
+		        const result = await mainWindow.webContents.executeJavaScript(jsCode);
+		        res.json(result);
+		    } catch (error) {
+		        res.json({ success: false, message: error.toString() });
+		    }
+		});
+        // 模型切换接口（供QT前端调用）
+        this.emotionApp.post('/switch-model', (req, res) => {
+            const { model_name, model_type } = req.body;
+            const mainWindow = BrowserWindow.getAllWindows()[0];
+
+            if (!mainWindow) {
+                return res.json({ success: false, message: '应用窗口未找到' });
+            }
+
+            if (model_type === 'vrm') {
+                // VRM模型切换：通过IPC触发
+                mainWindow.webContents.executeJavaScript(
+                    `require('electron').ipcRenderer.invoke('switch-vrm-model', '${model_name}')`
+                ).then(() => {
+                    res.json({ success: true, message: `VRM模型切换到 ${model_name}` });
+                }).catch(error => {
+                    res.json({ success: false, message: error.toString() });
+                });
+            } else {
+                // Live2D模型切换
+                mainWindow.webContents.executeJavaScript(
+                    `require('electron').ipcRenderer.invoke('switch-live2d-model', '${model_name}')`
+                ).then(() => {
+                    res.json({ success: true, message: `模型切换到 ${model_name}` });
+                }).catch(error => {
+                    res.json({ success: false, message: error.toString() });
+                });
+            }
+        });
+
+        // VMC控制端点
+        this._setupVMCEndpoint();
+
         // ===== 插件管理接口 =====
 
         this.emotionApp.get('/plugins', (req, res) => {
@@ -229,6 +298,55 @@ class HttpServer {
 
         this.emotionApp.listen(3002, () => {
             console.log('情绪控制服务启动在端口3002');
+        });
+    }
+
+    /**
+     * 启动VMC控制端点（挂载到情绪控制服务器）
+     * 供QT前端实时控制VMC发送器
+     */
+    _setupVMCEndpoint() {
+        if (!this.emotionApp) return;
+
+        this.emotionApp.post('/control-vmc', (req, res) => {
+            const { enabled, host, port } = req.body;
+            const mainWindow = BrowserWindow.getAllWindows()[0];
+
+            if (!mainWindow) {
+                return res.json({ success: false, message: '应用窗口未找到' });
+            }
+
+            // 净化输入
+            const safeHost = String(host || '127.0.0.1').replace(/[^a-zA-Z0-9.\-:]/g, '');
+            const safePort = parseInt(port) || 39539;
+            const hasEnabled = typeof enabled === 'boolean';
+
+            const jsCode = `
+                (function() {
+                    if (!global.currentVRMAdapter) return '当前未使用VRM模型';
+                    const sender = global.currentVRMAdapter.getVMCSender();
+                    if (!sender) return 'VMC发送器未初始化';
+
+                    sender.setTarget('${safeHost}', ${safePort});
+
+                    ${hasEnabled ? `
+                    sender.enabled = ${!!enabled};
+                    if (${!!enabled}) {
+                        if (!sender.socket) sender.start();
+                        return 'VMC已启用 → ${safeHost}:${safePort}';
+                    } else {
+                        sender.stop();
+                        return 'VMC已关闭';
+                    }
+                    ` : `
+                    return 'VMC目标已更新 → ${safeHost}:${safePort}';
+                    `}
+                })();
+            `;
+
+            mainWindow.webContents.executeJavaScript(jsCode)
+                .then(result => res.json({ success: true, message: result }))
+                .catch(error => res.json({ success: false, message: error.toString() }));
         });
     }
 }

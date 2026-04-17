@@ -60,7 +60,14 @@ async function handleAPIError(response) {
         errorDetail = "无法读取错误详情";
     }
 
-    logToTerminal('error', `API错误 (${response.status} ${response.statusText}):\n${errorDetail}`);
+    // 多模态不支持是预期的可恢复错误，降级为 warn 避免误导用户
+    const isMultimodalUnsupported = errorDetail.toLowerCase().includes('multimodal') ||
+        (response.status === 400 && errorDetail.toLowerCase().includes('image') && errorDetail.toLowerCase().includes('support'));
+    if (isMultimodalUnsupported) {
+        logToTerminal('warn', `📷 当前模型不支持图片/多模态，将自动过滤图片后重试`);
+    } else {
+        logToTerminal('error', `API错误 (${response.status} ${response.statusText}):\n${errorDetail}`);
+    }
 
     let errorMessage = "";
     switch (response.status) {
@@ -92,14 +99,6 @@ async function handleAPIError(response) {
 // 统一的工具列表合并函数
 function getMergedToolsList() {
     let allTools = [];
-
-    // 添加本地Function Call工具
-    if (global.localToolManager && global.localToolManager.isEnabled) {
-        const localTools = global.localToolManager.getToolsForLLM();
-        if (localTools && localTools.length > 0) {
-            allTools.push(...localTools);
-        }
-    }
 
     // 添加MCP工具
     if (global.mcpManager && global.mcpManager.isEnabled) {

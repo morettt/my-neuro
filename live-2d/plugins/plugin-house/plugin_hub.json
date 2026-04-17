@@ -70,5 +70,47 @@
     "desc": "思考气泡：在用户发出语音或文本后、LLM 返回并通过 TTS 播报前，在 Live2D 模型旁显示萌系「正在思考」提示气泡，内置约 50 条随机文案；与工具调用气泡、歌词气泡分层错开显示，避免遮挡；支持水平/垂直偏移、显示延迟、文案切换间隔与自定义文案列表等配置。",
     "author": "A-night-owl-Rabbit",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-thinking-bubble"
+  },
+  "rebirth-feiniu-music": {
+    "display_name": "rebirth-feiniu-music",
+    "desc": "网易云音乐集成：搜索、播放、歌单管理、每日推荐、智能推荐（私人漫游/心动模式/雷达歌单）、偏好分析、随机播放；完整 Live2D 联动（嘴型同步、歌词气泡、麦克风动作）。仓库内已打包 ncm-cli 依赖，用户运行 setup.bat 配置开放平台 API Key 并扫码登录即可开箱即用。",
+    "author": "LikeNightRabbit",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-rebirth-feiniu-music"
+  },
+  "bilibili-tools": {
+    "display_name": "bilibili-tools",
+    "desc": "B 站集成插件：扫码登录；关键词搜视频、分区排行榜；获取视频综合信息（标题/简介/评论/弹幕，字幕经 bilibili-api-python 获取，无字幕时降级 Whisper 转录，可选 OpenAI 兼容 API 做内容总结）；发评论与弹幕；点赞、投币、收藏、一键三连；含 WBI/设备标识等反风控处理。仓库提供 node_modules.zip 解压即用，亦可 npm ci；需自备 bili_config 与 Python/Whisper/总结 API 等按 README 配置。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-bilibili-mcp"
+  },
+  "multi-search": {
+    "display_name": "multi-search",
+    "desc": "Live2D 内置风格插件：整合 Tavily 与 SerpApi（Google/Bing/DuckDuckGo/Google Scholar），搜索结果经 OpenAI 兼容 Chat Completions（默认示例 SiliconFlow）提炼摘要。提供 vsearch 语义并发深度搜索、web_search 快速搜索（Tavily 失败回退 SerpApi）、以及各单引擎搜索工具。仓库含 node_modules 与 plugin_config.example.json；需自备 Tavily、SerpApi 与提炼 LLM 的 API Key，按 README 填写 plugin_config.json。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/live2d-multi-search-plugin"
+  },
+  "openrouter-image": {
+    "display_name": "openrouter-image",
+    "desc": "通过 OpenRouter OpenAI 兼容接口调用图像模型（默认 google/gemini-3-pro-image-preview）生成图片；提供工具 generate_image_final，支持负面提示、批量 1–4 张、自定义文件名、尺寸档位与宽高比映射；保存为本地文件并在 Windows 上自动打开预览。可在插件配置填写 OpenRouter API Key 与输出目录，或复用全局 llm.api_key。对非真人/写实类提示会附加日系二次元画风约束。详见仓库 README。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-openrouter-image"
+  },
+  "windows-app-launcher": {
+    "display_name": "windows-app-launcher",
+    "desc": "Windows 本地应用启动插件：首次加载扫描用户/公共桌面的 .exe/.lnk/.url，合并维护 apps.json；解析快捷方式目标与 Internet 快捷方式 URL，支持 HTTP、HTTPS 与 steam 自定义协议拉起；提供工具 launch_application（按应用名、不区分大小写启动）。仓库含完整 node_modules 与 package-lock，开箱一般无需 npm install；不包含用户 apps.json（防隐私泄露），提供 apps.example.json。需 Windows；安装路径需保持与主程序 plugin-base 的相对层级（见仓库 README）。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-windows-app-launcher"
+  },
+  "mcp-filesystem": {
+    "display_name": "mcp-filesystem",
+    "desc": "基于 MCP Filesystem Server 思路的文件系统插件：在用户配置的「允许访问目录」内提供读/写、列目录、递归目录树、glob 搜索、文件元信息等工具；写操作可通过配置开关；含单文件读取大小上限与路径/符号链接安全校验。仓库已内置 node_modules（minimatch 等），克隆到 live-2d/plugins/community/mcp-filesystem 后一般无需再 npm install；敏感路径与 API 密钥不入库，详见 README。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-mcp-filesystem"
+  },
+  "remote-sync": {
+    "display_name": "remote-sync",
+    "desc": "远程同步插件，支持在网页上与桌宠互动。",
+    "author": "txzhao",
+    "repo": "https://github.com/txzhao2023/my-neuro-remote-sync"
   }
 }

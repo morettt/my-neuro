@@ -1,10 +1,10 @@
 // app-initializer.js - 应用初始化协调模块
 const { MCPManager } = require('./ai/mcp-manager.js');
-const { LocalToolManager } = require('./ai/local-tool-manager.js');
 const { VoiceChatFacade } = require('./ai/conversation/VoiceChatFacade.js');
 const { UIController } = require('./ui/ui-controller.js');
 const { TTSFactory } = require('./voice/tts-factory.js');
 const { ModelSetup } = require('./model/model-setup.js');
+const { VRMModelSetup } = require('./model/vrm-model-setup.js');
 const { BarrageManager } = require('./live/barrage-manager.js');
 // LiveStreamModule → plugins/built-in/bilibili-live
 // AutoChatModule   → plugins/built-in/auto-chat
@@ -31,7 +31,6 @@ class AppInitializer {
         this.model = null;
         this.emotionMapper = null;
         this.musicPlayer = null;
-        this.localToolManager = null;
         this.barrageManager = null;
         this.liveStreamModule = null;
         this.autoChatModule = null;
@@ -97,7 +96,6 @@ class AppInitializer {
                 ttsProcessor: this.ttsProcessor,
                 model: this.model,
                 emotionMapper: this.emotionMapper,
-                localToolManager: this.localToolManager,
                 barrageManager: this.barrageManager,
                 liveStreamModule: this.liveStreamModule,
                 autoChatModule: this.autoChatModule,
@@ -234,20 +232,47 @@ class AppInitializer {
         }
     }
 
-    // 第五阶段: 加载Live2D模型
+    // 第五阶段: 加载模型（Live2D或VRM）
     async initializeModel() {
-        const result = await ModelSetup.initialize(
-            this.modelController,
-            this.config,
-            this.ttsEnabled,
-            this.asrEnabled,
-            this.ttsProcessor,
-            this.voiceChat
-        );
+        const modelType = this.config.ui?.model_type || 'live2d';
+        console.log(`模型类型: ${modelType}`);
+
+        let result;
+        if (modelType === 'vrm') {
+            // 使用VRM模型
+            logToTerminal('info', '正在加载VRM 3D模型...');
+            result = await VRMModelSetup.initialize(
+                this.modelController,
+                this.config,
+                this.ttsEnabled,
+                this.asrEnabled,
+                this.ttsProcessor,
+                this.voiceChat
+            );
+        } else {
+            // 默认使用Live2D模型
+            result = await ModelSetup.initialize(
+                this.modelController,
+                this.config,
+                this.ttsEnabled,
+                this.asrEnabled,
+                this.ttsProcessor,
+                this.voiceChat
+            );
+        }
 
         this.model = result.model;
         this.emotionMapper = result.emotionMapper;
         this.musicPlayer = result.musicPlayer;
+
+        // VRM模式：替换modelController并更新TTS唇形回调
+        if (result.vrmController) {
+            this.modelController = result.vrmController;
+            if (this.ttsProcessor?.playbackEngine) {
+                this.ttsProcessor.playbackEngine.onAudioDataCallback =
+                    (value) => result.vrmController.setMouthOpenY(value);
+            }
+        }
 
         global.currentModel = this.model;
         global.pixiApp = result.app;
@@ -255,15 +280,7 @@ class AppInitializer {
 
     // 第七阶段: 初始化工具管理器
     async initializeToolManagers() {
-        // 本地工具管理器初始化
         try {
-            this.localToolManager = new LocalToolManager(this.config);
-            global.localToolManager = this.localToolManager;
-
-            const stats = this.localToolManager.getStats();
-            console.log('本地工具管理器初始化成功');
-            logToTerminal('info', `本地工具管理器初始化成功: ${stats.modules}个模块, ${stats.tools}个工具`);
-
             // 修改VoiceChat的sendToLLM方法，支持工具调用
             const enhancedSendToLLM = LLMHandler.createEnhancedSendToLLM(
                 this.voiceChat,
@@ -278,8 +295,8 @@ class AppInitializer {
                 this.voiceChat.inputRouter.setLLMHandler(enhancedSendToLLM);
             }
         } catch (error) {
-            console.error('本地工具管理器初始化失败:', error);
-            logToTerminal('error', `本地工具管理器初始化失败: ${error.message}`);
+            console.error('工具管理器初始化失败:', error);
+            logToTerminal('error', `工具管理器初始化失败: ${error.message}`);
         }
     }
 
@@ -381,14 +398,9 @@ class AppInitializer {
         let _autoChatEnabled = false;
         try { _autoChatEnabled = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'plugins', 'built-in', 'auto-chat', 'plugin_config.json'), 'utf8')).enabled; } catch(e) {}
         console.log(`自动对话: ${_autoChatEnabled ? '启用' : '禁用'}`);
-        console.log(`Function Call工具: ${this.config.tools?.enabled ? '启用' : '禁用'}`);
         console.log(`MCP工具: ${this.config.mcp?.enabled ? '启用' : '禁用'}`);
 
         // 显示工具统计信息
-        if (this.localToolManager) {
-            const localStats = this.localToolManager.getStats();
-            console.log(`Function Call: ${localStats.tools}个工具`);
-        }
         if (this.mcpManager) {
             const mcpStats = this.mcpManager.getStats();
             console.log(`MCP: ${mcpStats.tools}个工具`);

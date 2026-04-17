@@ -1,0 +1,10 @@
+{
+  "name": "code-executor",
+  "displayName": "代码执行",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "执行 AI 生成的 Python 代码，提供 execute_code / install_packages 工具",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

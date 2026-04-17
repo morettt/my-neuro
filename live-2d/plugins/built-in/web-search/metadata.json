@@ -1,0 +1,10 @@
+{
+  "name": "web-search",
+  "displayName": "网络搜索",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "游览器搜索，桌宠可使用此插件获取最新的互联网内容",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

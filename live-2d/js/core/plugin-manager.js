@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const { PluginContext } = require('./plugin-context.js');
-const { logToTerminal } = require('../api-utils.js');
+const { logToTerminal, logToolAction } = require('../api-utils.js');
 
 class PluginManager {
     constructor(config) {
@@ -76,10 +76,10 @@ class PluginManager {
     // ===== 加载 =====
 
     async loadAll() {
-        logToTerminal('info', '🔌 开始加载插件...');
+        logToolAction('info', '🔌 开始加载插件...');
         await this._loadFromDir(this._builtinDir, 'built-in');
         await this._loadFromDir(this._communityDir, 'community');
-        logToTerminal('info', `🔌 插件加载完成，共 ${this._plugins.size} 个插件`);
+        logToolAction('info', `🔌 插件加载完成，共 ${this._plugins.size} 个插件`);
     }
 
     async _loadFromDir(dir, type) {
@@ -97,7 +97,7 @@ class PluginManager {
             if (!entry.isDirectory()) continue;
             const pluginDir = path.join(dir, entry.name);
             await this.load(pluginDir).catch(err => {
-                logToTerminal('error', `❌ 加载插件失败 (${entry.name}): ${err.message}`);
+                logToolAction('error', `❌ 加载插件失败 (${entry.name}): ${err.message}`);
             });
         }
     }
@@ -124,12 +124,12 @@ class PluginManager {
         this._loadEnabledList();
         const relPath = path.relative(this._pluginsDir, pluginDir).replace(/\\/g, '/');
         if (!this._enabledPlugins.has(relPath)) {
-            logToTerminal('info', `⏭️ 插件未启用，跳过: ${name}`);
+            //logToTerminal('info', `⏭️ 插件未启用，跳过: ${name}`);
             return;
         }
 
         if (this._plugins.has(name)) {
-            logToTerminal('info', `⏭️ 插件已加载，跳过: ${name}`);
+            //logToTerminal('info', `⏭️ 插件已加载，跳过: ${name}`);
             return;
         }
 
@@ -161,7 +161,8 @@ class PluginManager {
         await plugin.onInit();
 
         this._plugins.set(name, { plugin, metadata, pluginDir });
-        logToTerminal('info', `✅ 插件已加载: ${name} v${metadata.version || '?'}${isPython ? ' [Python]' : ''}`);
+        const displayName = metadata.displayName || name;
+        logToolAction('info', `✅ 插件已加载: ${displayName} v${metadata.version || '?'}${isPython ? ' [Python]' : ''}`);
     }
 
     /**

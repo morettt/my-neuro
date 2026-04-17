@@ -4,7 +4,7 @@ const { MemosTools } = require('./tools.js');
 const fs = require('fs');
 const path = require('path');
 
-const BACKEND_CONFIG_PATH = path.join(__dirname, '..', '..', '..', '..', 'memos_system', 'config', 'memos_config.json');
+const BACKEND_CONFIG_PATH = path.join(__dirname, '..', '..', '..', '..', 'plugins-dlc', 'memos', 'memos_system', 'config', 'memos_config.json');
 
 class MemosPlugin extends Plugin {
 
@@ -34,7 +34,7 @@ class MemosPlugin extends Plugin {
     }
 
     async onUserInput(event) {
-        if (!this.client?.enabled || !this._cfg.auto_inject) return;
+        if (!this.client?.enabled) return;
         if (!['voice', 'text'].includes(event.source)) return;
 
         try {
@@ -51,7 +51,7 @@ class MemosPlugin extends Plugin {
     }
 
     async onLLMResponse(response) {
-        if (!this.client?.enabled || !this._cfg.auto_save) return;
+        if (!this.client?.enabled) return;
 
 const messages = this.context.getMessages();
         const lastUser = [...messages].reverse().find(m => m.role === 'user');
@@ -96,18 +96,6 @@ const messages = this.context.getMessages();
                 };
             }
 
-            // LLM fallback
-            if (cfg.backend_llm_fallback) {
-                backendCfg.llm_fallback = {
-                    enabled: cfg.backend_llm_fallback.enabled !== false,
-                    config: {
-                        model: cfg.backend_llm_fallback.model || backendCfg.llm_fallback?.config?.model || '',
-                        api_key: cfg.backend_llm_fallback.api_key || backendCfg.llm_fallback?.config?.api_key || '',
-                        base_url: cfg.backend_llm_fallback.base_url || backendCfg.llm_fallback?.config?.base_url || ''
-                    }
-                };
-            }
-
             // Search
             if (cfg.backend_search) {
                 backendCfg.search = backendCfg.search || {};
@@ -116,6 +104,12 @@ const messages = this.context.getMessages();
                 if (cfg.backend_search.enable_graph_query !== undefined) backendCfg.search.enable_graph_query = cfg.backend_search.enable_graph_query;
                 backendCfg.search.similarity_threshold = cfg.similarity_threshold || backendCfg.search.similarity_threshold || 0.5;
             }
+
+            // Embedding
+            backendCfg.embedding = backendCfg.embedding || {};
+            backendCfg.embedding.use_api = cfg.use_api_embedding === true;
+            backendCfg.embedding.api_model = cfg.api_embedding_model || 'text-embedding-3-large';
+            backendCfg.embedding.api_dimensions = cfg.api_embedding_dimensions || 1024;
 
             // Features
             if (cfg.backend_features) {

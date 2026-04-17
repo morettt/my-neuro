@@ -120,8 +120,8 @@ class MoodChatModule {
     async evaluateInitialMood() {
         try {
             // 读取AI日记和记忆库
-            const diaryPath = path.join(__dirname, '..', '..', 'AI记录室', 'AI日记.txt');
-            const memoryPath = path.join(__dirname, '..', '..', 'AI记录室', '记忆库.txt');
+            const diaryPath = path.join(__dirname, '..', '..', '..', 'AI记录室','AI日记.txt');
+            const memoryPath = path.join(__dirname, '..', '..', '..', 'AI记录室','记忆库.txt');
 
             let contextContent = '';
             let hasDiary = false;
@@ -432,7 +432,7 @@ class MoodChatModule {
                 timestamp: Date.now()
             };
 
-            const filePath = path.join(__dirname, '..', '..', 'AI记录室', 'mood_status.json');
+            const filePath = path.join(__dirname, '..', '..', '..', 'AI记录室','mood_status.json');
             fs.writeFileSync(filePath, JSON.stringify(moodData, null, 2), 'utf8');
         } catch (error) {
             // 静默失败，不影响主功能
