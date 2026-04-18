@@ -36,8 +36,8 @@ def get_status():
 @service_bp.route('/api/system/info')
 def get_system_info():
     """获取系统信息（版本、运行时间等）"""
-    import json
     uptime = datetime.datetime.now() - START_TIME
+    # 格式化为人类可读的时间
     days = uptime.days
     hours, remainder = divmod(uptime.seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
@@ -45,22 +45,19 @@ def get_system_info():
     uptime_str = f"{days}天{hours}小时{minutes}分钟{seconds}秒" if days > 0 else f"{hours}小时{minutes}分钟{seconds}秒"
 
     config_path = PROJECT_ROOT / 'config.json'
-    webui_version = '未知'
     neuro_version = '未知'
     try:
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
-            webui_version = config.get('webui_version', '未知')
             neuro_version = config.get('version', '未知')
     except Exception as e:
         logger.warning(f'读取版本信息失败：{e}')
 
     return jsonify({
-        'version': webui_version,
         'neuro_version': neuro_version,
         'uptime': uptime_str,
         'start_time': START_TIME.strftime('%Y-%m-%d %H:%M:%S'),
-        'start_timestamp': START_TIME.timestamp()
+        'start_timestamp': START_TIME.timestamp()  # 添加时间戳用于前端计算
     })
 
 

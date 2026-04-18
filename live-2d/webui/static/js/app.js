@@ -3,8 +3,8 @@
 const serviceStates = {};
 let currentLogTab = 'system-log';
 let logPollingInterval = null;
-let lastPetLogContent = '';  // 记录上次桌宠日志内容指纹
-let lastToolLogContent = ''; // 记录上次工具日志内容指纹
+let lastPetLogCount = 0;  // 记录上次桌宠日志数量
+let lastToolLogCount = 0; // 记录上次工具日志数量
 
 // 对话历史状态
 let chatHistoryState = {
@@ -271,10 +271,6 @@ function clearCurrentLog() {
     }
     const logOutput = document.getElementById(outputId);
     logOutput.innerHTML = '<div class="log-entry log-info">日志已清空</div>';
-
-    // 重置内容指纹，使下次轮询能重新渲染
-    if (currentLogTab === 'pet-log') lastPetLogContent = '';
-    if (currentLogTab === 'tool-log') lastToolLogContent = '';
 }
 
 // 拆分/合并日志窗口
@@ -491,119 +487,15 @@ function renderChatHistory(messages, prependToTop = false, scrollBeforeLoad = 0,
 
     const htmlParts = [];
 
-    // 添加"加载更多"按钮在顶部
-    htmlParts.push(`
-        <div class="chat-load-more" id="chat-load-more-container">
-            <button id="chat-load-more-btn" onclick="loadMoreChatHistory()" ${!chatHistoryState.hasMorePrev ? 'disabled' : ''}>
-                ${chatHistoryState.hasMorePrev ? '加载更多历史对话' : '没有更多了'}
-            </button>
-        </div>
-    `);
+    // 添加"加载更多"按钮在顶部（仅有更多时显示）
+    if (chatHistoryState.hasMorePrev) {
+        htmlParts.push(`
+            <div class="chat-load-more" id="chat-load-more-container">
+                <button id="chat-load-more-btn" onclick="loadMoreChatHistory()">加载更多历史对话</button>
+            </div>
+        `);
+    }
 
-    // 添加 CSS 样式
-    htmlParts.push(`
-        <style>
-            .chat-message {
-                margin-bottom: 10px;
-                padding: 8px 12px;
-                border-radius: 6px;
-                background: rgba(255, 255, 255, 0.05);
-                min-height: 2.4em;
-                overflow-wrap: break-word;
-                word-wrap: break-word;
-            }
-            .chat-message.user {
-                background: rgba(74, 144, 217, 0.1);
-                border-left: 3px solid #4a90d9;
-            }
-            .chat-message.assistant {
-                background: rgba(212, 133, 13, 0.1);
-                border-left: 3px solid #d4850d;
-            }
-            .chat-sender {
-                font-weight: bold;
-                margin-bottom: 2px;
-                font-size: 13px;
-                display: block;
-            }
-            .chat-sender.user {
-                color: #4a90d9;
-            }
-            .chat-sender.assistant {
-                color: #d4850d;
-            }
-            .chat-content {
-                line-height: 1.5;
-                color: #e0e0e0;
-                white-space: pre-wrap;
-                word-wrap: break-word;
-                overflow-wrap: break-word;
-                font-size: 14px;
-                max-width: 100%;
-            }
-            .chat-content img {
-                max-width: 100%;
-                border-radius: 6px;
-                margin: 8px 0;
-                cursor: pointer;
-                transition: transform 0.2s;
-                display: block;
-            }
-            .chat-content img:hover {
-                transform: scale(1.02);
-            }
-            .chat-load-more {
-                text-align: center;
-                padding: 12px;
-            }
-            .chat-load-more button {
-                padding: 6px 16px;
-                background: linear-gradient(135deg, #667eea, #764ba2);
-                border: none;
-                border-radius: 6px;
-                color: white;
-                cursor: pointer;
-                font-size: 13px;
-            }
-            .chat-load-more button:disabled {
-                background: #555;
-                cursor: not-allowed;
-                font-size: 13px;
-            }
-            /* 工具调用样式 */
-            .chat-tool-calls {
-                margin: 8px 0;
-                padding: 8px;
-                background: rgba(102, 126, 234, 0.1);
-                border-radius: 6px;
-                border-left: 3px solid #667eea;
-            }
-            .chat-tool-call {
-                margin: 4px 0;
-                padding: 4px;
-            }
-            .chat-tool-name {
-                font-weight: bold;
-                color: #667eea;
-                font-size: 13px;
-                margin-bottom: 4px;
-            }
-            .chat-tool-args {
-                font-family: monospace;
-                font-size: 12px;
-                color: #a0a0a0;
-                white-space: pre-wrap;
-                word-wrap: break-word;
-                background: rgba(0, 0, 0, 0.2);
-                padding: 4px 8px;
-                border-radius: 4px;
-            }
-            /* 确保 chat-history-output 容器内的内容不会撑开父容器 */
-            #chat-history-output {
-                max-width: 100%;
-            }
-        </style>
-    `);
 
     // 遍历消息（保持原顺序：旧→新）
     messages.forEach((msg) => {
@@ -634,7 +526,7 @@ function renderChatHistory(messages, prependToTop = false, scrollBeforeLoad = 0,
                 // content 是数组格式（多模态消息）
                 msg.content.forEach(item => {
                     if (item.type === 'text') {
-                        let text = escapeHtml(item.text || '');
+                        let text = escapeHtml(item.text || '').replace(/\n+/g, ' ');
                         text = renderBase64Images(text);
                         contentHtml += `<div class="chat-content">${text}</div>`;
                     } else if (item.type === 'image_url') {
@@ -648,7 +540,7 @@ function renderChatHistory(messages, prependToTop = false, scrollBeforeLoad = 0,
                 });
             } else {
                 // content 是字符串格式
-                let content = escapeHtml(msg.content || '');
+                let content = escapeHtml(msg.content || '').replace(/\n+/g, ' ');
                 content = renderBase64Images(content);
                 contentHtml += `<div class="chat-content">${content}</div>`;
             }
@@ -656,8 +548,8 @@ function renderChatHistory(messages, prependToTop = false, scrollBeforeLoad = 0,
 
         htmlParts.push(`
             <div class="chat-message ${role}">
-                <div class="chat-sender ${role}">${senderName}</div>
-                ${contentHtml}
+                <span class="chat-sender ${role}">${senderName}</span>
+                <span class="chat-content">${contentHtml}</span>
             </div>
         `);
     });
@@ -753,11 +645,8 @@ function loadMoreChatHistory() {
 
 // 更新加载更多按钮状态
 function updateChatHistoryLoadMoreButton() {
-    const btn = document.getElementById('chat-load-more-btn');
-    if (btn) {
-        btn.disabled = !chatHistoryState.hasMorePrev;
-        btn.textContent = chatHistoryState.hasMorePrev ? '加载更多历史对话' : '没有更多了';
-    }
+    const container = document.getElementById('chat-load-more-container');
+    if (container) container.style.display = chatHistoryState.hasMorePrev ? '' : 'none';
 }
 
 // 启动对话历史轮询
@@ -765,7 +654,8 @@ function startChatHistoryPolling() {
     stopChatHistoryPolling();
     chatHistoryState.pollInterval = setInterval(() => {
         // 只在当前显示历史对话选项卡时轮询，且只在第一页（最新对话）时更新
-        const isChatHistoryActive = document.getElementById('chat-history')?.classList.contains('active');
+        const isChatHistoryActive = document.getElementById('chat-history')?.classList.contains('active')
+            || document.getElementById('chat-history2')?.classList.contains('active');
         if (isChatHistoryActive && chatHistoryState.messages.length > 0 && chatHistoryState.page === 1) {
             // 轮询时重新加载第一页，保持最新对话
             loadChatHistory(1, false);
@@ -816,32 +706,48 @@ function syncLogToPanel2() {
     }
 }
 
-// 加载日志（基于内容指纹检测变化）
+// 加载日志（增量更新）
 async function loadLogs(logType) {
     try {
         const response = await fetch('/api/logs/' + logType);
         if (response.ok) {
             const data = await response.json();
-            const outputId = logType + '-log-output';
-            const logOutput = document.getElementById(outputId);
-            const logs = data.logs || [];
-
-            // 用拼接内容作为指纹，检测日志是否真正变化
-            const contentFingerprint = logs.join('\n');
-            const lastContent = logType === 'pet' ? lastPetLogContent : lastToolLogContent;
-
-            if (contentFingerprint === lastContent) return;
-
-            // 内容有变化，整体重新渲染
-            logOutput.innerHTML = '';
-            if (logs.length > 0) {
-                appendNewLogs(logType, logs);
-            }
-
-            if (logType === 'pet') {
-                lastPetLogContent = contentFingerprint;
-            } else {
-                lastToolLogContent = contentFingerprint;
+            if (data.logs && data.logs.length > 0) {
+                const outputId = logType + '-log-output';
+                const logOutput = document.getElementById(outputId);
+                
+                // 检查日志数量是否变化
+                const currentCount = logType === 'pet' ? lastPetLogCount : lastToolLogCount;
+                const newCount = data.logs.length;
+                
+                // 只有当日志数量增加时才添加新日志
+                if (newCount > currentCount) {
+                    const newLogs = data.logs.slice(currentCount);  // 只取新增的日志
+                    appendNewLogs(logType, newLogs);
+                    
+                    // 更新计数
+                    if (logType === 'pet') {
+                        lastPetLogCount = newCount;
+                    } else {
+                        lastToolLogCount = newCount;
+                    }
+                }
+                // 如果日志数量减少（文件被清空），重置并重新加载
+                else if (newCount < currentCount) {
+                    logOutput.innerHTML = '';
+                    if (logType === 'pet') {
+                        lastPetLogCount = 0;
+                    } else {
+                        lastToolLogCount = 0;
+                    }
+                    // 重新加载所有日志
+                    appendNewLogs(logType, data.logs);
+                    if (logType === 'pet') {
+                        lastPetLogCount = data.logs.length;
+                    } else {
+                        lastToolLogCount = data.logs.length;
+                    }
+                }
             }
         }
     } catch (error) {
@@ -894,21 +800,46 @@ function toggleApiKeyVisibility() {
 // 更新服务状态
 function updateServiceStatus(serviceName, status) {
     serviceStates[serviceName] = status;
+
+    // live2d 使用单一切换按钮
+    if (serviceName === 'live2d') {
+        const toggleBtn = document.getElementById('live2d-toggle');
+        if (toggleBtn) {
+            if (status === 'running') {
+                toggleBtn.textContent = '关闭';
+                toggleBtn.classList.add('running');
+            } else {
+                toggleBtn.textContent = '启动';
+                toggleBtn.classList.remove('running');
+            }
+        }
+        return;
+    }
+
     const statusElement = document.getElementById(serviceName + '-status');
     const startBtn = document.getElementById(serviceName + '-start');
     const stopBtn = document.getElementById(serviceName + '-stop');
     const restartBtn = document.getElementById(serviceName + '-restart');
-    
+
     if (status === 'running') {
-        statusElement.className = 'status running';
+        if (statusElement) statusElement.className = 'status running';
         if (startBtn) startBtn.disabled = true;
         if (stopBtn) stopBtn.disabled = false;
-        if (restartBtn) restartBtn && (restartBtn.disabled = false);
+        if (restartBtn) restartBtn.disabled = false;
     } else {
-        statusElement.className = 'status stopped';
+        if (statusElement) statusElement.className = 'status stopped';
         if (startBtn) startBtn.disabled = false;
         if (stopBtn) stopBtn.disabled = true;
-        if (restartBtn) restartBtn && (restartBtn.disabled = true);
+        if (restartBtn) restartBtn.disabled = true;
+    }
+}
+
+// Live2D 启动/关闭切换
+async function toggleLive2dService() {
+    if (serviceStates['live2d'] === 'running') {
+        await stopService('live2d');
+    } else {
+        await startService('live2d');
     }
 }
 
@@ -1094,7 +1025,6 @@ async function saveLLMConfig() {
         api_url: document.getElementById('api-url').value,
         model: document.getElementById('model').value,
         temperature: parseFloat(document.getElementById('temperature').value),
-        temperature_enabled: document.getElementById('temperature-enabled').checked,
         system_prompt: document.getElementById('system-prompt').value
     };
     try {
@@ -1127,7 +1057,6 @@ async function loadLLMConfig() {
             _setVal('api-url', data.api_url || '');
             _setVal('model', data.model || '');
             _setVal('temperature', data.temperature || 0.9);
-            _setChk('temperature-enabled', data.temperature_enabled === true);
             _setVal('system-prompt', data.system_prompt || '');
         }
     } catch (error) {
@@ -1444,6 +1373,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // 启动日志轮询
     startLogPolling();
 
+    // 右侧面板默认显示历史对话，页面加载时主动拉取
+    loadLastPageOfChatHistory();
+
     // 加载模型列表（使用 refreshModelList 函数）
     refreshModelList();
 
@@ -1456,9 +1388,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // 初始化文件拖拽
     initFileDragDrop();
 
-    // 重置日志内容指纹
-    lastPetLogContent = '';
-    lastToolLogContent = '';
+    // 重置日志计数器
+    lastPetLogCount = 0;
+    lastToolLogCount = 0;
 
     addLog('WebUI 控制面板已就绪', 'success', 'system');
 
@@ -1608,11 +1540,75 @@ async function saveAdvancedSettings() {
 
 // ============ 工具和模型 ============
 
-// ============ MCP 工具管理 ============
+// ============ 工具屋管理 ============
+
+// 当前工具选项卡
+let currentToolTab = 'fc';
+
+// 切换工具子选项卡
+function switchToolTab(tab) {
+    currentToolTab = tab;
+
+    // 更新选项卡按钮状态
+    document.querySelectorAll('#tools .sub-tab-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
+
+    // 更新面板显示
+    document.querySelectorAll('#tools .tool-panel').forEach(panel => {
+        panel.classList.remove('active');
+    });
+    const targetPanel = document.getElementById(tab + '-tools-panel');
+    if (targetPanel) {
+        targetPanel.classList.add('active');
+    }
+}
 
 // 刷新所有工具列表
 async function refreshAllTools() {
+    await refreshFCTools();
     await refreshMCPTools();
+}
+
+// 刷新 Function Call 工具列表
+async function refreshFCTools() {
+    try {
+        const response = await fetch('/api/tools/list/fc');
+        if (!response.ok) {
+            console.error('FC 工具列表请求失败:', response.status);
+            return;
+        }
+        
+        const data = await response.json();
+        const fcToolsList = document.getElementById('fc-tools-list');
+        
+        if (!fcToolsList) {
+            console.error('fc-tools-list 元素不存在');
+            return;
+        }
+        
+        fcToolsList.innerHTML = '';
+
+        const tools = data.tools || [];
+        if (tools.length === 0) {
+            fcToolsList.innerHTML = '<div class="log-entry log-info">没有找到 Function Call 工具</div>';
+            return;
+        }
+
+        tools.forEach(tool => {
+            const card = createToolCard(tool);
+            fcToolsList.appendChild(card);
+        });
+    } catch (error) {
+        console.error('获取 FC 工具列表失败:', error);
+        const fcToolsList = document.getElementById('fc-tools-list');
+        if (fcToolsList) {
+            fcToolsList.innerHTML = `<div class="log-entry log-error">加载失败：${error.message}</div>`;
+        }
+    }
 }
 
 // 刷新 MCP 工具列表
@@ -1853,7 +1849,6 @@ async function loadConfigs() {
             _setVal('api-url', config.api_url || '');
             _setVal('model', config.model || '');
             _setVal('temperature', config.temperature || 0.9);
-            _setChk('temperature-enabled', config.temperature_enabled === true);
             _setVal('system-prompt', config.system_prompt || '');
         }
     } catch (error) {
@@ -1882,10 +1877,7 @@ async function loadSystemInfo() {
         const response = await fetch('/api/system/info');
         if (response.ok) {
             const data = await response.json();
-            document.getElementById('webui-version').textContent = data.version;
             document.getElementById('neuro-version').textContent = data.neuro_version;
-            window.startTimestamp = data.start_timestamp;
-            updateUptime();
         }
     } catch (error) {
         console.error('加载系统信息失败:', error);
@@ -2535,8 +2527,9 @@ async function saveBasicSettings() {
             auto_screenshot: document.getElementById('auto-screenshot').checked,
             use_vision_model: document.getElementById('use-vision-model').checked,
             show_chat_box: document.getElementById('show-chat-box').checked,
-            show_model: !document.getElementById('hide-model').checked,
+            show_model: !document.getElementById('hide-model').checked,  // 勾选表示隐藏，所以取反
             voice_barge_in: document.getElementById('voice-barge-in').checked,
+            tools_enabled: document.getElementById('tools-enabled').checked,
             mcp_enabled: document.getElementById('mcp-enabled').checked,
             vision_model: {
                 api_key: document.getElementById('vision-model-api-key').value,
@@ -2578,8 +2571,10 @@ async function loadBasicConfig() {
             _setChk('show-chat-box', config.show_chat_box === true);
             _setChk('show-model', config.show_model === true);
             _setChk('voice-barge-in', config.voice_barge_in === true);
+            _setChk('tools-enabled', config.tools_enabled === true);
             _setChk('mcp-enabled', config.mcp_enabled === true);
 
+            // 加载视觉模型配置
             if (config.vision_model) {
                 _setVal('vision-model-api-key', config.vision_model.api_key || '');
                 _setVal('vision-model-api-url', config.vision_model.api_url || '');
@@ -2875,7 +2870,7 @@ async function refreshToolMarket() {
         } else if (data.success) {
             listElement.innerHTML = '<div class="log-entry log-info">暂无工具</div>';
         } else {
-            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载失败') + '</div>';
+            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载���败') + '</div>';
         }
     } catch (error) {
         document.getElementById('tool-market-list').innerHTML = 
@@ -2927,6 +2922,68 @@ async function downloadTool(toolName, downloadUrl, fileName) {
     }
 }
 
+// 刷新 FC 广场
+async function refreshFCMarket() {
+    try {
+        const listElement = document.getElementById('fc-market-list');
+        listElement.innerHTML = '<div class="log-entry log-info">正在加载 FC 工具列表...</div>';
+
+        const response = await fetch('/api/market/fc-tools');
+        const data = await response.json();
+
+        if (data.success && data.fc_tools && data.fc_tools.length > 0) {
+            listElement.innerHTML = '';
+            data.fc_tools.forEach((tool) => {
+                const card = createFCCard(tool);
+                listElement.appendChild(card);
+            });
+        } else if (data.success) {
+            listElement.innerHTML = '<div class="log-entry log-info">暂无 FC 工具</div>';
+        } else {
+            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载失败') + '</div>';
+        }
+    } catch (error) {
+        document.getElementById('fc-market-list').innerHTML =
+            '<div class="log-entry log-error">加载出错：' + error.message + '</div>';
+    }
+}
+
+// 创建 FC 工具卡片
+function createFCCard(tool) {
+    const card = document.createElement('div');
+    card.className = 'market-card';
+
+    const toolName = tool.tool_name || tool.name || '未命名工具';
+    const downloadUrl = tool.download_url || '';
+
+    const html = `<div class="market-card-header">
+        <h4 class="market-card-title">🔧 ${toolName}</h4>
+    </div>
+    <button onclick="downloadFCtool('${toolName.replace(/'/g, "\\'")}', '${downloadUrl}')" class="btn-sm" style="margin-top: 10px;">⬇ 下载</button>`;
+
+    card.innerHTML = html;
+    return card;
+}
+
+// 下载 FC 工具
+async function downloadFCtool(toolName, downloadUrl) {
+    try {
+        const result = await fetch('/api/market/fc-tools/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tool_name: toolName, download_url: downloadUrl })
+        });
+        const res = await result.json();
+        if (res.success) {
+            showSuccess(`FC 工具 ${toolName} 已下载！`);
+        } else {
+            showError('下载失败：' + (res.error || '未知错误'));
+        }
+    } catch (error) {
+        showError('下载时出错：' + error.message);
+    }
+}
+
 // 刷新插件广场
 async function refreshPluginMarket() {
     try {
@@ -2945,7 +3002,7 @@ async function refreshPluginMarket() {
         } else if (data.success) {
             listElement.innerHTML = '<div class="log-entry log-info">暂无插件</div>';
         } else {
-            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载失败') + '</div>';
+            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载��败') + '</div>';
         }
     } catch (error) {
         document.getElementById('plugin-market-list').innerHTML =
@@ -2984,18 +3041,9 @@ function createPluginMarketCard(plugin) {
         btnDisabled = '';
     }
 
-    const authorLine = escapeHtml(author);
-    const repoHref = repo ? escapeHtml(repo) : '';
-    const metaBlock = repo
-        ? `<div class="market-card-meta">
-            <span class="market-card-author">👤 作者：${authorLine}</span>
-            <a class="market-card-source-link" href="${repoHref}" target="_blank" rel="noopener noreferrer">📎 查看来源</a>
-           </div>`
-        : `<p class="market-card-author">👤 作者：${authorLine}</p>`;
-
     const html = `<div class="market-card-header">
         <h4 class="market-card-title">🧩 ${displayName}</h4>
-        ${metaBlock}
+        <p class="market-card-author">作者：${author}</p>
         <p class="market-card-summary">${desc}</p>
         <div class="install-progress" id="progress-${pluginName}" style="display: none;">
             <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>

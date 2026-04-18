@@ -11,7 +11,7 @@ import time
 import webbrowser
 from flask import Flask, render_template, jsonify, send_from_directory
 
-from .utils import PROJECT_ROOT, WEBUI_VERSION, logger, find_free_port, service_pids
+from .utils import PROJECT_ROOT, IS_CLOUD_VERSION, logger, find_free_port, service_pids
 
 # 记录启动时间
 START_TIME = datetime.datetime.now()
@@ -46,7 +46,7 @@ def create_app():
         """主页"""
         start_time_str = START_TIME.strftime('%Y-%m-%d %H:%M:%S')
         port = find_free_port()
-        return render_template('index.html', port=port, start_time=start_time_str)
+        return render_template('index.html', port=port, start_time=start_time_str, is_cloud=IS_CLOUD_VERSION)
 
     # 提供 live-2d 目录的静态文件访问（路由保持 /live-2d/ 不变，但路径指向 PROJECT_ROOT）
     @app.route('/live-2d/<path:filename>')
@@ -63,7 +63,7 @@ def run_app():
     port = find_free_port()
     
     print(f"\n{'='*50}")
-    print(f"WebUI 控制面板 {WEBUI_VERSION}")
+    print(f"WebUI 控制面板")
     print(f"{'='*50}")
     print(f"访问地址：http://localhost:{port}")
     print(f"{'='*50}\n")

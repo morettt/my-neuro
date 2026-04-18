@@ -3,13 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="dark light">
-    <meta name="theme-color" content="#1a1a2e">
     <title>My Neuro - 控制中心</title>
     <link rel="icon" href="/live-2d/fake_neuro.ico" type="image/x-icon">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -17,122 +12,41 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <div class="container">
-        <header>
-            <h1>
-                <img src="/live-2d/fake_neuro.ico" alt="Logo" class="header-logo">
-                My Neuro - 控制中心
-            </h1>
-            <p class="subtitle">管理肥牛各项服务与配置</p>
-        </header>
 
-        <!-- 折叠控制栏和保存按钮栏 - 位于 header 和选项卡之间，同一行显示 -->
+        <!-- 顶部信息栏 -->
         <div class="header-collapse-control">
             <div class="config-save-buttons" id="configSaveButtons"></div>
-            <div class="collapsed-mini-title" id="collapsedMiniTitle">My Neuro - 控制中心</div>
-            <div class="collapse-right-group">
-                <button class="btn-collapse-header" onclick="toggleHeaderCollapse()">
-                    <span class="collapse-icon">▼</span>
-                    <span class="collapse-text">折叠</span>
-                </button>
+            <div class="collapsed-mini-title" id="collapsedMiniTitle">
+                {% if is_cloud %}（云端）{% else %}（本地）{% endif %} My Neuro 版本：<span id="neuro-version">加载中...</span>
             </div>
         </div>
 
         <div class="tabs">
-            <button class="tab-button active" onclick="switchTab('dashboard')">服务控制</button>
-            <button class="tab-button" onclick="switchTab('basic-config')">基础配置</button>
-            <button class="tab-button" onclick="switchTab('dialog-config')">对话配置</button>
+            <button class="tab-button active" onclick="switchTab('dashboard')">启动</button>
+            {% if not is_cloud %}<button class="tab-button" onclick="switchTab('terminal')">终端控制室</button>{% endif %}
             <button class="tab-button" onclick="switchTab('llm-config')">LLM 配置</button>
+            <button class="tab-button" onclick="switchTab('dialog-config')">对话配置</button>
+            <button class="tab-button" onclick="switchTab('basic-config')">基础配置</button>
             <button class="tab-button" onclick="switchTab('voice-settings')">云端配置</button>
             <button class="tab-button" onclick="switchTab('ui-settings')">Live2D设置</button>
-            <button class="tab-button" onclick="switchTab('model-manager')">声音克隆</button>
+            {% if not is_cloud %}<button class="tab-button" onclick="switchTab('model-manager')">声音克隆</button>{% endif %}
             <button class="tab-button" onclick="switchTab('market')">广场</button>
-            <button class="tab-button" onclick="switchTab('tools')">MCP管理</button>
+            <button class="tab-button" onclick="switchTab('tools')">工具屋</button>
             <button class="tab-button" onclick="switchTab('plugins')">插件管理</button>
         </div>
 
-        <!-- 服务控制面板 -->
+        <!-- 启动面板 -->
         <div id="dashboard" class="tab-content active">
-            <!-- 系统信息栏 -->
-            <div class="system-info-bar">
-                <div class="info-item">
-                    <span class="info-label">My Neuro 版本:</span>
-                    <span class="info-value" id="neuro-version">加载中...</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">WebUI 版本:</span>
-                    <span class="info-value" id="webui-version">加载中...</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">运行时间:</span>
-                    <span class="info-value" id="system-uptime">0 小时 0 分钟 0 秒</span>
-                </div>
-                <div class="info-actions">
-                    <button class="btn-start" onclick="startAllServices()">一键启动</button>
-                    <button class="btn-stop" onclick="stopAllServices()">一键停止</button>
-                </div>
-            </div>
-            
-            <div class="dashboard">
-                <div class="card">
-                    <h3><span class="status" id="live2d-status"></span>Live2D 主服务</h3>
-                    <p>核心 Live2D 桌面宠物服务</p>
-                    <div class="controls">
-                        <button class="btn-start" onclick="startService('live2d')" id="live2d-start">启动</button>
-                        <button class="btn-stop" onclick="stopService('live2d')" id="live2d-stop" disabled>停止</button>
-                        <button class="btn-restart" onclick="restartService('live2d')" id="live2d-restart">重启</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3><span class="status" id="asr-status"></span>ASR 语音识别</h3>
-                    <p>语音转文字服务</p>
-                    <div class="controls">
-                        <button class="btn-start" onclick="startService('asr')" id="asr-start">启动</button>
-                        <button class="btn-stop" onclick="stopService('asr')" id="asr-stop" disabled>停止</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3><span class="status" id="tts-status"></span>TTS 语音合成</h3>
-                    <p>文字转语音服务</p>
-                    <div class="controls">
-                        <button class="btn-start" onclick="startService('tts')" id="tts-start">启动</button>
-                        <button class="btn-stop" onclick="stopService('tts')" id="tts-stop" disabled>停止</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3><span class="status" id="memos-status"></span>记忆系统</h3>
-                    <p>MemOS 记忆存储与检索</p>
-                    <div class="controls">
-                        <button class="btn-start" onclick="startService('memos')" id="memos-start">启动</button>
-                        <button class="btn-stop" onclick="stopService('memos')" id="memos-stop" disabled>停止</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3><span class="status" id="rag-status"></span>RAG 服务</h3>
-                    <p>检索增强生成服务</p>
-                    <div class="controls">
-                        <button class="btn-start" onclick="startService('rag')" id="rag-start">启动</button>
-                        <button class="btn-stop" onclick="stopService('rag')" id="rag-stop" disabled>停止</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3><span class="status" id="bert-status"></span>BERT 服务</h3>
-                    <p>情感分析与文本分类</p>
-                    <div class="controls">
-                        <button class="btn-start" onclick="startService('bert')" id="bert-start">启动</button>
-                        <button class="btn-stop" onclick="stopService('bert')" id="bert-stop" disabled>停止</button>
-                    </div>
-                </div>
-            </div>
 
             <!-- 多日志系统 -->
             <div class="log-section">
-                <!-- 拆分按钮栏 -->
+                <!-- 操作栏 -->
                 <div class="log-split-bar">
-                    <button class="split-log-button" onclick="toggleLogSplit()" id="splitLogButton">拆分</button>
+                    <button class="btn-live2d-toggle" id="live2d-toggle" onclick="toggleLive2dService()">启动</button>
                     <button onclick="resetModelPosition()" class="btn-reset-position">复位皮套位置</button>
                 </div>
 
-                <div class="log-wrapper" id="logWrapper">
+                <div class="log-wrapper split" id="logWrapper">
                     <!-- 第一个日志面板容器 -->
                     <div class="log-panel-container" id="logPanelContainer1">
                         <!-- 头部：选项卡 -->
@@ -174,27 +88,27 @@
                         <div id="chat-history" class="log-panel">
                             <div class="log-container" data-log-type="main">
                                 <div id="chat-history-output">
-                                    <div class="log-entry log-info">对话历史为空</div>
+                                    <div class="log-entry log-info">点击刷新按钮加载对话历史...</div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 第二个日志面板容器（拆分时显示） -->
-                    <div class="log-panel-container" id="logPanelContainer2" style="display: none;">
+                    <!-- 第二个日志面板容器 -->
+                    <div class="log-panel-container" id="logPanelContainer2" style="display: flex;">
                         <!-- 头部：选项卡 -->
                         <div class="log-header">
                             <div class="log-tabs-main">
-                                <button class="log-tab active" onclick="switchLogTab2('system-log2')">系统日志</button>
+                                <button class="log-tab" onclick="switchLogTab2('system-log2')">系统日志</button>
                                 <button class="log-tab" onclick="switchLogTab2('pet-log2')">桌宠日志</button>
                                 <button class="log-tab" onclick="switchLogTab2('tool-log2')">工具日志</button>
-                                <button class="log-tab" onclick="switchLogTab2('chat-history2')">历史对话</button>
+                                <button class="log-tab active" onclick="switchLogTab2('chat-history2')">历史对话</button>
                                 <button class="clear-log-button" onclick="clearCurrentLog2()">清空日志</button>
                             </div>
                         </div>
 
                         <!-- 日志内容 -->
-                        <div id="system-log2" class="log-panel active">
+                        <div id="system-log2" class="log-panel">
                             <div class="log-container" data-log-type="second">
                                 <div id="system-log-output2"></div>
                             </div>
@@ -212,7 +126,7 @@
                             </div>
                         </div>
 
-                        <div id="chat-history2" class="log-panel">
+                        <div id="chat-history2" class="log-panel active">
                             <div class="log-container" data-log-type="second">
                                 <div id="chat-history-output2"></div>
                             </div>
@@ -224,6 +138,58 @@
                 <div class="log-resizer" id="logResizer"></div>
             </div>
         </div>
+
+        <!-- 终端控制室面板 -->
+        {% if not is_cloud %}<div id="terminal" class="tab-content">
+            <div class="system-info-bar">
+                <div class="info-actions">
+                    <button class="btn-start" onclick="startAllServices()">一键启动</button>
+                    <button class="btn-stop" onclick="stopAllServices()">一键停止</button>
+                </div>
+            </div>
+            <div class="dashboard">
+                <div class="card">
+                    <h3><span class="status" id="asr-status"></span>ASR 语音识别</h3>
+                    <p>语音转文字服务</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('asr')" id="asr-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('asr')" id="asr-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="memos-status"></span>记忆系统</h3>
+                    <p>MemOS 记忆存储与检索</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('memos')" id="memos-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('memos')" id="memos-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="rag-status"></span>RAG 服务</h3>
+                    <p>检索增强生成服务</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('rag')" id="rag-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('rag')" id="rag-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="bert-status"></span>BERT 服务</h3>
+                    <p>情感分析与文本分类</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('bert')" id="bert-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('bert')" id="bert-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="tts-status"></span>TTS 语音合成</h3>
+                    <p>文字转语音服务</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('tts')" id="tts-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('tts')" id="tts-stop" disabled>停止</button>
+                    </div>
+                </div>
+            </div>
+        </div>{% endif %}
 
         <!-- LLM 配置面板 -->
         <div id="llm-config" class="tab-content">
@@ -245,17 +211,11 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="model">模型</label>
-                        <input type="text" id="model" placeholder="LLM模型名">
+                        <input type="text" id="model" placeholder="gpt-4, qwen3.5-27b 等">
                     </div>
                     <div class="form-group">
                         <label for="temperature">Temperature</label>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <input type="number" id="temperature" min="0" max="2" step="0.1" placeholder="0.9" style="flex: 1;">
-                            <div class="checkbox-group" style="margin: 0; white-space: nowrap;">
-                                <input type="checkbox" id="temperature-enabled">
-                                <label for="temperature-enabled">启用温度</label>
-                            </div>
-                        </div>
+                        <input type="number" id="temperature" min="0" max="2" step="0.1" placeholder="0.9">
                     </div>
                 </div>
                 <div class="form-group">
@@ -411,7 +371,7 @@
         </div>
 
         <!-- 声音克隆 -->
-        <div id="model-manager" class="tab-content">
+        {% if not is_cloud %}<div id="model-manager" class="tab-content">
             <h3>声音克隆</h3>
             
             <!-- 声音克隆子选项卡 -->
@@ -475,13 +435,27 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </div>{% endif %}
 
-        <!-- MCP管理面板 -->
+        <!-- 工具屋面板 -->
         <div id="tools" class="tab-content">
-            <h3>MCP管理</h3>
+            <h3>工具屋</h3>
 
-            <div class="tool-panel active">
+            <!-- 工具子选项卡 -->
+            <div class="sub-tabs">
+                <button class="sub-tab-button active" onclick="switchToolTab('fc')">Function Call 工具</button>
+                <button class="sub-tab-button" onclick="switchToolTab('mcp')">MCP Tools</button>
+            </div>
+
+            <!-- Function Call 工具列表 -->
+            <div id="fc-tools-panel" class="tool-panel active">
+                <div class="tool-list" id="fc-tools-list">
+                    <div class="log-entry log-info">加载 Function Call 工具中...</div>
+                </div>
+            </div>
+
+            <!-- MCP 工具列表 -->
+            <div id="mcp-tools-panel" class="tool-panel">
                 <div class="tool-list" id="mcp-tools-list">
                     <div class="log-entry log-info">加载 MCP 工具中...</div>
                 </div>
@@ -496,6 +470,7 @@
             <div class="sub-tabs">
                 <button class="sub-tab-button active" onclick="switchMarketTab('prompt')">提示词广场</button>
                 <button class="sub-tab-button" onclick="switchMarketTab('tool')">工具广场</button>
+                <button class="sub-tab-button" onclick="switchMarketTab('fc')">FC 广场</button>
                 <button class="sub-tab-button" onclick="switchMarketTab('plugin')">插件广场</button>
             </div>
 
@@ -516,6 +491,16 @@
                 </div>
                 <div class="market-list" id="tool-market-list">
                     <div class="log-entry log-info">点击刷新按钮加载工具列表...</div>
+                </div>
+            </div>
+
+            <!-- FC 广场 -->
+            <div id="fc-market-panel" class="market-panel">
+                <div class="market-header">
+                    <button onclick="refreshFCMarket()" class="btn-start">🔄 刷新 FC 工具列表</button>
+                </div>
+                <div class="market-list" id="fc-market-list">
+                    <div class="log-entry log-info">点击刷新按钮加载 FC 工具列表...</div>
                 </div>
             </div>
 
@@ -560,6 +545,7 @@
                         </select>
                     </div>
                     <button onclick="saveLive2DModel()" class="btn-start" style="margin-top: 10px;">应用模型</button>
+                    <button onclick="resetModelPosition()" class="btn-start" style="margin-top: 10px; background: linear-gradient(135deg, #f59e0b, #d97706);">复位皮套位置</button>
                 </div>
                 <div class="section">
                     <div class="checkbox-group">
@@ -757,9 +743,13 @@
                 </div>
             </div>
             
-            <!-- MCP 配置 -->
+            <!-- 工具开关 -->
             <div class="section">
-                <h4>MCP 配置</h4>
+                <h4>工具配置</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tools-enabled">
+                    <label for="tools-enabled">启用 Function Call 工具</label>
+                </div>
                 <div class="checkbox-group">
                     <input type="checkbox" id="mcp-enabled">
                     <label for="mcp-enabled">启用 MCP 工具</label>
@@ -884,7 +874,7 @@
 
     </div>
 
-    <script src="static/js/app.js?v=20260416b"></script>
+    <script src="static/js/app.js?v=20260322"></script>
     
     <!-- 调试脚本：广场下载问题排查 -->
     <script>
