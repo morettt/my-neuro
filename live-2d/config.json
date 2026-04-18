@@ -47,13 +47,13 @@
     "api_key": "",
     "volcengine_tts": {
       "enabled": false,
-      "appid": "9282626043",
-      "access_token": "DlShlNhCUQd19bW3S-cAsD4Yc0WpLUpj",
+      "appid": "9753924061",
+      "access_token": "yEN5RNemTswZHcmb91asiEdSv4Biw0XS",
       "voice_type": "saturn_zh_female_tiaopigongzhu_tob"
     },
     "aliyun_tts": {
       "enabled": false,
-      "api_key": "sk-28b8bc8be4a24b89b5cecf6744a5893a",
+      "api_key": "",
       "model": "cosyvoice-v3-flash",
       "voice": "cosyvoice-v3-flash-llssss-2937493a94174fc7aa972b6fdcdc7b8c",
       "sample_rate": 48000,
@@ -89,15 +89,15 @@
     "model_type": "live2d",
     "vrm_model": "",
     "vrm_model_path": "",
-    "model_scale": 0.7270283889753179,
+    "model_scale": 0.65,
     "show_chat_box": true,
     "show_model": true,
     "text_only_mode": false,
     "auto_show_chat_on_text_mode": true,
     "hide_from_screenshot": true,
     "model_position": {
-      "x": 1.0670824436203852,
-      "y": 0.4494001365498821,
+      "x": 1.1625,
+      "y": 0.646,
       "remember_position": true
     }
   },
@@ -130,5 +130,9 @@
   "auto_close_services": {
     "enabled": false
   },
+<<<<<<< Updated upstream
   "version": "v6.4.8"
+=======
+  "version": "v6.5"
+>>>>>>> Stashed changes
 }

@@ -487,119 +487,15 @@ function renderChatHistory(messages, prependToTop = false, scrollBeforeLoad = 0,
 
     const htmlParts = [];
 
-    // 添加"加载更多"按钮在顶部
-    htmlParts.push(`
-        <div class="chat-load-more" id="chat-load-more-container">
-            <button id="chat-load-more-btn" onclick="loadMoreChatHistory()" ${!chatHistoryState.hasMorePrev ? 'disabled' : ''}>
-                ${chatHistoryState.hasMorePrev ? '加载更多历史对话' : '没有更多了'}
-            </button>
-        </div>
-    `);
+    // 添加"加载更多"按钮在顶部（仅有更多时显示）
+    if (chatHistoryState.hasMorePrev) {
+        htmlParts.push(`
+            <div class="chat-load-more" id="chat-load-more-container">
+                <button id="chat-load-more-btn" onclick="loadMoreChatHistory()">加载更多历史对话</button>
+            </div>
+        `);
+    }
 
-    // 添加 CSS 样式
-    htmlParts.push(`
-        <style>
-            .chat-message {
-                margin-bottom: 10px;
-                padding: 8px 12px;
-                border-radius: 6px;
-                background: rgba(255, 255, 255, 0.05);
-                min-height: 2.4em;
-                overflow-wrap: break-word;
-                word-wrap: break-word;
-            }
-            .chat-message.user {
-                background: rgba(74, 144, 217, 0.1);
-                border-left: 3px solid #4a90d9;
-            }
-            .chat-message.assistant {
-                background: rgba(212, 133, 13, 0.1);
-                border-left: 3px solid #d4850d;
-            }
-            .chat-sender {
-                font-weight: bold;
-                margin-bottom: 2px;
-                font-size: 13px;
-                display: block;
-            }
-            .chat-sender.user {
-                color: #4a90d9;
-            }
-            .chat-sender.assistant {
-                color: #d4850d;
-            }
-            .chat-content {
-                line-height: 1.5;
-                color: #e0e0e0;
-                white-space: pre-wrap;
-                word-wrap: break-word;
-                overflow-wrap: break-word;
-                font-size: 14px;
-                max-width: 100%;
-            }
-            .chat-content img {
-                max-width: 100%;
-                border-radius: 6px;
-                margin: 8px 0;
-                cursor: pointer;
-                transition: transform 0.2s;
-                display: block;
-            }
-            .chat-content img:hover {
-                transform: scale(1.02);
-            }
-            .chat-load-more {
-                text-align: center;
-                padding: 12px;
-            }
-            .chat-load-more button {
-                padding: 6px 16px;
-                background: linear-gradient(135deg, #667eea, #764ba2);
-                border: none;
-                border-radius: 6px;
-                color: white;
-                cursor: pointer;
-                font-size: 13px;
-            }
-            .chat-load-more button:disabled {
-                background: #555;
-                cursor: not-allowed;
-                font-size: 13px;
-            }
-            /* 工具调用样式 */
-            .chat-tool-calls {
-                margin: 8px 0;
-                padding: 8px;
-                background: rgba(102, 126, 234, 0.1);
-                border-radius: 6px;
-                border-left: 3px solid #667eea;
-            }
-            .chat-tool-call {
-                margin: 4px 0;
-                padding: 4px;
-            }
-            .chat-tool-name {
-                font-weight: bold;
-                color: #667eea;
-                font-size: 13px;
-                margin-bottom: 4px;
-            }
-            .chat-tool-args {
-                font-family: monospace;
-                font-size: 12px;
-                color: #a0a0a0;
-                white-space: pre-wrap;
-                word-wrap: break-word;
-                background: rgba(0, 0, 0, 0.2);
-                padding: 4px 8px;
-                border-radius: 4px;
-            }
-            /* 确保 chat-history-output 容器内的内容不会撑开父容器 */
-            #chat-history-output {
-                max-width: 100%;
-            }
-        </style>
-    `);
 
     // 遍历消息（保持原顺序：旧→新）
     messages.forEach((msg) => {
@@ -630,7 +526,7 @@ function renderChatHistory(messages, prependToTop = false, scrollBeforeLoad = 0,
                 // content 是数组格式（多模态消息）
                 msg.content.forEach(item => {
                     if (item.type === 'text') {
-                        let text = escapeHtml(item.text || '');
+                        let text = escapeHtml(item.text || '').replace(/\n+/g, ' ');
                         text = renderBase64Images(text);
                         contentHtml += `<div class="chat-content">${text}</div>`;
                     } else if (item.type === 'image_url') {
@@ -644,7 +540,7 @@ function renderChatHistory(messages, prependToTop = false, scrollBeforeLoad = 0,
                 });
             } else {
                 // content 是字符串格式
-                let content = escapeHtml(msg.content || '');
+                let content = escapeHtml(msg.content || '').replace(/\n+/g, ' ');
                 content = renderBase64Images(content);
                 contentHtml += `<div class="chat-content">${content}</div>`;
             }
@@ -652,8 +548,8 @@ function renderChatHistory(messages, prependToTop = false, scrollBeforeLoad = 0,
 
         htmlParts.push(`
             <div class="chat-message ${role}">
-                <div class="chat-sender ${role}">${senderName}</div>
-                ${contentHtml}
+                <span class="chat-sender ${role}">${senderName}</span>
+                <span class="chat-content">${contentHtml}</span>
             </div>
         `);
     });
@@ -749,11 +645,8 @@ function loadMoreChatHistory() {
 
 // 更新加载更多按钮状态
 function updateChatHistoryLoadMoreButton() {
-    const btn = document.getElementById('chat-load-more-btn');
-    if (btn) {
-        btn.disabled = !chatHistoryState.hasMorePrev;
-        btn.textContent = chatHistoryState.hasMorePrev ? '加载更多历史对话' : '没有更多了';
-    }
+    const container = document.getElementById('chat-load-more-container');
+    if (container) container.style.display = chatHistoryState.hasMorePrev ? '' : 'none';
 }
 
 // 启动对话历史轮询
@@ -761,7 +654,8 @@ function startChatHistoryPolling() {
     stopChatHistoryPolling();
     chatHistoryState.pollInterval = setInterval(() => {
         // 只在当前显示历史对话选项卡时轮询，且只在第一页（最新对话）时更新
-        const isChatHistoryActive = document.getElementById('chat-history')?.classList.contains('active');
+        const isChatHistoryActive = document.getElementById('chat-history')?.classList.contains('active')
+            || document.getElementById('chat-history2')?.classList.contains('active');
         if (isChatHistoryActive && chatHistoryState.messages.length > 0 && chatHistoryState.page === 1) {
             // 轮询时重新加载第一页，保持最新对话
             loadChatHistory(1, false);
@@ -906,21 +800,46 @@ function toggleApiKeyVisibility() {
 // 更新服务状态
 function updateServiceStatus(serviceName, status) {
     serviceStates[serviceName] = status;
+
+    // live2d 使用单一切换按钮
+    if (serviceName === 'live2d') {
+        const toggleBtn = document.getElementById('live2d-toggle');
+        if (toggleBtn) {
+            if (status === 'running') {
+                toggleBtn.textContent = '关闭';
+                toggleBtn.classList.add('running');
+            } else {
+                toggleBtn.textContent = '启动';
+                toggleBtn.classList.remove('running');
+            }
+        }
+        return;
+    }
+
     const statusElement = document.getElementById(serviceName + '-status');
     const startBtn = document.getElementById(serviceName + '-start');
     const stopBtn = document.getElementById(serviceName + '-stop');
     const restartBtn = document.getElementById(serviceName + '-restart');
-    
+
     if (status === 'running') {
-        statusElement.className = 'status running';
+        if (statusElement) statusElement.className = 'status running';
         if (startBtn) startBtn.disabled = true;
         if (stopBtn) stopBtn.disabled = false;
-        if (restartBtn) restartBtn && (restartBtn.disabled = false);
+        if (restartBtn) restartBtn.disabled = false;
     } else {
-        statusElement.className = 'status stopped';
+        if (statusElement) statusElement.className = 'status stopped';
         if (startBtn) startBtn.disabled = false;
         if (stopBtn) stopBtn.disabled = true;
-        if (restartBtn) restartBtn && (restartBtn.disabled = true);
+        if (restartBtn) restartBtn.disabled = true;
+    }
+}
+
+// Live2D 启动/关闭切换
+async function toggleLive2dService() {
+    if (serviceStates['live2d'] === 'running') {
+        await stopService('live2d');
+    } else {
+        await startService('live2d');
     }
 }
 
@@ -1454,6 +1373,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // 启动日志轮询
     startLogPolling();
 
+    // 右侧面板默认显示历史对话，页面加载时主动拉取
+    loadLastPageOfChatHistory();
+
     // 加载模型列表（使用 refreshModelList 函数）
     refreshModelList();
 
@@ -1955,11 +1877,15 @@ async function loadSystemInfo() {
         const response = await fetch('/api/system/info');
         if (response.ok) {
             const data = await response.json();
+<<<<<<< Updated upstream
             document.getElementById('webui-version').textContent = data.version;
             // 保存启动时间戳用于计算运行时间
             window.startTimestamp = data.start_timestamp;
             // 立即更新一次运行时间
             updateUptime();
+=======
+            document.getElementById('neuro-version').textContent = data.neuro_version;
+>>>>>>> Stashed changes
         }
     } catch (error) {
         console.error('加载系统信息失败:', error);

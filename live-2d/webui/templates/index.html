@@ -12,41 +12,41 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <div class="container">
-        <header>
-            <h1>
-                <img src="/live-2d/fake_neuro.ico" alt="Logo" class="header-logo">
-                My Neuro - 控制中心
-            </h1>
-            <p class="subtitle">管理肥牛各项服务与配置</p>
-        </header>
 
-        <!-- 折叠控制栏和保存按钮栏 - 位于 header 和选项卡之间，同一行显示 -->
+        <!-- 顶部信息栏 -->
         <div class="header-collapse-control">
             <div class="config-save-buttons" id="configSaveButtons"></div>
+<<<<<<< Updated upstream
             <div class="collapse-right-group">
                 <div class="collapsed-mini-title" id="collapsedMiniTitle">My Neuro - 控制中心</div>
                 <button class="btn-collapse-header" onclick="toggleHeaderCollapse()">
                     <span class="collapse-icon">▼</span>
                     <span class="collapse-text">折叠</span>
                 </button>
+=======
+            <div class="collapsed-mini-title" id="collapsedMiniTitle">
+                {% if is_cloud %}（云端）{% else %}（本地）{% endif %} My Neuro 版本：<span id="neuro-version">加载中...</span>
+>>>>>>> Stashed changes
             </div>
         </div>
 
         <div class="tabs">
-            <button class="tab-button active" onclick="switchTab('dashboard')">服务控制</button>
-            <button class="tab-button" onclick="switchTab('basic-config')">基础配置</button>
-            <button class="tab-button" onclick="switchTab('dialog-config')">对话配置</button>
+            <button class="tab-button active" onclick="switchTab('dashboard')">启动</button>
+            {% if not is_cloud %}<button class="tab-button" onclick="switchTab('terminal')">终端控制室</button>{% endif %}
             <button class="tab-button" onclick="switchTab('llm-config')">LLM 配置</button>
+            <button class="tab-button" onclick="switchTab('dialog-config')">对话配置</button>
+            <button class="tab-button" onclick="switchTab('basic-config')">基础配置</button>
             <button class="tab-button" onclick="switchTab('voice-settings')">云端配置</button>
             <button class="tab-button" onclick="switchTab('ui-settings')">Live2D设置</button>
-            <button class="tab-button" onclick="switchTab('model-manager')">声音克隆</button>
+            {% if not is_cloud %}<button class="tab-button" onclick="switchTab('model-manager')">声音克隆</button>{% endif %}
             <button class="tab-button" onclick="switchTab('market')">广场</button>
             <button class="tab-button" onclick="switchTab('tools')">工具屋</button>
             <button class="tab-button" onclick="switchTab('plugins')">插件管理</button>
         </div>
 
-        <!-- 服务控制面板 -->
+        <!-- 启动面板 -->
         <div id="dashboard" class="tab-content active">
+<<<<<<< Updated upstream
             <!-- 系统信息栏 -->
             <div class="system-info-bar">
                 <div class="info-item">
@@ -114,15 +114,22 @@
                     </div>
                 </div>
             </div>
+=======
+>>>>>>> Stashed changes
 
             <!-- 多日志系统 -->
             <div class="log-section">
-                <!-- 拆分按钮栏 -->
+                <!-- 操作栏 -->
                 <div class="log-split-bar">
+<<<<<<< Updated upstream
                     <button class="split-log-button" onclick="toggleLogSplit()" id="splitLogButton">拆分</button>
+=======
+                    <button class="btn-live2d-toggle" id="live2d-toggle" onclick="toggleLive2dService()">启动</button>
+                    <button onclick="resetModelPosition()" class="btn-reset-position">复位皮套位置</button>
+>>>>>>> Stashed changes
                 </div>
 
-                <div class="log-wrapper" id="logWrapper">
+                <div class="log-wrapper split" id="logWrapper">
                     <!-- 第一个日志面板容器 -->
                     <div class="log-panel-container" id="logPanelContainer1">
                         <!-- 头部：选项卡 -->
@@ -170,21 +177,21 @@
                         </div>
                     </div>
 
-                    <!-- 第二个日志面板容器（拆分时显示） -->
-                    <div class="log-panel-container" id="logPanelContainer2" style="display: none;">
+                    <!-- 第二个日志面板容器 -->
+                    <div class="log-panel-container" id="logPanelContainer2" style="display: flex;">
                         <!-- 头部：选项卡 -->
                         <div class="log-header">
                             <div class="log-tabs-main">
-                                <button class="log-tab active" onclick="switchLogTab2('system-log2')">系统日志</button>
+                                <button class="log-tab" onclick="switchLogTab2('system-log2')">系统日志</button>
                                 <button class="log-tab" onclick="switchLogTab2('pet-log2')">桌宠日志</button>
                                 <button class="log-tab" onclick="switchLogTab2('tool-log2')">工具日志</button>
-                                <button class="log-tab" onclick="switchLogTab2('chat-history2')">历史对话</button>
+                                <button class="log-tab active" onclick="switchLogTab2('chat-history2')">历史对话</button>
                                 <button class="clear-log-button" onclick="clearCurrentLog2()">清空日志</button>
                             </div>
                         </div>
 
                         <!-- 日志内容 -->
-                        <div id="system-log2" class="log-panel active">
+                        <div id="system-log2" class="log-panel">
                             <div class="log-container" data-log-type="second">
                                 <div id="system-log-output2"></div>
                             </div>
@@ -202,7 +209,7 @@
                             </div>
                         </div>
 
-                        <div id="chat-history2" class="log-panel">
+                        <div id="chat-history2" class="log-panel active">
                             <div class="log-container" data-log-type="second">
                                 <div id="chat-history-output2"></div>
                             </div>
@@ -214,6 +221,58 @@
                 <div class="log-resizer" id="logResizer"></div>
             </div>
         </div>
+
+        <!-- 终端控制室面板 -->
+        {% if not is_cloud %}<div id="terminal" class="tab-content">
+            <div class="system-info-bar">
+                <div class="info-actions">
+                    <button class="btn-start" onclick="startAllServices()">一键启动</button>
+                    <button class="btn-stop" onclick="stopAllServices()">一键停止</button>
+                </div>
+            </div>
+            <div class="dashboard">
+                <div class="card">
+                    <h3><span class="status" id="asr-status"></span>ASR 语音识别</h3>
+                    <p>语音转文字服务</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('asr')" id="asr-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('asr')" id="asr-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="memos-status"></span>记忆系统</h3>
+                    <p>MemOS 记忆存储与检索</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('memos')" id="memos-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('memos')" id="memos-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="rag-status"></span>RAG 服务</h3>
+                    <p>检索增强生成服务</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('rag')" id="rag-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('rag')" id="rag-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="bert-status"></span>BERT 服务</h3>
+                    <p>情感分析与文本分类</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('bert')" id="bert-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('bert')" id="bert-stop" disabled>停止</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3><span class="status" id="tts-status"></span>TTS 语音合成</h3>
+                    <p>文字转语音服务</p>
+                    <div class="controls">
+                        <button class="btn-start" onclick="startService('tts')" id="tts-start">启动</button>
+                        <button class="btn-stop" onclick="stopService('tts')" id="tts-stop" disabled>停止</button>
+                    </div>
+                </div>
+            </div>
+        </div>{% endif %}
 
         <!-- LLM 配置面板 -->
         <div id="llm-config" class="tab-content">
@@ -395,7 +454,7 @@
         </div>
 
         <!-- 声音克隆 -->
-        <div id="model-manager" class="tab-content">
+        {% if not is_cloud %}<div id="model-manager" class="tab-content">
             <h3>声音克隆</h3>
             
             <!-- 声音克隆子选项卡 -->
@@ -459,7 +518,7 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </div>{% endif %}
 
         <!-- 工具屋面板 -->
         <div id="tools" class="tab-content">

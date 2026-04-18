@@ -44,9 +44,23 @@ def get_system_info():
 
     uptime_str = f"{days}天{hours}小时{minutes}分钟{seconds}秒" if days > 0 else f"{hours}小时{minutes}分钟{seconds}秒"
 
+<<<<<<< Updated upstream
     from .utils import WEBUI_VERSION
     return jsonify({
         'version': WEBUI_VERSION,
+=======
+    config_path = PROJECT_ROOT / 'config.json'
+    neuro_version = '未知'
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            neuro_version = config.get('version', '未知')
+    except Exception as e:
+        logger.warning(f'读取版本信息失败：{e}')
+
+    return jsonify({
+        'neuro_version': neuro_version,
+>>>>>>> Stashed changes
         'uptime': uptime_str,
         'start_time': START_TIME.strftime('%Y-%m-%d %H:%M:%S'),
         'start_timestamp': START_TIME.timestamp()  # 添加时间戳用于前端计算
