@@ -16,17 +16,8 @@
         <!-- 顶部信息栏 -->
         <div class="header-collapse-control">
             <div class="config-save-buttons" id="configSaveButtons"></div>
-<<<<<<< Updated upstream
-            <div class="collapse-right-group">
-                <div class="collapsed-mini-title" id="collapsedMiniTitle">My Neuro - 控制中心</div>
-                <button class="btn-collapse-header" onclick="toggleHeaderCollapse()">
-                    <span class="collapse-icon">▼</span>
-                    <span class="collapse-text">折叠</span>
-                </button>
-=======
             <div class="collapsed-mini-title" id="collapsedMiniTitle">
                 {% if is_cloud %}（云端）{% else %}（本地）{% endif %} My Neuro 版本：<span id="neuro-version">加载中...</span>
->>>>>>> Stashed changes
             </div>
         </div>
 
@@ -46,87 +37,13 @@
 
         <!-- 启动面板 -->
         <div id="dashboard" class="tab-content active">
-<<<<<<< Updated upstream
-            <!-- 系统信息栏 -->
-            <div class="system-info-bar">
-                <div class="info-item">
-                    <span class="info-label">WebUI 版本:</span>
-                    <span class="info-value" id="webui-version">加载中...</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">运行时间:</span>
-                    <span class="info-value" id="system-uptime">0 小时 0 分钟 0 秒</span>
-                </div>
-                <div class="info-actions">
-                    <button class="btn-start" onclick="startAllServices()">一键启动</button>
-                    <button class="btn-stop" onclick="stopAllServices()">一键停止</button>
-                </div>
-            </div>
-            
-            <div class="dashboard">
-                <div class="card">
-                    <h3><span class="status" id="live2d-status"></span>Live2D 主服务</h3>
-                    <p>核心 Live2D 桌面宠物服务</p>
-                    <div class="controls">
-                        <button class="btn-start" onclick="startService('live2d')" id="live2d-start">启动</button>
-                        <button class="btn-stop" onclick="stopService('live2d')" id="live2d-stop" disabled>停止</button>
-                        <button class="btn-restart" onclick="restartService('live2d')" id="live2d-restart">重启</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3><span class="status" id="asr-status"></span>ASR 语音识别</h3>
-                    <p>语音转文字服务</p>
-                    <div class="controls">
-                        <button class="btn-start" onclick="startService('asr')" id="asr-start">启动</button>
-                        <button class="btn-stop" onclick="stopService('asr')" id="asr-stop" disabled>停止</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3><span class="status" id="tts-status"></span>TTS 语音合成</h3>
-                    <p>文字转语音服务</p>
-                    <div class="controls">
-                        <button class="btn-start" onclick="startService('tts')" id="tts-start">启动</button>
-                        <button class="btn-stop" onclick="stopService('tts')" id="tts-stop" disabled>停止</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3><span class="status" id="memos-status"></span>记忆系统</h3>
-                    <p>MemOS 记忆存储与检索</p>
-                    <div class="controls">
-                        <button class="btn-start" onclick="startService('memos')" id="memos-start">启动</button>
-                        <button class="btn-stop" onclick="stopService('memos')" id="memos-stop" disabled>停止</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3><span class="status" id="rag-status"></span>RAG 服务</h3>
-                    <p>检索增强生成服务</p>
-                    <div class="controls">
-                        <button class="btn-start" onclick="startService('rag')" id="rag-start">启动</button>
-                        <button class="btn-stop" onclick="stopService('rag')" id="rag-stop" disabled>停止</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3><span class="status" id="bert-status"></span>BERT 服务</h3>
-                    <p>情感分析与文本分类</p>
-                    <div class="controls">
-                        <button class="btn-start" onclick="startService('bert')" id="bert-start">启动</button>
-                        <button class="btn-stop" onclick="stopService('bert')" id="bert-stop" disabled>停止</button>
-                    </div>
-                </div>
-            </div>
-=======
->>>>>>> Stashed changes
 
             <!-- 多日志系统 -->
             <div class="log-section">
                 <!-- 操作栏 -->
                 <div class="log-split-bar">
-<<<<<<< Updated upstream
-                    <button class="split-log-button" onclick="toggleLogSplit()" id="splitLogButton">拆分</button>
-=======
                     <button class="btn-live2d-toggle" id="live2d-toggle" onclick="toggleLive2dService()">启动</button>
                     <button onclick="resetModelPosition()" class="btn-reset-position">复位皮套位置</button>
->>>>>>> Stashed changes
                 </div>
 
                 <div class="log-wrapper split" id="logWrapper">

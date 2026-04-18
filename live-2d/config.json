@@ -130,9 +130,5 @@
   "auto_close_services": {
     "enabled": false
   },
-<<<<<<< Updated upstream
-  "version": "v6.4.8"
-=======
   "version": "v6.5"
->>>>>>> Stashed changes
 }

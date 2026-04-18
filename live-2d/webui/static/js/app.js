@@ -1877,15 +1877,7 @@ async function loadSystemInfo() {
         const response = await fetch('/api/system/info');
         if (response.ok) {
             const data = await response.json();
-<<<<<<< Updated upstream
-            document.getElementById('webui-version').textContent = data.version;
-            // 保存启动时间戳用于计算运行时间
-            window.startTimestamp = data.start_timestamp;
-            // 立即更新一次运行时间
-            updateUptime();
-=======
             document.getElementById('neuro-version').textContent = data.neuro_version;
->>>>>>> Stashed changes
         }
     } catch (error) {
         console.error('加载系统信息失败:', error);
