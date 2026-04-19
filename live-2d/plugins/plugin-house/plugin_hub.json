@@ -118,5 +118,11 @@
     "desc": "整理 Live2D 模型表情文件，合并水印参数并重建 model3 的 Expressions。",
     "author": "cxkhjntm",
     "repo": "https://github.com/cxkhjntm/my-neuro-exp3-model-processor"
+  },
+  "check-in": {
+    "display_name": "check-in",
+    "desc": "每隔一段时间让 AI 主动问用户在做什么",
+    "author": "xxxiu",
+    "repo": "https://github.com/morettt/my-neuro-check-in"
   }
 }
