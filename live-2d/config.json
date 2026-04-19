@@ -67,7 +67,7 @@
       "model": "FunAudioLLM/CosyVoice2-0.5B",
       "voice": "speech:fake-neuro:j3qz9ij4k2:kquiiycgizgaoxeujypx",
       "response_format": "wav",
-      "speed": 1.0
+      "speed": 1
     },
     "baidu_asr": {
       "enabled": false,
@@ -96,8 +96,8 @@
     "auto_show_chat_on_text_mode": true,
     "hide_from_screenshot": true,
     "model_position": {
-      "x": 1.1625,
-      "y": 0.646,
+      "x": 1.1431250000000002,
+      "y": 0.59,
       "remember_position": true
     }
   },
@@ -130,5 +130,5 @@
   "auto_close_services": {
     "enabled": false
   },
-  "version": "v6.5"
+  "version": "v6.5.1"
 }

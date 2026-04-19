@@ -394,12 +394,12 @@ async function loadLastPageOfChatHistory() {
 
         renderChatHistory(chatHistoryState.messages, false, 0, 0);
         updateChatHistoryLoadMoreButton();
-        
-        // 在第一页时启动轮询
-        if (lastPage === 1) {
+
+        // 只在没有轮询时才启动，避免轮询调用时重置计时器
+        if (!chatHistoryState.pollInterval) {
             startChatHistoryPolling();
         }
-        
+
         console.log('[ChatHistory] 加载完成');
 
     } catch (error) {
@@ -416,10 +416,11 @@ async function loadChatHistory(page = 1, prependToTop = false) {
     if (chatHistoryState.isLoading) return;
 
     const container = document.getElementById('chat-history-output');
-    
+    const scrollEl = container.closest('.log-container') || container;
+
     // 保存加载前的滚动位置
-    const scrollBeforeLoad = container.scrollTop;
-    const scrollHeightBeforeLoad = container.scrollHeight;
+    const scrollBeforeLoad = scrollEl.scrollTop;
+    const scrollHeightBeforeLoad = scrollEl.scrollHeight;
 
     chatHistoryState.isLoading = true;
     try {
@@ -564,25 +565,15 @@ function renderChatHistory(messages, prependToTop = false, scrollBeforeLoad = 0,
     // 滚动位置处理 - 使用延迟确保内容完全渲染
     // 切换选项卡时需要等待 DOM 和样式完全应用
     setTimeout(() => {
+        const scrollEl = logContainer || container;
         if (prependToTop) {
-            // 加载更多时，计算新内容的高度并恢复滚动位置
-            const newScrollHeight = container.scrollHeight;
+            const newScrollHeight = scrollEl.scrollHeight;
             const heightDiff = newScrollHeight - scrollHeightBeforeLoad;
-            container.scrollTop = scrollBeforeLoad + heightDiff;
-            console.log(`[ChatHistory] 加载更多，恢复滚动位置：${container.scrollTop}`);
+            scrollEl.scrollTop = scrollBeforeLoad + heightDiff;
         } else {
-            // 初始加载或刷新时，滚动到底部（最新对话）
-            // 使用 scrollHeight 确保滚动到最底部
-            const targetScroll = container.scrollHeight;
-            container.scrollTop = targetScroll;
-            console.log(`[ChatHistory] 滚动到底部：${targetScroll}, 实际滚动位置：${container.scrollTop}`);
-            
-            // 验证滚动是否成功
-            setTimeout(() => {
-                console.log(`[ChatHistory] 验证滚动位置：${container.scrollTop} / ${container.scrollHeight}`);
-            }, 200);
+            scrollEl.scrollTop = scrollEl.scrollHeight;
         }
-    }, 300);
+    }, 50);
 }
 
 // HTML 转义函数
@@ -653,12 +644,8 @@ function updateChatHistoryLoadMoreButton() {
 function startChatHistoryPolling() {
     stopChatHistoryPolling();
     chatHistoryState.pollInterval = setInterval(() => {
-        // 只在当前显示历史对话选项卡时轮询，且只在第一页（最新对话）时更新
-        const isChatHistoryActive = document.getElementById('chat-history')?.classList.contains('active')
-            || document.getElementById('chat-history2')?.classList.contains('active');
-        if (isChatHistoryActive && chatHistoryState.messages.length > 0 && chatHistoryState.page === 1) {
-            // 轮询时重新加载第一页，保持最新对话
-            loadChatHistory(1, false);
+        if (!chatHistoryState.isLoading) {
+            loadLastPageOfChatHistory();
         }
     }, 2000);
 }
@@ -671,39 +658,8 @@ function stopChatHistoryPolling() {
     }
 }
 
-// 同步日志到第二个面板
 function syncLogToPanel2() {
-    const container2 = document.getElementById('logPanelContainer2');
-    if (container2.style.display === 'none' || container2.style.display === '') return;
-
-    // 同步系统日志
-    const systemLog1 = document.getElementById('system-log-output');
-    const systemLog2 = document.getElementById('system-log-output2');
-    systemLog2.innerHTML = systemLog1.innerHTML;
-
-    // 同步桌宠日志
-    const petLog1 = document.getElementById('pet-log-output');
-    const petLog2 = document.getElementById('pet-log-output2');
-    petLog2.innerHTML = petLog1.innerHTML;
-
-    // 同步工具日志
-    const toolLog1 = document.getElementById('tool-log-output');
-    const toolLog2 = document.getElementById('tool-log-output2');
-    toolLog2.innerHTML = toolLog1.innerHTML;
-
-    // 同步对话历史
-    const chatHistory1 = document.getElementById('chat-history-output');
-    const chatHistory2 = document.getElementById('chat-history-output2');
-    if (chatHistory2) {
-        chatHistory2.innerHTML = chatHistory1.innerHTML;
-    }
-
-    // 同步滚动位置
-    const activePanel1 = document.querySelector('#logPanelContainer1 .log-panel.active .log-container');
-    const activePanel2 = document.querySelector('#logPanelContainer2 .log-panel.active .log-container');
-    if (activePanel1 && activePanel2) {
-        activePanel2.scrollTop = activePanel1.scrollTop;
-    }
+    // 右侧面板现在只显示历史对话，无需同步日志
 }
 
 // 加载日志（增量更新）
@@ -1379,6 +1335,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 加载模型列表（使用 refreshModelList 函数）
     refreshModelList();
 
+
     // 加载工具列表
     refreshAllTools();
 
@@ -1478,7 +1435,6 @@ async function saveUISettings() {
     const settings = {
         show_chat_box: document.getElementById('show-chat-box').checked,
         show_model: !document.getElementById('hide-model').checked,  // 勾选表示隐藏，所以取反
-        model_scale: parseFloat(document.getElementById('model-scale').value),
         subtitle_user: document.getElementById('subtitle-user').value,
         subtitle_ai: document.getElementById('subtitle-ai').value,
         subtitle_enabled: document.getElementById('subtitle-enabled').checked
@@ -1543,7 +1499,7 @@ async function saveAdvancedSettings() {
 // ============ 工具屋管理 ============
 
 // 当前工具选项卡
-let currentToolTab = 'fc';
+let currentToolTab = 'mcp';
 
 // 切换工具子选项卡
 function switchToolTab(tab) {
@@ -1569,46 +1525,7 @@ function switchToolTab(tab) {
 
 // 刷新所有工具列表
 async function refreshAllTools() {
-    await refreshFCTools();
     await refreshMCPTools();
-}
-
-// 刷新 Function Call 工具列表
-async function refreshFCTools() {
-    try {
-        const response = await fetch('/api/tools/list/fc');
-        if (!response.ok) {
-            console.error('FC 工具列表请求失败:', response.status);
-            return;
-        }
-        
-        const data = await response.json();
-        const fcToolsList = document.getElementById('fc-tools-list');
-        
-        if (!fcToolsList) {
-            console.error('fc-tools-list 元素不存在');
-            return;
-        }
-        
-        fcToolsList.innerHTML = '';
-
-        const tools = data.tools || [];
-        if (tools.length === 0) {
-            fcToolsList.innerHTML = '<div class="log-entry log-info">没有找到 Function Call 工具</div>';
-            return;
-        }
-
-        tools.forEach(tool => {
-            const card = createToolCard(tool);
-            fcToolsList.appendChild(card);
-        });
-    } catch (error) {
-        console.error('获取 FC 工具列表失败:', error);
-        const fcToolsList = document.getElementById('fc-tools-list');
-        if (fcToolsList) {
-            fcToolsList.innerHTML = `<div class="log-entry log-error">加载失败：${error.message}</div>`;
-        }
-    }
 }
 
 // 刷新 MCP 工具列表
@@ -1763,6 +1680,7 @@ async function toggleTool(event, toolName, toolType) {
         addLog(`工具切换异常：${error.message}`, 'error', 'system');
     }
 }
+
 // 刷新模型列表
 async function refreshModelList() {
     try {
@@ -1773,15 +1691,12 @@ async function refreshModelList() {
             const models = data.models || [];
             const modelSelect = document.getElementById('live2d-model-select');
 
-            // 如果元素不存在，跳过
             if (!modelSelect) {
                 return;
             }
 
-            // 清空选项
             modelSelect.innerHTML = '';
 
-            // 添加模型到下拉框
             models.forEach(model => {
                 const option = document.createElement('option');
                 option.value = model;
@@ -1789,7 +1704,6 @@ async function refreshModelList() {
                 modelSelect.appendChild(option);
             });
 
-            // 读取当前模型并选中
             const currentResponse = await fetch('/api/settings/current-model');
             if (currentResponse.ok) {
                 const currentData = await currentResponse.json();
@@ -1800,6 +1714,32 @@ async function refreshModelList() {
         }
     } catch (error) {
         console.error('获取模型列表时出错:', error);
+    }
+}
+
+// 保存 Live2D 模型
+async function saveLive2DModel() {
+    try {
+        const modelName = document.getElementById('live2d-model-select').value;
+
+        const response = await fetch('/api/settings/current-model', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: modelName })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            addLog(`Live2D 模型已切换为：${modelName}`, 'success', 'system');
+            await loadExpressionConfig();
+            await loadAllMotions();
+            addLog('已重新加载动作和表情配置', 'info', 'system');
+        } else {
+            addLog('切换模型失败：' + (result.error || '未知错误'), 'error', 'system');
+        }
+    } catch (error) {
+        addLog('切换模型时出错：' + error.message, 'error', 'system');
     }
 }
 
@@ -2529,7 +2469,6 @@ async function saveBasicSettings() {
             show_chat_box: document.getElementById('show-chat-box').checked,
             show_model: !document.getElementById('hide-model').checked,  // 勾选表示隐藏，所以取反
             voice_barge_in: document.getElementById('voice-barge-in').checked,
-            tools_enabled: document.getElementById('tools-enabled').checked,
             mcp_enabled: document.getElementById('mcp-enabled').checked,
             vision_model: {
                 api_key: document.getElementById('vision-model-api-key').value,
@@ -2571,7 +2510,6 @@ async function loadBasicConfig() {
             _setChk('show-chat-box', config.show_chat_box === true);
             _setChk('show-model', config.show_model === true);
             _setChk('voice-barge-in', config.voice_barge_in === true);
-            _setChk('tools-enabled', config.tools_enabled === true);
             _setChk('mcp-enabled', config.mcp_enabled === true);
 
             // 加载视觉模型配置
@@ -2650,7 +2588,6 @@ async function loadUISettings() {
             console.log('loadUISettings API response:', data);
             
             _setChk('show-chat-box', data.show_chat_box === true);
-            _setVal('model-scale', data.model_scale || 2.3);
             // hide-model: 勾选表示隐藏，所以取反
             _setChk('hide-model', data.show_model !== true);
             
@@ -2688,34 +2625,6 @@ async function loadUISettings() {
     }
 }
 
-// 保存 Live2D 模型
-async function saveLive2DModel() {
-    try {
-        const modelName = document.getElementById('live2d-model-select').value;
-
-        const response = await fetch('/api/settings/current-model', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: modelName })
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-            addLog(`Live2D 模型已切换为：${modelName}`, 'success', 'system');
-            
-            // 自动刷新动作和表情配置
-            await loadExpressionConfig();
-            await loadAllMotions();
-            
-            addLog('已重新加载动作和表情配置', 'info', 'system');
-        } else {
-            addLog('切换模型失败：' + (result.error || '未知错误'), 'error', 'system');
-        }
-    } catch (error) {
-        addLog('切换模型时出错：' + error.message, 'error', 'system');
-    }
-}
 
 // 复位皮套位置
 async function resetModelPosition() {
@@ -2852,137 +2761,7 @@ async function applyPrompt(title) {
     }
 }
 
-// 刷新工具广场
-async function refreshToolMarket() {
-    try {
-        const listElement = document.getElementById('tool-market-list');
-        listElement.innerHTML = '<div class="log-entry log-info">正在加载工具列表...</div>';
 
-        const response = await fetch('/api/market/tools');
-        const data = await response.json();
-        
-        if (data.success && data.tools && data.tools.length > 0) {
-            listElement.innerHTML = '';
-            data.tools.forEach((tool) => {
-                const card = createMarketToolCard(tool);
-                listElement.appendChild(card);
-            });
-        } else if (data.success) {
-            listElement.innerHTML = '<div class="log-entry log-info">暂无工具</div>';
-        } else {
-            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载���败') + '</div>';
-        }
-    } catch (error) {
-        document.getElementById('tool-market-list').innerHTML = 
-            '<div class="log-entry log-error">加载出错：' + error.message + '</div>';
-    }
-}
-
-// 创建广场工具卡���
-function createMarketToolCard(tool) {
-    const card = document.createElement('div');
-    card.className = 'market-card';
-
-    const toolName = tool.tool_name || tool.name || '未命名工具';
-    const toolId = tool.id || '';
-    const fileName = tool.file_name || toolName + '.js';
-
-    // 优先使用后端返回的 download_url，如果没有则回退到用 id 构建
-    const downloadUrl = tool.download_url || (toolId ? `http://mynewbot.com/api/download-tool/${toolId}` : '');
-
-    const html = `<div class="market-card-header">
-        <h4 class="market-card-title">📦 ${toolName}</h4>
-    </div>
-    <button onclick="downloadTool('${toolName.replace(/'/g, "\\'")}', '${downloadUrl}', '${fileName}')" class="btn-sm" style="margin-top: 10px;">⬇ 下载</button>`;
-
-    card.innerHTML = html;
-    return card;
-}
-
-// 下载工具
-async function downloadTool(toolName, downloadUrl, fileName) {
-    try {
-        const result = await fetch('/api/market/tools/download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                tool_name: toolName, 
-                download_url: downloadUrl,
-                file_name: fileName
-            })
-        });
-        const res = await result.json();
-        if (res.success) {
-            showSuccess(`工具 ${toolName} 已下载！`);
-        } else {
-            showError('下载失败：' + (res.error || '未知错误'));
-        }
-    } catch (error) {
-        showError('下载时出错：' + error.message);
-    }
-}
-
-// 刷新 FC 广场
-async function refreshFCMarket() {
-    try {
-        const listElement = document.getElementById('fc-market-list');
-        listElement.innerHTML = '<div class="log-entry log-info">正在加载 FC 工具列表...</div>';
-
-        const response = await fetch('/api/market/fc-tools');
-        const data = await response.json();
-
-        if (data.success && data.fc_tools && data.fc_tools.length > 0) {
-            listElement.innerHTML = '';
-            data.fc_tools.forEach((tool) => {
-                const card = createFCCard(tool);
-                listElement.appendChild(card);
-            });
-        } else if (data.success) {
-            listElement.innerHTML = '<div class="log-entry log-info">暂无 FC 工具</div>';
-        } else {
-            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载失败') + '</div>';
-        }
-    } catch (error) {
-        document.getElementById('fc-market-list').innerHTML =
-            '<div class="log-entry log-error">加载出错：' + error.message + '</div>';
-    }
-}
-
-// 创建 FC 工具卡片
-function createFCCard(tool) {
-    const card = document.createElement('div');
-    card.className = 'market-card';
-
-    const toolName = tool.tool_name || tool.name || '未命名工具';
-    const downloadUrl = tool.download_url || '';
-
-    const html = `<div class="market-card-header">
-        <h4 class="market-card-title">🔧 ${toolName}</h4>
-    </div>
-    <button onclick="downloadFCtool('${toolName.replace(/'/g, "\\'")}', '${downloadUrl}')" class="btn-sm" style="margin-top: 10px;">⬇ 下载</button>`;
-
-    card.innerHTML = html;
-    return card;
-}
-
-// 下载 FC 工具
-async function downloadFCtool(toolName, downloadUrl) {
-    try {
-        const result = await fetch('/api/market/fc-tools/download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tool_name: toolName, download_url: downloadUrl })
-        });
-        const res = await result.json();
-        if (res.success) {
-            showSuccess(`FC 工具 ${toolName} 已下载！`);
-        } else {
-            showError('下载失败：' + (res.error || '未知错误'));
-        }
-    } catch (error) {
-        showError('下载时出错：' + error.message);
-    }
-}
 
 // 刷新插件广场
 async function refreshPluginMarket() {
@@ -3202,35 +2981,6 @@ function switchUISubTab(tab) {
     }
 }
 
-// 开始唱歌
-async function startSinging() {
-    try {
-        const response = await fetch('/api/live2d/singing/start', { method: 'POST' });
-        const result = await response.json();
-        if (!(response.ok && result.success)) {
-            showError('启动失败：' + (result.error || '未知错误'));
-        } else {
-            showSuccess('开始唱歌');
-        }
-    } catch (error) {
-        showError('启动时出错：' + error.message);
-    }
-}
-
-// 停止唱歌
-async function stopSinging() {
-    try {
-        const response = await fetch('/api/live2d/singing/stop', { method: 'POST' });
-        const result = await response.json();
-        if (!(response.ok && result.success)) {
-            showError('停止失败：' + (result.error || '未知错误'));
-        } else {
-            showSuccess('停止唱歌');
-        }
-    } catch (error) {
-        showError('停止时出错：' + error.message);
-    }
-}
 
 // 一键复位
 async function resetMotion() {

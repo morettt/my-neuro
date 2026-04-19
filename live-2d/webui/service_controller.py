@@ -9,6 +9,7 @@ import sys
 import subprocess
 import time
 import os
+import json
 from flask import Blueprint, jsonify
 
 from .utils import PROJECT_ROOT, logger, service_processes, service_pids, is_service_running
