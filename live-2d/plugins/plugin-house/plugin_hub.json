@@ -112,5 +112,11 @@
     "desc": "远程同步插件，支持在网页上与桌宠互动。",
     "author": "txzhao",
     "repo": "https://github.com/txzhao2023/my-neuro-remote-sync"
+  },
+  "exp3-model-processor": {
+    "display_name": "EXP3 表情整理器",
+    "desc": "整理 Live2D 模型表情文件，合并水印参数并重建 model3 的 Expressions。",
+    "author": "cxkhjntm",
+    "repo": "https://github.com/cxkhjntm/my-neuro-exp3-model-processor"
   }
 }
