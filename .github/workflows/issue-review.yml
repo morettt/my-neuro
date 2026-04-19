@@ -107,11 +107,11 @@ jobs:
 
               let reviewText;
               try {
-                const response = await fetch('https://www.dmxapi.cn/v1/chat/completions', {
+                const response = await fetch('https://api.zhizengzeng.com/v1/chat/completions', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.OPENAI_API_KEY },
                   body: JSON.stringify({
-                    model: 'gemini-2.0-flash',
+                    model: 'claude-haiku-4-5-20251001',
                     messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
                     max_tokens: 1500,
                     temperature: 0.8
