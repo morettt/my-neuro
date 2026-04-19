@@ -25,13 +25,11 @@
             <button class="tab-button active" onclick="switchTab('dashboard')">启动</button>
             {% if not is_cloud %}<button class="tab-button" onclick="switchTab('terminal')">终端控制室</button>{% endif %}
             <button class="tab-button" onclick="switchTab('llm-config')">LLM 配置</button>
-            <button class="tab-button" onclick="switchTab('dialog-config')">对话配置</button>
-            <button class="tab-button" onclick="switchTab('basic-config')">基础配置</button>
+            <button class="tab-button" onclick="switchTab('dialog-config')">功能配置</button>
             <button class="tab-button" onclick="switchTab('voice-settings')">云端配置</button>
             <button class="tab-button" onclick="switchTab('ui-settings')">Live2D设置</button>
             {% if not is_cloud %}<button class="tab-button" onclick="switchTab('model-manager')">声音克隆</button>{% endif %}
-            <button class="tab-button" onclick="switchTab('market')">广场</button>
-            <button class="tab-button" onclick="switchTab('tools')">工具屋</button>
+            <button class="tab-button" onclick="switchTab('market')">广场工具屋</button>
             <button class="tab-button" onclick="switchTab('plugins')">插件管理</button>
         </div>
 
@@ -44,6 +42,7 @@
                 <div class="log-split-bar">
                     <button class="btn-live2d-toggle" id="live2d-toggle" onclick="toggleLive2dService()">启动</button>
                     <button onclick="resetModelPosition()" class="btn-reset-position">复位皮套位置</button>
+                    <button onclick="clearCurrentLog()" class="btn-reset-position">清空日志</button>
                 </div>
 
                 <div class="log-wrapper split" id="logWrapper">
@@ -55,8 +54,6 @@
                                 <button class="log-tab active" onclick="switchLogTab('system-log')">系统日志</button>
                                 <button class="log-tab" onclick="switchLogTab('pet-log')">桌宠日志</button>
                                 <button class="log-tab" onclick="switchLogTab('tool-log')">工具日志</button>
-                                <button class="log-tab" onclick="switchLogTab('chat-history')">历史对话</button>
-                                <button class="clear-log-button" onclick="clearCurrentLog()">清空日志</button>
                             </div>
                         </div>
 
@@ -85,50 +82,21 @@
                             </div>
                         </div>
 
-                        <div id="chat-history" class="log-panel">
-                            <div class="log-container" data-log-type="main">
-                                <div id="chat-history-output">
-                                    <div class="log-entry log-info">点击刷新按钮加载对话历史...</div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- 第二个日志面板容器 -->
                     <div class="log-panel-container" id="logPanelContainer2" style="display: flex;">
-                        <!-- 头部：选项卡 -->
+                        <!-- 头部 -->
                         <div class="log-header">
                             <div class="log-tabs-main">
-                                <button class="log-tab" onclick="switchLogTab2('system-log2')">系统日志</button>
-                                <button class="log-tab" onclick="switchLogTab2('pet-log2')">桌宠日志</button>
-                                <button class="log-tab" onclick="switchLogTab2('tool-log2')">工具日志</button>
-                                <button class="log-tab active" onclick="switchLogTab2('chat-history2')">历史对话</button>
-                                <button class="clear-log-button" onclick="clearCurrentLog2()">清空日志</button>
+                                <button class="log-tab active">历史对话</button>
                             </div>
                         </div>
 
-                        <!-- 日志内容 -->
-                        <div id="system-log2" class="log-panel">
-                            <div class="log-container" data-log-type="second">
-                                <div id="system-log-output2"></div>
-                            </div>
-                        </div>
-
-                        <div id="pet-log2" class="log-panel">
-                            <div class="log-container" data-log-type="second">
-                                <div id="pet-log-output2"></div>
-                            </div>
-                        </div>
-
-                        <div id="tool-log2" class="log-panel">
-                            <div class="log-container" data-log-type="second">
-                                <div id="tool-log-output2"></div>
-                            </div>
-                        </div>
-
+                        <!-- 历史对话内容 -->
                         <div id="chat-history2" class="log-panel active">
                             <div class="log-container" data-log-type="second">
-                                <div id="chat-history-output2"></div>
+                                <div id="chat-history-output"></div>
                             </div>
                         </div>
                     </div>
@@ -193,7 +161,6 @@
 
         <!-- LLM 配置面板 -->
         <div id="llm-config" class="tab-content">
-            <h3>LLM 配置</h3>
             <div class="section">
                 <div class="form-row">
                     <div class="form-group">
@@ -227,7 +194,6 @@
 
         <!-- 云端配置面板 -->
         <div id="voice-settings" class="tab-content">
-            <h3>云端配置</h3>
             
             <!-- 云端配置子选项卡 -->
             <div class="sub-tabs">
@@ -372,7 +338,6 @@
 
         <!-- 声音克隆 -->
         {% if not is_cloud %}<div id="model-manager" class="tab-content">
-            <h3>声音克隆</h3>
             
             <!-- 声音克隆子选项卡 -->
             <div class="sub-tabs">
@@ -438,40 +403,14 @@
         </div>{% endif %}
 
         <!-- 工具屋面板 -->
-        <div id="tools" class="tab-content">
-            <h3>工具屋</h3>
-
-            <!-- 工具子选项卡 -->
-            <div class="sub-tabs">
-                <button class="sub-tab-button active" onclick="switchToolTab('fc')">Function Call 工具</button>
-                <button class="sub-tab-button" onclick="switchToolTab('mcp')">MCP Tools</button>
-            </div>
-
-            <!-- Function Call 工具列表 -->
-            <div id="fc-tools-panel" class="tool-panel active">
-                <div class="tool-list" id="fc-tools-list">
-                    <div class="log-entry log-info">加载 Function Call 工具中...</div>
-                </div>
-            </div>
-
-            <!-- MCP 工具列表 -->
-            <div id="mcp-tools-panel" class="tool-panel">
-                <div class="tool-list" id="mcp-tools-list">
-                    <div class="log-entry log-info">加载 MCP 工具中...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 广场面板 -->
+        <!-- 广场工具屋面板 -->
         <div id="market" class="tab-content">
-            <h3>广场</h3>
-            
-            <!-- 广场子选项卡 -->
+
+            <!-- 子选项卡 -->
             <div class="sub-tabs">
                 <button class="sub-tab-button active" onclick="switchMarketTab('prompt')">提示词广场</button>
-                <button class="sub-tab-button" onclick="switchMarketTab('tool')">工具广场</button>
-                <button class="sub-tab-button" onclick="switchMarketTab('fc')">FC 广场</button>
                 <button class="sub-tab-button" onclick="switchMarketTab('plugin')">插件广场</button>
+                <button class="sub-tab-button" onclick="switchMarketTab('mcp-tools')">MCP Tools</button>
             </div>
 
             <!-- 提示词广场 -->
@@ -484,25 +423,6 @@
                 </div>
             </div>
 
-            <!-- 工具广场 -->
-            <div id="tool-market-panel" class="market-panel">
-                <div class="market-header">
-                    <button onclick="refreshToolMarket()" class="btn-start">🔄 刷新工具列表</button>
-                </div>
-                <div class="market-list" id="tool-market-list">
-                    <div class="log-entry log-info">点击刷新按钮加载工具列表...</div>
-                </div>
-            </div>
-
-            <!-- FC 广场 -->
-            <div id="fc-market-panel" class="market-panel">
-                <div class="market-header">
-                    <button onclick="refreshFCMarket()" class="btn-start">🔄 刷新 FC 工具列表</button>
-                </div>
-                <div class="market-list" id="fc-market-list">
-                    <div class="log-entry log-info">点击刷新按钮加载 FC 工具列表...</div>
-                </div>
-            </div>
 
             <!-- 插件广场 -->
             <div id="plugin-market-panel" class="market-panel">
@@ -513,21 +433,17 @@
                     <div class="log-entry log-info">点击刷新按钮加载插件列表...</div>
                 </div>
             </div>
+
+            <!-- MCP Tools -->
+            <div id="mcp-tools-market-panel" class="market-panel">
+                <div class="tool-list" id="mcp-tools-list">
+                    <div class="log-entry log-info">加载 MCP 工具中...</div>
+                </div>
+            </div>
         </div>
 
         <!-- UI 设置面板 -->
         <div id="ui-settings" class="tab-content">
-            <h3>Live2D 设置</h3>
-            
-            <!-- 唱歌控制（移动到分选项卡之上） -->
-            <div class="section" style="margin-bottom: 20px;">
-                <h4>🎵 唱歌控制</h4>
-                <div class="action-buttons" style="display: flex; gap: 15px;">
-                    <button onclick="startSinging()" class="btn-start">🎵 开始唱歌</button>
-                    <button onclick="stopSinging()" class="btn-stop">🛑 停止唱歌</button>
-                </div>
-            </div>
-            
             <!-- 子选项卡 -->
             <div class="sub-tabs">
                 <button class="sub-tab-button active" onclick="switchUISubTab('ui')">UI 设置</button>
@@ -538,7 +454,6 @@
             <!-- UI 设置面板 -->
             <div id="ui-sub-panel" class="ui-sub-panel active">
                 <div class="section">
-                    <h4>Live2D 模型选择</h4>
                     <div class="form-group">
                         <label for="live2d-model-select">选择模型：</label>
                         <select id="live2d-model-select" style="width: 100%; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.3); color: white;">
@@ -548,6 +463,12 @@
                     <button onclick="resetModelPosition()" class="btn-start" style="margin-top: 10px; background: linear-gradient(135deg, #f59e0b, #d97706);">复位皮套位置</button>
                 </div>
                 <div class="section">
+                    <div class="form-group">
+                        <label for="intro-text">开场白:</label>
+                        <textarea id="intro-text" placeholder="你好啊" rows="1"></textarea>
+                    </div>
+                </div>
+                <div class="section">
                     <div class="checkbox-group">
                         <input type="checkbox" id="subtitle-enabled">
                         <label for="subtitle-enabled">启用字幕显示</label>
@@ -555,10 +476,6 @@
                     <div class="checkbox-group">
                         <input type="checkbox" id="hide-model">
                         <label for="hide-model">隐藏皮套</label>
-                    </div>
-                    <div class="form-group">
-                        <label for="model-scale">模型缩放比例</label>
-                        <input type="number" id="model-scale" min="0.1" max="5" step="0.1" placeholder="2.3">
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -712,67 +629,15 @@
             </div>
         </div>
 
-        <!-- 基础配置面板 -->
-        <div id="basic-config" class="tab-content">
-            <h3>基础配置</h3>
-            
-            <!-- 视觉功能 -->
-            <div class="section">
-                <h4>视觉功能</h4>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="auto-screenshot">
-                    <label for="auto-screenshot">开启后，每次对话 AI 都会去识图（会增加延迟）</label>
-                </div>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="use-vision-model">
-                    <label for="use-vision-model">启用辅助视觉模型</label>
-                </div>
-                <div class="form-group" style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px;">
-                    <label style="display: block; margin-bottom: 10px; font-weight: bold; color: #66b3ff;">
-                        💡 说明：当主模型（LLM）不支持图片识别时，可以启用此配置。在需要视觉功能时，系统会自动使用此辅助模型处理
-                    </label>
-                    <label style="font-size: 13px; opacity: 0.8;">视觉模型 API Key:</label>
-                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                        <input type="password" id="vision-model-api-key" placeholder="sk-..." style="flex: 1;">
-                        <button type="button" onclick="togglePasswordVisibility('vision-model-api-key')" style="width: 40px;">👁️</button>
-                    </div>
-                    <label style="font-size: 13px; opacity: 0.8;">视觉模型 API URL:</label>
-                    <input type="text" id="vision-model-api-url" placeholder="https://..." style="margin-bottom: 10px;">
-                    <label style="font-size: 13px; opacity: 0.8;">视觉模型名称:</label>
-                    <input type="text" id="vision-model-name" placeholder="qwen-vl-max 等">
-                </div>
-            </div>
-            
-            <!-- 工具开关 -->
-            <div class="section">
-                <h4>工具配置</h4>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="tools-enabled">
-                    <label for="tools-enabled">启用 Function Call 工具</label>
-                </div>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="mcp-enabled">
-                    <label for="mcp-enabled">启用 MCP 工具</label>
-                </div>
-            </div>
-
-        </div>
-
-        <!-- 对话配置面板 -->
+        <!-- 功能配置面板 -->
         <div id="dialog-config" class="tab-content">
-            <h3>对话配置</h3>
             <div class="section">
-                <h4>基础设置</h4>
-                <div class="form-group">
-                    <label for="intro-text">开场白:</label>
-                    <textarea id="intro-text" placeholder="你好啊" rows="1"></textarea>
-                </div>
                 <div class="form-group">
                     <label for="max-messages">最大消息数:</label>
                     <input type="number" id="max-messages" min="1" max="100" placeholder="30">
                 </div>
             </div>
-            
+
             <div class="section">
                 <h4>功能开关</h4>
                 <div class="checkbox-group">
@@ -800,14 +665,44 @@
                     <label for="persistent-history">启用对话历史记忆</label>
                     <span style="font-size: 12px; color: #f87171; margin-left: 10px;">⚠️ 警告：这个目前有 bug 会导致 AI 复读混乱，请暂时别选择</span>
                 </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="auto-screenshot">
+                    <label for="auto-screenshot">开启后，每次对话 AI 都会去识图（会增加延迟）</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="mcp-enabled">
+                    <label for="mcp-enabled">启用 MCP 工具</label>
+                </div>
             </div>
-            
+
+            <!-- 视觉功能 -->
+            <div class="section">
+                <h4>视觉功能</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="use-vision-model">
+                    <label for="use-vision-model">启用辅助视觉模型</label>
+                </div>
+                <div class="form-group" style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                    <label style="display: block; margin-bottom: 10px; font-weight: bold; color: #66b3ff;">
+                        💡 说明：当主模型（LLM）不支持图片识别时，可以启用此配置。在需要视觉功能时，系统会自动使用此辅助模型处理
+                    </label>
+                    <label style="font-size: 13px; opacity: 0.8;">视觉模型 API Key:</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <input type="password" id="vision-model-api-key" placeholder="sk-..." style="flex: 1;">
+                        <button type="button" onclick="togglePasswordVisibility('vision-model-api-key')" style="width: 40px;">👁️</button>
+                    </div>
+                    <label style="font-size: 13px; opacity: 0.8;">视觉模型 API URL:</label>
+                    <input type="text" id="vision-model-api-url" placeholder="https://..." style="margin-bottom: 10px;">
+                    <label style="font-size: 13px; opacity: 0.8;">视觉模型名称:</label>
+                    <input type="text" id="vision-model-name" placeholder="qwen-vl-max 等">
+                </div>
+            </div>
+
         </div>
 
         <!-- 插件管理面板 -->
         <div id="plugins" class="tab-content">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="margin: 0;">插件管理</h3>
+            <div style="margin-bottom: 15px;">
                 <button onclick="refreshPlugins()" class="btn-start" style="padding: 8px 16px; font-size: 14px;">
                     🔄 刷新插件列表
                 </button>
@@ -875,40 +770,5 @@
     </div>
 
     <script src="static/js/app.js?v=20260322"></script>
-    
-    <!-- 调试脚本：广场下载问题排查 -->
-    <script>
-        // 覆盖 downloadTool 函数添加调试日志
-        const _originalDownloadTool = window.downloadTool;
-        window.downloadTool = async function(toolName, downloadUrl, fileName) {
-            console.log('=== 工具广场下载调试 ===');
-            console.log('工具名称:', toolName);
-            console.log('下载 URL:', downloadUrl);
-            console.log('文件名:', fileName);
-            console.log('调用堆栈:', new Error().stack);
-            try {
-                await _originalDownloadTool(toolName, downloadUrl, fileName);
-            } catch (error) {
-                console.error('下载失败:', error);
-                throw error;
-            }
-        };
-        
-        // 覆盖 applyPrompt 函数添加调试日志
-        const _originalApplyPrompt = window.applyPrompt;
-        window.applyPrompt = async function(title) {
-            console.log('=== 提示词应用调试 ===');
-            console.log('提示词标题:', title);
-            console.log('调用堆栈:', new Error().stack);
-            try {
-                await _originalApplyPrompt(title);
-            } catch (error) {
-                console.error('应用失败:', error);
-                throw error;
-            }
-        };
-        
-        console.log('✅ 调试脚本已加载');
-    </script>
 </body>
 </html>
