@@ -113,7 +113,7 @@ jobs:
                   body: JSON.stringify({
                     model: 'claude-haiku-4-5-20251001',
                     messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-                    max_tokens: 1500,
+                    max_tokens: 3500,
                     temperature: 0.8
                   })
                 });
