@@ -133,6 +133,7 @@
     "ref_text_placeholder": "Enter text corresponding to reference audio",
     "generate_bat": "Generate TTS bat File",
     "status": "Status: Please upload files and generate config",
+    "selected": "Selected: ",
     "status_generating": "Status: ",
     "train_coming": "🚧 This feature is under development...",
     "train_wait": "Stay tuned"
@@ -270,6 +271,7 @@
     "loading_config": "Loading config...",
     "config_error": "Failed to load config",
     "config_error_load": "Error loading config",
+    "config_path": "Config path: ",
     "cancel": "Cancel",
     "reset_default": "Reset to Default",
     "save_config": "Save Config",
@@ -325,6 +327,10 @@
     "ai": "AI",
     "tool_call": "Tool Call"
   },
+  "game": {
+    "start_success": "Minecraft game started!",
+    "start_script_missing": "Launch script not found: "
+  },
   "tools": {
     "no_tools": "No MCP tools found",
     "load_failed": "Failed to get MCP tool list",
@@ -349,6 +355,12 @@
     "no": "No",
     "expand": "Expand",
     "collapse": "Collapse",
-    "reset": "Reset"
+    "image": "Image",
+    "unnamed": "Unnamed",
+    "reset": "Reset",
+    "day": "d",
+    "hour": "h",
+    "minute": "m",
+    "second": "s"
   }
 }

@@ -133,6 +133,7 @@
     "ref_text_placeholder": "请输入参考音频对应的文本内容",
     "generate_bat": "生成 TTS 的 bat 文件",
     "status": "状态：请上传文件并生成配置",
+    "selected": "已选择：",
     "status_generating": "状态：",
     "train_coming": "🚧 此功能开发中…",
     "train_wait": "敬请期待"
@@ -270,6 +271,7 @@
     "loading_config": "正在加载配置...",
     "config_error": "加载配置失败",
     "config_error_load": "加载配置时出错",
+    "config_path": "配置路径：",
     "cancel": "取消",
     "reset_default": "重置默认值",
     "save_config": "保存配置",
@@ -325,6 +327,10 @@
     "ai": "AI",
     "tool_call": "调用工具"
   },
+  "game": {
+    "start_success": "Minecraft 游戏已启动！",
+    "start_script_missing": "启动脚本不存在："
+  },
   "tools": {
     "no_tools": "没有找到 MCP 工具",
     "load_failed": "获取 MCP 工具列表失败",
@@ -349,6 +355,12 @@
     "no": "否",
     "expand": "展开",
     "collapse": "折叠",
-    "reset": "重置"
+    "image": "图片",
+    "unnamed": "未命名",
+    "reset": "重置",
+    "day": "天",
+    "hour": "小时",
+    "minute": "分钟",
+    "second": "秒"
   }
 }
