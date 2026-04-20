@@ -2726,7 +2726,7 @@ function createPromptCard(prompt) {
     }
 
     // 添加应用按钮
-    html += `<button onclick="applyPrompt('${title.replace(/'/g, "\\'")}')" class="btn-sm" style="margin-top: 10px;">${t('market.apply')}</button>`;
+    html += `<button onclick="applyPrompt('${title.replace(/'/g, "\\'")}')" class="btn-sm" style="margin-top: 10px;" data-i18n="market.apply">${t('market.apply')}</button>`;
 
     card.innerHTML = html;
     return card;
@@ -2808,19 +2808,22 @@ function createPluginMarketCard(plugin) {
     const installing = plugin.installing || false;
 
     // 根据状态设置按钮文本和样式（installed 优先于 installing）
-    let btnText, btnDisabled;
+    let btnText, btnDisabled, btnI18n;
     if (installed) {
         // 已安装状态优先
         btnText = t('market.plugin_installed');
         btnDisabled = 'disabled';
+        btnI18n = 'market.plugin_installed';
     } else if (installing) {
         // 正在安装
         btnText = t('market.plugin_installing');
         btnDisabled = 'disabled';
+        btnI18n = 'market.plugin_installing';
     } else {
         // 未安装
         btnText = t('market.plugin_install');
         btnDisabled = '';
+        btnI18n = 'market.plugin_install';
     }
 
     const html = `<div class="market-card-header">
@@ -2833,7 +2836,7 @@ function createPluginMarketCard(plugin) {
         </div>
     </div>
     <button onclick="installPlugin('${pluginName.replace(/'/g, "\\'")}', '${downloadUrl.replace(/'/g, "\\'")}')" 
-        class="btn-sm" style="margin-top: 10px;" ${btnDisabled}>${btnText}</button>`;
+        class="btn-sm" style="margin-top: 10px;" ${btnDisabled} data-i18n="${btnI18n}">${btnText}</button>`;
 
     card.innerHTML = html;
     return card;
@@ -2848,6 +2851,7 @@ async function installPlugin(pluginName, downloadUrl) {
             const btn = card.querySelector('button');
             btn.disabled = true;
             btn.textContent = t('market.plugin_installing');
+            btn.setAttribute('data-i18n', 'market.plugin_installing');
             btn.classList.add('btn-installing');
             
             // 显示进度条
@@ -2885,6 +2889,7 @@ function restoreInstallButton(pluginName, text) {
         const btn = card.querySelector('button');
         btn.disabled = false;
         btn.textContent = text;
+        btn.setAttribute('data-i18n', 'market.plugin_install');
         btn.classList.remove('btn-installing');
     }
     const progressDiv = document.getElementById(`progress-${pluginName}`);

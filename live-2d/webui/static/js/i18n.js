@@ -77,6 +77,15 @@ function updatePageLanguage() {
             }
         });
     }
+
+    // Refresh market card button texts without re-fetching data
+    document.querySelectorAll('#market .market-card button[data-i18n]').forEach(function(btn) {
+        const key = btn.getAttribute('data-i18n');
+        const translated = i18next.t(key);
+        if (translated && translated !== key) {
+            btn.textContent = translated;
+        }
+    });
 }
 
 // Change language
