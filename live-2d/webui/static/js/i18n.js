@@ -24,6 +24,12 @@ function initI18n() {
         .use(i18nextBrowserLanguageDetector)
         .init(i18nConfig)
         .then(function() {
+            // 如果 localStorage 中没有语言记录，检测浏览器语言并持久化
+            if (!localStorage.getItem('i18nextLng')) {
+                const browserLng = navigator.language || navigator.userLanguage;
+                const lng = browserLng && browserLng.startsWith('zh') ? 'zh' : 'en';
+                i18next.changeLanguage(lng);
+            }
             updatePageLanguage();
             i18next.on('languageChanged', function() {
                 updatePageLanguage();
