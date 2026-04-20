@@ -1862,7 +1862,7 @@ async function refreshPlugins() {
         if (btn) {
             const originalText = btn.textContent;
             btn.disabled = true;
-            btn.textContent = '🔄 刷新中...';
+            btn.textContent = t('plugins.refreshing');
             setTimeout(() => {
                 btn.disabled = false;
                 btn.textContent = originalText;
@@ -2051,7 +2051,7 @@ async function openPluginConfig(pluginPath) {
 // 打开插件配置模态框
 function openPluginConfigModal(pluginPath, displayName) {
     // 设置模态框标题（使用 display_name 显示）
-    document.getElementById('pluginConfigModalTitle').textContent = `插件配置 - ${displayName}`;
+    document.getElementById('pluginConfigModalTitle').textContent = t('plugins.config_title') + ' - ' + displayName;
     
     // 显示加载状态
     document.getElementById('pluginConfigLoading').style.display = 'block';
@@ -2681,11 +2681,11 @@ function switchMarketTab(tab) {
 async function refreshPromptMarket() {
     try {
         const listElement = document.getElementById('prompt-market-list');
-        listElement.innerHTML = '<div class="log-entry log-info">正在加载提示词列表...</div>';
+        listElement.innerHTML = '<div class="log-entry log-info">' + t('market.loading_list') + '</div>';
 
         const response = await fetch('/api/market/prompts');
         const data = await response.json();
-        
+
         if (data.success && data.prompts && data.prompts.length > 0) {
             listElement.innerHTML = '';
             data.prompts.forEach((prompt) => {
@@ -2693,13 +2693,13 @@ async function refreshPromptMarket() {
                 listElement.appendChild(card);
             });
         } else if (data.success) {
-            listElement.innerHTML = '<div class="log-entry log-info">��无提示词</div>';
+            listElement.innerHTML = '<div class="log-entry log-info">' + t('market.no_prompt') + '</div>';
         } else {
-            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载失败') + '</div>';
+            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || t('market.load_failed')) + '</div>';
         }
     } catch (error) {
-        document.getElementById('prompt-market-list').innerHTML = 
-            '<div class="log-entry log-error">加载出错：' + error.message + '</div>';
+        document.getElementById('prompt-market-list').innerHTML =
+            '<div class="log-entry log-error">' + t('market.load_error') + '：' + error.message + '</div>';
     }
 }
 
@@ -2726,7 +2726,7 @@ function createPromptCard(prompt) {
     }
 
     // 添加应用按钮
-    html += `<button onclick="applyPrompt('${title.replace(/'/g, "\\'")}')" class="btn-sm" style="margin-top: 10px;">应用</button>`;
+    html += `<button onclick="applyPrompt('${title.replace(/'/g, "\\'")}')" class="btn-sm" style="margin-top: 10px;">${t('market.apply')}</button>`;
 
     card.innerHTML = html;
     return card;
@@ -2770,7 +2770,7 @@ async function applyPrompt(title) {
 async function refreshPluginMarket() {
     try {
         const listElement = document.getElementById('plugin-market-list');
-        listElement.innerHTML = '<div class="log-entry log-info">正在加载插件列表...</div>';
+        listElement.innerHTML = '<div class="log-entry log-info">' + t('market.loading_plugin_list') + '</div>';
 
         const response = await fetch('/api/market/plugins');
         const data = await response.json();
@@ -2784,11 +2784,11 @@ async function refreshPluginMarket() {
         } else if (data.success) {
             listElement.innerHTML = '<div class="log-entry log-info">' + t('market.no_plugin') + '</div>';
         } else {
-            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || '加载��败') + '</div>';
+            listElement.innerHTML = '<div class="log-entry log-error">' + (data.error || t('market.load_failed')) + '</div>';
         }
     } catch (error) {
         document.getElementById('plugin-market-list').innerHTML =
-            '<div class="log-entry log-error">加载出错：' + error.message + '</div>';
+            '<div class="log-entry log-error">' + t('market.load_error') + '：' + error.message + '</div>';
     }
 }
 
@@ -2811,15 +2811,15 @@ function createPluginMarketCard(plugin) {
     let btnText, btnDisabled;
     if (installed) {
         // 已安装状态优先
-        btnText = '✓ 已安装';
+        btnText = t('market.plugin_installed');
         btnDisabled = 'disabled';
     } else if (installing) {
         // 正在安装
-        btnText = '⏳ 安装中...';
+        btnText = t('market.plugin_installing');
         btnDisabled = 'disabled';
     } else {
         // 未安装
-        btnText = '⬇ 安装';
+        btnText = t('market.plugin_install');
         btnDisabled = '';
     }
 
@@ -2847,7 +2847,7 @@ async function installPlugin(pluginName, downloadUrl) {
         if (card) {
             const btn = card.querySelector('button');
             btn.disabled = true;
-            btn.textContent = '⏳ 安装中...';
+            btn.textContent = t('market.plugin_installing');
             btn.classList.add('btn-installing');
             
             // 显示进度条
@@ -2870,11 +2870,11 @@ async function installPlugin(pluginName, downloadUrl) {
         } else {
             showError(t('market.install_failed') + '：' + (res.error || t('common.unknown_error')));
             // 恢复按钮状态
-            restoreInstallButton(pluginName, '⬇ 安装');
+            restoreInstallButton(pluginName, t('market.plugin_install'));
         }
     } catch (error) {
-        showError('安装时出错：' + error.message);
-        restoreInstallButton(pluginName, '⬇ 安装');
+        showError(t('market.install_error') + '：' + error.message);
+        restoreInstallButton(pluginName, t('market.plugin_install'));
     }
 }
 
@@ -2909,7 +2909,7 @@ async function pollPluginInstalled(pluginName) {
             if (data.installed) {
                 // 插件已安装，成功！
                 if (progressFill) progressFill.style.width = '100%';
-                if (progressText) progressText.textContent = '✓ 安装完成';
+                if (progressText) progressText.textContent = t('market.progress_done');
                 // 延迟刷新列表，让后端有时间清理任务状态
                 setTimeout(() => refreshPluginMarket(), 500);
                 return;
@@ -2926,8 +2926,8 @@ async function pollPluginInstalled(pluginName) {
                 setTimeout(poll, 1000);  // 每秒检查一次
             } else {
                 // 超时
-                if (progressText) progressText.textContent = '安装超时，请重试';
-                restoreInstallButton(pluginName, '⬇ 安装');
+                if (progressText) progressText.textContent = t('market.progress_timeout');
+                restoreInstallButton(pluginName, t('market.plugin_install'));
             }
         } catch (error) {
             console.error('轮询安装状态失败:', error);
@@ -2935,7 +2935,7 @@ async function pollPluginInstalled(pluginName) {
             if (attempts < maxAttempts) {
                 setTimeout(poll, 1000);
             } else {
-                restoreInstallButton(pluginName, '⬇ 安装');
+                restoreInstallButton(pluginName, t('market.plugin_install'));
             }
         }
     };
@@ -3030,8 +3030,8 @@ function addMotionToCategory(btn) {
             motionItem.innerHTML = `
                 <span>${file.name}</span>
                 <div>
-                    <button onclick="previewMotion(this)" class="btn-sm">预览</button>
-                    <button onclick="removeMotion(this)" class="btn-sm">删除</button>
+                    <button onclick="previewMotion(this)" class="btn-sm">${t('ui_settings.preview')}</button>
+                    <button onclick="removeMotion(this)" class="btn-sm">${t('ui_settings.delete')}</button>
                 </div>
             `;
             actionsContainer.appendChild(motionItem);
@@ -3250,8 +3250,8 @@ function createMotionBindingItem(emotion, filePath, displayName) {
     item.innerHTML = `
         <span data-file-path="${escapedFilePath}">${displayName}</span>
         <div>
-            <button onclick="previewMotionByPath('${escapedFilePath}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">预览</button>
-            <button onclick="removeMotionBinding('${escapedEmotion}', '${escapedFilePath}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">删除</button>
+            <button onclick="previewMotionByPath('${escapedFilePath}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">${t('ui_settings.preview')}</button>
+            <button onclick="removeMotionBinding('${escapedEmotion}', '${escapedFilePath}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">${t('ui_settings.delete')}</button>
         </div>
     `;
     return item;
@@ -3649,8 +3649,8 @@ function createExpressionBindingItem(emotion, filePath, displayName) {
     item.innerHTML = `
         <span data-file-path="${escapedFilePath}">${displayName}</span>
         <div>
-            <button onclick="previewExpressionFromBinding('${escapedFilePath}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">预览</button>
-            <button onclick="removeExpressionBinding('${escapedEmotion}', '${escapedFilePath}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">删除</button>
+            <button onclick="previewExpressionFromBinding('${escapedFilePath}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">${t('ui_settings.preview')}</button>
+            <button onclick="removeExpressionBinding('${escapedEmotion}', '${escapedFilePath}')" class="btn-sm" style="padding: 2px 6px; font-size: 11px;">${t('ui_settings.delete')}</button>
         </div>
     `;
     return item;
