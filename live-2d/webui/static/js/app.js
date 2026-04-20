@@ -929,19 +929,19 @@ function switchTab(tabName) {
         let buttonHTML = '';
         switch(tabName) {
             case 'basic-config':
-                buttonHTML = '<button class="config-save-button" onclick="saveBasicSettings()">' + t('llm_config.save_config') + '</button>';
+                buttonHTML = '<button class="config-save-button px-4 py-2 text-sm font-medium rounded-md shadow-sm transition-colors" onclick="saveBasicSettings()">' + t('llm_config.save_config') + '</button>';
                 break;
             case 'dialog-config':
-                buttonHTML = '<button class="config-save-button" onclick="saveDialogSettings()">' + t('llm_config.save_config') + '</button>';
+                buttonHTML = '<button class="config-save-button px-4 py-2 text-sm font-medium rounded-md shadow-sm transition-colors" onclick="saveDialogSettings()">' + t('llm_config.save_config') + '</button>';
                 break;
             case 'llm-config':
-                buttonHTML = '<button class="config-save-button" onclick="saveLLMConfig()">' + t('llm_config.save_config') + '</button>';
+                buttonHTML = '<button class="config-save-button px-4 py-2 text-sm font-medium rounded-md shadow-sm transition-colors" onclick="saveLLMConfig()">' + t('llm_config.save_config') + '</button>';
                 break;
             case 'voice-settings':
-                buttonHTML = '<button class="config-save-button" onclick="saveCloudSettings()">' + t('llm_config.save_config') + '</button>';
+                buttonHTML = '<button class="config-save-button px-4 py-2 text-sm font-medium rounded-md shadow-sm transition-colors" onclick="saveCloudSettings()">' + t('llm_config.save_config') + '</button>';
                 break;
             case 'ui-settings':
-                buttonHTML = '<button class="config-save-button" onclick="saveUISettings()">' + t('llm_config.save_config') + '</button>';
+                buttonHTML = '<button class="config-save-button px-4 py-2 text-sm font-medium rounded-md shadow-sm transition-colors" onclick="saveUISettings()">' + t('llm_config.save_config') + '</button>';
                 break;
             default:
                 // 无保存按钮的页面显示空占位，保持布局稳定
