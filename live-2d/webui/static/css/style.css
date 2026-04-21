@@ -85,16 +85,6 @@ h1 {
     width: 100%;
     flex: 1;
     min-height: 0;
-    overflow: hidden;
-}
-
-.content-area {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
 }
 .tabs {
     display: flex;
@@ -105,9 +95,9 @@ h1 {
     flex-shrink: 0;
     padding: 10px;
     background: rgba(255, 255, 255, 0.03);
-    border-radius: 0;
-    border: none;
-    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px 0 0 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-right: none;
     overflow-y: auto;
 }
 
@@ -164,17 +154,16 @@ h1 {
     border-color: rgba(59, 130, 246, 0.5);
 }
 .tab-content {
-    display: none;
-    background: rgba(255, 255, 255, 0.05);
-    padding: 25px;
-    backdrop-filter: blur(10px);
+    display: none; background: rgba(255, 255, 255, 0.05);
+    border-radius: 0 12px 12px 12px; padding: 25px; backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     flex: 1;
     min-width: 0;
-    overflow-y: auto;
 }
 .tab-content.active {
     display: block;
+    height: 100%;
+    overflow-y: auto;
 }
 
 /* 保存按钮栏 - 位于面板底部靠右 */
@@ -1900,12 +1889,10 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
     justify-content: space-between;
     align-items: center;
     gap: 15px;
-    padding: 10px 20px;
+    margin-bottom: 10px;
+    padding: 0 20px;
     min-height: 52px;
     transition: all 0.3s ease;
-    flex-shrink: 0;
-    background: rgba(255, 255, 255, 0.02);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* 保存按钮容器 */

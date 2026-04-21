@@ -17,6 +17,32 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <div class="container">
+
+        <!-- 顶部信息栏 -->
+        <div class="header-collapse-control">
+            <div class="header-right-group">
+                <div class="language-selector-wrapper">
+                    <select id="language-selector" onchange="changeLanguage(this.value)">
+                        <option value="zh" data-i18n="app.language_zh">中文</option>
+                        <option value="en" data-i18n="app.language_en">English</option>
+                    </select>
+                </div>
+                <div class="header-icon-group">
+                    <a href="http://mynewbot.com/tutorials" target="_blank" rel="noopener noreferrer" class="header-icon" title="文档">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                        </svg>
+                    </a>
+                    <a href="https://github.com/morettt/my-neuro" target="_blank" rel="noopener noreferrer" class="header-icon" title="GitHub">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+
         <div class="main-layout">
             <div class="tabs">
                 <div class="collapsed-mini-title" id="collapsedMiniTitle">
@@ -34,35 +60,8 @@
                 <button class="tab-button" onclick="switchTab('plugins')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span data-i18n="tabs.plugins">插件管理</span></button>
             </div>
 
-            <!-- 内容区域 -->
-            <div class="content-area">
-                <!-- 顶部信息栏 -->
-                <div class="header-collapse-control">
-                    <div class="header-right-group">
-                        <div class="language-selector-wrapper">
-                            <select id="language-selector" onchange="changeLanguage(this.value)">
-                                <option value="zh" data-i18n="app.language_zh">中文</option>
-                                <option value="en" data-i18n="app.language_en">English</option>
-                            </select>
-                        </div>
-                        <div class="header-icon-group">
-                            <a href="http://mynewbot.com/tutorials" target="_blank" rel="noopener noreferrer" class="header-icon" title="文档">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                                </svg>
-                            </a>
-                            <a href="https://github.com/morettt/my-neuro" target="_blank" rel="noopener noreferrer" class="header-icon" title="GitHub">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
-                                </svg>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 启动面板 -->
-                <div id="dashboard" class="tab-content active">
+            <!-- 启动面板 -->
+            <div id="dashboard" class="tab-content active">
 
             <!-- 多日志系统 -->
             <div class="log-section">
@@ -764,7 +763,6 @@
             <div id="community-plugin-panel" class="plugin-panel">
                 <div id="community-plugins-list" class="plugins-container"></div>
             </div>
-        </div>
         </div>
 
         </div>
