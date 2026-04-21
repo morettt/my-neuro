@@ -61,6 +61,8 @@ def run_app():
     """运行 Flask 应用"""
     app = create_app()
     port = find_free_port()
+
+    port = 59320
     
     print(f"\n{'='*50}")
     print(f"WebUI 控制面板")
