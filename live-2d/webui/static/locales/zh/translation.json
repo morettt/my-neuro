@@ -267,7 +267,7 @@
     "no_config": "无配置",
     "author": "作者：",
     "config_title": "插件配置",
-    "readme_btn": "📖 配置说明",
+    "readme_btn": "配置说明",
     "loading_config": "正在加载配置...",
     "config_error": "加载配置失败",
     "config_error_load": "加载配置时出错",

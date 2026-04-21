@@ -923,33 +923,7 @@ function switchTab(tabName) {
         targetButton.classList.add('active');
     }
 
-    // 控制选项卡栏中保存按钮的显示/隐藏 - 只显示当前页面对应的按钮
-    const configSaveButtons = document.getElementById('configSaveButtons');
-    if (configSaveButtons) {
-        let buttonHTML = '';
-        switch(tabName) {
-            case 'basic-config':
-                buttonHTML = '<button class="config-save-button" onclick="saveBasicSettings()">' + t('llm_config.save_config') + '</button>';
-                break;
-            case 'dialog-config':
-                buttonHTML = '<button class="config-save-button" onclick="saveDialogSettings()">' + t('llm_config.save_config') + '</button>';
-                break;
-            case 'llm-config':
-                buttonHTML = '<button class="config-save-button" onclick="saveLLMConfig()">' + t('llm_config.save_config') + '</button>';
-                break;
-            case 'voice-settings':
-                buttonHTML = '<button class="config-save-button" onclick="saveCloudSettings()">' + t('llm_config.save_config') + '</button>';
-                break;
-            case 'ui-settings':
-                buttonHTML = '<button class="config-save-button" onclick="saveUISettings()">' + t('llm_config.save_config') + '</button>';
-                break;
-            default:
-                // 无保存按钮的页面显示空占位，保持布局稳定
-                buttonHTML = '<div class="config-save-placeholder"></div>';
-                break;
-        }
-        configSaveButtons.innerHTML = buttonHTML;
-    }
+    // 保存按钮已移至各面板底部，此处不再需要动态控制
 }
 
 // ============ 配置保存 ============
@@ -1438,9 +1412,11 @@ async function saveUISettings() {
     const settings = {
         show_chat_box: document.getElementById('show-chat-box').checked,
         show_model: !document.getElementById('hide-model').checked,  // 勾选表示隐藏，所以取反
-        subtitle_user: document.getElementById('subtitle-user').value,
-        subtitle_ai: document.getElementById('subtitle-ai').value,
-        subtitle_enabled: document.getElementById('subtitle-enabled').checked
+        subtitle_labels: {
+            enabled: document.getElementById('subtitle-enabled').checked,
+            user: document.getElementById('subtitle-user').value,
+            ai: document.getElementById('subtitle-ai').value
+        }
     };
     try {
         const response = await fetch('/api/settings/ui', {
@@ -2530,6 +2506,7 @@ async function loadBasicConfig() {
 // 保存对话配置
 async function saveDialogSettings() {
     try {
+        // 保存基础对话配置到 /api/settings/dialog
         const config = {
             intro_text: document.getElementById('intro-text').value,
             max_messages: parseInt(document.getElementById('max-messages').value) || 30,
@@ -2541,20 +2518,43 @@ async function saveDialogSettings() {
             show_chat_box: document.getElementById('show-chat-box').checked
         };
 
-        const response = await fetch('/api/settings/dialog', {
+        const response1 = await fetch('/api/settings/dialog', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(config)
         });
 
-        const result = await response.json();
+        // 保存高级配置到 /api/settings/advanced
+        const advancedConfig = {
+            auto_screenshot: document.getElementById('auto-screenshot').checked,
+            use_vision_model: document.getElementById('use-vision-model').checked,
+            show_chat_box: document.getElementById('show-chat-box').checked,
+            show_model: !document.getElementById('hide-model').checked,
+            voice_barge_in: document.getElementById('voice-barge-in').checked,
+            mcp_enabled: document.getElementById('mcp-enabled').checked,
+            vision_model: {
+                api_key: document.getElementById('vision-model-api-key').value,
+                api_url: document.getElementById('vision-model-api-url').value,
+                model: document.getElementById('vision-model-name').value
+            }
+        };
 
-        if (response.ok && result.success) {
+        const response2 = await fetch('/api/settings/advanced', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(advancedConfig)
+        });
+
+        const result1 = await response1.json();
+        const result2 = await response2.json();
+
+        if (response1.ok && result1.success && response2.ok && result2.success) {
             addLog(t('dialog_config.save_success'), 'success', 'system');
             showSuccess(t('dialog_config.save_success'));
         } else {
-            addLog(t('dialog_config.save_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
-            showError(t('dialog_config.save_failed') + '：' + (result.error || t('common.unknown_error')));
+            const errorMsg = (result1.error || result2.error || t('common.unknown_error'));
+            addLog(t('dialog_config.save_failed') + '：' + errorMsg, 'error', 'system');
+            showError(t('dialog_config.save_failed') + '：' + errorMsg);
         }
     } catch (error) {
         addLog(t('dialog_config.save_error') + '：' + error.message, 'error', 'system');

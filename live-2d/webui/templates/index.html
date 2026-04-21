@@ -6,6 +6,7 @@
     <title data-i18n="app.title">My Neuro - 控制中心</title>
     <link rel="icon" href="/live-2d/fake_neuro.ico" type="image/x-icon">
     <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="/static/js/libs/i18next.min.js"></script>
     <script src="/static/js/libs/i18nextHttpBackend.min.js"></script>
     <script src="/static/js/libs/i18nextBrowserLanguageDetector.min.js"></script>
@@ -19,32 +20,48 @@
 
         <!-- 顶部信息栏 -->
         <div class="header-collapse-control">
-            <div class="config-save-buttons" id="configSaveButtons"></div>
-            <div class="collapsed-mini-title" id="collapsedMiniTitle">
-                {% if is_cloud %}<span data-i18n="app.cloud">（云端）</span>{% else %}<span data-i18n="app.local">（本地）</span>{% endif %} My Neuro <span data-i18n="app.version_loading">版本：<span id="neuro-version">加载中...</span></span>
+            <div class="header-title-group" id="collapsedMiniTitle">
+                <span class="header-title-text">{% if is_cloud %}<span data-i18n="app.cloud">(云端) </span>{% else %}<span data-i18n="app.local">(本地) </span>{% endif %} My Neuro</span>
+                <span class="header-version" id="neuro-version"></span>
             </div>
-            <div class="language-selector-wrapper" style="margin-left: auto;">
-                <select id="language-selector" onchange="changeLanguage(this.value)" style="padding: 6px 12px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: white; cursor: pointer;">
-                    <option value="zh" data-i18n="app.language_zh">中文</option>
-                    <option value="en" data-i18n="app.language_en">English</option>
-                </select>
+            <div class="header-right-group">
+                <div class="language-selector-wrapper">
+                    <select id="language-selector" onchange="changeLanguage(this.value)">
+                        <option value="zh" data-i18n="app.language_zh">中文</option>
+                        <option value="en" data-i18n="app.language_en">English</option>
+                    </select>
+                </div>
+                <div class="header-icon-group">
+                    <a href="http://mynewbot.com/tutorials" target="_blank" rel="noopener noreferrer" class="header-icon" title="文档">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                        </svg>
+                    </a>
+                    <a href="https://github.com/morettt/my-neuro" target="_blank" rel="noopener noreferrer" class="header-icon" title="GitHub">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                        </svg>
+                    </a>
+                </div>
             </div>
         </div>
 
-        <div class="tabs">
-            <button class="tab-button active" onclick="switchTab('dashboard')" data-i18n="tabs.dashboard">启动</button>
-            {% if not is_cloud %}<button class="tab-button" onclick="switchTab('terminal')" data-i18n="tabs.terminal">终端控制室</button>{% endif %}
-            <button class="tab-button" onclick="switchTab('llm-config')" data-i18n="tabs.llm_config">LLM 配置</button>
-            <button class="tab-button" onclick="switchTab('dialog-config')" data-i18n="tabs.dialog_config">功能配置</button>
-            <button class="tab-button" onclick="switchTab('voice-settings')" data-i18n="tabs.voice_settings">云端配置</button>
-            <button class="tab-button" onclick="switchTab('ui-settings')" data-i18n="tabs.ui_settings">Live2D设置</button>
-            {% if not is_cloud %}<button class="tab-button" onclick="switchTab('model-manager')" data-i18n="tabs.model_manager">声音克隆</button>{% endif %}
-            <button class="tab-button" onclick="switchTab('market')" data-i18n="tabs.market">广场工具屋</button>
-            <button class="tab-button" onclick="switchTab('plugins')" data-i18n="tabs.plugins">插件管理</button>
-        </div>
+        <div class="main-layout">
+            <div class="tabs">
+                <button class="tab-button active" onclick="switchTab('dashboard')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><span data-i18n="tabs.dashboard">启动</span></button>
+                {% if not is_cloud %}<button class="tab-button" onclick="switchTab('terminal')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><span data-i18n="tabs.terminal">终端控制室</span></button>{% endif %}
+                <button class="tab-button" onclick="switchTab('llm-config')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z"></path><path d="M12 2a10 10 0 0 1 10 10"></path><path d="M12 12l9.5 4.5"></path></svg><span data-i18n="tabs.llm_config">LLM 配置</span></button>
+                <button class="tab-button" onclick="switchTab('dialog-config')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg><span data-i18n="tabs.dialog_config">功能配置</span></button>
+                <button class="tab-button" onclick="switchTab('voice-settings')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg><span data-i18n="tabs.voice_settings">云端配置</span></button>
+                <button class="tab-button" onclick="switchTab('ui-settings')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg><span data-i18n="tabs.ui_settings">Live2D设置</span></button>
+                {% if not is_cloud %}<button class="tab-button" onclick="switchTab('model-manager')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg><span data-i18n="tabs.model_manager">声音克隆</span></button>{% endif %}
+                <button class="tab-button" onclick="switchTab('market')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg><span data-i18n="tabs.market">广场工具屋</span></button>
+                <button class="tab-button" onclick="switchTab('plugins')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span data-i18n="tabs.plugins">插件管理</span></button>
+            </div>
 
-        <!-- 启动面板 -->
-        <div id="dashboard" class="tab-content active">
+            <!-- 启动面板 -->
+            <div id="dashboard" class="tab-content active">
 
             <!-- 多日志系统 -->
             <div class="log-section">
@@ -200,6 +217,9 @@
                     <textarea id="system-prompt" class="system-prompt-textarea" data-i18n-placeholder="llm_config.system_prompt_placeholder" placeholder="在这里输入 AI 人设..."></textarea>
                 </div>
             </div>
+            <div class="config-save-bar">
+                <button class="config-save-button" onclick="saveLLMConfig()" data-i18n="common.save_config">保存配置</button>
+            </div>
         </div>
 
         <!-- 云端配置面板 -->
@@ -235,7 +255,6 @@
                     <div class="info-tip" data-i18n="cloud_config.gateway_tip">
                         💡 提示：启动就能用！语音识别、语音合成、智能对话这些功能全在云端跑，你的电脑上不用装任何东西。不管是 Windows 还是 Mac、Linux，只要能上网就行。点击下方的按键前往肥牛官网注册登录后。选择肥牛 API 密钥，在那即可获取到肥牛的 API KEY
                     </div>
-                    <button onclick="openGatewayWebsite()" class="btn-start" style="margin-top: 15px;" data-i18n="cloud_config.gateway_website">🔗 获取 API KEY - 前往云端肥牛官网</button>
                 </div>
             </div>
             
@@ -343,7 +362,10 @@
                     </div>
                 </div>
             </div>
-            
+            <div class="config-save-bar">
+                <button class="btn-start" onclick="openGatewayWebsite()" style="margin-right: auto;" data-i18n="cloud_config.gateway_website">🔗 前往云端肥牛官网</button>
+                <button class="config-save-button" onclick="saveCloudSettings()" data-i18n="common.save_config">保存配置</button>
+            </div>
         </div>
 
         <!-- 声音克隆 -->
@@ -469,8 +491,8 @@
                         <select id="live2d-model-select" style="width: 100%; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.3); color: white;">
                         </select>
                     </div>
-                    <button onclick="saveLive2DModel()" class="btn-start" style="margin-top: 10px;" data-i18n="ui_settings.apply_model">应用模型</button>
-                    <button onclick="resetModelPosition()" class="btn-start" style="margin-top: 10px; background: linear-gradient(135deg, #f59e0b, #d97706);" data-i18n="ui_settings.reset_position">复位皮套位置</button>
+                    <button onclick="saveLive2DModel()" class="btn-start btn-apply mt-2.5" data-i18n="ui_settings.apply_model">应用模型</button>
+                    <button onclick="resetModelPosition()" class="btn-start btn-reset-model mt-2.5" data-i18n="ui_settings.reset_position">复位皮套位置</button>
                 </div>
                 <div class="section">
                     <div class="form-group">
@@ -637,6 +659,9 @@
                     </div>
                 </div>
             </div>
+            <div class="config-save-bar">
+                <button class="config-save-button" onclick="saveUISettings()" data-i18n="common.save_config">保存配置</button>
+            </div>
         </div>
 
         <!-- 功能配置面板 -->
@@ -707,7 +732,9 @@
                     <input type="text" id="vision-model-name" data-i18n-placeholder="dialog_config.vision_model_placeholder" placeholder="qwen-vl-max 等">
                 </div>
             </div>
-
+            <div class="config-save-bar">
+                <button class="config-save-button" onclick="saveDialogSettings()" data-i18n="common.save_config">保存配置</button>
+            </div>
         </div>
 
         <!-- 插件管理面板 -->
@@ -738,6 +765,8 @@
             </div>
         </div>
 
+        </div>
+
         <!-- 插件配置模态框 -->
         <div id="pluginConfigModal" class="modal" style="display: none;">
             <div class="modal-content">
@@ -747,8 +776,8 @@
                         <span id="pluginConfigModalTitle" data-i18n="plugins.config_title">插件配置</span>
                     </h3>
                     <div style="display: flex; gap: 10px; align-items: center;">
-                        <button type="button" class="btn btn-info" id="readmeBtn" onclick="openPluginReadme()" style="padding: 8px 16px; background: linear-gradient(135deg, #06b6d4, #0891b2); color: white; border: none; border-radius: 6px; cursor: pointer;">
-                            <span data-i18n="plugins.readme_btn">📖 配置说明</span>
+                        <button type="button" class="btn-info" id="readmeBtn" onclick="openPluginReadme()">
+                            📖 <span data-i18n="plugins.readme_btn">配置说明</span>
                         </button>
                         <button type="button" class="btn-close" onclick="closePluginConfigModal()">&times;</button>
                     </div>

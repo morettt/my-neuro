@@ -267,7 +267,7 @@
     "no_config": "No Config",
     "author": "Author: ",
     "config_title": "Plugin Config",
-    "readme_btn": "📖 Config Guide",
+    "readme_btn": "Config Guide",
     "loading_config": "Loading config...",
     "config_error": "Failed to load config",
     "config_error_load": "Error loading config",
