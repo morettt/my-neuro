@@ -128,33 +128,7 @@ h1 {
     opacity: 0.8;
 }
 
-.tabs .language-selector-wrapper {
-    margin-top: auto;
-    padding-top: 10px;
-}
 
-.tabs .language-selector-wrapper select {
-    width: 100%;
-    padding: 10px 12px;
-    border-radius: 8px;
-    background: rgba(0,0,0,0.3);
-    border: 1px solid rgba(255,255,255,0.2);
-    color: white;
-    cursor: pointer;
-    font-size: 14px;
-    outline: none;
-    transition: border-color 0.25s ease, background 0.25s ease;
-}
-
-.tabs .language-selector-wrapper select:hover {
-    border-color: rgba(255, 255, 255, 0.3);
-    background: rgba(0, 0, 0, 0.4);
-}
-
-.tabs .language-selector-wrapper select:focus {
-    border-color: rgba(59, 130, 246, 0.6);
-    background: rgba(0, 0, 0, 0.45);
-}
 .tab-button {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -192,16 +166,15 @@ h1 {
     overflow-y: auto;
 }
 
-/* 保存按钮栏 - 位于选项卡上方 */
+/* 保存按钮栏 - 位于面板底部靠右 */
 .config-save-bar {
     display: flex;
-    justify-content: flex-start;
-    margin-bottom: 10px;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    margin-top: 20px;
     min-height: 50px;
-    max-width: 1600px;
-    margin-left: auto;
-    margin-right: auto;
-    padding: 0 20px;
+    padding: 0;
 }
 
 /* 保存按钮容器 */
@@ -219,7 +192,7 @@ h1 {
 }
 
 .config-save-button {
-    background: #059669;
+    background: #2563eb;
     color: white;
     border: none;
     cursor: pointer;
@@ -228,10 +201,14 @@ h1 {
     justify-content: center;
     white-space: nowrap;
     transition: background-color 0.2s ease;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
 }
 
 .config-save-button:hover {
-    background: #047857;
+    background: #1d4ed8;
     transform: none;
     box-shadow: none;
 }
@@ -1994,11 +1971,39 @@ body.header-collapsed .collapse-icon {
     box-sizing: border-box;
 }
 
+.header-right-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+}
+
 .header-icon-group {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-left: auto;
+}
+
+.header-right-group .language-selector-wrapper select {
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.25s ease, background 0.25s ease;
+}
+
+.header-right-group .language-selector-wrapper select:hover {
+    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.header-right-group .language-selector-wrapper select:focus {
+    border-color: rgba(59, 130, 246, 0.6);
+    background: rgba(0, 0, 0, 0.45);
 }
 
 .header-icon {

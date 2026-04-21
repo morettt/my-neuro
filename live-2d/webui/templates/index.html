@@ -20,19 +20,26 @@
 
         <!-- 顶部信息栏 -->
         <div class="header-collapse-control">
-            <div class="config-save-buttons" id="configSaveButtons"></div>
-            <div class="header-icon-group">
-                <a href="http://mynewbot.com/tutorials" target="_blank" rel="noopener noreferrer" class="header-icon" title="文档">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                    </svg>
-                </a>
-                <a href="https://github.com/morettt/my-neuro" target="_blank" rel="noopener noreferrer" class="header-icon" title="GitHub">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
-                    </svg>
-                </a>
+            <div class="header-right-group">
+                <div class="language-selector-wrapper">
+                    <select id="language-selector" onchange="changeLanguage(this.value)">
+                        <option value="zh" data-i18n="app.language_zh">中文</option>
+                        <option value="en" data-i18n="app.language_en">English</option>
+                    </select>
+                </div>
+                <div class="header-icon-group">
+                    <a href="http://mynewbot.com/tutorials" target="_blank" rel="noopener noreferrer" class="header-icon" title="文档">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                        </svg>
+                    </a>
+                    <a href="https://github.com/morettt/my-neuro" target="_blank" rel="noopener noreferrer" class="header-icon" title="GitHub">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                        </svg>
+                    </a>
+                </div>
             </div>
         </div>
 
@@ -51,12 +58,6 @@
                 {% if not is_cloud %}<button class="tab-button" onclick="switchTab('model-manager')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg><span data-i18n="tabs.model_manager">声音克隆</span></button>{% endif %}
                 <button class="tab-button" onclick="switchTab('market')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg><span data-i18n="tabs.market">广场工具屋</span></button>
                 <button class="tab-button" onclick="switchTab('plugins')"><svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg><span data-i18n="tabs.plugins">插件管理</span></button>
-                <div class="language-selector-wrapper">
-                    <select id="language-selector" onchange="changeLanguage(this.value)">
-                        <option value="zh" data-i18n="app.language_zh">中文</option>
-                        <option value="en" data-i18n="app.language_en">English</option>
-                    </select>
-                </div>
             </div>
 
             <!-- 启动面板 -->
@@ -216,6 +217,9 @@
                     <textarea id="system-prompt" class="system-prompt-textarea" data-i18n-placeholder="llm_config.system_prompt_placeholder" placeholder="在这里输入 AI 人设..."></textarea>
                 </div>
             </div>
+            <div class="config-save-bar">
+                <button class="config-save-button" onclick="saveLLMConfig()" data-i18n="common.save_config">保存配置</button>
+            </div>
         </div>
 
         <!-- 云端配置面板 -->
@@ -251,7 +255,6 @@
                     <div class="info-tip" data-i18n="cloud_config.gateway_tip">
                         💡 提示：启动就能用！语音识别、语音合成、智能对话这些功能全在云端跑，你的电脑上不用装任何东西。不管是 Windows 还是 Mac、Linux，只要能上网就行。点击下方的按键前往肥牛官网注册登录后。选择肥牛 API 密钥，在那即可获取到肥牛的 API KEY
                     </div>
-                    <button onclick="openGatewayWebsite()" class="btn-start" style="margin-top: 15px;" data-i18n="cloud_config.gateway_website">🔗 获取 API KEY - 前往云端肥牛官网</button>
                 </div>
             </div>
             
@@ -359,7 +362,10 @@
                     </div>
                 </div>
             </div>
-            
+            <div class="config-save-bar">
+                <button class="btn-start" onclick="openGatewayWebsite()" style="margin-right: auto;" data-i18n="cloud_config.gateway_website">🔗 前往云端肥牛官网</button>
+                <button class="config-save-button" onclick="saveCloudSettings()" data-i18n="common.save_config">保存配置</button>
+            </div>
         </div>
 
         <!-- 声音克隆 -->
@@ -653,6 +659,9 @@
                     </div>
                 </div>
             </div>
+            <div class="config-save-bar">
+                <button class="config-save-button" onclick="saveUISettings()" data-i18n="common.save_config">保存配置</button>
+            </div>
         </div>
 
         <!-- 功能配置面板 -->
@@ -723,7 +732,9 @@
                     <input type="text" id="vision-model-name" data-i18n-placeholder="dialog_config.vision_model_placeholder" placeholder="qwen-vl-max 等">
                 </div>
             </div>
-
+            <div class="config-save-bar">
+                <button class="config-save-button" onclick="saveDialogSettings()" data-i18n="common.save_config">保存配置</button>
+            </div>
         </div>
 
         <!-- 插件管理面板 -->
