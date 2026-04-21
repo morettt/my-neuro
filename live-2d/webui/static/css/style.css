@@ -423,7 +423,24 @@ button:disabled { background: #6b7280; cursor: not-allowed; transform: none; box
     width: 100%; padding: 12px; border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.3);
     background: rgba(0, 0, 0, 0.2); color: white; font-size: 16px;
+    outline: none;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
 }
+
+.form-group input:hover,
+.form-group textarea:hover,
+.form-group select:hover {
+    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    border-color: rgba(59, 130, 246, 0.6);
+    background: rgba(0, 0, 0, 0.4);
+}
+
 .form-group textarea { min-height: 48px; max-height: 80px; resize: vertical; }
 .system-prompt-textarea { min-height: 150px !important; max-height: none !important; }
 .form-row { display: flex; gap: 15px; flex-wrap: wrap; }
@@ -434,13 +451,12 @@ button:disabled { background: #6b7280; cursor: not-allowed; transform: none; box
 .tool-status { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.8em; margin-top: 10px; }
 .tool-status.enabled { background: rgba(40, 167, 69, 0.3); color: #28a745; }
 .tool-status.disabled { background: rgba(220, 53, 69, 0.3); color: #dc3545; }
-.checkbox-group { 
-    display: flex; 
-    align-items: center; 
-    gap: 10px; 
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     margin-top: 10px;
-    margin-bottom: 10px; 
-    cursor: pointer; 
+    margin-bottom: 10px;
 }
 .checkbox-group input[type="checkbox"] {
     appearance: none;
@@ -473,7 +489,7 @@ button:disabled { background: #6b7280; cursor: not-allowed; transform: none; box
 .checkbox-group input[type="checkbox"]:checked::after {
     transform: translateX(20px);
 }
-.checkbox-group label { cursor: pointer; }
+.checkbox-group label { cursor: default; }
 h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
 .section { margin-bottom: 30px; }
 .model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-top: 20px; }
@@ -1462,15 +1478,15 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
     font-size: 14px;
     font-weight: 500;
     color: white;
-    background: linear-gradient(135deg, #0891b2, #0e7490);
+    background: #0891b2;
     border: none;
     border-radius: 6px;
     cursor: pointer;
-    transition: background 0.2s ease;
+    transition: background-color 0.2s ease;
 }
 
 .btn-info:hover {
-    background: linear-gradient(135deg, #0e7490, #155e75);
+    background: #0e7490;
 }
 
 .modal-body {
@@ -1534,7 +1550,6 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
 .config-field select:focus {
     border-color: rgba(59, 130, 246, 0.6);
     background: rgba(0, 0, 0, 0.4);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2), 0 0 12px rgba(59, 130, 246, 0.15);
 }
 
 .config-field textarea {
