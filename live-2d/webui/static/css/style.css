@@ -1399,7 +1399,7 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
 }
 
 .modal-content {
-    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    background: #252525;
     /* 使用纯 CSS 居中方式：相对于视口居中 */
     position: fixed;
     top: 50%;
@@ -1444,12 +1444,33 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
     display: flex;
     align-items: center;
     justify-content: center;
+    line-height: 1;
     border-radius: 50%;
     transition: all 0.3s ease;
 }
 
 .btn-close:hover {
     background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-info {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: white;
+    background: linear-gradient(135deg, #0891b2, #0e7490);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.btn-info:hover {
+    background: linear-gradient(135deg, #0e7490, #155e75);
 }
 
 .modal-body {
@@ -1487,16 +1508,33 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
     line-height: 1.5;
 }
 
-.config-field input,
+.config-field input:not([type="checkbox"]),
 .config-field textarea,
 .config-field select {
     width: 100%;
-    padding: 10px;
-    border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    background: rgba(0, 0, 0, 0.2);
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.25);
     color: white;
     font-size: 14px;
+    outline: none;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+}
+
+.config-field input:not([type="checkbox"]):hover,
+.config-field textarea:hover,
+.config-field select:hover {
+    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.config-field input:not([type="checkbox"]):focus,
+.config-field textarea:focus,
+.config-field select:focus {
+    border-color: rgba(59, 130, 246, 0.6);
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2), 0 0 12px rgba(59, 130, 246, 0.15);
 }
 
 .config-field textarea {
