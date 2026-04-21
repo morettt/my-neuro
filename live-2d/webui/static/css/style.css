@@ -90,7 +90,7 @@ h1 {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    width: 160px;
+    width: 250px;
     height: 100%;
     flex-shrink: 0;
     padding: 10px;
@@ -99,6 +99,61 @@ h1 {
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-right: none;
     overflow-y: auto;
+}
+
+.tabs .collapsed-mini-title {
+    padding: 10px 8px;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: center;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    line-height: 1.6;
+    min-height: 70px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.tabs .collapsed-mini-title div:first-child {
+    font-size: 20px;
+}
+
+.tabs .collapsed-mini-title div:last-child {
+    font-size: 13px;
+    font-weight: 400;
+    opacity: 0.8;
+}
+
+.tabs .language-selector-wrapper {
+    margin-top: auto;
+    padding-top: 10px;
+}
+
+.tabs .language-selector-wrapper select {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.25s ease, background 0.25s ease;
+}
+
+.tabs .language-selector-wrapper select:hover {
+    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.tabs .language-selector-wrapper select:focus {
+    border-color: rgba(59, 130, 246, 0.6);
+    background: rgba(0, 0, 0, 0.45);
 }
 .tab-button {
     background: rgba(255, 255, 255, 0.05);
@@ -1937,6 +1992,39 @@ body.header-collapsed .collapse-icon {
     height: 52px;
     line-height: 52px;
     box-sizing: border-box;
+}
+
+.header-icon-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.header-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+}
+
+.header-icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.header-icon:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 @media (max-width: 768px) {
