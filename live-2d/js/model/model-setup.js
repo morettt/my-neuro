@@ -53,8 +53,7 @@ class ModelSetup {
         console.log(`=========================`);
 
         // 加载Live2D模型
-        const model = await PIXI.live2d.Live2DModel.from("2D/肥牛/",
-        );
+        const model = await PIXI.live2d.Live2DModel.from("2D/肥牛/feiniu.model3.json");
         app.stage.addChild(model);
 
         // 根据配置控制模型显示/隐藏
