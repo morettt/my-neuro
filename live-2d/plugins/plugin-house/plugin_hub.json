@@ -130,5 +130,11 @@
     "desc": "创建 .txt 文件并写入文本内容，支持可选覆盖；对系统敏感目录（C:\\Windows、C:\\Program Files、/usr、/bin 等）做了禁止写入保护。仅允许 .txt 扩展名，自动递归创建父目录，提供覆盖确认机制防止误删。纯 Node.js 内置模块实现，无额外 npm 依赖。",
     "author": "爱熬夜的人形兔",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-txt-writer"
+  },
+  "minimax-music": {
+    "display_name": "minimax-music",
+    "desc": "对接 MiniMax 官方音乐生成 API（music-2.6 / music-cover 及对应 free 版）：支持原创歌曲（歌词+风格描述，可选 lyrics_optimizer 自动歌词）、纯音乐/BGM（is_instrumental）、参考音频翻唱（URL 或 Base64）；可配置输出目录、mp3/wav/pcm、采样率、比特率、AIGC 水印与免费模型回退。需用户自备 MiniMax API Key，仓库提供脱敏 plugin_config.json 模板与中文 README，不含 node 额外依赖。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-minimax-music"
   }
 }
