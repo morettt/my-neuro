@@ -6,20 +6,55 @@ const { MusicPlayer } = require('../services/music-player.js');
 class ModelSetup {
     // 初始化PIXI应用和Live2D模型
     static async initialize(modelController, config, ttsEnabled, asrEnabled, ttsProcessor, voiceChat) {
-        // 创建PIXI应用
+        const { ipcRenderer } = require('electron');
+        
+        // 获取所有显示器信息
+        const displays = await ipcRenderer.invoke('get-all-displays');
+        const windowBounds = await ipcRenderer.invoke('get-window-bounds');
+        
+        console.log(`=== PIXI 渲染器初始化 ===`);
+        console.log(`检测到 ${displays.length} 个显示器`);
+        displays.forEach((display, index) => {
+            console.log(`显示器 ${index}: ${display.bounds.width}x${display.bounds.height} at (${display.bounds.x}, ${display.bounds.y})`);
+        });
+        console.log(`窗口尺寸: ${windowBounds.width}x${windowBounds.height}`);
+        console.log(`window.innerWidth/Height: ${window.innerWidth}x${window.innerHeight}`);
+        
+        // 使用窗口的实际尺寸
+        const actualWidth = windowBounds.width;
+        const actualHeight = windowBounds.height;
+        
+        // 创建PIXI应用 - 使用窗口实际尺寸的2倍以支持高分辨率
         const app = new PIXI.Application({
             view: document.getElementById("canvas"),
             autoStart: true,
             transparent: true,
-            width: window.innerWidth * 2,
-            height: window.innerHeight * 2
+            width: actualWidth * 2,
+            height: actualHeight * 2
         });
 
-        app.stage.position.set(window.innerWidth / 2, window.innerHeight / 2);
-        app.stage.pivot.set(window.innerWidth / 2, window.innerHeight / 2);
+        // 设置Canvas的CSS尺寸以正确显示
+        app.view.style.width = `${actualWidth}px`;
+        app.view.style.height = `${actualHeight}px`;
+
+        // 多屏幕坐标系统：舞台从左上角开始，不使用pivot和position偏移
+        // 模型坐标需要乘以2来匹配Canvas的2倍分辨率
+        
+        // 保存实际尺寸和缩放因子到全局
+        window.actualWindowWidth = actualWidth;
+        window.actualWindowHeight = actualHeight;
+        window.canvasScaleFactor = 2; // Canvas相对于窗口的缩放因子
+        
+        console.log(`Canvas内部尺寸: ${app.view.width}x${app.view.height}`);
+        console.log(`Canvas CSS尺寸: ${app.view.style.width} x ${app.view.style.height}`);
+        console.log(`窗口尺寸: ${actualWidth}x${actualHeight}`);
+        console.log(`缩放因子: ${window.canvasScaleFactor}`);
+        console.log(`坐标系统: Canvas坐标 = 窗口坐标 × 2`);
+        console.log(`=========================`);
 
         // 加载Live2D模型
-        const model = await PIXI.live2d.Live2DModel.from("2D/肥牛/feiniu.model3.json");
+        const model = await PIXI.live2d.Live2DModel.from("2D/肥牛/",
+        );
         app.stage.addChild(model);
 
         // 根据配置控制模型显示/隐藏
@@ -30,6 +65,16 @@ class ModelSetup {
         // 初始化模型交互控制器
         modelController.init(model, app, config);
         modelController.setupInitialModelProperties(config.ui.model_scale || 2.3);
+
+        // 调试输出：检查模型位置和尺寸
+        console.log(`=== 模型调试信息 ===`);
+        console.log(`模型位置: (${model.x}, ${model.y})`);
+        console.log(`模型尺寸: ${model.width}x${model.height}`);
+        console.log(`模型缩放: ${model.scale.x}`);
+        console.log(`模型可见: ${model.visible}`);
+        console.log(`Canvas尺寸: ${app.view.width}x${app.view.height}`);
+        console.log(`窗口尺寸: ${actualWidth}x${actualHeight}`);
+        console.log(`==================`);
 
         // 创建情绪动作映射器
         const emotionMapper = new EmotionMotionMapper(model);

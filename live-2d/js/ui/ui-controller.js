@@ -24,8 +24,25 @@ class UIController {
 
     // 设置鼠标穿透
     setupMouseIgnore() {
-        const updateMouseIgnore = () => {
+        // 肥牛棋盘等浮层在屏中，指针不在 Live2D 模型上；若不排除则每次 mousemove 都会把窗口设回穿透，导致盘面无法点击
+        const pointerOverFeiniuBoardPanel = (clientX, clientY) => {
+            const panel = document.querySelector('#feiniu-board-game-root .feiniu-panel');
+            if (!panel || !panel.isConnected) return false;
+            const r = panel.getBoundingClientRect();
+            if (r.width <= 0 || r.height <= 0) return false;
+            return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
+        };
+
+        const updateMouseIgnore = (e) => {
             if (!global.currentModel) return;
+
+            if (e && pointerOverFeiniuBoardPanel(e.clientX, e.clientY)) {
+                ipcRenderer.send('set-ignore-mouse-events', {
+                    ignore: false,
+                    options: { forward: false }
+                });
+                return;
+            }
 
             const shouldIgnore = !global.currentModel.containsPoint(
                 global.pixiApp.renderer.plugins.interaction.mouse.global
@@ -46,6 +63,9 @@ class UIController {
         const submitBtn = document.getElementById('chat-send-btn');
 
         if (!chatInput || !textChatContainer || !submitBtn) return;
+
+        // 跨屏定位（异步，不阻塞渲染线程）
+        this._setupCrossScreenPositioning(textChatContainer);
 
         textChatContainer.addEventListener('mouseenter', () => {
             ipcRenderer.send('set-ignore-mouse-events', {
@@ -75,6 +95,59 @@ class UIController {
             });
         });
         
+    }
+
+    async _setupCrossScreenPositioning(textChatContainer) {
+        try {
+            const screenExtend = this.config.ui?.screen_extend || { extend: false, left: false, right: true };
+
+            textChatContainer.style.setProperty('position', 'fixed', 'important');
+            textChatContainer.style.setProperty('z-index', '10000', 'important');
+            textChatContainer.style.setProperty('width', '350px', 'important');
+            textChatContainer.style.setProperty('height', 'auto', 'important');
+            textChatContainer.style.setProperty('pointer-events', 'auto', 'important');
+
+            const screenInfo = await ipcRenderer.invoke('get-screen-info');
+            if (screenInfo) {
+                const { primaryDisplay, windowBounds } = screenInfo;
+                
+                const winX = windowBounds ? windowBounds.x : 0;
+                const winY = windowBounds ? windowBounds.y : 0;
+                const winH = windowBounds ? windowBounds.height : window.innerHeight;
+                
+                const primaryLeftOffset = primaryDisplay.bounds.x - winX;
+                const primaryTopOffset = primaryDisplay.bounds.y - winY;
+                const primaryBottomOffset = winH - (primaryTopOffset + primaryDisplay.bounds.height);
+
+                const rightPos = primaryLeftOffset + primaryDisplay.bounds.width - 350 - 20;
+                
+                textChatContainer.style.setProperty('left', rightPos + 'px', 'important');
+                textChatContainer.style.setProperty('right', 'auto', 'important');
+                textChatContainer.style.setProperty('bottom', (primaryBottomOffset + 50) + 'px', 'important');
+
+                const subtitleContainer = document.getElementById('subtitle-container');
+                if (subtitleContainer) {
+                    subtitleContainer.style.setProperty('position', 'fixed', 'important');
+                    subtitleContainer.style.setProperty('bottom', (primaryBottomOffset + 20) + 'px', 'important');
+                    const subtitleLeft = primaryLeftOffset + (primaryDisplay.bounds.width / 2);
+                    subtitleContainer.style.setProperty('left', subtitleLeft + 'px', 'important');
+                    subtitleContainer.style.setProperty('transform', 'translateX(-50%)', 'important');
+                }
+
+                console.log('跨屏定位调试:', {
+                    winX, winY, winH,
+                    primaryX: primaryDisplay.bounds.x,
+                    primaryY: primaryDisplay.bounds.y,
+                    primaryW: primaryDisplay.bounds.width,
+                    primaryH: primaryDisplay.bounds.height,
+                    primaryLeftOffset,
+                    primaryBottomOffset,
+                    rightPos
+                });
+            }
+        } catch (e) {
+            console.error('跨屏定位失败:', e);
+        }
     }
 
     // 显示字幕
@@ -195,11 +268,11 @@ class UIController {
                 toolBubblesContainer.style.top = `${this.toolBubblesCurrentY}px`;
             }
 
-            // 更新歌词气泡位置 (身体左侧或上方)
+            // 更新歌词气泡位置 (支持插件配置覆盖)
             const lyricsBubbleContainer = document.getElementById('lyrics-bubble-container');
             if (this.lyricsBubbleVisible && lyricsBubbleContainer) {
-                const lyricsOffsetX = -20;  // 再向右移 (原-150)
-                const lyricsOffsetY = -20;  // 再向下移 (原-100)
+                const lyricsOffsetX = (typeof global._lyricsBubbleOffsetX === 'number') ? global._lyricsBubbleOffsetX : -20;
+                const lyricsOffsetY = (typeof global._lyricsBubbleOffsetY === 'number') ? global._lyricsBubbleOffsetY : -20;
                 const lyricsTargetX = screenX + lyricsOffsetX;
                 const lyricsTargetY = screenY + lyricsOffsetY;
 
@@ -377,10 +450,18 @@ class UIController {
 
         textChatContainer.style.display = shouldShowChatBox ? 'block' : 'none';
 
-        // 如果启用了text_only_mode或者TTS/ASR任一被禁用，自动显示聊天框
         if ((this.config.ui && this.config.ui.text_only_mode) || !ttsEnabled || !asrEnabled) {
             textChatContainer.style.display = 'block';
             console.log('检测到纯文本模式或TTS/ASR禁用，自动显示聊天框');
+        }
+
+        // 显示时确保跨屏定位样式正确
+        if (textChatContainer.style.display !== 'none') {
+            textChatContainer.style.setProperty('visibility', 'visible', 'important');
+            textChatContainer.style.setProperty('opacity', '1', 'important');
+            textChatContainer.style.setProperty('z-index', '10000', 'important');
+            textChatContainer.style.setProperty('pointer-events', 'auto', 'important');
+            this._setupCrossScreenPositioning(textChatContainer);
         }
 
         // 从localStorage加载保存的样式
@@ -390,7 +471,6 @@ class UIController {
                 textChatContainer.setAttribute('data-style', savedStyle);
                 console.log(`加载保存的聊天框样式: ${savedStyle}`);
             } else {
-                // 默认样式1
                 textChatContainer.setAttribute('data-style', '1');
             }
         } catch (e) {
@@ -401,7 +481,6 @@ class UIController {
         // Alt键切换聊天框显示/隐藏
         // Alt+数字键切换样式
         document.addEventListener('keydown', (e) => {
-            // Alt键单独按下：切换聊天框显示/隐藏
             if (e.key === 'Alt' && !e.shiftKey && !e.ctrlKey) {
                 e.preventDefault();
                 const chatContainer = document.getElementById('text-chat-container');
@@ -410,7 +489,6 @@ class UIController {
                 }
             }
 
-            // Alt+1~6：切换聊天框样式
             if (e.altKey && !e.shiftKey && !e.ctrlKey) {
                 const num = parseInt(e.key);
                 if (num >= 1 && num <= 6) {
@@ -436,9 +514,11 @@ class UIController {
 
             chatInput.textContent = '';
 
-            // 走 inputRouter.handleTextInput，触发插件 hooks（含 memos 记忆注入）
+            // 兼容多种API：优先 inputRouter，其次 handleTextMessage，最后 sendToLLM
             if (voiceChat.inputRouter) {
                 voiceChat.inputRouter.handleTextInput(message);
+            } else if (voiceChat.handleTextMessage) {
+                voiceChat.handleTextMessage(message);
             } else {
                 voiceChat.sendToLLM(message);
             }

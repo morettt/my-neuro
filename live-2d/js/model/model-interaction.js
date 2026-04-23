@@ -35,6 +35,64 @@ class ModelInteractionController {
         this.interactionY = this.model.y + (this.model.height - this.interactionHeight) / 2;
     }
 
+    getVisibleBounds() {
+        const actualWidth = window.actualWindowWidth || window.innerWidth;
+        const actualHeight = window.actualWindowHeight || window.innerHeight;
+        const scaleFactor = window.canvasScaleFactor || 2;
+
+        if (!this.model) {
+            return {
+                minX: 0,
+                maxX: actualWidth * scaleFactor,
+                minY: 0,
+                maxY: actualHeight * scaleFactor
+            };
+        }
+
+        return {
+            minX: -this.model.width * 0.2,
+            maxX: Math.max(-this.model.width * 0.2, actualWidth * scaleFactor - this.model.width * 0.35),
+            minY: -this.model.height * 0.05,
+            maxY: Math.max(-this.model.height * 0.05, actualHeight * scaleFactor - this.model.height * 0.2)
+        };
+    }
+
+    clampPosition(x, y) {
+        const bounds = this.getVisibleBounds();
+        return {
+            x: Math.min(bounds.maxX, Math.max(bounds.minX, x)),
+            y: Math.min(bounds.maxY, Math.max(bounds.minY, y))
+        };
+    }
+
+    getDefaultVisiblePosition() {
+        const actualWidth = window.actualWindowWidth || window.innerWidth;
+        const actualHeight = window.actualWindowHeight || window.innerHeight;
+        const scaleFactor = window.canvasScaleFactor || 2;
+
+        if (!this.model) {
+            return {
+                x: actualWidth * 0.6 * scaleFactor,
+                y: actualHeight * 0.25 * scaleFactor
+            };
+        }
+
+        const preferredX = actualWidth * scaleFactor - this.model.width * 0.7;
+        const preferredY = actualHeight * scaleFactor - this.model.height * 0.92;
+        return this.clampPosition(preferredX, preferredY);
+    }
+
+    resetToDefaultPosition() {
+        if (!this.model) return false;
+
+        const defaultPosition = this.getDefaultVisiblePosition();
+        this.model.x = defaultPosition.x;
+        this.model.y = defaultPosition.y;
+        this.updateInteractionArea();
+        this.saveModelPosition();
+        return true;
+    }
+
     // 设置交互性
     setupInteractivity() {
         if (!this.model) return;
@@ -72,7 +130,6 @@ class ModelInteractionController {
             const chatTopInPixi = (chatRect.top - canvasRect.top) * (pixiView.height / canvasRect.height);
             const chatBottomInPixi = (chatRect.bottom - canvasRect.top) * (pixiView.height / canvasRect.height);
 
-            // const chatRect = chatContainer.getBoundingClientRect();
             const isOverChat = (
                 point.x >= chatLeftInPixi &&
                 point.x <= chatRightInPixi &&
@@ -102,8 +159,16 @@ class ModelInteractionController {
         // 鼠标移动事件
         this.model.on('mousemove', (e) => {
             if (this.isDragging) {
-                const newX = e.data.global.x - this.dragOffset.x;
-                const newY = e.data.global.y - this.dragOffset.y;
+                let newX = e.data.global.x - this.dragOffset.x;
+                let newY = e.data.global.y - this.dragOffset.y;
+
+                if (this.config && this.config.ui && this.config.ui.screen_extend) {
+                    const extend = this.config.ui.screen_extend;
+                    if (extend.extend && extend.left) {
+                        if (newX < 0) newX = 0;
+                    }
+                }
+
                 this.model.position.set(newX, newY);
                 this.updateInteractionArea();
             }
@@ -148,13 +213,11 @@ class ModelInteractionController {
             if (this.isDraggingChat) {
                 chatContainer.style.left = `${e.clientX - this.chatDragOffset.x}px`;
                 chatContainer.style.top = `${e.clientY - this.chatDragOffset.y}px`;
-                // 注意: 拖动聊天框时不需要修改模型位置
             }
         });
 
         // 鼠标释放时停止拖动
         document.addEventListener('mouseup', () => {
-            // this.isDraggingChat = false;
             if (this.isDraggingChat) {
                 this.isDraggingChat = false;
                 setTimeout(() => {
@@ -167,25 +230,6 @@ class ModelInteractionController {
                 }, 100);
             }
         });
-
-
-// 拖动结束时，再次检查穿透状态
-// window.addEventListener('mouseup', () => {
-//     if (this.isDraggingChat) {
-//         this.isDraggingChat = false;
-//         this.updateMouseIgnore(); // 确保拖动结束后状态正确
-//     }
-// });
-
-// 鼠标离开事件
-// document.addEventListener('mouseout', () => {
-//     if (!this.isDraggingChat) {
-//         ipcRenderer.send('set-ignore-mouse-events', {
-//             ignore: true,
-//             options: { forward: true }
-//         });
-//     }
-// });
 
         // 鼠标悬停事件
         this.model.on('mouseover', () => {
@@ -245,9 +289,11 @@ class ModelInteractionController {
         // 窗口大小改变事件
         window.addEventListener('resize', () => {
             if (this.app && this.app.renderer) {
-                this.app.renderer.resize(window.innerWidth * 2, window.innerHeight * 2);
-                this.app.stage.position.set(window.innerWidth / 2, window.innerHeight / 2);
-                this.app.stage.pivot.set(window.innerWidth / 2, window.innerHeight / 2);
+                const actualWidth = window.actualWindowWidth || window.innerWidth;
+                const actualHeight = window.actualWindowHeight || window.innerHeight;
+                const scaleFactor = window.canvasScaleFactor || 2;
+                this.app.renderer.resize(actualWidth * scaleFactor, actualHeight * scaleFactor);
+                //多屏幕坐标系统，不设置pivot/position,舞台从0,0开始
                 this.updateInteractionArea();
             }
         });
@@ -273,7 +319,6 @@ class ModelInteractionController {
             v = Math.max(0, Math.min(v, 3.0));
             const coreModel = this.model.internalModel.coreModel;
 
-            // 同时尝试所有可能的组合，不要return，让所有的都执行
             try {
                 coreModel.setParameterValueById('PARAM_MOUTH_OPEN_Y', v);
             } catch (e) {}
@@ -299,27 +344,41 @@ class ModelInteractionController {
     setupInitialModelProperties(scaleMultiplier = 2.3) {
         if (!this.model || !this.app) return;
 
-        // const scaleX = (window.innerWidth * scaleMultiplier) / this.model.width;
-        // const scaleY = (window.innerHeight * scaleMultiplier) / this.model.height;
+        const actualWidth = window.actualWindowWidth || window.innerWidth;
+        const actualHeight = window.actualWindowHeight || window.innerHeight;
+        const scaleFactor = window.canvasScaleFactor || 2;
+
         this.model.scale.set(scaleMultiplier);
 
         // 检查是否有保存的位置
         if (this.config && this.config.ui && this.config.ui.model_position && this.config.ui.model_position.remember_position) {
             const savedPos = this.config.ui.model_position;
-            if (savedPos.x !== null && savedPos.y !== null) {
-                // 使用保存的位置（相对比例转换为绝对坐标）
-                this.model.x = savedPos.x * window.innerWidth;
-                this.model.y = savedPos.y * window.innerHeight;
-                console.log('加载保存的模型位置:', { x: this.model.x, y: this.model.y });
+            // 允许负值和大于1的值以支持多屏幕，合理范围：x：-0.5~2.5，y：-0.5~2.0
+            const isValidPosition = savedPos.x !== null && savedPos.y !== null &&
+                                savedPos.x >= -0.5 && savedPos.x <= 2.5 &&
+                                savedPos.y >= -0.5 && savedPos.y <= 2.0;
+            if (isValidPosition) {
+                this.model.x = savedPos.x * actualWidth * scaleFactor;
+                this.model.y = savedPos.y * actualHeight * scaleFactor;
+                console.log('加载保存的位置:', { 
+                    relativePos: savedPos,
+                    canvasX: this.model.x,
+                    canvasY: this.model.y,
+                    scaleFactor
+                });
             } else {
-                // 使用默认位置
-                this.model.y = window.innerHeight * 0.8;
-                this.model.x = window.innerWidth * 1.35;
+                console.warn('保存的位置无效，使用默认位置', savedPos);
+                const defaultPosition = this.getDefaultVisiblePosition();
+                this.model.x = defaultPosition.x;
+                this.model.y = defaultPosition.y;
+                this.config.ui.model_position.x = 0.5;
+                this.config.ui.model_position.y = 0.5;
+                this.saveModelPosition();
             }
         } else {
-            // 使用默认位置
-            this.model.y = window.innerHeight * 0.8;
-            this.model.x = window.innerWidth * 1.35;
+            const defaultPosition = this.getDefaultVisiblePosition();
+            this.model.x = defaultPosition.x;
+            this.model.y = defaultPosition.y;
         }
 
         this.updateInteractionArea();
@@ -329,27 +388,36 @@ class ModelInteractionController {
     saveModelPosition() {
         if (!this.model || !this.config) return;
 
-        // 检查是否启用位置记忆
         if (!this.config.ui || !this.config.ui.model_position || !this.config.ui.model_position.remember_position) {
             return;
         }
 
-        // 计算相对位置（0-1之间的比例）
-        const relativeX = this.model.x / window.innerWidth;
-        const relativeY = this.model.y / window.innerHeight;
+        const actualWidth = window.actualWindowWidth || window.innerWidth;
+        const actualHeight = window.actualWindowHeight || window.innerHeight;
+        const scaleFactor = window.canvasScaleFactor || 2;
 
-        // 更新配置对象
+        // 将canvas坐标转换为相对于窗口的坐标，再计算相对位置
+        const windowX = this.model.x / scaleFactor;
+        const windowY = this.model.y / scaleFactor;
+
+        const relativeX = windowX / actualWidth;
+        const relativeY = windowY / actualHeight;
+
         this.config.ui.model_position.x = relativeX;
         this.config.ui.model_position.y = relativeY;
 
-        // 发送IPC消息保存位置
         ipcRenderer.send('save-model-position', {
             x: relativeX,
             y: relativeY,
-            scale:this.model.scale.x
+            scale: this.model.scale.x
         });
 
-        console.log('保存模型位置:', { x: relativeX, y: relativeY });
+        console.log('保存模型位置:', { 
+            canvasPos: { x: this.model.x, y: this.model.y },
+            windowPos: { x: windowX, y: windowY },
+            relativePos: { x: relativeX, y: relativeY },
+            scaleFactor
+        });
     }
 }
 
