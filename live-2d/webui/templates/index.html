@@ -520,6 +520,18 @@
                         </div>
                     </div>
                 </div>
+                <!-- 显示器设置 -->
+                <div class="section" id="display-settings-section">
+                    <h4 data-i18n="ui_settings.display_title">显示器设置</h4>
+                    <div class="form-group">
+                        <label for="display-select" data-i18n="ui_settings.select_display">选择显示器：</label>
+                        <select id="display-select" disabled style="width: 100%; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.3); color: white;">
+                            <option value="" data-i18n="ui_settings.waiting_app">等待应用启动...</option>
+                        </select>
+                    </div>
+                    <button onclick="switchDisplay()" id="switch-display-btn" disabled class="btn-start btn-apply mt-2.5" data-i18n="ui_settings.switch_display">切换显示器</button>
+                    <div id="display-status" class="status-hint" style="margin-top: 10px; font-size: 12px; color: rgba(255,255,255,0.6);" data-i18n="ui_settings.display_hint">启动应用后可切换显示器</div>
+                </div>
             </div>
             
             <!-- 动作管理面板 -->

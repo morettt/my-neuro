@@ -493,3 +493,44 @@ def preview_expression():
     except Exception as e:
         logger.error(f'预览表情失败：{str(e)}')
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============ 显示器管理 ============
+
+@live2d_bp.route('/api/live2d/display/list', methods=['GET'])
+def get_display_list():
+    """获取显示器列表（转发到 Electron）"""
+    try:
+        req = urllib.request.Request('http://localhost:3002/get-displays', method='GET')
+        req.add_header('Content-Type', 'application/json')
+        with urllib.request.urlopen(req, timeout=3) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            return jsonify(data)
+    except urllib.error.URLError:
+        logger.warning('获取显示器列表失败：Electron 服务未启动')
+        return jsonify({'success': False, 'displays': [], 'error': 'Electron 服务未启动'})
+    except Exception as e:
+        logger.warning(f'获取显示器列表失败：{e}')
+        return jsonify({'success': False, 'displays': [], 'error': str(e)})
+
+
+@live2d_bp.route('/api/live2d/display/switch', methods=['POST'])
+def switch_display():
+    """切换显示器（转发到 Electron）"""
+    try:
+        data = request.get_json()
+        display_index = data.get('display_index', 0)
+        
+        json_data = json.dumps({'display_index': display_index}).encode('utf-8')
+        req = urllib.request.Request('http://localhost:3002/switch-display', data=json_data, method='POST')
+        req.add_header('Content-Type', 'application/json')
+        
+        with urllib.request.urlopen(req, timeout=3) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            return jsonify(result)
+    except urllib.error.URLError:
+        logger.warning('切换显示器失败：Electron 服务未启动')
+        return jsonify({'success': False, 'error': 'Electron 服务未启动'})
+    except Exception as e:
+        logger.error(f'切换显示器失败：{e}')
+        return jsonify({'success': False, 'error': str(e)})

@@ -1,5 +1,5 @@
 const express = require('express');
-const { BrowserWindow } = require('electron');
+const { BrowserWindow, screen } = require('electron');
 
 /**
  * HTTP API 服务器
@@ -294,6 +294,49 @@ class HttpServer {
             pm.syncEnabledPlugins()
                 .then(() => res.json({ success: true, message: '插件列表已同步' }))
                 .catch(e => res.json({ success: false, message: e.message }));
+        });
+
+        // ===== 显示器管理接口 =====
+
+        this.emotionApp.get('/get-displays', (req, res) => {
+            try {
+                const displays = screen.getAllDisplays();
+                res.json({
+                    success: true,
+                    displays: displays.map((d, i) => ({
+                        index: i,
+                        id: d.id,
+                        label: `显示器 ${i + 1} (${d.bounds.width}x${d.bounds.height})`,
+                        bounds: d.bounds,
+                        scaleFactor: d.scaleFactor
+                    }))
+                });
+            } catch (error) {
+                res.json({ success: false, message: error.toString(), displays: [] });
+            }
+        });
+
+        this.emotionApp.post('/switch-display', (req, res) => {
+            try {
+                const { display_index } = req.body;
+                const displays = screen.getAllDisplays();
+                const targetDisplay = displays[display_index];
+                const mainWindow = BrowserWindow.getAllWindows()[0];
+                
+                if (!mainWindow) {
+                    return res.json({ success: false, message: '应用窗口未找到' });
+                }
+                if (!targetDisplay) {
+                    return res.json({ success: false, message: '目标显示器未找到' });
+                }
+                
+                mainWindow.setPosition(targetDisplay.bounds.x, targetDisplay.bounds.y);
+                mainWindow.setSize(targetDisplay.bounds.width, targetDisplay.bounds.height);
+                
+                res.json({ success: true, message: `已切换到显示器 ${display_index + 1}` });
+            } catch (error) {
+                res.json({ success: false, message: error.toString() });
+            }
         });
 
         this.emotionApp.listen(3002, () => {

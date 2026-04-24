@@ -225,7 +225,18 @@
     "model_switch_failed": "Failed to switch model",
     "ui_save_success": "UI settings saved",
     "ui_save_failed": "Failed to save UI settings",
-    "ui_save_error": "Error saving UI settings"
+    "ui_save_error": "Error saving UI settings",
+    "display_title": "Display Settings",
+    "select_display": "Select Display:",
+    "waiting_app": "Waiting for app to start...",
+    "switch_display": "Switch Display",
+    "display_hint": "Switch display after starting the app",
+    "display_detected": "Multiple displays detected",
+    "display_unavailable": "Unable to get display info",
+    "display_not_running": "Electron not running or connection failed",
+    "select_display_first": "Please select target display",
+    "switch_failed": "Switch failed",
+    "switch_error": "Switch request failed"
   },
   "dialog_config": {
     "max_messages": "Max Messages:",
