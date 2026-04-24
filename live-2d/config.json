@@ -47,8 +47,8 @@
     "api_key": "",
     "volcengine_tts": {
       "enabled": false,
-      "appid": "9753924061",
-      "access_token": "yEN5RNemTswZHcmb91asiEdSv4Biw0XS",
+      "appid": "",
+      "access_token": "",
       "voice_type": "saturn_zh_female_tiaopigongzhu_tob"
     },
     "aliyun_tts": {
@@ -72,8 +72,8 @@
     "baidu_asr": {
       "enabled": false,
       "url": "ws://vop.baidu.com/realtime_asr",
-      "appid": 121933442,
-      "appkey": "WZt66qwOHojtVm4MSLPFzQ7F",
+      "appid": "",
+      "appkey": "",
       "dev_pid": 15372
     }
   },
@@ -99,6 +99,11 @@
       "x": 1.1431250000000002,
       "y": 0.59,
       "remember_position": true
+    },
+    "screen_extend": {
+      "extend": false,
+      "left": false,
+      "right": true
     }
   },
   "context": {
