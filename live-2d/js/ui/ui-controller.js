@@ -129,9 +129,11 @@ class UIController {
                 if (subtitleContainer) {
                     subtitleContainer.style.setProperty('position', 'fixed', 'important');
                     subtitleContainer.style.setProperty('bottom', (primaryBottomOffset + 20) + 'px', 'important');
-                    const subtitleLeft = primaryLeftOffset + (primaryDisplay.bounds.width / 2);
+                    const subtitleLeft = primaryLeftOffset + primaryDisplay.bounds.width - 800;
                     subtitleContainer.style.setProperty('left', subtitleLeft + 'px', 'important');
-                    subtitleContainer.style.setProperty('transform', 'translateX(-50%)', 'important');
+                    subtitleContainer.style.setProperty('width', '400px', 'important');
+                    subtitleContainer.style.setProperty('max-width', '400px', 'important');
+                    subtitleContainer.style.setProperty('transform', 'none', 'important');
                 }
 
                 console.log('跨屏定位调试:', {
