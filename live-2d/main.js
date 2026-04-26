@@ -10,7 +10,7 @@ const screenshot = require('screenshot-desktop');
 const configPath = path.join(app.getAppPath(), 'config.json');
 
 // Live2D模型优先级配置（Python程序会修改这个列表来切换模型）
-const priorityFolders = ['肥牛v2.3', 'Hiyouri', 'Default', 'Main'];
+const priorityFolders = ['肥牛', '肥牛v2.3', 'Hiyouri', 'Default', 'Main'];
 
 
 function ensureTopMost(win) {
