@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, desktopCapturer, dialog, nativeImage } = require('electron')
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, desktopCapturer, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { HttpServer } = require('./js/services/http-server')
@@ -10,7 +10,7 @@ const screenshot = require('screenshot-desktop');
 const configPath = path.join(app.getAppPath(), 'config.json');
 
 // Live2D模型优先级配置（Python程序会修改这个列表来切换模型）
-const priorityFolders = ['肥牛', 'Hiyouri', 'Default', 'Main'];
+const priorityFolders = ['肥牛v2.3', 'Hiyouri', 'Default', 'Main'];
 
 
 function ensureTopMost(win) {
@@ -20,11 +20,73 @@ function ensureTopMost(win) {
 }
 
 function createWindow () {
-    const primaryDisplay = screen.getPrimaryDisplay()
-    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize
+    // 读取配置
+    let config = {};
+    try {
+        config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch (e) {
+        console.error('读取配置失败:', e);
+    }
+
+    const screenExtend = config.ui?.screen_extend || { extend: false, left: false, right: true };
+    
+    // 获取所有显示器信息
+    const displays = screen.getAllDisplays()
+    const primaryDisplay = screen.getPrimaryDisplay();
+    
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    if (screenExtend.extend) {
+        if (screenExtend.right && !screenExtend.left) {
+            // 保持当前不变 (包含所有屏幕)
+            displays.forEach((display, index) => {
+                const { x, y, width, height } = display.bounds
+                console.log(`显示器 ${index}: x=${x}, y=${y}, width=${width}, height=${height}`)
+                minX = Math.min(minX, x)
+                minY = Math.min(minY, y)
+                maxX = Math.max(maxX, x + width)
+                maxY = Math.max(maxY, y + height)
+            })
+        } else if (screenExtend.left) {
+            // 包含主屏和主屏左侧的屏幕
+            displays.forEach((display, index) => {
+                const { x, y, width, height } = display.bounds;
+                if (x <= primaryDisplay.bounds.x) {
+                    console.log(`显示器 ${index} (左侧/主屏): x=${x}, y=${y}, width=${width}, height=${height}`);
+                    minX = Math.min(minX, x);
+                    minY = Math.min(minY, y);
+                    maxX = Math.max(maxX, x + width);
+                    maxY = Math.max(maxY, y + height);
+                }
+            });
+        } else {
+            // 默认仅主屏
+            minX = primaryDisplay.bounds.x;
+            minY = primaryDisplay.bounds.y;
+            maxX = primaryDisplay.bounds.x + primaryDisplay.bounds.width;
+            maxY = primaryDisplay.bounds.y + primaryDisplay.bounds.height;
+        }
+    } else {
+        // 非扩展模式：仅使用主屏
+        minX = primaryDisplay.bounds.x;
+        minY = primaryDisplay.bounds.y;
+        maxX = primaryDisplay.bounds.x + primaryDisplay.bounds.width;
+        maxY = primaryDisplay.bounds.y + primaryDisplay.bounds.height;
+    }
+    
+    const totalWidth = maxX - minX
+    const totalHeight = maxY - minY
+    
+    console.log(`=== 窗口创建信息 ===`)
+    console.log(`总边界: minX=${minX}, minY=${minY}, maxX=${maxX}, maxY=${maxY}`)
+    console.log(`计算的窗口尺寸: ${totalWidth}x${totalHeight}`)
+    console.log(`窗口位置: (${minX}, ${minY})`)
+    
     const win = new BrowserWindow({
-        width: screenWidth,
-        height: screenHeight,
+        x: minX,
+        y: minY,
+        width: totalWidth,
+        height: totalHeight,
         transparent: true,
         frame: false,
         alwaysOnTop: true,
@@ -47,20 +109,42 @@ function createWindow () {
     win.setAlwaysOnTop(true, 'screen-saver')
     win.setIgnoreMouseEvents(true, { forward: true });
     win.setMenu(null)
-    win.setPosition(0, 0)
+    
+    // 立即验证窗口尺寸
+    const immediateBounds = win.getBounds()
+    console.log(`窗口创建后立即尺寸: ${immediateBounds.width}x${immediateBounds.height}`)
+    console.log(`窗口创建后立即位置: (${immediateBounds.x}, ${immediateBounds.y})`)
+    
+    // 延迟验证窗口实际尺寸
+    setTimeout(() => {
+        const actualBounds = win.getBounds()
+        console.log(`窗口实际尺寸: ${actualBounds.width}x${actualBounds.height}`)
+        console.log(`窗口实际位置: (${actualBounds.x}, ${actualBounds.y})`)
+        
+        // 如果尺寸不匹配，尝试强制设置
+        if (actualBounds.width !== totalWidth || actualBounds.height !== totalHeight) {
+            console.log(`⚠️ 窗口尺寸不匹配！尝试强制设置为 ${totalWidth}x${totalHeight}`)
+            win.setBounds({
+                x: minX,
+                y: minY,
+                width: totalWidth,
+                height: totalHeight
+            })
+            
+            setTimeout(() => {
+                const finalBounds = win.getBounds()
+                console.log(`强制设置后尺寸: ${finalBounds.width}x${finalBounds.height}`)
+            }, 100)
+        }
+        console.log(`======================`)
+    }, 100)
+    
     win.loadFile('index.html')
     win.on('minimize', (event) => {
         event.preventDefault()
         win.restore()
     })
-    win.on('will-move', (event, newBounds) => {
-        const { width, height } = primaryDisplay.workAreaSize
-        if (newBounds.x < 0 || newBounds.y < 0 || 
-            newBounds.x + newBounds.width > width || 
-            newBounds.y + newBounds.height > height) {
-            event.preventDefault()
-        }
-    })
+    // 移除 will-move 限制,允许跨屏幕移动
     win.on('blur', () => {
         ensureTopMost(win)
     })
@@ -121,12 +205,47 @@ app.on('activate', () => {
 ipcMain.on('window-move', (event, { mouseX, mouseY }) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     const [currentX, currentY] = win.getPosition()
-    const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize
+    // 不限制窗口移动范围,允许自由移动到任何位置(包括副屏)
     let newX = currentX + mouseX
     let newY = currentY + mouseY
-    newX = Math.max(-win.getBounds().width + 100, Math.min(newX, screenWidth - 100))
-    newY = Math.max(-win.getBounds().height + 100, Math.min(newY, screenHeight - 100))
+
     win.setPosition(newX, newY)
+
+    // 动态调整窗口大小以覆盖当前位置所在的所有屏幕
+    const displays = screen.getAllDisplays()
+    const winBounds = win.getBounds()
+    
+    // 找出窗口覆盖的所有显示器
+    let minX = winBounds.x
+    let minY = winBounds.y
+    let maxX = winBounds.x + winBounds.width
+    let maxY = winBounds.y + winBounds.height
+    
+    displays.forEach(display => {
+        const { x, y, width, height } = display.bounds
+        // 检查窗口是否与这个显示器有交集
+        if (!(winBounds.x + winBounds.width < x || winBounds.x > x + width ||
+              winBounds.y + winBounds.height < y || winBounds.y > y + height)) {
+            minX = Math.min(minX, x)
+            minY = Math.min(minY, y)
+            maxX = Math.max(maxX, x + width)
+            maxY = Math.max(maxY, y + height)
+        }
+    })
+    
+    const newWidth = maxX - minX
+    const newHeight = maxY - minY
+    
+    // 如果需要调整窗口大小
+    if (newWidth !== winBounds.width || newHeight !== winBounds.height || minX !== winBounds.x || minY !== winBounds.y) {
+        win.setBounds({
+            x: minX,
+            y: minY,
+            width: newWidth,
+            height: newHeight
+        })
+        console.log(`窗口调整: ${newWidth}x${newHeight} at (${minX}, ${minY})`)
+    }
 })
 
 ipcMain.on('set-ignore-mouse-events', (event, { ignore, options }) => {
@@ -136,6 +255,20 @@ ipcMain.on('set-ignore-mouse-events', (event, { ignore, options }) => {
 ipcMain.on('set-window-opacity', (event, opacity) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win) win.setOpacity(Math.max(0, Math.min(1, opacity)));
+})
+
+ipcMain.on('get-screen-info-sync', (event) => {
+    try {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        event.returnValue = {
+            primaryDisplay: screen.getPrimaryDisplay(),
+            allDisplays: screen.getAllDisplays(),
+            windowBounds: win ? win.getBounds() : null
+        };
+    } catch (e) {
+        console.error('获取屏幕信息失败:', e);
+        event.returnValue = null;
+    }
 })
 
 ipcMain.on('request-top-most', (event) => {
@@ -211,16 +344,10 @@ ipcMain.handle('take-screenshot', async (event) => {
 
         const imgBuffer = await screenshot({
             screen: targetNativeDisplay.id,
-            format: 'png'
+            format: 'jpg'
         });
 
-        // 缩放到 720p（1280×720），保持宽高比
-        const img = nativeImage.createFromBuffer(imgBuffer);
-        const { width, height } = img.getSize();
-        const targetHeight = 720;
-        const targetWidth = Math.round(width * targetHeight / height);
-        const resized = img.resize({ width: targetWidth, height: targetHeight, quality: 'good' });
-        return resized.toJPEG(85).toString('base64');
+        return imgBuffer.toString('base64');
     } catch (error) {
         console.error('截图错误:', error)
         throw error;
@@ -300,6 +427,32 @@ ipcMain.handle('switch-live2d-model', async (event, modelName) => {
         return { success: false, message: `切换失败: ${error.message}` }
     }
 })
+
+
+// 添加获取窗口实际尺寸的IPC处理器
+ipcMain.handle('get-window-bounds', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const bounds = win.getBounds();
+    return {
+        width: bounds.width,
+        height: bounds.height,
+        x: bounds.x,
+        y: bounds.y
+    };
+});
+
+// 添加获取所有显示器信息的IPC处理器
+ipcMain.handle('get-all-displays', (event) => {
+    const displays = screen.getAllDisplays();
+    return displays.map(display => ({
+        id: display.id,
+        bounds: display.bounds,
+        workArea: display.workArea,
+        scaleFactor: display.scaleFactor,
+        rotation: display.rotation
+    }));
+});
+
 
 // 添加保存模型位置的IPC处理器
 ipcMain.on('save-model-position', (event, position) => {

@@ -47,6 +47,68 @@ class UIController {
 
         if (!chatInput || !textChatContainer || !submitBtn) return;
 
+        // 强制固定对话框位置逻辑
+        const screenExtend = this.config.ui?.screen_extend || { extend: false, left: false, right: true };
+        
+        // 无论是否扩展，都确保对话框样式正确
+        textChatContainer.style.setProperty('position', 'fixed', 'important');
+        textChatContainer.style.setProperty('display', 'block', 'important');
+        textChatContainer.style.setProperty('visibility', 'visible', 'important');
+        textChatContainer.style.setProperty('opacity', '1', 'important');
+        textChatContainer.style.setProperty('z-index', '10000', 'important');
+        textChatContainer.style.setProperty('width', '350px', 'important');
+        textChatContainer.style.setProperty('height', 'auto', 'important');
+
+        // 统一使用屏幕信息进行定位，确保无论是否扩展，对话框都显示在主屏右下角
+        const screenInfo = ipcRenderer.sendSync('get-screen-info-sync');
+        if (screenInfo) {
+            const { primaryDisplay, windowBounds } = screenInfo;
+            
+            // 使用主进程返回的实际窗口边界，确保坐标系完全匹配
+            const winX = windowBounds ? windowBounds.x : 0;
+            const winY = windowBounds ? windowBounds.y : 0;
+            const winH = windowBounds ? windowBounds.height : window.innerHeight;
+            
+            // 计算主屏相对于窗口左侧和底部的偏移
+            // 窗口坐标 (0,0) 对应屏幕坐标 (winX, winY)
+            const primaryLeftOffset = primaryDisplay.bounds.x - winX;
+            const primaryTopOffset = primaryDisplay.bounds.y - winY;
+            const primaryBottomOffset = winH - (primaryTopOffset + primaryDisplay.bounds.height);
+
+            // 始终定位到主屏右下角 (相对于窗口左侧)
+            // 350是对话框宽度，20是右边距
+            const rightPos = primaryLeftOffset + primaryDisplay.bounds.width - 350 - 20;
+            
+            textChatContainer.style.setProperty('left', rightPos + 'px', 'important');
+            textChatContainer.style.setProperty('right', 'auto', 'important');
+            textChatContainer.style.setProperty('bottom', (primaryBottomOffset + 50) + 'px', 'important');
+
+            // 同时确保字幕容器在主屏显示
+            const subtitleContainer = document.getElementById('subtitle-container');
+            if (subtitleContainer) {
+                subtitleContainer.style.setProperty('position', 'fixed', 'important');
+                subtitleContainer.style.setProperty('bottom', (primaryBottomOffset + 20) + 'px', 'important');
+                // 字幕在主屏右下角距离屏幕右侧800px处开始显示，显示范围不超过400px/行
+                const subtitleLeft = primaryLeftOffset + primaryDisplay.bounds.width - 800;
+                subtitleContainer.style.setProperty('left', subtitleLeft + 'px', 'important');
+                subtitleContainer.style.setProperty('width', '400px', 'important');
+                subtitleContainer.style.setProperty('max-width', '400px', 'important');
+                subtitleContainer.style.setProperty('transform', 'none', 'important');
+                subtitleContainer.style.setProperty('display', 'block', 'important');
+            }
+
+            console.log('跨屏定位调试:', {
+                winX, winY, winH,
+                primaryX: primaryDisplay.bounds.x,
+                primaryY: primaryDisplay.bounds.y,
+                primaryW: primaryDisplay.bounds.width,
+                primaryH: primaryDisplay.bounds.height,
+                primaryLeftOffset,
+                primaryBottomOffset,
+                rightPos
+            });
+        }
+
         textChatContainer.addEventListener('mouseenter', () => {
             ipcRenderer.send('set-ignore-mouse-events', {
                 ignore: false,
@@ -373,15 +435,33 @@ class UIController {
         // 根据配置设置对话框显示状态
         const shouldShowChatBox = this.config.ui && this.config.ui.hasOwnProperty('show_chat_box')
             ? this.config.ui.show_chat_box
-            : (!ttsEnabled || !asrEnabled);
+            : true; // 默认强制显示
 
-        textChatContainer.style.display = shouldShowChatBox ? 'block' : 'none';
+        textChatContainer.style.setProperty('display', 'block', 'important');
+        textChatContainer.style.setProperty('visibility', 'visible', 'important');
+        textChatContainer.style.setProperty('opacity', '1', 'important');
+        textChatContainer.style.setProperty('z-index', '10000', 'important');
+        textChatContainer.style.setProperty('pointer-events', 'auto', 'important');
+        
+        // 重新触发一次位置计算，确保可见性切换后位置正确
+        this.setupChatBoxEvents();
 
-        // 如果启用了text_only_mode或者TTS/ASR任一被禁用，自动显示聊天框
-        if ((this.config.ui && this.config.ui.text_only_mode) || !ttsEnabled || !asrEnabled) {
-            textChatContainer.style.display = 'block';
-            console.log('检测到纯文本模式或TTS/ASR禁用，自动显示聊天框');
-        }
+        console.log('强制显示聊天框');
+
+        // 调试：确保对话框在可见范围内
+        setTimeout(() => {
+            const computedStyle = window.getComputedStyle(textChatContainer);
+            console.log('对话框调试信息:', {
+                display: computedStyle.display,
+                position: computedStyle.position,
+                bottom: computedStyle.bottom,
+                right: computedStyle.right,
+                zIndex: computedStyle.zIndex,
+                visibility: computedStyle.visibility,
+                opacity: computedStyle.opacity
+            });
+        }, 1000);
+
 
         // 从localStorage加载保存的样式
         try {
