@@ -45,6 +45,11 @@ def get_app_path():
         return os.path.dirname(os.path.abspath(__file__))
 
 
+# 云端版本检测：tts-hub 不存在或内部无子文件夹则为云端版本
+_tts_hub_path = Path(get_base_path()) / 'full-hub' / 'tts-hub'
+IS_CLOUD_VERSION = not _tts_hub_path.is_dir() or not any(p.is_dir() for p in _tts_hub_path.iterdir())
+
+
 def load_tool_descriptions():
     """加载所有工具的名称和描述"""
     tool_descriptions = {}
@@ -651,7 +656,9 @@ class set_pyqt(QWidget):
         # 添加自定义标题栏
         self.title_bar = CustomTitleBar(self)
         version = self.config.get('version', '')
-        self.title_bar.title_label.setText(f'My-Neuro  {version}' if version else 'My-Neuro')
+        cloud_tag = '(云端)' if IS_CLOUD_VERSION else '(本地)'
+        version_str = f'  {version}' if version else ''
+        self.title_bar.title_label.setText(f'My-Neuro {cloud_tag}{version_str}')
         container_layout.addWidget(self.title_bar)
 
         # 添加原始UI
@@ -681,6 +688,11 @@ class set_pyqt(QWidget):
         # 保持原来的功能
         self.set_btu()
         self.set_config()
+
+        # 云端版本隐藏本地专属功能入口
+        if IS_CLOUD_VERSION:
+            self.ui.pushButton_terminal.hide()
+            self.ui.pushButton_voice_clone.hide()
 
         # 为API KEY输入框添加小眼睛图标
         self.setup_api_key_visibility_toggles()
@@ -2822,6 +2834,11 @@ class set_pyqt(QWidget):
         # 云端肥牛网页导航按钮
         self.ui.pushButton_gateway_website.clicked.connect(self.open_gateway_website)
 
+        # 云端/本地样式预览切换
+        self._previewing_local = not IS_CLOUD_VERSION  # 本地版本初始即为本地样式
+        self.ui.pushButton_toggle_cloud_preview.clicked.connect(self.toggle_cloud_preview)
+        self._update_cloud_preview_button()
+
         # 初始化桌宠切换按钮样式（默认为"启动"状态）
         self.update_toggle_button_style(False)
 
@@ -4722,6 +4739,32 @@ class set_pyqt(QWidget):
             self.toast.show_message("正在打开云端肥牛官网...", 2000)
         except Exception as e:
             self.toast.show_message(f"打开网页失败: {e}", 3000)
+
+    def toggle_cloud_preview(self):
+        """切换本地/云端侧边栏样式预览"""
+        self._previewing_local = not self._previewing_local
+        if self._previewing_local:
+            self.ui.pushButton_terminal.show()
+            self.ui.pushButton_voice_clone.show()
+        else:
+            self.ui.pushButton_terminal.hide()
+            self.ui.pushButton_voice_clone.hide()
+        self._update_cloud_preview_button()
+        self._update_title_cloud_tag()
+
+    def _update_cloud_preview_button(self):
+        """同步按钮文字到当前预览状态"""
+        if self._previewing_local:
+            self.ui.pushButton_toggle_cloud_preview.setText('☁️ 切回云端样式')
+        else:
+            self.ui.pushButton_toggle_cloud_preview.setText('👁️ 预览本地样式')
+
+    def _update_title_cloud_tag(self):
+        """同步标题栏的云端/本地标签"""
+        version = self.config.get('version', '')
+        version_str = f'  {version}' if version else ''
+        tag = '(本地)' if self._previewing_local else '(云端)'
+        self.title_bar.title_label.setText(f'My-Neuro {tag}{version_str}')
 
     def init_live2d_models(self):
         """初始化Live2D模型功能"""

@@ -3336,6 +3336,22 @@ QPushButton:pressed {
             </widget>
            </item>
            <item>
+            <widget class="QPushButton" name="pushButton_toggle_cloud_preview">
+             <property name="font">
+              <font>
+               <family>微软雅黑</family>
+               <pointsize>10</pointsize>
+              </font>
+             </property>
+             <property name="text">
+              <string>👁️ 预览本地样式</string>
+             </property>
+             <property name="toolTip">
+              <string>切换预览本地/云端侧边栏样式，不影响实际检测结果</string>
+             </property>
+            </widget>
+           </item>
+           <item>
             <spacer name="verticalSpacer_ui_settings">
              <property name="orientation">
               <enum>Qt::Vertical</enum>
