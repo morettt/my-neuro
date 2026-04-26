@@ -225,7 +225,18 @@
     "model_switch_failed": "切换模型失败",
     "ui_save_success": "UI 设置保存成功",
     "ui_save_failed": "UI 设置保存失败",
-    "ui_save_error": "UI 设置保存时出错"
+    "ui_save_error": "UI 设置保存时出错",
+    "display_title": "显示器设置",
+    "select_display": "选择显示器：",
+    "waiting_app": "等待应用启动...",
+    "switch_display": "切换显示器",
+    "display_hint": "启动应用后可切换显示器",
+    "display_detected": "检测到多个显示器",
+    "display_unavailable": "无法获取显示器信息",
+    "display_not_running": "Electron 未启动或连接失败",
+    "select_display_first": "请选择目标显示器",
+    "switch_failed": "切换失败",
+    "switch_error": "切换请求失败"
   },
   "dialog_config": {
     "max_messages": "最大消息数:",

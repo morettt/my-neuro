@@ -4,7 +4,7 @@
 
 # 忽略特定文件夹
 # live-2d/2D/*
-live-2d/AI记录室/*
+AI记录室/*
 live-2d/build/
 live-2d/fake_neuro_audio/
 live-2d/node/

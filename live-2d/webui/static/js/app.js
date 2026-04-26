@@ -808,6 +808,11 @@ async function startService(serviceName) {
         if (response.ok && result.success) {
             updateServiceStatus(serviceName, 'running');
             addLog(serviceName + ' ' + t('services.start_success'), 'success', 'system');
+            
+            // Live2D 启动后加载显示器列表
+            if (serviceName === 'live2d') {
+                setTimeout(loadDisplayList, 1500);
+            }
         } else {
             addLog(serviceName + ' ' + t('services.start_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
         }
@@ -3960,5 +3965,70 @@ function toggleHeaderCollapse() {
         if (collapseBtn) {
             collapseBtn.querySelector('.collapse-text').textContent = t('common.collapse');
         }
+    }
+}
+
+// ============ 显示器切换功能 ============
+
+// 加载显示器列表
+async function loadDisplayList() {
+    const select = document.getElementById('display-select');
+    const statusDiv = document.getElementById('display-status');
+    const switchBtn = document.getElementById('switch-display-btn');
+    
+    if (!select) return;
+    
+    try {
+        const response = await fetch('/api/live2d/display/list');
+        const data = await response.json();
+        
+        if (data.success && data.displays && data.displays.length > 0) {
+            select.innerHTML = '';
+            
+            data.displays.forEach(display => {
+                const option = document.createElement('option');
+                option.value = display.index;
+                option.textContent = display.label;
+                select.appendChild(option);
+            });
+            
+            select.disabled = false;
+            switchBtn.disabled = false;
+            statusDiv.textContent = t('ui_settings.display_detected') || `检测到 ${data.displays.length} 个显示器`;
+        } else {
+            statusDiv.textContent = data.error || t('ui_settings.display_unavailable') || '无法获取显示器信息';
+        }
+    } catch (error) {
+        console.error('加载显示器列表失败:', error);
+        statusDiv.textContent = t('ui_settings.display_not_running') || 'Electron 未启动或连接失败';
+    }
+}
+
+// 切换显示器
+async function switchDisplay() {
+    const select = document.getElementById('display-select');
+    const displayIndex = parseInt(select.value);
+    
+    if (isNaN(displayIndex)) {
+        showToast(t('ui_settings.select_display_first') || '请选择目标显示器', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/live2d/display/switch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ display_index: displayIndex })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(result.message, 'success');
+        } else {
+            showToast(t('ui_settings.switch_failed') + ': ' + (result.error || t('common.unknown_error')), 'error');
+        }
+    } catch (error) {
+        showToast(t('ui_settings.switch_error') + ': ' + error.message, 'error');
     }
 }
