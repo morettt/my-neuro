@@ -99,6 +99,11 @@
       "x": 1.1431250000000002,
       "y": 0.59,
       "remember_position": true
+    },
+    "drag_optimization": {
+      "stop_motion_on_drag": true,
+      "lower_fps_on_drag": false,
+      "drag_fps": 15
     }
   },
   "context": {
