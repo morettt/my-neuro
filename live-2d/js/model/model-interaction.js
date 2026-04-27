@@ -222,8 +222,20 @@ class ModelInteractionController {
 
         this.model.on('mousemove', (e) => {
             if (this.isDragging) {
-                const newX = e.data.global.x - this.dragOffset.x;
-                const newY = e.data.global.y - this.dragOffset.y;
+                let newX = e.data.global.x - this.dragOffset.x;
+                let newY = e.data.global.y - this.dragOffset.y;
+
+                // 限制模型移动范围
+                if (this.config && this.config.ui && this.config.ui.screen_extend) {
+                    const extend = this.config.ui.screen_extend;
+                    if (extend.extend && extend.left) {
+                        // 限制在主屏幕范围内 (假设主屏幕在右侧，左侧是扩展屏)
+                        // 这里需要根据实际屏幕布局调整，假设主屏幕宽度为 screen.getPrimaryDisplay().size.width
+                        // 简单处理：限制 x 不能小于 0
+                        if (newX < 0) newX = 0;
+                    }
+                }
+
                 this.model.position.set(newX, newY);
                 this.updateInteractionArea();
             }
@@ -339,9 +351,11 @@ class ModelInteractionController {
 
         window.addEventListener('resize', () => {
             if (this.app && this.app.renderer) {
-                this.app.renderer.resize(window.innerWidth * 2, window.innerHeight * 2);
-                this.app.stage.position.set(window.innerWidth / 2, window.innerHeight / 2);
-                this.app.stage.pivot.set(window.innerWidth / 2, window.innerHeight / 2);
+                const actualWidth = window.actualWidth || window.innerWidth;
+                const actualHeight = window.actualHeight || window.innerHeight;
+                const scaleFactor = window.canvasScaleFactor || 2;
+                this.app.renderer.resize(actualWidth * scaleFactor, actualHeight * scaleFactor);
+                //多屏幕坐标系统，不设置pivot/position,舞台从0,0开始
                 this.updateInteractionArea();
             }
         });
@@ -387,22 +401,43 @@ class ModelInteractionController {
     setupInitialModelProperties(scaleMultiplier = 2.3) {
         if (!this.model || !this.app) return;
 
+// 使用实际窗口尺寸（如果可用）
+        const actualWidth = window.actualWidth || window.innerWidth;
+        const actualHeight = window.actualHeight || window.innerHeight;
+        const scaleFactor = window.canvasScaleFactor || 2;
         this.model.scale.set(scaleMultiplier);
 
         if (this.config && this.config.ui && this.config.ui.model_position && this.config.ui.model_position.remember_position) {
             const savedPos = this.config.ui.model_position;
-            if (savedPos.x !== null && savedPos.y !== null &&
-                savedPos.x >= 0 && savedPos.x <= 1 &&
-                savedPos.y >= 0 && savedPos.y <= 1) {
-                this.model.x = savedPos.x * window.innerWidth;
-                this.model.y = savedPos.y * window.innerHeight;
+// 验证保存模型位置是否合法
+            // 允许负值和大于1的值以支持多屏幕
+            // 合理范围：x：-0.5--2.5，y：-0.5--2.0
+            const isVlidPosition = savedPos.x !== null && savedPos.y !== null &&
+                                savedPos.x >= -0.5 && savedPos.x <= 2.5 &&
+                                savedPos.y >= -0.5 && savedPos.y <= 2.0;
+            if (isVlidPosition) {
+                this.model.x = savedPos.x * actualWidth * scaleFactor;
+                this.model.y = savedPos.y * actualHeight * scaleFactor;
+                console.log('加载保存的位置:', { 
+                    relativePos: savedPos,
+                    canvasX: this.model.x,
+                    canvasY: this.model.y,
+                    scaleFactor
+                });
             } else {
-                this.model.x = window.innerWidth * 0.7;
-                this.model.y = window.innerHeight * 0.8;
+                // 位置无效，使用默认位置并重置配置
+                console.warn('保存的位置无效，使用默认位置',savedPos);
+                this.model.y = actualHeight * 0.5 * scaleFactor;
+                this.model.x = actualWidth * 0.5 * scaleFactor;
+                // 重置配置中的位置
+                this.config.ui.model_position.x = 0.5;
+                this.config.ui.model_position.y = 0.5;
+                this.saveModelPosition();
             }
         } else {
-            this.model.x = window.innerWidth * 0.7;
-            this.model.y = window.innerHeight * 0.8;
+            // 使用默认位置(canvas坐标系)
+            this.model.y = actualHeight * 0.5 * scaleFactor;
+            this.model.x = actualWidth * 0.5 * scaleFactor;
         }
 
         this.updateInteractionArea();
@@ -415,8 +450,18 @@ class ModelInteractionController {
             return;
         }
 
-        const relativeX = this.model.x / window.innerWidth;
-        const relativeY = this.model.y / window.innerHeight;
+// 使用实际窗口尺寸计算相对位置
+        const actualWidth = window.actualWidth || window.innerWidth;
+        const actualHeight = window.actualHeight || window.innerHeight;
+        const scaleFactor = window.canvasScaleFactor || 2;
+
+        // 将canvas坐标转换为相对于窗口的坐标，再计算相对位置
+        const windowX = this.model.x / scaleFactor;
+        const windowY = this.model.y / scaleFactor;
+
+        // 计算相对位置（0-1之间的比例）
+        const relativeX = windowX / actualWidth;
+        const relativeY = windowY / actualHeight;
 
         this.config.ui.model_position.x = relativeX;
         this.config.ui.model_position.y = relativeY;
@@ -425,6 +470,13 @@ class ModelInteractionController {
             x: relativeX,
             y: relativeY,
             scale: this.model.scale.x
+        });
+
+        console.log('保存模型位置:', { 
+            canvasPos: { x: this.model.x, y: this.model.y },
+            windowPos: { x: windowX, y: windowY },
+            relativePos: { x: relativeX, y: relativeY },
+            scaleFactor
         });
     }
 }
