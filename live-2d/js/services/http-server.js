@@ -208,14 +208,12 @@ class HttpServer {
 		
 		            const { ipcRenderer } = require('electron');
 		            const model = mc.model;
-		            const defaultX = window.innerWidth * 1.35;
-		            const defaultY = window.innerHeight * 0.8;
-		            const scale = 0.65;
-                    // 复位到默认位置
-		            model.x = defaultX;
-		            model.y = defaultY;
-		            model.scale.set(scale);
-		            mc.updateInteractionArea();
+		            const scale = model.scale.x; // 保持当前皮套的大小比例
+		                  
+		                  // 触发重新初始化位置逻辑，利用我们刚才在 setupInitialModelProperties 中添加的动态计算
+		                  mc.config.ui.model_position.x = 1.35;
+		                  mc.config.ui.model_position.y = 0.8;
+		                  mc.setupInitialModelProperties(scale);
 		
 		            ipcRenderer.send('save-model-position', { x: 1.35, y: 0.8, scale });
 		            return { success: true};
