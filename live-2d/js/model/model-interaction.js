@@ -138,47 +138,6 @@ class ModelInteractionController {
             }
         });
 
-        const chatContainer = document.getElementById('text-chat-container');
-
-        // 鼠标按下时开始拖动
-        chatContainer.addEventListener('mousedown', (e) => {
-            // 仅当点击聊天框背景或消息区域时触发拖动（避免误触输入框和按钮）
-            if (e.target === chatContainer || e.target.id === 'chat-messages') {
-                this.isDraggingChat = true;
-                this.chatDragOffset.x = e.clientX - chatContainer.getBoundingClientRect().left;
-                this.chatDragOffset.y = e.clientY - chatContainer.getBoundingClientRect().top;
-                e.preventDefault(); // 防止文本选中
-                ipcRenderer.send('set-ignore-mouse-events', {
-                    ignore: false
-                });
-                
-            }
-        });
-
-        // 鼠标移动时更新位置
-        document.addEventListener('mousemove', (e) => {
-            if (this.isDraggingChat) {
-                chatContainer.style.left = `${e.clientX - this.chatDragOffset.x}px`;
-                chatContainer.style.top = `${e.clientY - this.chatDragOffset.y}px`;
-                // 注意: 拖动聊天框时不需要修改模型位置
-            }
-        });
-
-        // 鼠标释放时停止拖动
-        document.addEventListener('mouseup', () => {
-            // this.isDraggingChat = false;
-            if (this.isDraggingChat) {
-                this.isDraggingChat = false;
-                setTimeout(() => {
-                    if (!this.model.containsPoint(this.app.renderer.plugins.interaction.mouse.global)) {
-                        ipcRenderer.send('set-ignore-mouse-events', {
-                            ignore: true,
-                            options: { forward: true }
-                        });
-                    }
-                }, 100);
-            }
-        });
 
 
 // 拖动结束时，再次检查穿透状态
@@ -314,27 +273,74 @@ class ModelInteractionController {
         if (!this.model || !this.app) return;
 
         //使用实际窗口尺寸（如果可用
-        const actualWidth = window.actualWidth || window.innerWidth;
-        const actualHeight = window.actualHeight || window.innerHeight;
+        const actualWidth = window.actualWindowWidth || window.innerWidth;
+        const actualHeight = window.actualWindowHeight || window.innerHeight;
         const scaleFactor = window.canvasScaleFactor || 2;
 
-        const scaleX = (actualWidth * scaleMultiplier) / this.model.width;
-        const scaleY = (actualHeight * scaleMultiplier) / this.model.height;
         this.model.scale.set(scaleMultiplier);
 
         // 检查是否有保存的位置
         if (this.config && this.config.ui && this.config.ui.model_position && this.config.ui.model_position.remember_position) {
             const savedPos = this.config.ui.model_position;
-            //验证保存模型位置是否合法
-            //允许负值和大于1的值以支持多屏幕
-            //合理范围：x：-0.5--2.5，y：-0.5--2.0
+            
+            // 特殊逻辑：如果 x=1.35 且 y=0.8，则动态计算位置使其始终在对话框上方
+            if (Math.abs(savedPos.x - 1.35) < 0.001 && Math.abs(savedPos.y - 0.8) < 0.001) {
+                const screenInfo = ipcRenderer.sendSync('get-screen-info-sync');
+                if (screenInfo) {
+                    const { primaryDisplay, windowBounds } = screenInfo;
+                    const winX = windowBounds ? windowBounds.x : 0;
+                    const winY = windowBounds ? windowBounds.y : 0;
+                    const winH = windowBounds ? windowBounds.height : actualHeight;
+                    
+                    const primaryLeftOffset = primaryDisplay.bounds.x - winX;
+                    const primaryTopOffset = primaryDisplay.bounds.y - winY;
+                    const primaryBottomOffset = winH - (primaryTopOffset + primaryDisplay.bounds.height);
+
+                    // 对话框位置：left = primaryLeftOffset + primaryW - 350 - 20
+                    // 对话框 bottom = primaryBottomOffset + 50
+                    // 对话框距离屏幕底部的距离 D = 50
+                    // 皮套距离对话框距离 = 3 * D = 150
+                    // 皮套中心点 Y = 窗口底部 - primaryBottomOffset - 50 - 150
+                    // 皮套中心点 X = 对话框左侧 + 175 (对话框宽度一半)
+                    
+                    const dialogLeft = primaryLeftOffset + primaryDisplay.bounds.width - 350 - 20;
+                    const targetWindowX = dialogLeft + 175;
+                    
+                    // 修正：当 y=0.8 时，让皮套在主屏幕垂直居中
+                    // 主屏幕在 Canvas 中的垂直中心点 = primaryTopOffset + primaryDisplay.bounds.height / 2
+                    const primaryCenterY = primaryTopOffset + primaryDisplay.bounds.height / 2;
+                    const targetWindowY = primaryCenterY;
+
+                    // 修正：考虑模型自身的宽度和高度，使其中心对齐目标点
+                    const modelWidth = this.model.width / scaleFactor;
+                    const modelHeight = this.model.height / scaleFactor;
+
+                    this.model.x = (targetWindowX - modelWidth / 2) * scaleFactor;
+                    this.model.y = (targetWindowY - modelHeight / 2) * scaleFactor;
+                    
+                    console.log('动态计算皮套位置(x=1.35, y=0.8):', {
+                        targetWindowX,
+                        targetWindowY,
+                        modelWidth,
+                        modelHeight,
+                        canvasX: this.model.x,
+                        canvasY: this.model.y
+                    });
+                    this.updateInteractionArea();
+                    return;
+                }
+            }
+
+            // 验证保存模型位置是否合法
+            // 允许负值和大于1的值以支持多屏幕
+            // 合理范围：x：-0.5--2.5，y：-0.5--2.0
             const isVlidPosition = savedPos.x !== null && savedPos.y !== null &&
                                 savedPos.x >= -0.5 && savedPos.x <= 2.5 &&
                                 savedPos.y >= -0.5 && savedPos.y <= 2.0;
             if (isVlidPosition) {
                 this.model.x = savedPos.x * actualWidth * scaleFactor;
                 this.model.y = savedPos.y * actualHeight * scaleFactor;
-                console.log('加载保存的位置:', { 
+                console.log('加载保存的位置:', {
                     relativePos: savedPos,
                     canvasX: this.model.x,
                     canvasY: this.model.y,
@@ -369,8 +375,8 @@ class ModelInteractionController {
         }
 
         // 使用实际窗口尺寸计算相对位置
-        const actualWidth = window.actualWidth || window.innerWidth;
-        const actualHeight = window.actualHeight || window.innerHeight;
+        const actualWidth = window.actualWindowWidth || window.innerWidth;
+        const actualHeight = window.actualWindowHeight || window.innerHeight;
         const scaleFactor = window.canvasScaleFactor || 2;
 
         //将canvas坐标转换为相对于窗口的坐标，在计算相对位置

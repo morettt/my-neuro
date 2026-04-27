@@ -44,17 +44,34 @@ class UIController {
         const chatInput = document.getElementById('chat-input');
         const textChatContainer = document.getElementById('text-chat-container');
         const submitBtn = document.getElementById('chat-send-btn');
+        const dragHandle = document.getElementById('chat-drag-handle');
 
         if (!chatInput || !textChatContainer || !submitBtn) return;
+
+        // 设置拖动功能
+        this.setupChatBoxDrag(textChatContainer, dragHandle);
 
         // 强制固定对话框位置逻辑
         const screenExtend = this.config.ui?.screen_extend || { extend: false, left: false, right: true };
         
         // 无论是否扩展，都确保对话框样式正确
         textChatContainer.style.setProperty('position', 'fixed', 'important');
-        textChatContainer.style.setProperty('display', 'block', 'important');
-        textChatContainer.style.setProperty('visibility', 'visible', 'important');
-        textChatContainer.style.setProperty('opacity', '1', 'important');
+        
+        // 根据配置决定初始显示状态
+        const shouldShowChatBox = this.config.ui && this.config.ui.hasOwnProperty('show_chat_box')
+            ? this.config.ui.show_chat_box
+            : true;
+            
+        if (shouldShowChatBox) {
+            textChatContainer.style.setProperty('display', 'block', 'important');
+            textChatContainer.style.setProperty('visibility', 'visible', 'important');
+            textChatContainer.style.setProperty('opacity', '1', 'important');
+        } else {
+            textChatContainer.style.setProperty('display', 'none', 'important');
+            textChatContainer.style.setProperty('visibility', 'hidden', 'important');
+            textChatContainer.style.setProperty('opacity', '0', 'important');
+        }
+        
         textChatContainer.style.setProperty('z-index', '10000', 'important');
         textChatContainer.style.setProperty('width', '350px', 'important');
         textChatContainer.style.setProperty('height', 'auto', 'important');
@@ -109,6 +126,16 @@ class UIController {
             });
         }
 
+        // 防止拖动条点击时触发任何隐藏逻辑
+        if (dragHandle) {
+            dragHandle.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            dragHandle.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+            });
+        }
+
         textChatContainer.addEventListener('mouseenter', () => {
             ipcRenderer.send('set-ignore-mouse-events', {
                 ignore: false,
@@ -137,6 +164,63 @@ class UIController {
             });
         });
         
+    }
+
+    // 设置聊天框拖动功能
+    setupChatBoxDrag(container, dragHandle) {
+        if (!dragHandle) return;
+
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+        let startLeft = 0;
+        let startBottom = 0;
+
+        dragHandle.addEventListener('mousedown', (e) => {
+            // 防止文本选中
+            e.preventDefault();
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+
+            // 获取当前位置
+            const rect = container.getBoundingClientRect();
+            startLeft = rect.left;
+            startBottom = window.innerHeight - rect.bottom;
+
+            // 添加拖动中的样式
+            dragHandle.style.background = 'rgba(100, 150, 200, 0.8)';
+            container.style.cursor = 'grabbing';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+
+            const newLeft = startLeft + deltaX;
+            const newBottom = startBottom - deltaY;
+
+            // 更新位置，使用 left 和 bottom 定位
+            container.style.setProperty('left', newLeft + 'px', 'important');
+            container.style.setProperty('right', 'auto', 'important');
+            container.style.setProperty('bottom', newBottom + 'px', 'important');
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (!isDragging) return;
+            isDragging = false;
+
+            // 恢复样式
+            dragHandle.style.background = 'rgba(100, 150, 200, 0.4)';
+            container.style.cursor = 'default';
+        });
+
+        // 防止拖动时选中文本
+        dragHandle.addEventListener('selectstart', (e) => {
+            e.preventDefault();
+        });
     }
 
     // 显示字幕
@@ -435,18 +519,25 @@ class UIController {
         // 根据配置设置对话框显示状态
         const shouldShowChatBox = this.config.ui && this.config.ui.hasOwnProperty('show_chat_box')
             ? this.config.ui.show_chat_box
-            : true; // 默认强制显示
+            : true;
 
-        textChatContainer.style.setProperty('display', 'block', 'important');
-        textChatContainer.style.setProperty('visibility', 'visible', 'important');
-        textChatContainer.style.setProperty('opacity', '1', 'important');
-        textChatContainer.style.setProperty('z-index', '10000', 'important');
-        textChatContainer.style.setProperty('pointer-events', 'auto', 'important');
+        if (shouldShowChatBox) {
+            textChatContainer.style.setProperty('display', 'block', 'important');
+            textChatContainer.style.setProperty('visibility', 'visible', 'important');
+            textChatContainer.style.setProperty('opacity', '1', 'important');
+            textChatContainer.style.setProperty('z-index', '10000', 'important');
+            textChatContainer.style.setProperty('pointer-events', 'auto', 'important');
+            console.log('显示聊天框');
+        } else {
+            textChatContainer.style.setProperty('display', 'none', 'important');
+            textChatContainer.style.setProperty('visibility', 'hidden', 'important');
+            textChatContainer.style.setProperty('opacity', '0', 'important');
+            textChatContainer.style.setProperty('pointer-events', 'none', 'important');
+            console.log('隐藏聊天框');
+        }
         
         // 重新触发一次位置计算，确保可见性切换后位置正确
         this.setupChatBoxEvents();
-
-        console.log('强制显示聊天框');
 
         // 调试：确保对话框在可见范围内
         setTimeout(() => {
@@ -486,7 +577,18 @@ class UIController {
                 e.preventDefault();
                 const chatContainer = document.getElementById('text-chat-container');
                 if (chatContainer) {
-                    chatContainer.style.display = chatContainer.style.display === 'none' ? 'block' : 'none';
+                    const isHidden = window.getComputedStyle(chatContainer).display === 'none';
+                    if (isHidden) {
+                        chatContainer.style.setProperty('display', 'block', 'important');
+                        chatContainer.style.setProperty('visibility', 'visible', 'important');
+                        chatContainer.style.setProperty('opacity', '1', 'important');
+                        chatContainer.style.setProperty('pointer-events', 'auto', 'important');
+                    } else {
+                        chatContainer.style.setProperty('display', 'none', 'important');
+                        chatContainer.style.setProperty('visibility', 'hidden', 'important');
+                        chatContainer.style.setProperty('opacity', '0', 'important');
+                        chatContainer.style.setProperty('pointer-events', 'none', 'important');
+                    }
                 }
             }
 

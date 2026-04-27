@@ -51,6 +51,29 @@ body {
           1.5px 1.5px 0 black;
 }
 
+#chat-drag-handle {
+    width: 50%;
+    height: 15px;
+    background: rgba(100, 150, 200, 0.4);
+    cursor: move;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    font-weight: bold;
+    user-select: none;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: background 0.2s ease;
+    margin: 0 auto 8px auto;
+}
+
+#chat-drag-handle:hover {
+    background: rgba(100, 150, 200, 0.6);
+    color: rgba(255, 255, 255, 0.9);
+}
+
 #text-chat-container {
     position: fixed !important;
     bottom: 50px !important;
@@ -59,16 +82,21 @@ body {
     width: 350px !important;
     max-height: 400px !important;
     z-index: 10000 !important;
-    display: block !important;
-    pointer-events: auto !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+    display: block;
+    pointer-events: auto;
+    visibility: visible;
+    opacity: 1;
 }
 
 /* 当副屏在主屏左侧时，对话框显示在左下角 */
 body.screen-left #text-chat-container {
     right: auto !important;
     left: 20px !important;
+}
+
+/* 拖动后的对话框位置样式 */
+#text-chat-container.dragging {
+    transition: none !important;
 }
 
 /* VRM模型控制面板（展开式） */
@@ -167,6 +195,7 @@ body.screen-left #text-chat-container {
     color: #333333;
     min-height: 20px;
     overflow-y: auto;
+    cursor: text;
 }
 
 #chat-input:empty:before {
