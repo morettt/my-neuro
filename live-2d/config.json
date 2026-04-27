@@ -86,6 +86,7 @@
   },
   "ui": {
     "intro_text": "你好啊",
+    "stay_on_top_of_taskbar": true,
     "model_type": "live2d",
     "vrm_model": "",
     "vrm_model_path": "",
@@ -96,8 +97,8 @@
     "auto_show_chat_on_text_mode": true,
     "hide_from_screenshot": true,
     "model_position": {
-      "x": 0.814648449420929,
-      "y": 0.2527777883741591,
+      "x": null,
+      "y": null,
       "remember_position": true
     },
     "screen_extend": {
