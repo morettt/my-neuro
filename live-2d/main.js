@@ -14,10 +14,13 @@ const priorityFolders = ['肥牛', '肥牛v2.3', 'Hiyouri', 'Default', 'Main'];
 
 
 function ensureTopMost(win) {
-    if (!win.isAlwaysOnTop()) {
-        win.setAlwaysOnTop(true, 'screen-saver')
+    if (win && !win.isDestroyed() && !win.isMinimized() && win.isVisible()) {
+        win.setAlwaysOnTop(true, 'floating', -1);
     }
 }
+
+
+
 
 function createWindow () {
     // 读取配置
@@ -40,7 +43,7 @@ function createWindow () {
         if (screenExtend.right && !screenExtend.left) {
             // 保持当前不变 (包含所有屏幕)
             displays.forEach((display, index) => {
-                const { x, y, width, height } = display.bounds
+                const { x, y, width, height } = display.workArea
                 console.log(`显示器 ${index}: x=${x}, y=${y}, width=${width}, height=${height}`)
                 minX = Math.min(minX, x)
                 minY = Math.min(minY, y)
@@ -50,8 +53,8 @@ function createWindow () {
         } else if (screenExtend.left) {
             // 包含主屏和主屏左侧的屏幕
             displays.forEach((display, index) => {
-                const { x, y, width, height } = display.bounds;
-                if (x <= primaryDisplay.bounds.x) {
+                const { x, y, width, height } = display.workArea;
+                if (x <= primaryDisplay.workArea.x) {
                     console.log(`显示器 ${index} (左侧/主屏): x=${x}, y=${y}, width=${width}, height=${height}`);
                     minX = Math.min(minX, x);
                     minY = Math.min(minY, y);
@@ -61,19 +64,19 @@ function createWindow () {
             });
         } else {
             // 默认仅主屏
-            minX = primaryDisplay.bounds.x;
-            minY = primaryDisplay.bounds.y;
-            maxX = primaryDisplay.bounds.x + primaryDisplay.bounds.width;
-            maxY = primaryDisplay.bounds.y + primaryDisplay.bounds.height;
+            minX = primaryDisplay.workArea.x;
+            minY = primaryDisplay.workArea.y;
+            maxX = primaryDisplay.workArea.x + primaryDisplay.workArea.width;
+            maxY = primaryDisplay.workArea.y + primaryDisplay.workArea.height;
         }
     } else {
-        // 非扩展模式：仅使用主屏
-        minX = primaryDisplay.bounds.x;
-        minY = primaryDisplay.bounds.y;
-        maxX = primaryDisplay.bounds.x + primaryDisplay.bounds.width;
-        maxY = primaryDisplay.bounds.y + primaryDisplay.bounds.height;
+        // 非扩展模式：必须使用 workArea 避开任务栏
+        minX = primaryDisplay.workArea.x;
+        minY = primaryDisplay.workArea.y;
+        maxX = primaryDisplay.workArea.x + primaryDisplay.workArea.width;
+        maxY = primaryDisplay.workArea.y + primaryDisplay.workArea.height;
     }
-    
+
     const totalWidth = maxX - minX
     const totalHeight = maxY - minY
     
@@ -93,7 +96,7 @@ function createWindow () {
         backgroundColor: '#00000000',
         hasShadow: false,
         focusable: true,
-        type: 'desktop',
+        type: 'toolbar',
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
@@ -106,7 +109,7 @@ function createWindow () {
         skipTaskbar: true,
         maximizable: false,
     })
-    win.setAlwaysOnTop(true, 'screen-saver')
+    win.setAlwaysOnTop(true, 'floating')
     win.setIgnoreMouseEvents(true, { forward: true });
     win.setMenu(null)
     
@@ -144,17 +147,26 @@ function createWindow () {
         event.preventDefault()
         win.restore()
     })
-    // 移除 will-move 限制,允许跨屏幕移动
-    win.on('blur', () => {
-        ensureTopMost(win)
-    })
-    setInterval(() => {
-        ensureTopMost(win)
-    }, 1000)
     
     
     return win
 }
+// 全局定时器，安全地维持所有窗口的置顶状态
+setInterval(() => {
+    try {
+        const windows = BrowserWindow.getAllWindows();
+        windows.forEach(win => {
+            // 增加 isVisible() 检查，防止最小化或隐藏时操作导致闪退
+            if (win && !win.isDestroyed() && !win.isMinimized() && win.isVisible()) {
+                // 使用 -1 作为相对层级，确保它在置顶层中“垫底”，从而位于任务栏下方
+                win.setAlwaysOnTop(true, 'floating', -1);
+            }
+        });
+    } catch (e) {
+        console.error('置顶逻辑异常:', e);
+    }
+}, 1000);
+
 
 // 在主进程启动时调用
 app.whenReady().then(() => {
@@ -222,7 +234,7 @@ ipcMain.on('window-move', (event, { mouseX, mouseY }) => {
     let maxY = winBounds.y + winBounds.height
     
     displays.forEach(display => {
-        const { x, y, width, height } = display.bounds
+        const { x, y, width, height } = display.workArea
         // 检查窗口是否与这个显示器有交集
         if (!(winBounds.x + winBounds.width < x || winBounds.x > x + width ||
               winBounds.y + winBounds.height < y || winBounds.y > y + height)) {
@@ -273,7 +285,7 @@ ipcMain.on('get-screen-info-sync', (event) => {
 
 ipcMain.on('request-top-most', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
-    win.setAlwaysOnTop(true, 'screen-saver')
+    win.setAlwaysOnTop(true, 'floating')
 })
 
 // 添加保存配置的IPC处理器
