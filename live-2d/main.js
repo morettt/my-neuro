@@ -10,7 +10,7 @@ const screenshot = require('screenshot-desktop');
 const configPath = path.join(app.getAppPath(), 'config.json');
 
 // Live2D模型优先级配置（Python程序会修改这个列表来切换模型）
-const priorityFolders = ['肥牛', '肥牛v2.3', 'Hiyouri', 'Default', 'Main'];
+const priorityFolders = ['肥牛v2.3', 'Hiyouri', 'Default', 'Main'];
 
 
 
@@ -25,7 +25,7 @@ try {
 // 根据配置决定层级：
 // 'screen-saver' 级别非常高，会显示在任务栏前面
 // 'floating' 级别足以超过浏览器，但通常在任务栏后面
-const taskbarLevel = appConfig.ui?.stay_on_top_of_taskbar ? 'screen-saver' : 'floating';
+const taskbarLevel = appConfig.ui?.stay_on_top_of_taskbar ? 'screen-saver' : 'pop-up-menu';
 
 function ensureTopMost(win) {
     if (win && !win.isDestroyed() && !win.isMinimized() && win.isVisible()) {
