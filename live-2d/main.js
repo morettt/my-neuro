@@ -25,7 +25,7 @@ try {
 // 根据配置决定层级：
 // 'screen-saver' 级别非常高，会显示在任务栏前面
 // 'floating' 级别足以超过浏览器，但通常在任务栏后面
-const taskbarLevel = appConfig.ui?.stay_on_top_of_taskbar ? 'screen-saver' : 'pop-up-menu';
+const taskbarLevel = appConfig.ui?.stay_on_top_of_taskbar ? 'screen-saver' : 'floating';
 
 function ensureTopMost(win) {
     if (win && !win.isDestroyed() && !win.isMinimized() && win.isVisible()) {
