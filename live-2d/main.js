@@ -10,7 +10,7 @@ const screenshot = require('screenshot-desktop');
 const configPath = path.join(app.getAppPath(), 'config.json');
 
 // Live2D模型优先级配置（Python程序会修改这个列表来切换模型）
-const priorityFolders = ['肥牛v2.3', 'Hiyouri', 'Default', 'Main'];
+const priorityFolders = ['肥牛', 'Hiyouri', 'Default', 'Main'];
 
 
 
@@ -22,10 +22,8 @@ try {
 } catch (e) {
     console.error('读取配置失败:', e);
 }
-// 根据配置决定层级：
-// 'screen-saver' 级别非常高，会显示在任务栏前面
-// 'floating' 级别足以超过浏览器，但通常在任务栏后面
-const taskbarLevel = appConfig.ui?.stay_on_top_of_taskbar ? 'screen-saver' : 'pop-up-menu';
+
+const taskbarLevel = 'pop-up-menu';
 
 function ensureTopMost(win) {
     if (win && !win.isDestroyed() && !win.isMinimized() && win.isVisible()) {
@@ -60,7 +58,6 @@ function createWindow () {
     if (screenExtend.extend) {
         displays.forEach(display => {
             const area = getArea(display);
-            // 如果是“扩展到右侧”模式，且不是主屏也不是主屏右侧，则跳过（保留原项目逻辑）
             if (screenExtend.right && !screenExtend.left) {
                 minX = Math.min(minX, area.x);
                 minY = Math.min(minY, area.y);
@@ -97,7 +94,6 @@ function createWindow () {
         backgroundColor: '#00000000',
         hasShadow: false,
         focusable: true,
-        // 关键：保持 toolbar 类型以确保透明度和交互正常，仅靠 level 提升层级
         type: 'toolbar', 
         webPreferences: {
             nodeIntegration: true,
@@ -112,7 +108,7 @@ function createWindow () {
         maximizable: false,
     });
 
-    // 使用之前定义的 taskbarLevel ('screen-saver' 或 'floating')
+    // 使用之前定义的 taskbarLevel 来设置窗口置顶层级
     win.setAlwaysOnTop(true, taskbarLevel);
     win.setIgnoreMouseEvents(true, { forward: true });
     win.setMenu(null);
@@ -138,12 +134,13 @@ setInterval(() => {
             // 增加 isVisible() 检查，防止最小化或隐藏时操作导致闪退
             if (win && !win.isDestroyed() && !win.isMinimized() && win.isVisible()) {
                 win.setAlwaysOnTop(true, taskbarLevel);
+                
     }
         });
     } catch (e) {
         console.error('置顶逻辑异常:', e);
     }
-}, 100);
+}, 1000000000);
 
 
 // 在主进程启动时调用
@@ -313,17 +310,24 @@ ipcMain.handle('get-config', async (event) => {
 });
 
 ipcMain.handle('take-screenshot', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    
+    // 1. 截图前瞬间取消置顶，确保皮套不会出现在截图中，也不会挡住截图界面
+    const wasAlwaysOnTop = win.isAlwaysOnTop();
+    if (wasAlwaysOnTop) {
+        win.setAlwaysOnTop(false);
+    }
+
     try {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // 给系统和窗口管理器一点点时间来完成层级切换
+        await new Promise(resolve => setTimeout(resolve, 150));
 
         const displays = await screenshot.listDisplays();
-
         const cursorPoint = screen.getCursorScreenPoint();
         const currentDisplay = screen.getDisplayNearestPoint(cursorPoint);
 
         const electronDisplays = screen.getAllDisplays().sort((a, b) => a.bounds.x - b.bounds.x);
         const targetIndex = electronDisplays.findIndex(d => d.id === currentDisplay.id);
-
         const nativeDisplays = displays.sort((a, b) => (a.left || 0) - (b.left || 0));
 
         if (targetIndex >= nativeDisplays.length) {
@@ -339,10 +343,19 @@ ipcMain.handle('take-screenshot', async (event) => {
 
         return imgBuffer.toString('base64');
     } catch (error) {
-        console.error('截图错误:', error)
+        console.error('截图错误:', error);
         throw error;
+    } finally {
+        // 2. 无论截图成功与否，最后都恢复原有的置顶层级
+        if (wasAlwaysOnTop) {
+            // 使用你定义的 taskbarLevel (建议设为 'status' 或 'floating')
+            win.setAlwaysOnTop(true, taskbarLevel);
+            // 额外调用一次 moveTop 确保它回到最前端
+            win.moveTop();
+        }
     }
-})
+});
+
 
 // 添加IPC处理器，允许从渲染进程手动更新模型
 ipcMain.handle('update-live2d-model', async (event) => {
