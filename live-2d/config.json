@@ -86,7 +86,7 @@
   },
   "ui": {
     "intro_text": "你好啊",
-    "stay_on_top_of_taskbar": true,
+    "stay_on_top_of_taskbar": false,
     "model_type": "live2d",
     "vrm_model": "",
     "vrm_model_path": "",
