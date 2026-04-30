@@ -102,9 +102,7 @@
       "remember_position": true
     },
     "screen_extend": {
-      "extend": true,
-      "left": false,
-      "right": true
+      "extend": true
     }
   },
   "context": {

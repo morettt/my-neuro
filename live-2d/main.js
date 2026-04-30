@@ -23,7 +23,7 @@ try {
     console.error('读取配置失败:', e);
 }
 
-const taskbarLevel = 'pop-up-menu';
+const taskbarLevel = 'screen-saver';
 
 function ensureTopMost(win) {
     if (win && !win.isDestroyed() && !win.isMinimized() && win.isVisible()) {
@@ -55,24 +55,15 @@ function createWindow () {
     // 核心修改：统一使用一个逻辑计算边界
     const getArea = (d) => useFullBounds ? d.bounds : d.workArea;
 
-    if (screenExtend.extend) {
-        displays.forEach(display => {
-            const area = getArea(display);
-            if (screenExtend.right && !screenExtend.left) {
-                minX = Math.min(minX, area.x);
-                minY = Math.min(minY, area.y);
-                maxX = Math.max(maxX, area.x + area.width);
-                maxY = Math.max(maxY, area.y + area.height);
-            } else if (screenExtend.left) {
-                if (area.x <= getArea(primaryDisplay).x) {
-                    minX = Math.min(minX, area.x);
-                    minY = Math.min(minY, area.y);
-                    maxX = Math.max(maxX, area.x + area.width);
-                    maxY = Math.max(maxY, area.y + area.height);
-                }
-            }
-        });
-    } 
+if (screenExtend.extend) {
+    displays.forEach(display => {
+        const area = getArea(display);
+        minX = Math.min(minX, area.x);
+        minY = Math.min(minY, area.y);
+        maxX = Math.max(maxX, area.x + area.width);
+        maxY = Math.max(maxY, area.y + area.height);
+    });
+}
     
     // 如果没计算出有效边界，回退到主屏
     if (minX === Infinity) {
@@ -120,28 +111,9 @@ function createWindow () {
             win.setBounds({ x: minX, y: minY, width: totalWidth, height: totalHeight });
         }
     }, 200);
-
     win.loadFile('index.html');
     return win;
 }
-
-
-// 全局定时器，安全地维持所有窗口的置顶状态
-setInterval(() => {
-    try {
-        const windows = BrowserWindow.getAllWindows();
-        windows.forEach(win => {
-            // 增加 isVisible() 检查，防止最小化或隐藏时操作导致闪退
-            if (win && !win.isDestroyed() && !win.isMinimized() && win.isVisible()) {
-                win.setAlwaysOnTop(true, taskbarLevel);
-                
-    }
-        });
-    } catch (e) {
-        console.error('置顶逻辑异常:', e);
-    }
-}, 1000000000);
-
 
 // 在主进程启动时调用
 app.whenReady().then(() => {
@@ -231,6 +203,7 @@ ipcMain.on('window-move', (event, { mouseX, mouseY }) => {
             width: newWidth,
             height: newHeight
         })
+         win.setAlwaysOnTop(true, taskbarLevel); 
         console.log(`窗口调整: ${newWidth}x${newHeight} at (${minX}, ${minY})`)
     }
 })
@@ -348,7 +321,6 @@ ipcMain.handle('take-screenshot', async (event) => {
     } finally {
         // 2. 无论截图成功与否，最后都恢复原有的置顶层级
         if (wasAlwaysOnTop) {
-            // 使用你定义的 taskbarLevel (建议设为 'status' 或 'floating')
             win.setAlwaysOnTop(true, taskbarLevel);
             // 额外调用一次 moveTop 确保它回到最前端
             win.moveTop();
