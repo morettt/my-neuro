@@ -148,5 +148,11 @@
     "desc": "Kimi 联网搜索插件：通过 Kimi-Free-API 调用 Kimi 网页版内置联网搜索能力，并作为 Function Calling 工具 kimi_web_search 暴露给主 LLM；支持普通联网问答、深度研究模式、引用源剥离、自动拉起内置 backend/kimi-free-api 后端，也可切换 Moonshot 官方 API 模式。仓库已包含插件依赖与后端依赖，用户只需按 README 自行配置 refresh_token 或 official_api_key，仓库不包含任何敏感凭据。",
     "author": "爱熬夜的人形兔",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-kimi-search"
+  },
+  "agent-dream": {
+    "display_name": "agent-dream",
+    "desc": "my-neuro live-2d 社区梦系统插件：在深夜静默窗口内让数字角色进入仿生梦境，结合 MemOS 记忆涟漪与语义联想生成第一人称意识流梦叙事；支持独立梦境 LLM、梦境文本本地保存、梦后关键词/重要度/梦残像处理、达标写入长期记忆；可选梦中图书馆好奇心检索，梦中记忆合并/删除等操作带审批窗口。公开仓库已脱敏，需用户自行配置 API Key、角色梦境提示词与 MemOS/搜索插件。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-agent-dream"
   }
 }
