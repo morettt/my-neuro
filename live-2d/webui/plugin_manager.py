@@ -11,9 +11,15 @@ from collections import OrderedDict
 from flask import Blueprint, request, jsonify
 
 from .utils import PROJECT_ROOT, logger
+from .marketplace_updater import (
+    check_framework_compatibility,
+    check_updates_for_plugins,
+)
 
 # 创建插件管理蓝图
 plugin_bp = Blueprint('plugin', __name__)
+
+PLUGIN_FRAMEWORK_VERSION = '1.0.0'
 
 
 def load_enabled_plugins():
@@ -68,6 +74,11 @@ def scan_plugins_directory():
                 # 使用目录名作为插件路径（与 live-2d 保持一致）
                 plugin_path = f"{category}/{plugin_dir.name}"
                 plugin_enabled = plugin_path in enabled_plugins
+                framework_version = metadata.get('framework_version', '')
+                compatible, compatibility_message = check_framework_compatibility(
+                    framework_version,
+                    PLUGIN_FRAMEWORK_VERSION,
+                )
 
                 plugins.append({
                     'name': metadata.get('name', plugin_dir.name),
@@ -75,6 +86,10 @@ def scan_plugins_directory():
                     'description': metadata.get('description', '无描述'),
                     'version': metadata.get('version', '1.0.0'),
                     'author': metadata.get('author', 'unknown'),
+                    'repo': metadata.get('repo', ''),
+                    'framework_version': framework_version,
+                    'compatible': compatible,
+                    'compatibility_message': compatibility_message,
                     'category': category,
                     'enabled': plugin_enabled,
                     'plugin_path': plugin_path,
@@ -92,6 +107,16 @@ def list_plugins():
     """获取插件列表（自动扫描）"""
     try:
         plugins = scan_plugins_directory()
+        check_updates = request.args.get('check_updates', 'false').lower() == 'true'
+        if check_updates:
+            update_info = check_updates_for_plugins(plugins)
+            for plugin in plugins:
+                info = update_info.get(plugin.get('name'))
+                if not info:
+                    continue
+                plugin['latest_version'] = info.get('latest_version', '')
+                plugin['has_update'] = bool(info.get('has_update'))
+                plugin['update_error'] = info.get('update_error', '')
         return jsonify(plugins)
     except Exception as e:
         return jsonify({'error': str(e)}), 500

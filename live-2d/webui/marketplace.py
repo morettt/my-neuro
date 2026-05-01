@@ -15,9 +15,16 @@ import shutil
 import urllib.request
 import urllib.error
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Blueprint, request, jsonify
 
 from .utils import PROJECT_ROOT, logger
+from .marketplace_updater import (
+    check_updates_for_plugins,
+    get_local_metadata,
+    install_plugin_from_archive,
+    update_plugin_safe,
+)
 
 # 尝试导入 requests 库，如果不可用则使用 urllib
 try:
@@ -32,6 +39,8 @@ market_bp = Blueprint('market', __name__)
 
 # 存储正在进行的安装任务
 installing_tasks = {}
+
+PLUGIN_UPDATE_CONCURRENCY = 3
 
 # 与桌面版 test.py.refresh_plugin_market 一致：上游插件目录索引
 PLUGIN_HUB_RAW_URL = (
@@ -69,6 +78,82 @@ def load_plugin_hub_catalog():
     raise FileNotFoundError(
         f'无法加载插件商店：远程不可用 ({remote_err})，且本地不存在 {plugin_hub_path}'
     )
+
+
+def _get_market_plugin_dir(plugin_name):
+    """插件广场只安装到 community 目录。"""
+    return PROJECT_ROOT / 'plugins' / 'community' / plugin_name
+
+
+def _build_market_plugin_items(check_updates=True):
+    """读取插件广场列表，并补充本地安装状态与版本更新信息。"""
+    plugins_data = load_plugin_hub_catalog()
+    plugins = []
+
+    for key, value in plugins_data.items():
+        plugin_dir = _get_market_plugin_dir(key)
+        is_installed = plugin_dir.exists() and any(plugin_dir.iterdir())
+        local_metadata = get_local_metadata(plugin_dir) if is_installed else {}
+        repo_url = value.get('repo', '') or local_metadata.get('repo', '')
+        local_version = local_metadata.get('version', '')
+        catalog_version = value.get('version', '')
+
+        plugins.append({
+            'name': key,
+            'display_name': value.get('display_name', value.get('displayName', key)),
+            'description': value.get('desc', value.get('description', '无描述')),
+            'author': value.get('author', '未知'),
+            'repo': repo_url,
+            # 兼容旧前端字段；这里传 repo，真正 archive URL 由后端动态解析。
+            'download_url': repo_url,
+            'version': local_version or catalog_version,
+            'local_version': local_version,
+            'latest_version': catalog_version,
+            'has_update': False,
+            'update_error': '',
+            'installed': is_installed,
+            'installing': key in installing_tasks,
+            'status': installing_tasks.get(key, {}).get('status', ''),
+            'progress': installing_tasks.get(key, {}).get('progress', 0),
+        })
+
+    if check_updates and plugins:
+        update_info = check_updates_for_plugins(plugins)
+        for plugin in plugins:
+            info = update_info.get(plugin['name'])
+            if not info:
+                continue
+            plugin['latest_version'] = info.get('latest_version') or plugin.get('latest_version', '')
+            plugin['has_update'] = bool(plugin.get('installed') and info.get('has_update'))
+            plugin['update_error'] = info.get('update_error', '')
+            plugin['remote_metadata'] = info.get('remote_metadata')
+
+    return plugins
+
+
+def _find_market_plugin(plugin_name):
+    for plugin in _build_market_plugin_items(check_updates=False):
+        if plugin.get('name') == plugin_name:
+            return plugin
+    return None
+
+
+def _install_requirements_with_task_status(plugin_name):
+    def _installer(plugin_dir):
+        req_path = Path(plugin_dir) / 'requirements.txt'
+        if not req_path.exists():
+            return
+        installing_tasks[plugin_name]['status'] = 'installing_deps'
+        installing_tasks[plugin_name]['progress'] = 75
+        result = subprocess.run(
+            [sys.executable, '-m', 'pip', 'install', '-r', str(req_path)],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr or '插件依赖安装失败')
+    return _installer
 
 
 # ============ 提示词广场 ============
@@ -118,27 +203,8 @@ def apply_prompt():
 def get_plugin_market():
     """获取插件广场列表（优先远程 Raw，与桌面版一致；失败则用本地 plugin_hub.json）"""
     try:
-        plugins_data = load_plugin_hub_catalog()
-
-        # 转换为列表格式，并检测安装状态
-        plugins = []
-        community_path = PROJECT_ROOT / 'plugins' / 'community'
-        
-        for key, value in plugins_data.items():
-            # 检测是否已安装
-            plugin_dir = community_path / key
-            is_installed = plugin_dir.exists() and any(plugin_dir.iterdir())
-            
-            plugins.append({
-                'name': key,
-                'display_name': value.get('display_name', key),
-                'description': value.get('desc', '无描述'),
-                'author': value.get('author', '未知'),
-                'repo': value.get('repo', ''),
-                'download_url': value.get('repo', '') + '/archive/refs/heads/main.zip',
-                'installed': is_installed,
-                'installing': key in installing_tasks  # 是否正在安装中
-            })
+        check_updates = request.args.get('check_updates', 'true').lower() != 'false'
+        plugins = _build_market_plugin_items(check_updates=check_updates)
 
         return jsonify({
             'success': True,
@@ -157,7 +223,11 @@ def download_plugin():
     try:
         data = request.get_json()
         plugin_name = data.get('plugin_name', '')
-        plugin_url = data.get('download_url', '')
+        plugin_url = data.get('repo') or data.get('download_url', '')
+
+        if not plugin_url and plugin_name:
+            plugin_info = _find_market_plugin(plugin_name)
+            plugin_url = plugin_info.get('repo', '') if plugin_info else ''
 
         if not plugin_name or not plugin_url:
             return jsonify({'success': False, 'error': '缺少参数'}), 400
@@ -172,9 +242,8 @@ def download_plugin():
         if plugin_dir.exists() and any(plugin_dir.iterdir()):
             return jsonify({'success': False, 'error': '插件已安装'}), 400
 
-        # 创建插件目录
+        # 只创建父目录。插件目录由安装成功后原子落盘，避免失败留下空壳。
         community_path.mkdir(parents=True, exist_ok=True)
-        plugin_dir.mkdir(parents=True, exist_ok=True)
 
         # 启动后台线程进行下载和安装
         thread = threading.Thread(
@@ -198,85 +267,15 @@ def _install_plugin_worker(plugin_name, plugin_url, plugin_dir):
         installing_tasks[plugin_name] = {'status': 'downloading', 'progress': 0}
         logger.info(f'开始下载插件：{plugin_name}')
 
-        # 下载 zip 文件
-        zip_path = plugin_dir / f'{plugin_name}.zip'
-        
-        if HAS_REQUESTS:
-            # 使用 requests 库（支持进度显示）
-            response = requests.get(plugin_url, stream=True, timeout=120)
-            response.raise_for_status()
-            total_size = int(response.headers.get('content-length', 0))
-            downloaded = 0
-            
-            with open(zip_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if total_size > 0:
-                            installing_tasks[plugin_name]['progress'] = int(downloaded / total_size * 50)
-        else:
-            # 使用 urllib（无进度显示）
-            urllib.request.urlretrieve(plugin_url, zip_path)
-            installing_tasks[plugin_name]['progress'] = 50
-
-        logger.info(f'插件下载完成：{plugin_name}')
+        # 下载、解压、依赖安装都在辅助模块中完成；它会自动处理 main/master/default_branch。
+        installing_tasks[plugin_name]['progress'] = 20
         installing_tasks[plugin_name]['status'] = 'extracting'
-
-        # 解压 zip 文件
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            # 获取 zip 内所有文件的根目录名（通常是 repo-name-branch 格式）
-            zip_info_list = zip_ref.namelist()
-            if zip_info_list:
-                # 找到根目录
-                root_dir = zip_info_list[0].split('/')[0]
-                
-                # 解压所有文件到临时目录
-                temp_extract_dir = plugin_dir / 'temp_extract'
-                zip_ref.extractall(temp_extract_dir)
-                
-                # 将根目录内容移动到插件目录
-                source_dir = temp_extract_dir / root_dir
-                if source_dir.exists():
-                    for item in source_dir.iterdir():
-                        dest = plugin_dir / item.name
-                        if dest.exists():
-                            if dest.is_dir():
-                                shutil.rmtree(dest)
-                            else:
-                                dest.unlink()
-                        shutil.move(str(item), str(plugin_dir))
-                    
-                    # 清理临时目录
-                    shutil.rmtree(temp_extract_dir)
-
-        # 删除 zip 文件
-        zip_path.unlink()
-        logger.info(f'插件解压完成：{plugin_name}')
-        installing_tasks[plugin_name]['status'] = 'installing_deps'
-        installing_tasks[plugin_name]['progress'] = 75
-
-        # 检测并安装依赖
-        req_path = plugin_dir / 'requirements.txt'
-        if req_path.exists():
-            logger.info(f'正在安装插件依赖：{plugin_name}')
-            try:
-                result = subprocess.run(
-                    [sys.executable, '-m', 'pip', 'install', '-r', str(req_path)],
-                    capture_output=True,
-                    text=True,
-                    timeout=300
-                )
-                if result.returncode != 0:
-                    logger.warning(f'插件依赖安装失败：{plugin_name}, {result.stderr}')
-                    installing_tasks[plugin_name]['status'] = 'completed_with_warning'
-                else:
-                    logger.info(f'插件依赖安装完成：{plugin_name}')
-            except subprocess.TimeoutExpired:
-                logger.warning(f'插件依赖安装超时：{plugin_name}')
-                installing_tasks[plugin_name]['status'] = 'completed_with_warning'
-        else:
-            logger.info(f'插件无需安装依赖：{plugin_name}')
+        installing_tasks[plugin_name]['progress'] = 50
+        install_plugin_from_archive(
+            plugin_dir,
+            plugin_url,
+            requirements_installer=_install_requirements_with_task_status(plugin_name),
+        )
 
         installing_tasks[plugin_name]['status'] = 'completed'
         installing_tasks[plugin_name]['progress'] = 100
@@ -302,6 +301,136 @@ def _install_plugin_worker(plugin_name, plugin_url, plugin_dir):
     finally:
         # 确保任务被清理
         pass
+
+
+@market_bp.route('/api/market/plugins/update', methods=['POST'])
+def update_market_plugin():
+    """更新单个已安装插件。"""
+    try:
+        data = request.get_json() or {}
+        plugin_name = data.get('plugin_name') or data.get('name') or ''
+        repo_url = data.get('repo') or ''
+
+        if not plugin_name:
+            return jsonify({'success': False, 'error': '缺少 plugin_name 参数'}), 400
+        if plugin_name in installing_tasks:
+            return jsonify({'success': False, 'error': '该插件正在安装或更新中'}), 400
+
+        plugin_info = _find_market_plugin(plugin_name)
+        repo_url = repo_url or (plugin_info.get('repo', '') if plugin_info else '')
+        if not repo_url:
+            return jsonify({'success': False, 'error': '插件未配置 repo，无法更新'}), 400
+
+        plugin_dir = _get_market_plugin_dir(plugin_name)
+        if not plugin_dir.exists() or not any(plugin_dir.iterdir()):
+            return jsonify({'success': False, 'error': '插件尚未安装'}), 404
+
+        installing_tasks[plugin_name] = {'status': 'updating', 'progress': 10}
+        result = update_plugin_safe(
+            plugin_dir,
+            plugin_name,
+            repo_url,
+            requirements_installer=_install_requirements_with_task_status(plugin_name),
+        )
+        installing_tasks[plugin_name]['status'] = 'completed'
+        installing_tasks[plugin_name]['progress'] = 100
+        return jsonify({'success': True, 'message': '插件更新完成', 'result': result})
+    except Exception as e:
+        logger.error(f'插件更新失败：{str(e)}', exc_info=True)
+        if 'plugin_name' in locals() and plugin_name in installing_tasks:
+            installing_tasks[plugin_name]['status'] = 'failed'
+            installing_tasks[plugin_name]['error'] = str(e)
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if 'plugin_name' in locals() and plugin_name in installing_tasks:
+            import time
+            time.sleep(0.3)
+            installing_tasks.pop(plugin_name, None)
+
+
+@market_bp.route('/api/market/plugins/update-all', methods=['POST'])
+def update_all_market_plugins():
+    """批量更新已安装插件，最多 3 个并发。"""
+    try:
+        data = request.get_json() or {}
+        plugin_names = data.get('plugin_names') or data.get('names') or []
+        if not isinstance(plugin_names, list) or not plugin_names:
+            return jsonify({'success': False, 'error': '插件列表不能为空'}), 400
+
+        market_plugins = {
+            plugin['name']: plugin
+            for plugin in _build_market_plugin_items(check_updates=False)
+        }
+
+        def _update_one(name):
+            plugin = market_plugins.get(name)
+            if not plugin:
+                return {'name': name, 'success': False, 'error': '插件不在插件广场中'}
+            if not plugin.get('installed'):
+                return {'name': name, 'success': False, 'error': '插件尚未安装'}
+            repo_url = plugin.get('repo', '')
+            if not repo_url:
+                return {'name': name, 'success': False, 'error': '插件未配置 repo'}
+            try:
+                installing_tasks[name] = {'status': 'updating', 'progress': 10}
+                result = update_plugin_safe(
+                    _get_market_plugin_dir(name),
+                    name,
+                    repo_url,
+                    requirements_installer=_install_requirements_with_task_status(name),
+                )
+                installing_tasks[name]['status'] = 'completed'
+                installing_tasks[name]['progress'] = 100
+                return {'name': name, 'success': True, 'result': result}
+            except Exception as exc:
+                logger.error(f'批量更新插件失败 {name}: {exc}', exc_info=True)
+                return {'name': name, 'success': False, 'error': str(exc)}
+            finally:
+                installing_tasks.pop(name, None)
+
+        results = []
+        workers = min(PLUGIN_UPDATE_CONCURRENCY, len(plugin_names))
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            future_map = {executor.submit(_update_one, name): name for name in plugin_names}
+            for future in as_completed(future_map):
+                results.append(future.result())
+
+        failed = [item for item in results if not item.get('success')]
+        return jsonify({
+            'success': len(failed) == 0,
+            'message': (
+                '全部插件更新完成'
+                if not failed
+                else f'批量更新完成，其中 {len(failed)}/{len(results)} 个失败'
+            ),
+            'results': results,
+        })
+    except Exception as e:
+        logger.error(f'批量更新插件失败：{str(e)}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@market_bp.route('/api/market/plugins/check-updates', methods=['GET'])
+def check_market_plugin_updates():
+    """检查插件广场中已安装插件的更新状态。"""
+    try:
+        plugins = _build_market_plugin_items(check_updates=True)
+        installed_plugins = [plugin for plugin in plugins if plugin.get('installed')]
+        return jsonify({
+            'success': True,
+            'plugins': installed_plugins,
+            'updates': {
+                plugin['name']: {
+                    'has_update': plugin.get('has_update', False),
+                    'version': plugin.get('version', ''),
+                    'latest_version': plugin.get('latest_version', ''),
+                    'update_error': plugin.get('update_error', ''),
+                }
+                for plugin in installed_plugins
+            }
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @market_bp.route('/api/market/plugins/install-status/<plugin_name>', methods=['GET'])
