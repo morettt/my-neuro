@@ -136,5 +136,11 @@
     "desc": "对接 MiniMax 官方音乐生成 API（music-2.6 / music-cover 及对应 free 版）：支持原创歌曲（歌词+风格描述，可选 lyrics_optimizer 自动歌词）、纯音乐/BGM（is_instrumental）、参考音频翻唱（URL 或 Base64）；可配置输出目录、mp3/wav/pcm、采样率、比特率、AIGC 水印与免费模型回退。需用户自备 MiniMax API Key，仓库提供脱敏 plugin_config.json 模板与中文 README，不含 node 额外依赖。",
     "author": "爱熬夜的人形兔",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-minimax-music"
+  },
+  "feiniu-board-game": {
+    "display_name": "feiniu-board-game",
+    "desc": "Web UI 棋盘对弈：井字棋、五子棋、围棋（练习规则）、中国象棋、军棋（明棋）；内置本地 HTTP 服务与静态网页，默认 127.0.0.1:22335；棋力随 built-in/mood-chat 心情分变化；对局中与终局可向 LLM 注入盘面文本概要，局后可按配置注入限时 system 文案并支持安全词中止；含悔棋（井字棋/五子棋）、象棋交叉点渲染、终局自动对话等可选能力。必备依赖：built-in/mood-chat；需宿主提供 express 等。单目录社区插件，README 含安装路径、配置项说明与设计参考。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-feiniu-board-game"
   }
 }
