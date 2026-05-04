@@ -10,17 +10,33 @@ const screenshot = require('screenshot-desktop');
 const configPath = path.join(app.getAppPath(), 'config.json');
 
 // Live2D模型优先级配置（Python程序会修改这个列表来切换模型）
-const priorityFolders = ['肥牛', '肥牛v2.3', 'Hiyouri', 'Default', 'Main'];
+const priorityFolders = ['肥牛', 'Hiyouri', 'Default', 'Main'];
 
+
+
+
+// 读取配置以获取层级
+let appConfig = {};
+try {
+    appConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+} catch (e) {
+    console.error('读取配置失败:', e);
+}
+
+const taskbarLevel = 'screen-saver';
 
 function ensureTopMost(win) {
-    if (!win.isAlwaysOnTop()) {
-        win.setAlwaysOnTop(true, 'screen-saver')
+    if (win && !win.isDestroyed() && !win.isMinimized() && win.isVisible()) {
+        // 移除第三个参数，改用动态的 level
+        win.setAlwaysOnTop(true, taskbarLevel);
     }
 }
 
+
+
+
+
 function createWindow () {
-    // 读取配置
     let config = {};
     try {
         config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -29,58 +45,34 @@ function createWindow () {
     }
 
     const screenExtend = config.ui?.screen_extend || { extend: false, left: false, right: true };
+    const useFullBounds = config.ui?.stay_on_top_of_taskbar; // 是否覆盖任务栏
     
-    // 获取所有显示器信息
     const displays = screen.getAllDisplays()
     const primaryDisplay = screen.getPrimaryDisplay();
     
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
-    if (screenExtend.extend) {
-        if (screenExtend.right && !screenExtend.left) {
-            // 保持当前不变 (包含所有屏幕)
-            displays.forEach((display, index) => {
-                const { x, y, width, height } = display.bounds
-                console.log(`显示器 ${index}: x=${x}, y=${y}, width=${width}, height=${height}`)
-                minX = Math.min(minX, x)
-                minY = Math.min(minY, y)
-                maxX = Math.max(maxX, x + width)
-                maxY = Math.max(maxY, y + height)
-            })
-        } else if (screenExtend.left) {
-            // 包含主屏和主屏左侧的屏幕
-            displays.forEach((display, index) => {
-                const { x, y, width, height } = display.bounds;
-                if (x <= primaryDisplay.bounds.x) {
-                    console.log(`显示器 ${index} (左侧/主屏): x=${x}, y=${y}, width=${width}, height=${height}`);
-                    minX = Math.min(minX, x);
-                    minY = Math.min(minY, y);
-                    maxX = Math.max(maxX, x + width);
-                    maxY = Math.max(maxY, y + height);
-                }
-            });
-        } else {
-            // 默认仅主屏
-            minX = primaryDisplay.bounds.x;
-            minY = primaryDisplay.bounds.y;
-            maxX = primaryDisplay.bounds.x + primaryDisplay.bounds.width;
-            maxY = primaryDisplay.bounds.y + primaryDisplay.bounds.height;
-        }
-    } else {
-        // 非扩展模式：仅使用主屏
-        minX = primaryDisplay.bounds.x;
-        minY = primaryDisplay.bounds.y;
-        maxX = primaryDisplay.bounds.x + primaryDisplay.bounds.width;
-        maxY = primaryDisplay.bounds.y + primaryDisplay.bounds.height;
+    // 核心修改：统一使用一个逻辑计算边界
+    const getArea = (d) => useFullBounds ? d.bounds : d.workArea;
+
+if (screenExtend.extend) {
+    displays.forEach(display => {
+        const area = getArea(display);
+        minX = Math.min(minX, area.x);
+        minY = Math.min(minY, area.y);
+        maxX = Math.max(maxX, area.x + area.width);
+        maxY = Math.max(maxY, area.y + area.height);
+    });
+}
+    
+    // 如果没计算出有效边界，回退到主屏
+    if (minX === Infinity) {
+        const area = getArea(primaryDisplay);
+        minX = area.x; minY = area.y; maxX = area.x + area.width; maxY = area.y + area.height;
     }
-    
-    const totalWidth = maxX - minX
-    const totalHeight = maxY - minY
-    
-    console.log(`=== 窗口创建信息 ===`)
-    console.log(`总边界: minX=${minX}, minY=${minY}, maxX=${maxX}, maxY=${maxY}`)
-    console.log(`计算的窗口尺寸: ${totalWidth}x${totalHeight}`)
-    console.log(`窗口位置: (${minX}, ${minY})`)
+
+    const totalWidth = maxX - minX;
+    const totalHeight = maxY - minY;
     
     const win = new BrowserWindow({
         x: minX,
@@ -93,7 +85,7 @@ function createWindow () {
         backgroundColor: '#00000000',
         hasShadow: false,
         focusable: true,
-        type: 'desktop',
+        type: 'toolbar', 
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
@@ -105,55 +97,22 @@ function createWindow () {
         movable: true,
         skipTaskbar: true,
         maximizable: false,
-    })
-    win.setAlwaysOnTop(true, 'screen-saver')
+    });
+
+    // 使用之前定义的 taskbarLevel 来设置窗口置顶层级
+    win.setAlwaysOnTop(true, taskbarLevel);
     win.setIgnoreMouseEvents(true, { forward: true });
-    win.setMenu(null)
+    win.setMenu(null);
     
-    // 立即验证窗口尺寸
-    const immediateBounds = win.getBounds()
-    console.log(`窗口创建后立即尺寸: ${immediateBounds.width}x${immediateBounds.height}`)
-    console.log(`窗口创建后立即位置: (${immediateBounds.x}, ${immediateBounds.y})`)
-    
-    // 延迟验证窗口实际尺寸
+    // 恢复尺寸验证逻辑，防止窗口被系统强制缩放导致 UI 错位
     setTimeout(() => {
-        const actualBounds = win.getBounds()
-        console.log(`窗口实际尺寸: ${actualBounds.width}x${actualBounds.height}`)
-        console.log(`窗口实际位置: (${actualBounds.x}, ${actualBounds.y})`)
-        
-        // 如果尺寸不匹配，尝试强制设置
-        if (actualBounds.width !== totalWidth || actualBounds.height !== totalHeight) {
-            console.log(`⚠️ 窗口尺寸不匹配！尝试强制设置为 ${totalWidth}x${totalHeight}`)
-            win.setBounds({
-                x: minX,
-                y: minY,
-                width: totalWidth,
-                height: totalHeight
-            })
-            
-            setTimeout(() => {
-                const finalBounds = win.getBounds()
-                console.log(`强制设置后尺寸: ${finalBounds.width}x${finalBounds.height}`)
-            }, 100)
+        const actual = win.getBounds();
+        if (actual.width !== totalWidth || actual.height !== totalHeight) {
+            win.setBounds({ x: minX, y: minY, width: totalWidth, height: totalHeight });
         }
-        console.log(`======================`)
-    }, 100)
-    
-    win.loadFile('index.html')
-    win.on('minimize', (event) => {
-        event.preventDefault()
-        win.restore()
-    })
-    // 移除 will-move 限制,允许跨屏幕移动
-    win.on('blur', () => {
-        ensureTopMost(win)
-    })
-    setInterval(() => {
-        ensureTopMost(win)
-    }, 1000)
-    
-    
-    return win
+    }, 200);
+    win.loadFile('index.html');
+    return win;
 }
 
 // 在主进程启动时调用
@@ -222,7 +181,7 @@ ipcMain.on('window-move', (event, { mouseX, mouseY }) => {
     let maxY = winBounds.y + winBounds.height
     
     displays.forEach(display => {
-        const { x, y, width, height } = display.bounds
+        const { x, y, width, height } = display.workArea
         // 检查窗口是否与这个显示器有交集
         if (!(winBounds.x + winBounds.width < x || winBounds.x > x + width ||
               winBounds.y + winBounds.height < y || winBounds.y > y + height)) {
@@ -244,6 +203,7 @@ ipcMain.on('window-move', (event, { mouseX, mouseY }) => {
             width: newWidth,
             height: newHeight
         })
+         win.setAlwaysOnTop(true, taskbarLevel); 
         console.log(`窗口调整: ${newWidth}x${newHeight} at (${minX}, ${minY})`)
     }
 })
@@ -273,7 +233,7 @@ ipcMain.on('get-screen-info-sync', (event) => {
 
 ipcMain.on('request-top-most', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
-    win.setAlwaysOnTop(true, 'screen-saver')
+    win.setAlwaysOnTop(true, taskbarLevel);
 })
 
 // 添加保存配置的IPC处理器
@@ -323,17 +283,24 @@ ipcMain.handle('get-config', async (event) => {
 });
 
 ipcMain.handle('take-screenshot', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    
+    // 1. 截图前瞬间取消置顶，确保皮套不会出现在截图中，也不会挡住截图界面
+    const wasAlwaysOnTop = win.isAlwaysOnTop();
+    if (wasAlwaysOnTop) {
+        win.setAlwaysOnTop(false);
+    }
+
     try {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // 给系统和窗口管理器一点点时间来完成层级切换
+        await new Promise(resolve => setTimeout(resolve, 150));
 
         const displays = await screenshot.listDisplays();
-
         const cursorPoint = screen.getCursorScreenPoint();
         const currentDisplay = screen.getDisplayNearestPoint(cursorPoint);
 
         const electronDisplays = screen.getAllDisplays().sort((a, b) => a.bounds.x - b.bounds.x);
         const targetIndex = electronDisplays.findIndex(d => d.id === currentDisplay.id);
-
         const nativeDisplays = displays.sort((a, b) => (a.left || 0) - (b.left || 0));
 
         if (targetIndex >= nativeDisplays.length) {
@@ -349,10 +316,18 @@ ipcMain.handle('take-screenshot', async (event) => {
 
         return imgBuffer.toString('base64');
     } catch (error) {
-        console.error('截图错误:', error)
+        console.error('截图错误:', error);
         throw error;
+    } finally {
+        // 2. 无论截图成功与否，最后都恢复原有的置顶层级
+        if (wasAlwaysOnTop) {
+            win.setAlwaysOnTop(true, taskbarLevel);
+            // 额外调用一次 moveTop 确保它回到最前端
+            win.moveTop();
+        }
     }
-})
+});
+
 
 // 添加IPC处理器，允许从渲染进程手动更新模型
 ipcMain.handle('update-live2d-model', async (event) => {
