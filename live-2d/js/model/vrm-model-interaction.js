@@ -34,14 +34,6 @@ class VRMInteractionController {
         const panel = document.getElementById('model-controls');
         if (!panel) return;
 
-        const modelType = this.config?.ui?.model_type || 'live2d';
-        if (modelType === 'vrm') {
-            panel.style.display = 'block';
-        } else {
-            panel.style.display = 'none';
-            return; // 如果不是 VRM 模式，后续逻辑（绑定事件）也可以跳过
-        }
-
         panel.style.display = 'block';
 
         // 展开/折叠按钮

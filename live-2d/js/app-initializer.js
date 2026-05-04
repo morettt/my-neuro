@@ -235,11 +235,7 @@ class AppInitializer {
     // 第五阶段: 加载模型（Live2D或VRM）
     async initializeModel() {
         const modelType = this.config.ui?.model_type || 'live2d';
-        const vrmPanel = document.getElementById('model-controls');
-        // 显式控制 VRM 控制面板的显示/隐藏
-        if (vrmPanel) {
-            vrmPanel.style.display = (modelType === 'vrm') ? 'block' : 'none';
-        }
+        console.log(`模型类型: ${modelType}`);
 
         let result;
         if (modelType === 'vrm') {
