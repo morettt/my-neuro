@@ -322,39 +322,13 @@ class ModelInteractionController {
         const scaleY = (actualHeight * scaleMultiplier) / this.model.height;
         this.model.scale.set(scaleMultiplier);
 
-        // 检查是否有保存的位置
-        if (this.config && this.config.ui && this.config.ui.model_position && this.config.ui.model_position.remember_position) {
-            const savedPos = this.config.ui.model_position;
-            //验证保存模型位置是否合法
-            //允许负值和大于1的值以支持多屏幕
-            //合理范围：x：-0.5--2.5，y：-0.5--2.0
-            const isVlidPosition = savedPos.x !== null && savedPos.y !== null &&
-                                savedPos.x >= -0.5 && savedPos.x <= 2.5 &&
-                                savedPos.y >= -0.5 && savedPos.y <= 2.0;
-            if (isVlidPosition) {
-                this.model.x = savedPos.x * actualWidth * scaleFactor;
-                this.model.y = savedPos.y * actualHeight * scaleFactor;
-                console.log('加载保存的位置:', { 
-                    relativePos: savedPos,
-                    canvasX: this.model.x,
-                    canvasY: this.model.y,
-                    scaleFactor
-                });
-            } else {
-                // 位置无效，使用默认位置并重置配置
-                console.warn('保存的位置无效，使用默认位置',savedPos);
-                this.model.y = actualHeight * 0.5 * scaleFactor;
-                this.model.x = actualWidth * 0.5 * scaleFactor;
-                // 重置配置中的位置
-                this.config.ui.model_position.x = 0.5;
-                this.config.ui.model_position.y = 0.5;
-                this.saveModelPosition();
-            }
-        } else {
-            // 使用默认位置(canvas坐标系)
-            this.model.y = actualHeight * 0.5 * scaleFactor;
-            this.model.x = actualWidth * 0.5 * scaleFactor;
-        }
+        const isDualRight = window.innerWidth > window.screen.width * 1.2 && this.config?.ui?.screen_extend?.right;
+        const pos = this.config?.ui?.model_position;
+        const defaultRelX = isDualRight ? (pos?.x_dual ?? 0.825) : (pos?.x ?? 0.65);
+        const defaultRelY = isDualRight ? (pos?.y_dual ?? 0.38) : (pos?.y ?? 0.38);
+
+        this.model.x = defaultRelX * actualWidth * scaleFactor;
+        this.model.y = defaultRelY * actualHeight * scaleFactor;
 
         this.updateInteractionArea();
     }
@@ -381,15 +355,23 @@ class ModelInteractionController {
         const relativeX = windowX / actualWidth;
         const relativeY = windowY / actualHeight;
 
+        const isDualRight = window.innerWidth > window.screen.width * 1.2 && this.config?.ui?.screen_extend?.right;
+
         // 更新配置对象
-        this.config.ui.model_position.x = relativeX;
-        this.config.ui.model_position.y = relativeY;
+        if (isDualRight) {
+            this.config.ui.model_position.x_dual = relativeX;
+            this.config.ui.model_position.y_dual = relativeY;
+        } else {
+            this.config.ui.model_position.x = relativeX;
+            this.config.ui.model_position.y = relativeY;
+        }
 
         // 发送IPC消息保存位置
         ipcRenderer.send('save-model-position', {
             x: relativeX,
             y: relativeY,
-            scale:this.model.scale.x
+            scale: this.model.scale.x,
+            dual: isDualRight
         });
 
         console.log('保存模型位置:', { 

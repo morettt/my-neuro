@@ -89,15 +89,17 @@
     "model_type": "live2d",
     "vrm_model": "",
     "vrm_model_path": "",
-    "model_scale": 0.7270283889753179,
+    "model_scale": 0.65,
     "show_chat_box": true,
     "show_model": true,
     "text_only_mode": false,
     "auto_show_chat_on_text_mode": true,
     "hide_from_screenshot": true,
     "model_position": {
-      "x": 0.814648449420929,
-      "y": 0.2527777883741591,
+      "x": 0.65,
+      "y": 0.38,
+      "x_dual": 0.825,
+      "y_dual": 0.38,
       "remember_position": true
     },
     "screen_extend": {

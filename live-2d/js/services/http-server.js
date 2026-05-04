@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { BrowserWindow } = require('electron');
 
 /**
@@ -208,16 +208,19 @@ class HttpServer {
 		
 		            const { ipcRenderer } = require('electron');
 		            const model = mc.model;
-		            const defaultX = window.innerWidth * 1.35;
-		            const defaultY = window.innerHeight * 0.8;
+		            const scaleFactor = window.canvasScaleFactor || 2;
+		            const isDualRight = window.innerWidth > window.screen.width * 1.2 && mc.config?.ui?.screen_extend?.right;
+		            const relX = isDualRight ? 0.825 : 0.65;
+		            const relY = 0.38;
+		            const defaultX = relX * window.innerWidth * scaleFactor;
+		            const defaultY = relY * window.innerHeight * scaleFactor;
 		            const scale = 0.65;
-                    // 复位到默认位置
 		            model.x = defaultX;
 		            model.y = defaultY;
 		            model.scale.set(scale);
 		            mc.updateInteractionArea();
 		
-		            ipcRenderer.send('save-model-position', { x: 1.35, y: 0.8, scale });
+		            ipcRenderer.send('save-model-position', { x: relX, y: relY, scale, dual: isDualRight });
 		            return { success: true};
 		        })()
 		    `;
