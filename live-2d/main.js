@@ -472,8 +472,13 @@ ipcMain.on('save-model-position', (event, position) => {
             };
         }
 
-        configData.ui.model_position.x = position.x;
-        configData.ui.model_position.y = position.y;
+        if (position.dual) {
+            configData.ui.model_position.x_dual = position.x;
+            configData.ui.model_position.y_dual = position.y;
+        } else {
+            configData.ui.model_position.x = position.x;
+            configData.ui.model_position.y = position.y;
+        }
         configData.ui.model_scale = position.scale;
 
         // 保存到文件
