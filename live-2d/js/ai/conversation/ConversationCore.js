@@ -19,6 +19,7 @@ class ConversationCore {
 
         // 上下文限制相关
         this.maxContextMessages = config.context.max_messages;
+        this.maxRounds = config.context.max_rounds || 10;
         this.enableContextLimit = config.context.enable_limit;
 
         // 完整对话历史（用于保存）

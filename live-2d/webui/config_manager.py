@@ -85,7 +85,8 @@ def handle_chat_settings():
         context_config = config.get('context', {})
         return jsonify({
             'intro_text': ui_config.get('intro_text', '你好啊'),
-            'max_messages': context_config.get('max_messages', 30),
+            'max_rounds': context_config.get('max_rounds', 10),
+            'max_messages': context_config.get('max_messages', 50),
             'enable_limit': context_config.get('enable_limit', True),
             'persistent_history': context_config.get('persistent_history', False),
             'history_file': context_config.get('history_file', '')
@@ -98,7 +99,8 @@ def handle_chat_settings():
             if 'context' not in config:
                 config['context'] = {}
             config['ui']['intro_text'] = data.get('intro_text', '')
-            config['context']['max_messages'] = data.get('max_messages', 30)
+            config['context']['max_rounds'] = data.get('max_rounds', 10)
+            config['context']['max_messages'] = data.get('max_messages', 50)
             config['context']['enable_limit'] = data.get('enable_limit', True)
             config['context']['persistent_history'] = data.get('persistent_history', False)
             config['context']['history_file'] = data.get('history_file', '')
@@ -354,7 +356,8 @@ def handle_dialog_settings():
 
         return jsonify({
             'intro_text': ui_config.get('intro_text', '你好啊'),
-            'max_messages': context_config.get('max_messages', 30),
+            'max_rounds': context_config.get('max_rounds', 10),
+            'max_messages': context_config.get('max_messages', 50),
             'enable_limit': context_config.get('enable_limit', True),
             'persistent_history': context_config.get('persistent_history', False),
             'tts_enabled': tts_config.get('enabled', True),
@@ -375,7 +378,8 @@ def handle_dialog_settings():
                 config['asr'] = {}
 
             config['ui']['intro_text'] = data.get('intro_text', '你好啊')
-            config['context']['max_messages'] = data.get('max_messages', 30)
+            config['context']['max_rounds'] = data.get('max_rounds', 10)
+            config['context']['max_messages'] = data.get('max_messages', 50)
             config['context']['enable_limit'] = data.get('enable_limit', True)
             config['context']['persistent_history'] = data.get('persistent_history', False)
             config['tts']['enabled'] = data.get('tts_enabled', True)
