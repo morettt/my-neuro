@@ -53,9 +53,9 @@ body {
 
 #text-chat-container {
     position: fixed !important;
-    bottom: 50px !important;
-    right: 390px !important; /* 默认固定在右下角 */
-    left: auto !important;
+    bottom: 50px;
+    right: 390px; /* 默认固定在右下角 */
+    left: auto;
     width: 350px !important;
     max-height: 400px !important;
     z-index: 10000 !important;
@@ -67,8 +67,8 @@ body {
 
 /* 当副屏在主屏左侧时，对话框显示在左下角 */
 body.screen-left #text-chat-container {
-    right: auto !important;
-    left: 20px !important;
+    right: auto;
+    left: 20px;
 }
 
 /* VRM模型控制面板（展开式） */
@@ -79,7 +79,6 @@ body.screen-left #text-chat-container {
     z-index: 1001;
     display: none;
     pointer-events: auto;
-    display: flex;
     flex-direction: column;
     align-items: center;
     gap: 12px;
