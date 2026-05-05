@@ -50,14 +50,25 @@ class UIController {
         // 强制固定对话框位置逻辑
         const screenExtend = this.config.ui?.screen_extend || { extend: false, left: false, right: true };
         
-        // 无论是否扩展，都确保对话框样式正确
+        // 基础定位样式
         textChatContainer.style.setProperty('position', 'fixed', 'important');
-        textChatContainer.style.setProperty('display', 'block', 'important');
-        textChatContainer.style.setProperty('visibility', 'visible', 'important');
-        textChatContainer.style.setProperty('opacity', '1', 'important');
         textChatContainer.style.setProperty('z-index', '10000', 'important');
         textChatContainer.style.setProperty('width', '350px', 'important');
         textChatContainer.style.setProperty('height', 'auto', 'important');
+
+        // 初始化时立即根据配置设置可见性，避免先显示再隐藏的闪烁
+        const shouldShow = this.config.ui && this.config.ui.hasOwnProperty('show_chat_box')
+            ? this.config.ui.show_chat_box
+            : true;
+        if (shouldShow) {
+            textChatContainer.style.setProperty('display', 'block', 'important');
+            textChatContainer.style.setProperty('visibility', 'visible', 'important');
+            textChatContainer.style.setProperty('opacity', '1', 'important');
+        } else {
+            textChatContainer.style.setProperty('display', 'none', 'important');
+            textChatContainer.style.setProperty('visibility', 'hidden', 'important');
+            textChatContainer.style.setProperty('opacity', '0', 'important');
+        }
 
         // 统一使用屏幕信息进行定位，确保无论是否扩展，对话框都显示在主屏右下角
         const screenInfo = ipcRenderer.sendSync('get-screen-info-sync');
@@ -435,18 +446,22 @@ class UIController {
         // 根据配置设置对话框显示状态
         const shouldShowChatBox = this.config.ui && this.config.ui.hasOwnProperty('show_chat_box')
             ? this.config.ui.show_chat_box
-            : true; // 默认强制显示
+            : true;
 
-        textChatContainer.style.setProperty('display', 'block', 'important');
-        textChatContainer.style.setProperty('visibility', 'visible', 'important');
-        textChatContainer.style.setProperty('opacity', '1', 'important');
+        if (shouldShowChatBox) {
+            textChatContainer.style.setProperty('display', 'block', 'important');
+            textChatContainer.style.setProperty('visibility', 'visible', 'important');
+            textChatContainer.style.setProperty('opacity', '1', 'important');
+            textChatContainer.style.setProperty('pointer-events', 'auto', 'important');
+        } else {
+            textChatContainer.style.setProperty('display', 'none', 'important');
+            textChatContainer.style.setProperty('visibility', 'hidden', 'important');
+            textChatContainer.style.setProperty('opacity', '0', 'important');
+            textChatContainer.style.setProperty('pointer-events', 'none', 'important');
+        }
         textChatContainer.style.setProperty('z-index', '10000', 'important');
-        textChatContainer.style.setProperty('pointer-events', 'auto', 'important');
-        
-        // 重新触发一次位置计算，确保可见性切换后位置正确
-        this.setupChatBoxEvents();
 
-        console.log('强制显示聊天框');
+        console.log(`聊天框: ${shouldShowChatBox ? '显示' : '隐藏'}`);
 
         // 调试：确保对话框在可见范围内
         setTimeout(() => {
@@ -486,7 +501,8 @@ class UIController {
                 e.preventDefault();
                 const chatContainer = document.getElementById('text-chat-container');
                 if (chatContainer) {
-                    chatContainer.style.display = chatContainer.style.display === 'none' ? 'block' : 'none';
+                    const isHidden = window.getComputedStyle(chatContainer).display === 'none';
+                    chatContainer.style.setProperty('display', isHidden ? 'block' : 'none', 'important');
                 }
             }
 
