@@ -752,3 +752,84 @@ body.screen-left #text-chat-container {
 .tool-bubble.removing {
     animation: tool-bubble-slide-out 0.6s ease-out forwards;
 }
+
+/* ==================== 快捷设置面板 ==================== */
+#quick-settings {
+    position: fixed;
+    bottom: 120px;
+    right: 20px;
+    z-index: 1001;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    pointer-events: auto;
+}
+
+#quick-settings-items {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.25s ease;
+}
+
+#quick-settings-items.expanded {
+    max-height: 200px;
+    opacity: 1;
+}
+
+.quick-item {
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: rgba(40, 40, 40, 0.85);
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Microsoft YaHei', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+}
+
+.quick-item:hover {
+    background: rgba(60, 60, 60, 0.95);
+    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.6);
+    transform: translateX(-3px);
+}
+
+.quick-item.active {
+    background: rgba(76, 175, 80, 0.45);
+    border-color: rgba(76, 175, 80, 0.7);
+}
+
+#quick-gear {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(40, 40, 40, 0.85);
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+    font-size: 22px;
+    line-height: 44px;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.35s ease;
+    user-select: none;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+#quick-gear:hover {
+    background: rgba(60, 60, 60, 0.95);
+    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.6);
+}
+
+#quick-gear.open {
+    transform: rotate(90deg);
+}

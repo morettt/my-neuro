@@ -369,6 +369,8 @@ class AppInitializer {
         // 聊天界面设置
         const shouldShowChatBox = this.uiController.setupChatBoxVisibility(this.ttsEnabled, this.asrEnabled);
         this.uiController.setupChatInput(this.voiceChat);
+        this.uiController.setupPTT(this.voiceChat, this.config);
+        this.uiController.setupQuickPanel(this.voiceChat, this.config);
 
         // 初始化IPC处理器
         this.ipcHandlers = new IPCHandlers();

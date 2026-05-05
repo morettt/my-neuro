@@ -62,6 +62,9 @@ class ASRProcessor {
         // 新增：防止重复触发中断的标志
         this.hasInterruptedThisSession = false;
 
+        // PTT（按住说话）模式
+        this.pttModeEnabled = this.config.asr?.ptt_enabled || false;
+
         // 初始化
         this.setupAudioSystem();
     }
@@ -125,6 +128,9 @@ class ASRProcessor {
     }
 
     handleSpeech() {
+        // PTT模式下VAD不做任何事，打断和录音全由按键控制
+        if (this.pttModeEnabled) return;
+
         // 修改：根据语音打断配置处理人声检测
         if (!this.voiceBargeInEnabled) {
             // 传统模式：TTS播放时不处理
@@ -162,6 +168,9 @@ class ASRProcessor {
         }
 
         if (!this.isRecording) {
+            // PTT模式下不由VAD自动触发录音
+            if (this.pttModeEnabled) return;
+
             this.isRecording = true;
             this.recordingStartIndex = this.continuousBuffer.length;
 
@@ -174,6 +183,8 @@ class ASRProcessor {
     }
 
     handleSilence() {
+        if (this.pttModeEnabled) return;
+
         // 修改：根据语音打断配置处理静音
         if (!this.voiceBargeInEnabled) {
             // 传统模式：TTS播放时不处理
@@ -183,7 +194,8 @@ class ASRProcessor {
             if (this.asrLocked) return;
         }
 
-        if (this.isRecording) {
+        // PTT模式下不由静音自动结束录音
+        if (this.isRecording && !this.pttModeEnabled) {
             const currentTime = Date.now();
             const silenceDuration = currentTime - this.lastSpeechTime;
 
@@ -479,6 +491,32 @@ class ASRProcessor {
             // 如果启用语音打断，恢复VAD监听
             this.resumeRecording();
         }
+    }
+
+    // PTT：按下触发，打断TTS并开始录音
+    pttStartRecording() {
+        if (this.isRecording) return;
+        // 按V是唯一的打断方式，无论TTS是否在播放都中断
+        if (this.ttsProcessor) {
+            this.ttsProcessor.interrupt();
+        }
+        // 解锁ASR（TTS播放期间可能已锁定）
+        this.asrLocked = false;
+        this.hasInterruptedThisSession = false;
+        this.isRecording = true;
+        this.recordingStartIndex = this.continuousBuffer.length;
+        console.log('PTT: 开始录音');
+    }
+
+    // PTT：松开触发，强制结束录音并送 ASR
+    pttStopRecording() {
+        if (!this.isRecording) return;
+        if (this.silenceTimeout) {
+            clearTimeout(this.silenceTimeout);
+            this.silenceTimeout = null;
+        }
+        console.log('PTT: 停止录音，开始识别');
+        this.finishRecording();
     }
 
     // 统一的ASR错误处理

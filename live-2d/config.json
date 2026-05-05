@@ -22,7 +22,9 @@
     "vad_url": "ws://127.0.0.1:1000/v1/ws/vad",
     "asr_url": "http://127.0.0.1:1000/v1/upload_audio",
     "voice_barge_in": true,
-    "merge_window_ms": 500
+    "merge_window_ms": 500,
+    "ptt_enabled": false,
+    "ptt_key": "v"
   },
   "bert": {
     "enabled": true,
@@ -89,15 +91,15 @@
     "model_type": "live2d",
     "vrm_model": "",
     "vrm_model_path": "",
-    "model_scale": 0.65,
-    "show_chat_box": true,
+    "model_scale": 0.6932977023863289,
+    "show_chat_box": false,
     "show_model": true,
     "text_only_mode": false,
     "auto_show_chat_on_text_mode": true,
     "hide_from_screenshot": true,
     "model_position": {
-      "x": 0.65,
-      "y": 0.38,
+      "x": 0.5483040683903566,
+      "y": 0.2473080231342701,
       "x_dual": 0.825,
       "y_dual": 0.38,
       "remember_position": true

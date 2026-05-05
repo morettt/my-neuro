@@ -551,6 +551,100 @@ class UIController {
         chatSendBtn.addEventListener('click', handleSendMessage);
     }
 
+    // 快捷设置面板（齿轮菜单）
+    setupQuickPanel(voiceChat, config) {
+        const gear = document.getElementById('quick-gear');
+        const items = document.getElementById('quick-settings-items');
+        const toggleModeBtn = document.getElementById('btn-toggle-mode');
+        const toggleChatBtn = document.getElementById('btn-toggle-chat');
+        if (!gear || !items) return;
+
+        let panelOpen = false;
+
+        // 初始化按钮激活状态
+        const isPTT = voiceChat.asrController?.asrProcessor?.pttModeEnabled || false;
+        toggleModeBtn.classList.toggle('active', isPTT);
+
+        const chatContainer = document.getElementById('text-chat-container');
+        const chatVisible = chatContainer && window.getComputedStyle(chatContainer).display !== 'none';
+        toggleChatBtn.classList.toggle('active', chatVisible);
+
+        gear.addEventListener('click', (e) => {
+            e.stopPropagation();
+            panelOpen = !panelOpen;
+            items.classList.toggle('expanded', panelOpen);
+            gear.classList.toggle('open', panelOpen);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (panelOpen && !e.target.closest('#quick-settings')) {
+                panelOpen = false;
+                items.classList.remove('expanded');
+                gear.classList.remove('open');
+            }
+        });
+
+        toggleChatBtn.addEventListener('click', () => {
+            const chatContainer = document.getElementById('text-chat-container');
+            if (!chatContainer) return;
+            const visible = window.getComputedStyle(chatContainer).display !== 'none';
+            if (visible) {
+                chatContainer.style.setProperty('display', 'none', 'important');
+                chatContainer.style.setProperty('visibility', 'hidden', 'important');
+                chatContainer.style.setProperty('opacity', '0', 'important');
+                chatContainer.style.setProperty('pointer-events', 'none', 'important');
+            } else {
+                chatContainer.style.setProperty('display', 'block', 'important');
+                chatContainer.style.setProperty('visibility', 'visible', 'important');
+                chatContainer.style.setProperty('opacity', '1', 'important');
+                chatContainer.style.setProperty('pointer-events', 'auto', 'important');
+            }
+            toggleChatBtn.classList.toggle('active', !visible);
+        });
+
+        toggleModeBtn.addEventListener('click', () => {
+            const proc = voiceChat.asrController?.asrProcessor;
+            if (!proc) return;
+            proc.pttModeEnabled = !proc.pttModeEnabled;
+            config.asr.ptt_enabled = proc.pttModeEnabled;
+            toggleModeBtn.classList.toggle('active', proc.pttModeEnabled);
+        });
+    }
+
+    // PTT（按住说话）模式按键监听
+    setupPTT(voiceChat, config) {
+        const pttKey = (config.asr?.ptt_key || 'v').toLowerCase();
+        let pttActive = false;
+
+        const isPTTEnabled = () => voiceChat.asrController?.asrProcessor?.pttModeEnabled || false;
+
+        const isInputFocused = () => {
+            const el = document.activeElement;
+            if (!el) return false;
+            const tag = el.tagName;
+            return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+        };
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() !== pttKey) return;
+            if (!isPTTEnabled()) return;
+            if (e.repeat || pttActive || isInputFocused()) return;
+            pttActive = true;
+            voiceChat.pttStartRecording();
+            this.showSubtitle('录音中...', 0);
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key.toLowerCase() !== pttKey || !pttActive) return;
+            pttActive = false;
+            if (!isPTTEnabled()) return;
+            voiceChat.pttStopRecording();
+            this.hideSubtitle();
+        });
+
+        console.log(`PTT按键监听已注册，按键: ${pttKey.toUpperCase()}`);
+    }
+
     // 显示歌词气泡
     showLyricsBubble(text) {
         const bubbleContainer = document.getElementById('lyrics-bubble-container');

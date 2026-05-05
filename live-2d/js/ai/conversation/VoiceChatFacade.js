@@ -215,6 +215,14 @@ class VoiceChatFacade {
         return this.asrController.resumeRecording();
     }
 
+    pttStartRecording() {
+        return this.asrController.pttStartRecording();
+    }
+
+    pttStopRecording() {
+        return this.asrController.pttStopRecording();
+    }
+
     getVoiceBargeInStatus() {
         return this.asrController.getVoiceBargeInStatus();
     }
