@@ -38,9 +38,12 @@ class LLMClient {
         // 添加工具列表(如果提供)
         if (tools && tools.length > 0) {
             requestBody.tools = tools;
-//            logToTerminal('info', `🔧 发送工具列表到LLM: ${tools.length}个工具`);
-        } else {
-            logToTerminal('warn', `⚠️ 未发送工具列表到LLM (tools=${tools ? 'empty array' : 'null'})`);
+        } else if (tools === null) {
+            // null 表示设计预期不传工具（如视觉模型调用），不记录警告
+            console.log('[LLMClient] 本次调用不传递工具列表（预期行为）');
+        } else if (tools && tools.length === 0) {
+            // 空数组表示应该有工具但列表为空，这才是真正的问题
+            logToTerminal('warn', `⚠️ 工具列表为空，请检查工具配置`);
         }
 
         logToTerminal('info', `已将内容发送给AI..`);

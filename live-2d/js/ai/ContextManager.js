@@ -60,10 +60,44 @@ class ContextManager {
             // ⚠️ 核心修复：不要从 this.messages 中获取，而是直接对比 fullConversationHistory
             // 因为 this.messages 可能被 trimMessages 裁剪过
 
-            // 获取当前会话的所有对话（不包括系统消息）
-            const currentSessionMessages = this.voiceChat.messages.filter(msg =>
-                msg.role === 'user' || msg.role === 'assistant'
-            );
+            // 🔥 修复：获取当前会话对话，包装工具调用信息为文本形式
+            // 保存历史时将 assistant+tool_calls 转换为普通文本，兼容严格API
+            // 注意：只保存 user 和 assistant 消息，不保存 system 和 tool 消息
+            const currentSessionMessages = this.voiceChat.messages
+                .map(msg => {
+                    // 不保存 system 消息
+                    if (msg.role === 'system') {
+                        return null;
+                    }
+                    if (msg.role === 'assistant' && msg.tool_calls) {
+                        // 包装工具调用为简洁文本形式
+                        const toolDescriptions = msg.tool_calls.map(tc => {
+                            const name = tc.function.name;
+                            let args = '';
+                            try {
+                                const argsObj = JSON.parse(tc.function.arguments);
+                                args = Object.entries(argsObj)
+                                    .map(([k, v]) => `${k}=${typeof v === 'string' && v.length > 20 ? v.substring(0, 20) + '...' : v}`)
+                                    .join(', ');
+                            } catch (e) {
+                                args = tc.function.arguments;
+                            }
+                            return `${name}(${args})`;
+                        }).join('、');
+                        
+                        // 保留原有 content，添加工具调用标记
+                        return {
+                            role: 'assistant',
+                            content: `[已调用工具：${toolDescriptions}]${msg.content ? ' ' + msg.content : ''}`
+                        };
+                    }
+                    if (msg.role === 'tool') {
+                        // 不保存 tool 响应消息（避免消息结构不完整）
+                        return null;
+                    }
+                    return msg;
+                })
+                .filter(msg => msg !== null);
 
             // 🔧 修复逻辑：对比 fullConversationHistory，找出本次会话新增的消息
             const existingLength = this.voiceChat.fullConversationHistory.length;
