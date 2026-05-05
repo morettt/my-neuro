@@ -110,7 +110,8 @@
   },
   "context": {
     "enable_limit": true,
-    "max_messages": 18,
+    "max_rounds": 10,
+    "max_messages": 50,
     "persistent_history": false,
     "history_file": "../AI记录室/对话历史.json"
   },

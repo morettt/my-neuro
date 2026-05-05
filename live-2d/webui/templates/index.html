@@ -672,8 +672,14 @@
         <div id="dialog-config" class="tab-content">
             <div class="section">
                 <div class="form-group">
+                    <label for="max-rounds" data-i18n="dialog_config.max_rounds">最大轮数:</label>
+                    <input type="number" id="max-rounds" min="1" max="50" placeholder="10">
+                    <small class="form-hint" data-i18n="dialog_config.max_rounds_desc">优先保留完整对话轮数（包含工具调用链）</small>
+                </div>
+                <div class="form-group">
                     <label for="max-messages" data-i18n="dialog_config.max_messages">最大消息数:</label>
-                    <input type="number" id="max-messages" min="1" max="100" placeholder="30">
+                    <input type="number" id="max-messages" min="1" max="200" placeholder="50">
+                    <small class="form-hint" data-i18n="dialog_config.max_messages_desc">兜底限制，防止极端情况</small>
                 </div>
             </div>
 

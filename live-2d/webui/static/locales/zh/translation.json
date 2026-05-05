@@ -245,7 +245,10 @@
     "ui_save_error": "UI 设置保存时出错"
   },
   "dialog_config": {
+    "max_rounds": "最大轮数:",
+    "max_rounds_desc": "优先保留完整对话轮数（包含工具调用链）",
     "max_messages": "最大消息数:",
+    "max_messages_desc": "兜底限制，防止极端情况",
     "features": "功能开关",
     "asr_enabled": "启用 ASR（本地语音识别）",
     "tts_enabled": "启用 TTS（本地语音合成）",

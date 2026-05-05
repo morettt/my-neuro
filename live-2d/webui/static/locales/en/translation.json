@@ -245,7 +245,10 @@
     "ui_save_error": "Error saving UI settings"
   },
   "dialog_config": {
+    "max_rounds": "Max Rounds:",
+    "max_rounds_desc": "Priority: keep complete conversation rounds (including tool call chains)",
     "max_messages": "Max Messages:",
+    "max_messages_desc": "Fallback limit to prevent extreme cases",
     "features": "Feature Toggles",
     "asr_enabled": "Enable ASR (Local Speech Recognition)",
     "tts_enabled": "Enable TTS (Local Speech Synthesis)",
