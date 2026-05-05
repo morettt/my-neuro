@@ -2766,16 +2766,48 @@ async function applyPrompt(title) {
 
 
 
+let pluginMarketUpdateCandidates = [];
+
+function escapeJsString(value) {
+    return String(value || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r');
+}
+
+function escapeAttribute(value) {
+    return escapeHtml(value).replace(/"/g, '&quot;');
+}
+
+function updatePluginMarketToolbar() {
+    const toolbar = document.getElementById('plugin-market-update-toolbar');
+    const updateAllBtn = document.getElementById('plugin-market-update-all-btn');
+    const updateCount = document.getElementById('plugin-market-update-count');
+    if (!toolbar || !updateAllBtn || !updateCount) return;
+
+    const count = pluginMarketUpdateCandidates.length;
+    updateCount.textContent = count > 0
+        ? (typeof t === 'function' ? t('market.updates_available', { count }) : `发现 ${count} 个可更新插件`)
+        : (typeof t === 'function' ? t('market.no_updates') : '暂无可更新插件');
+    updateAllBtn.classList.toggle('is-hidden', count === 0);
+    toolbar.classList.remove('is-hidden');
+}
+
 // 刷新插件广场
 async function refreshPluginMarket() {
     try {
         const listElement = document.getElementById('plugin-market-list');
         listElement.innerHTML = '<div class="log-entry log-info">' + t('market.loading_plugin_list') + '</div>';
+        pluginMarketUpdateCandidates = [];
+        updatePluginMarketToolbar();
 
         const response = await fetch('/api/market/plugins');
         const data = await response.json();
 
         if (data.success && data.plugins && data.plugins.length > 0) {
+            pluginMarketUpdateCandidates = data.plugins.filter((plugin) => plugin.installed && plugin.has_update);
+            updatePluginMarketToolbar();
             listElement.innerHTML = '';
             data.plugins.forEach((plugin) => {
                 const card = createPluginMarketCard(plugin);
@@ -2803,40 +2835,59 @@ function createPluginMarketCard(plugin) {
     const desc = plugin.description || plugin.desc || t('market.no_desc');
     const author = plugin.author || t('market.unknown_author');
     const repo = plugin.repo || '';
-    const downloadUrl = plugin.download_url || repo + '/archive/refs/heads/main.zip';
+    const downloadUrl = plugin.download_url || repo;
     const installed = plugin.installed || false;
     const installing = plugin.installing || false;
+    const localVersion = plugin.local_version || plugin.version || '';
+    const latestVersion = plugin.latest_version || plugin.version || '';
+    const hasUpdate = installed && plugin.has_update && latestVersion;
 
-    // 根据状态设置按钮文本和样式（installed 优先于 installing）
-    let btnText, btnDisabled, btnI18n;
-    if (installed) {
-        // 已安装状态优先
-        btnText = t('market.plugin_installed');
+    // 根据状态设置按钮文本和样式（hasUpdate / installed / installing 顺序判断）
+    let btnText, btnDisabled, btnI18n, buttonAction;
+    if (hasUpdate) {
+        btnText = t('market.plugin_update_to', { version: latestVersion });
+        btnDisabled = '';
+        btnI18n = 'market.plugin_update_to';
+        buttonAction = `updatePlugin('${escapeJsString(pluginName)}', '${escapeJsString(repo)}')`;
+    } else if (installed) {
+        btnText = localVersion
+            ? t('market.plugin_installed_version', { version: localVersion })
+            : t('market.plugin_installed');
         btnDisabled = 'disabled';
         btnI18n = 'market.plugin_installed';
+        buttonAction = '';
     } else if (installing) {
-        // 正在安装
-        btnText = t('market.plugin_installing');
+        btnText = plugin.status === 'updating'
+            ? t('market.plugin_updating')
+            : t('market.plugin_installing');
         btnDisabled = 'disabled';
         btnI18n = 'market.plugin_installing';
+        buttonAction = '';
     } else {
-        // 未安装
         btnText = t('market.plugin_install');
         btnDisabled = '';
         btnI18n = 'market.plugin_install';
+        buttonAction = `installPlugin('${escapeJsString(pluginName)}', '${escapeJsString(downloadUrl)}')`;
     }
 
+    const versionBlock = `<div class="market-card-versions">
+            ${localVersion ? `<span class="version-badge">${escapeHtml(t('market.version_current', { version: localVersion }))}</span>` : ''}
+            ${latestVersion ? `<span class="version-badge ${hasUpdate ? 'update-badge' : ''}">${escapeHtml(t('market.version_latest', { version: latestVersion }))}</span>` : ''}
+            ${plugin.update_error ? `<span class="version-badge muted-badge" title="${escapeAttribute(plugin.update_error)}">${escapeHtml(t('market.update_check_failed'))}</span>` : ''}
+           </div>`;
+
     const html = `<div class="market-card-header">
-        <h4 class="market-card-title">🧩 ${displayName}</h4>
-        <p class="market-card-author">${t('plugins.author')}${author}</p>
-        <p class="market-card-summary">${desc}</p>
-        <div class="install-progress" id="progress-${pluginName}" style="display: none;">
+        <h4 class="market-card-title">🧩 ${escapeHtml(displayName)}</h4>
+        <p class="market-card-author">${t('plugins.author')}${escapeHtml(author)}</p>
+        ${versionBlock}
+        <p class="market-card-summary">${escapeHtml(desc)}</p>
+        <div class="install-progress" id="progress-${escapeAttribute(pluginName)}" style="display: none;">
             <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
             <span class="progress-text">${t('market.progress_ready')}</span>
         </div>
     </div>
-    <button onclick="installPlugin('${pluginName.replace(/'/g, "\\'")}', '${downloadUrl.replace(/'/g, "\\'")}')" 
-        class="btn-sm" style="margin-top: 10px;" ${btnDisabled} data-i18n="${btnI18n}">${btnText}</button>`;
+    <button ${buttonAction ? `onclick="${escapeAttribute(buttonAction)}"` : ''}
+        class="btn-sm" style="margin-top: 10px;" ${btnDisabled} data-i18n="${btnI18n}">${escapeHtml(btnText)}</button>`;
 
     card.innerHTML = html;
     return card;
@@ -2864,7 +2915,7 @@ async function installPlugin(pluginName, downloadUrl) {
         const result = await fetch('/api/market/plugins/download', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ plugin_name: pluginName, download_url: downloadUrl })
+            body: JSON.stringify({ plugin_name: pluginName, repo: downloadUrl, download_url: downloadUrl })
         });
         const res = await result.json();
         
@@ -2946,6 +2997,82 @@ async function pollPluginInstalled(pluginName) {
     };
     
     poll();
+}
+
+// 更新单个插件
+async function updatePlugin(pluginName, repo) {
+    try {
+        const card = document.querySelector(`.market-card[data-plugin-name="${pluginName}"]`);
+        if (card) {
+            const btn = card.querySelector('button');
+            btn.disabled = true;
+            btn.textContent = t('market.plugin_updating');
+            btn.classList.add('btn-installing');
+
+            const progressDiv = document.getElementById(`progress-${pluginName}`);
+            const progressText = progressDiv ? progressDiv.querySelector('.progress-text') : null;
+            const progressFill = progressDiv ? progressDiv.querySelector('.progress-fill') : null;
+            if (progressDiv) progressDiv.style.display = 'block';
+            if (progressText) progressText.textContent = t('market.progress_updating');
+            if (progressFill) progressFill.style.width = '50%';
+        }
+
+        const response = await fetch('/api/market/plugins/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plugin_name: pluginName, repo })
+        });
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            showSuccess(t('market.update_succeeded', { name: pluginName }));
+            setTimeout(() => refreshPluginMarket(), 500);
+        } else {
+            showError(t('market.update_failed') + '：' + (result.error || t('common.unknown_error')));
+            restoreInstallButton(pluginName, t('market.plugin_install'));
+        }
+    } catch (error) {
+        showError(t('market.update_error') + '：' + error.message);
+        restoreInstallButton(pluginName, t('market.plugin_install'));
+    }
+}
+
+// 批量更新插件
+async function updateAllPlugins() {
+    if (!pluginMarketUpdateCandidates.length) {
+        showSuccess(t('market.no_updates'));
+        return;
+    }
+
+    const names = pluginMarketUpdateCandidates.map((plugin) => plugin.name);
+    const updateAllBtn = document.getElementById('plugin-market-update-all-btn');
+    const originalText = updateAllBtn ? updateAllBtn.textContent : '';
+    if (updateAllBtn) {
+        updateAllBtn.disabled = true;
+        updateAllBtn.textContent = t('market.update_all_in_progress');
+    }
+
+    try {
+        const response = await fetch('/api/market/plugins/update-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plugin_names: names })
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            showSuccess(result.message || t('market.update_all_succeeded'));
+        } else {
+            showError(result.message || result.error || t('market.update_all_partial_failed'));
+        }
+        setTimeout(() => refreshPluginMarket(), 500);
+    } catch (error) {
+        showError(t('market.update_all_error') + '：' + error.message);
+    } finally {
+        if (updateAllBtn) {
+            updateAllBtn.disabled = false;
+            updateAllBtn.textContent = originalText || t('market.update_all');
+        }
+    }
 }
 
 // ============ 初始化 ============

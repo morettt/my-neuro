@@ -461,6 +461,10 @@
                 <div class="market-header">
                     <button onclick="refreshPluginMarket()" class="btn-start" data-i18n="market.refresh_plugin">🔄 刷新插件列表</button>
                 </div>
+                <div id="plugin-market-update-toolbar" class="market-update-toolbar is-hidden">
+                    <span id="plugin-market-update-count" class="market-update-count" data-i18n="market.no_updates">暂无可更新插件</span>
+                    <button id="plugin-market-update-all-btn" onclick="updateAllPlugins()" class="btn-sm is-hidden" data-i18n="market.update_all">⬆ 全部更新</button>
+                </div>
                 <div class="market-list" id="plugin-market-list">
                     <div class="log-entry log-info" data-i18n="market.loading_plugin">点击刷新按钮加载插件列表...</div>
                 </div>
