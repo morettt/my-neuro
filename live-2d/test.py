@@ -3342,6 +3342,7 @@ class set_pyqt(QWidget):
         self.ui.checkBox_tts.setChecked(self.config['tts']['enabled'])
         self.ui.checkBox_persistent_history.setChecked(self.config['context']['persistent_history'])
         self.ui.checkBox_voice_barge_in.setChecked(self.config['asr']['voice_barge_in'])
+        self.ui.checkBox_ptt_enabled.setChecked(self.config['asr'].get('ptt_enabled', False))
 
         # 新增：设置TTS语言下拉框
         tts_language = self.ui.comboBox_tts_language.currentText().split(' - ')[0]
@@ -4563,6 +4564,7 @@ class set_pyqt(QWidget):
         # 保存本地ASR和TTS配置（保持现有配置结构，只更新enabled状态）
         current_config['asr']['enabled'] = self.ui.checkBox_asr.isChecked()
         current_config['asr']['voice_barge_in'] = self.ui.checkBox_voice_barge_in.isChecked()
+        current_config['asr']['ptt_enabled'] = self.ui.checkBox_ptt_enabled.isChecked()
         current_config['tts']['enabled'] = self.ui.checkBox_tts.isChecked()
 
         # 保存TTS语言

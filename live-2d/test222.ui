@@ -1447,6 +1447,25 @@ QTabWidget#tabWidget_tools QTabBar {
                   </widget>
                  </item>
                  <item>
+                  <widget class="QCheckBox" name="checkBox_ptt_enabled">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="font">
+                    <font>
+                     <family>微软雅黑</family>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="text">
+                    <string>键盘语音输入（按住V键录音）</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
                   <widget class="QCheckBox" name="checkBox_4">
                    <property name="sizePolicy">
                     <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
