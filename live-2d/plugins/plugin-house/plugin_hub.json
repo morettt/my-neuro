@@ -154,5 +154,11 @@
     "desc": "my-neuro live-2d 社区梦系统插件：在深夜静默窗口内让数字角色进入仿生梦境，结合 MemOS 记忆涟漪与语义联想生成第一人称意识流梦叙事；支持独立梦境 LLM、梦境文本本地保存、梦后关键词/重要度/梦残像处理、达标写入长期记忆；可选梦中图书馆好奇心检索，梦中记忆合并/删除等操作带审批窗口。公开仓库已脱敏，需用户自行配置 API Key、角色梦境提示词与 MemOS/搜索插件。",
     "author": "爱熬夜的人形兔",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-agent-dream"
+  },
+  "qq-connect": {
+    "display_name": "qq-connect",
+    "desc": "通过 OneBot 11 协议（推荐 LLBot / LLOneBot）把肥牛桥接到 QQ：admin 私聊与电脑端语音共享同一份带压缩、可持久化的主上下文（voiceChat.messages），群聊与陌生人走独立会话不污染电脑端；三级用户权限（admin / trusted / normal）+ 三级群权限（trusted / open / normal）；admin 可通过 Function Calling 调用 my-neuro 当前所有已启用插件暴露工具的并集（含本插件自带 12 个：文件读写/重命名/列目录/系统命令/桌面 TTS/Live2D 表情/QQ 主动外发/状态查询）；按 key 分桶限流（stall / discard）；合并转发自动展开与外发；长回复可按句号分段；MemOS 集成自动注入记忆与回写。零 npm 运行时依赖。README 含 LLBot 从下载、扫码登录到配置 OneBot 11 正向 WS 的完整教程，并专章说明 admin 工具能力的攻击面放大场景与缓解措施（不需要工具时设 enable_agent_tools=false）。仓库已脱敏：token / trusted_users / 真实 QQ 号全部清空。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-qq-connect"
   }
 }
