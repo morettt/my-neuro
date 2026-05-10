@@ -208,7 +208,13 @@ def extract_7z(archive_file, target_folder):
         print('正在解压TTS模型包，这可能需要几分钟时间，请耐心等待.......')
 
         # 使用7z解压到根目录
-        cmd = f'"{local_7z}" x "{archive_file}" -o"{target_folder}" -y'
+        cmd = [
+    local_7z,
+    'x',
+    archive_file,
+    f'-o{target_folder}',
+    '-y'
+]
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
         if result.returncode == 0:
@@ -225,16 +231,16 @@ def extract_7z(archive_file, target_folder):
 
 
 # 定义下载函数，包含重试机制
-def download_with_retry(command, max_retry=MAX_RETRY, wait_time=RETRY_WAIT):
-    import subprocess
-    print(f"执行命令: {command}")
+def download_with_retry(argv, max_retry=MAX_RETRY, wait_time=RETRY_WAIT):
+    print(f"执行命令: {' '.join(argv)}")
     for attempt in range(max_retry):
         if attempt > 0:
             print(f"第 {attempt + 1} 次尝试下载...")
 
+        # shell=False，直接将列表传递给 Popen
         result = subprocess.Popen(
-            command,
-            shell=True,
+            argv,
+            shell=False,
             stdout=None,
             stderr=None
         ).wait()
@@ -257,56 +263,64 @@ def download_live2d_model():
     """下载并解压Live 2D模型到live-2d文件夹"""
     print("\n========== 下载Live 2D模型 ==========")
 
-    target_folder = "live-2d"
+    target_folder = "..\live-2d"
+    confirm = "y"
 
     # 如果live-2d文件夹存在，先清空文件夹内容
     if os.path.exists(target_folder):
-        print(f"检测到 {target_folder} 文件夹已存在，正在清空内容...")
-        for item in os.listdir(target_folder):
-            item_path = os.path.join(target_folder, item)
-            if os.path.isfile(item_path) or os.path.islink(item_path):
-                os.unlink(item_path)
-            elif os.path.isdir(item_path):
-                shutil.rmtree(item_path)
-        print(f"{target_folder} 文件夹内容已清空")
+        print(f"检测到 {target_folder} 文件夹已存在")
+        confirm = str(input("是否清空文件夹并重新下载(y/n):"))
+        while not(confirm == "y" or confirm == "n"):
+            confirm = str(input("是否清空文件夹并重新下载(y/n):"))
+        if confirm == "y":
+            for item in os.listdir(target_folder):
+                item_path = os.path.join(target_folder, item)
+                if os.path.isfile(item_path) or os.path.islink(item_path):
+                    os.unlink(item_path)
+                elif os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+            print(f"{target_folder} 文件夹内容已清空")
 
-    # 定义多个下载源（按优先级排序）
-    download_sources = [
-        ('香港镜像',
-         f'https://hk.gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip'),
-        ('备用镜像',
-         f'https://gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip'),
-        ('GitHub原版', f'https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip')
-    ]
+    if confirm == "y":
+        # 定义多个下载源（按优先级排序）
+        download_sources = [
+            ('香港镜像',
+             f'https://hk.gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip'),
+            ('备用镜像',
+             f'https://gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip'),
+            ('GitHub原版', f'https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip')
+        ]
 
-    file_name = 'live-2d.zip'
-    downloaded_file = None
+        file_name = 'live-2d.zip'
+        downloaded_file = None
 
-    # 依次尝试每个下载源
-    for source_name, url in download_sources:
-        try:
-            print(f"尝试使用 {source_name} 下载...")
-            downloaded_file = download_file(url, file_name)
-            print(f"✓ {source_name} 下载成功!")
-            break  # 下载成功就跳出循环
-        except Exception as e:
-            print(f"✗ {source_name} 下载失败: {e}")
-            if source_name != download_sources[-1][0]:  # 如果不是最后一个源
-                print("尝试下一个下载源...")
-            else:
-                print("所有下载源都已尝试失败!")
-                return False
+        # 依次尝试每个下载源
+        for source_name, url in download_sources:
+            try:
+                print(f"尝试使用 {source_name} 下载...")
+                downloaded_file = download_file(url, file_name)
+                print(f"✓ {source_name} 下载成功!")
+                break  # 下载成功就跳出循环
+            except Exception as e:
+                print(f"✗ {source_name} 下载失败: {e}")
+                if source_name != download_sources[-1][0]:  # 如果不是最后一个源
+                    print("尝试下一个下载源...")
+                else:
+                    print("所有下载源都已尝试失败!")
+                    return False
 
-    # 解压文件
-    if downloaded_file:
-        extract_success = extract_zip(downloaded_file, target_folder)
+        # 解压文件
+        if downloaded_file:
+            extract_success = extract_zip(downloaded_file, target_folder)
 
-        # 清理：删除压缩文件
-        if extract_success and os.path.exists(downloaded_file):
-            os.remove(downloaded_file)
-            print(f"原压缩文件 {downloaded_file} 已删除")
+            # 清理：删除压缩文件
+            if extract_success and os.path.exists(downloaded_file):
+                os.remove(downloaded_file)
+                print(f"原压缩文件 {downloaded_file} 已删除")
 
-        return extract_success
+            return extract_success
+    else:
+        print("跳过live2d下载")
 
     return False
 
@@ -339,7 +353,7 @@ else:
     os.chdir(bert_hub_dir)
 
     # 使用ModelScope下载Omni_fn_bert模型，带重试机制
-    if not download_with_retry("modelscope download --model morelle/Omni_fn_bert --local_dir ./"):
+    if not download_with_retry(['modelscope', 'download', '--model', 'morelle/Omni_fn_bert', '--local_dir', './']):
         print("Omni_fn_bert模型下载失败，终止程序")
         exit(1)
 
@@ -437,7 +451,7 @@ else:
             print(f'下载50系专属TTS包')
 
             if not download_with_retry(
-                    f"modelscope download --model morelle/fake-neuro-gsv-50 --local_dir ./tts-hub"):
+                    ["modelscope", "download", "--model", "morelle/fake-neuro-gsv-50", "--local_dir","./tts-hub"]):
                 print("fake-neuro-gsv-50模型包下载失败，终止程序")
                 exit(1)
 
@@ -473,7 +487,7 @@ else:
             print(f"下载fake-neuro-gsv模型包到tts-hub文件夹: {tts_hub_dir}")
 
             # 使用ModelScope下载fake-neuro-gsv模型包到tts-hub文件夹，带重试机制
-            if not download_with_retry(f"modelscope download --model morelle/fake-neuro-gsv --local_dir ./tts-hub"):
+            if not download_with_retry(["modelscope", "download", "--model", "morelle/fake-neuro-gsv", "--local_dir","./tts-hub"]):
                 print("fake-neuro-gsv模型包下载失败，终止程序")
                 exit(1)
 
@@ -529,7 +543,7 @@ else:
     print(f"BAAI/bge-m3模型未完整下载，开始下载到: {rag_hub_dir}")
 
     # 使用ModelScope下载BAAI/bge-m3模型，带重试机制
-    if not download_with_retry("modelscope download --model BAAI/bge-m3 --local_dir ./rag-hub"):
+    if not download_with_retry(["modelscope", "download", "--model", "BAAI/bge-m3", "--local_dir ", "./rag-hub"]):
         print("BAAI/bge-m3模型下载失败")
         # 不终止程序，继续执行其他任务
     else:
@@ -562,7 +576,7 @@ if vad_already_downloaded:
     print("检测到VAD模型已经下载完成，跳过下载步骤")
 else:
     print("VAD模型未下载，开始下载...")
-    if not download_with_retry(f"modelscope download --model morelle/my-neuro-vad --local_dir {vad_target_dir}"):
+    if not download_with_retry(download_with_retry(['modelscope', 'download', '--model', 'morelle/my-neuro-vad', '--local_dir', vad_target_dir])):
         print("VAD模型下载失败")
     else:
         print("VAD模型下载成功！")
@@ -587,7 +601,7 @@ if asr_already_downloaded:
 else:
     print("ASR主模型未完整下载，开始下载...")
     if not download_with_retry(
-            f"modelscope download --model iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch --local_dir {asr_model_dir}"):
+            ["modelscope", "download", "--model", "iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch", "--local_dir", asr_model_dir]):
         print("ASR主模型下载失败")
     else:
         print("ASR主模型下载成功！")
@@ -613,7 +627,7 @@ if punc_already_downloaded:
 else:
     print("标点符号模型未完整下载，开始下载...")
     if not download_with_retry(
-            f"modelscope download --model iic/punc_ct-transformer_cn-en-common-vocab471067-large --local_dir {punc_model_dir}"):
+            ["modelscope", "download", "--model", "iic/punc_ct-transformer_cn-en-common-vocab471067-large", "--local_dir", punc_model_dir]):
         print("标点符号模型下载失败")
     else:
         print("标点符号模型下载成功！")
