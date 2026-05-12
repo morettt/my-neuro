@@ -45,8 +45,7 @@ def create_app():
     def dashboard():
         """主页"""
         start_time_str = START_TIME.strftime('%Y-%m-%d %H:%M:%S')
-        port = find_free_port()
-        return render_template('index.html', port=port, start_time=start_time_str, is_cloud=IS_CLOUD_VERSION)
+        return render_template('index.html', start_time=start_time_str, is_cloud=IS_CLOUD_VERSION)
 
     # 提供 live-2d 目录的静态文件访问（路由保持 /live-2d/ 不变，但路径指向 PROJECT_ROOT）
     @app.route('/live-2d/<path:filename>')
