@@ -160,5 +160,11 @@
     "desc": "通过 OneBot 11 协议（推荐 LLBot / LLOneBot）把肥牛桥接到 QQ：admin 私聊与电脑端语音共享同一份带压缩、可持久化的主上下文（voiceChat.messages），群聊与陌生人走独立会话不污染电脑端；三级用户权限（admin / trusted / normal）+ 三级群权限（trusted / open / normal）；admin 可通过 Function Calling 调用 my-neuro 当前所有已启用插件暴露工具的并集（含本插件自带 12 个：文件读写/重命名/列目录/系统命令/桌面 TTS/Live2D 表情/QQ 主动外发/状态查询）；按 key 分桶限流（stall / discard）；合并转发自动展开与外发；长回复可按句号分段；MemOS 集成自动注入记忆与回写。零 npm 运行时依赖。README 含 LLBot 从下载、扫码登录到配置 OneBot 11 正向 WS 的完整教程，并专章说明 admin 工具能力的攻击面放大场景与缓解措施（不需要工具时设 enable_agent_tools=false）。仓库已脱敏：token / trusted_users / 真实 QQ 号全部清空。",
     "author": "爱熬夜的人形兔",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-qq-connect"
+  },
+  "timed-tasks": {
+    "display_name": "timed-tasks",
+    "desc": "Python 定时任务插件：到点提醒、定时让 AI 执行任务、定时触发指定 LLM 工具；支持一次性/每天/每周/每月/每年及「仅工作日」「仅法定节假日」（timor.tech 节假日数据 + 本地缓存）。数据 JSON 持久化，重启自动恢复调度。仓库内含 vendor 预下载 wheel，配合新版宿主可从市场/ZIP 离线自动 pip 安装依赖；移植思路来自 astrbot_plugin_sy。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-timed-tasks"
   }
 }
