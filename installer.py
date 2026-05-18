@@ -307,18 +307,6 @@ class InstallerApp(tk.Tk):
                     subprocess.run([unpack], check=True)
                     self.log_msg("路径修复完成")
 
-                # 4b. 修复 huggingface_hub SyntaxError bug
-                hf_file = os.path.join(env_dir, "Lib", "site-packages",
-                                       "huggingface_hub", "file_download.py")
-                if os.path.exists(hf_file):
-                    with open(hf_file, "r", encoding="utf-8", errors="replace") as f:
-                        src = f.read()
-                    fixed = src.replace(r'startswith("\\\")', r'startswith("\\\\")')
-                    fixed = fixed.replace(r'"\\\" +', r'"\\\\" +')
-                    if fixed != src:
-                        with open(hf_file, "w", encoding="utf-8") as f:
-                            f.write(fixed)
-                        self.log_msg("已修复 huggingface_hub 兼容性问题")
 
             # 5. 下载模型
             self.set_progress(60, "开始下载模型...")
