@@ -313,7 +313,8 @@ class InstallerApp(tk.Tk):
                 if os.path.exists(hf_file):
                     with open(hf_file, "r", encoding="utf-8", errors="replace") as f:
                         src = f.read()
-                    fixed = src.replace('startswith("\\\\\\"")', 'startswith("\\\\\\\\")')
+                    fixed = src.replace(r'startswith("\\\")', r'startswith("\\\\")')
+                    fixed = fixed.replace(r'"\\\" +', r'"\\\\" +')
                     if fixed != src:
                         with open(hf_file, "w", encoding="utf-8") as f:
                             f.write(fixed)
