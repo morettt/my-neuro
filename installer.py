@@ -395,8 +395,7 @@ class InstallerApp(tk.Tk):
                                    f"下载  {filename}   {downloaded} / {total}")
         else:
             self.log_msg(line)
-            self.file_progress["value"] = 0
-            self.file_label.configure(text=line[:80])
+            self.set_file_progress(0, line[:80])
 
     # ── 安装流程 ─────────────────────────────────────────
     def _start(self):
@@ -419,30 +418,38 @@ class InstallerApp(tk.Tk):
                 self.set_progress(5, "下载 Python 环境包（~3.6 GB）...")
                 self.log_msg("开始下载 Python 环境包...")
 
-                self._dl_done = False
+                import urllib.request
+                url = (f"https://modelscope.cn/models/{CONDA_ENV_MODEL}"
+                       f"/resolve/master/{CONDA_ENV_FILE}")
 
-                def _watch():
-                    total = 3_600 * 1024 * 1024
-                    while not self._dl_done:
-                        if os.path.exists(tar_path):
-                            size = os.path.getsize(tar_path)
-                            pct  = min(int(size / total * 38) + 5, 43)
-                            mb   = size / 1024 / 1024
-                            self.set_progress(pct)
-                            self.set_file_progress(
-                                min(int(size / total * 100), 99),
-                                f"下载  my-neuro-env.tar.gz   {mb:.0f} MB / 3600 MB")
-                        time.sleep(1)
+                def _do_download():
+                    try:
+                        req = urllib.request.Request(
+                            url, headers={"User-Agent": "Mozilla/5.0"})
+                        with urllib.request.urlopen(req, timeout=60) as resp, \
+                             open(tar_path, "wb") as out:
+                            total_bytes = int(resp.headers.get("Content-Length", 0))
+                            done = 0
+                            while True:
+                                chunk = resp.read(65536)
+                                if not chunk:
+                                    break
+                                out.write(chunk)
+                                done += len(chunk)
+                                mb_done  = done / 1024 / 1024
+                                mb_total = total_bytes / 1024 / 1024 if total_bytes else 3600
+                                pct = int(done / total_bytes * 100) if total_bytes else 0
+                                self.set_file_progress(
+                                    pct,
+                                    f"下载  my-neuro-env.tar.gz   "
+                                    f"{mb_done:.0f} MB / {mb_total:.0f} MB")
+                                self.set_progress(
+                                    max(5, min(43, int(done / total_bytes * 38) + 5))
+                                    if total_bytes else 5)
+                    except Exception as e:
+                        raise RuntimeError(f"下载失败：{e}")
 
-                threading.Thread(target=_watch, daemon=True).start()
-                try:
-                    import io, contextlib
-                    from modelscope import snapshot_download
-                    _sink = io.StringIO()
-                    with contextlib.redirect_stdout(_sink), contextlib.redirect_stderr(_sink):
-                        snapshot_download(CONDA_ENV_MODEL, local_dir=install_dir)
-                finally:
-                    self._dl_done = True
+                _do_download()
 
                 if not os.path.exists(tar_path):
                     raise RuntimeError("环境包下载失败，文件不存在")
@@ -455,7 +462,7 @@ class InstallerApp(tk.Tk):
                     members = tar.getmembers()
                     total   = len(members)
                     for i, m in enumerate(members):
-                        tar.extract(m, path=env_dir, filter="data")
+                        tar.extract(m, path=env_dir)
                         if i % 300 == 0:
                             p = int(i / total * 10) + 45
                             self.set_progress(p)
