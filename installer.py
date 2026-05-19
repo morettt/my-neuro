@@ -299,14 +299,7 @@ class InstallerApp(tk.Tk):
                                 f"解压中...  {i} / {total} 文件")
                 os.remove(tar_path)
                 self.log_msg("解压完成，已删除压缩包")
-
-                # 4. conda-unpack
-                self.set_progress(56, "修复环境路径...")
-                unpack = os.path.join(env_dir, "Scripts", "conda-unpack.exe")
-                if os.path.exists(unpack):
-                    subprocess.run([unpack], check=True)
-                    self.log_msg("路径修复完成")
-
+                self.set_progress(58, "环境就绪")
 
             # 5. 下载模型
             self.set_progress(60, "开始下载模型...")
