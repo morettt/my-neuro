@@ -30,7 +30,13 @@ live-2d/webui/__pycache__
 *.log
 
 #忽略无意义文件
+runtime.log
 
-runtime.logfull-hub/ 
+# 整合包相关（不提交到仓库）
+env/
+*.tar.gz
+魔塔上传/
+测试下载/
 
-
+# Claude 内部文件
+.claude/
