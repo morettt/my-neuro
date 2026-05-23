@@ -221,6 +221,11 @@ class HttpServer {
 		            mc.updateInteractionArea();
 		
 		            ipcRenderer.send('save-model-position', { x: relX, y: relY, scale, dual: isDualRight });
+
+		            // 同步复位字幕位置
+		            const uic = global.uiController;
+		            if (uic) uic.resetSubtitlePosition();
+
 		            return { success: true};
 		        })()
 		    `;
@@ -297,6 +302,28 @@ class HttpServer {
             pm.syncEnabledPlugins()
                 .then(() => res.json({ success: true, message: '插件列表已同步' }))
                 .catch(e => res.json({ success: false, message: e.message }));
+        });
+
+        // 字幕位置调整端点
+        this.emotionApp.post('/adjust-subtitle-position', async (req, res) => {
+            const mainWindow = BrowserWindow.getAllWindows()[0];
+            if (!mainWindow) {
+                return res.json({ success: false, message: '应用窗口未找到' });
+            }
+
+            const jsCode = `(() => {
+                const uic = global.uiController;
+                if (!uic?.enterSubtitleAdjustMode) return '字幕控制器未初始化';
+                uic.enterSubtitleAdjustMode();
+                return '字幕调整模式已开启';
+            })()`;
+
+            try {
+                const result = await mainWindow.webContents.executeJavaScript(jsCode);
+                res.json({ success: true, message: result });
+            } catch (error) {
+                res.json({ success: false, message: error.toString() });
+            }
         });
 
         this.emotionApp.listen(3002, () => {

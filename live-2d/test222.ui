@@ -1721,6 +1721,49 @@ QPushButton:pressed {
                   </widget>
                  </item>
                  <item>
+                  <widget class="QPushButton" name="pushButton_adjust_subtitle_position">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="minimumSize">
+                    <size>
+                     <width>0</width>
+                     <height>35</height>
+                    </size>
+                   </property>
+                   <property name="font">
+                    <font>
+                     <family>微软雅黑</family>
+                     <pointsize>10</pointsize>
+                    </font>
+                   </property>
+                   <property name="cursor">
+                    <cursorShape>PointingHandCursor</cursorShape>
+                   </property>
+                   <property name="styleSheet">
+                    <string notr="true">QPushButton {
+    background-color: #ff9800;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 15px;
+}
+QPushButton:hover {
+    background-color: #f57c00;
+}
+QPushButton:pressed {
+    background-color: #e65100;
+}</string>
+                   </property>
+                   <property name="text">
+                    <string>调整字幕位置</string>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
                   <spacer name="verticalSpacer_basic_config">
                    <property name="orientation">
                     <enum>Qt::Vertical</enum>

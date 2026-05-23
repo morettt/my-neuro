@@ -833,3 +833,50 @@ body.screen-left #text-chat-container {
 #quick-gear.open {
     transform: rotate(90deg);
 }
+
+/* ====== 字幕位置调整模式 ====== */
+#subtitle-container.subtitle-adjusting {
+    border: 2px dashed #2196F3 !important;
+    display: block !important;
+    position: fixed !important;
+    overflow: visible !important;
+    z-index: 9999 !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+/* 字幕调整操作按钮 */
+#subtitle-confirm-btn {
+    display: none;
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 32px;
+    height: 32px;
+    background: #4CAF50;
+    color: white;
+    border: 2px solid white;
+    border-radius: 50%;
+    font-size: 13px;
+    font-weight: bold;
+    line-height: 28px;
+    text-align: center;
+    cursor: pointer;
+    z-index: 10001;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    user-select: none;
+    -webkit-user-select: none;
+    transition: background 0.2s ease, transform 0.15s ease;
+    pointer-events: auto !important;
+}
+
+#subtitle-confirm-btn:hover {
+    background: #388E3C;
+    transform: scale(1.15);
+}
+
+/* 调整模式下显示确认按钮 */
+#subtitle-container.subtitle-adjusting #subtitle-confirm-btn {
+    display: block;
+}
