@@ -330,11 +330,11 @@ def download_asr():
     # ASR主模型
     print("\n检查ASR主模型...")
     asr_model_dir = os.path.join(asr_hub_dir, 'model', 'asr', 'models', 'iic',
-                                 'speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch')
-    asr_key_files = [os.path.join(asr_model_dir, "config.yaml"), os.path.join(asr_model_dir, "model.pb")]
+                                 'speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch')
+    asr_key_files = [os.path.join(asr_model_dir, "config.yaml")]
     if not all(os.path.exists(f) for f in asr_key_files):
         download_model_direct(
-            "iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+            "iic/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
             asr_model_dir)
 
     # 标点模型
