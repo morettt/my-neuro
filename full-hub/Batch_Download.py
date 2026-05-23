@@ -2,7 +2,6 @@ import os
 import shutil
 import zipfile
 import time
-import modelscope
 
 import requests
 import sys
@@ -144,21 +143,59 @@ def extract_7z(archive_file, target_folder):
         return False
 
 
-def download_with_retry(command, max_retry=MAX_RETRY, wait_time=RETRY_WAIT):
-    print(f"执行命令: {command}")
-    for attempt in range(max_retry):
-        if attempt > 0:
-            print(f"第 {attempt + 1} 次尝试下载...")
-        result = subprocess.Popen(command, shell=True, stdout=None, stderr=None).wait()
-        if result == 0:
-            print("下载成功!")
+def _clear_modelscope_lock(model_id):
+    lock_name = model_id.replace('/', '___')
+    lock_path = os.path.join(os.path.expanduser('~'), '.cache', 'modelscope', 'hub', '.lock', lock_name)
+    if not os.path.exists(lock_path):
+        return
+
+    print(f"检测到残留锁文件: {lock_path}", flush=True)
+
+    # 找到占用锁文件的进程并强制终止
+    try:
+        import psutil
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                for f in proc.open_files():
+                    if os.path.normcase(f.path) == os.path.normcase(lock_path):
+                        print(f"终止占用锁的进程: PID={proc.pid} ({proc.name()})", flush=True)
+                        proc.kill()
+                        proc.wait(timeout=5)
+                        break
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.TimeoutExpired):
+                pass
+    except ImportError:
+        print("psutil 未安装，跳过进程检测", flush=True)
+
+    # 重试删除
+    for attempt in range(5):
+        try:
+            os.remove(lock_path)
+            print(f"已清除锁文件", flush=True)
+            return
+        except Exception:
+            time.sleep(1)
+    print(f"警告: 锁文件无法删除，下载可能仍会卡住: {lock_path}", flush=True)
+
+
+def download_model_direct(model_id, local_dir):
+    """直接用Python API下载modelscope模型，不依赖CLI命令"""
+    from modelscope.hub.snapshot_download import snapshot_download
+    _clear_modelscope_lock(model_id)
+    print(f"开始下载: {model_id}", flush=True)
+    print(f"保存到: {local_dir}", flush=True)
+    os.makedirs(local_dir, exist_ok=True)
+    for attempt in range(MAX_RETRY):
+        try:
+            snapshot_download(model_id, local_dir=local_dir)
+            print(f"下载完成: {model_id}", flush=True)
             return True
-        else:
-            print(f"下载失败，返回值: {result}")
-            if attempt < max_retry - 1:
-                print(f"等待 {wait_time} 秒后重试...")
-                time.sleep(wait_time)
-    print(f"经过 {max_retry} 次尝试后，下载仍然失败")
+        except Exception as e:
+            print(f"下载失败({attempt + 1}/{MAX_RETRY}): {e}", flush=True)
+            if attempt < MAX_RETRY - 1:
+                _clear_modelscope_lock(model_id)
+                print(f"等待{RETRY_WAIT}秒后重试...", flush=True)
+                time.sleep(RETRY_WAIT)
     return False
 
 
@@ -168,7 +205,7 @@ def download_with_retry(command, max_retry=MAX_RETRY, wait_time=RETRY_WAIT):
 
 def download_live2d():
     print("\n========== 下载Live 2D模型 ==========")
-    os.chdir(os.path.dirname(current_dir))  # 切换到项目根目录
+    os.chdir(os.path.dirname(current_dir))
     target_folder = "live-2d"
     if os.path.exists(target_folder):
         print(f"检测到 {target_folder} 文件夹已存在，正在清空内容...")
@@ -203,32 +240,26 @@ def download_live2d():
 
 def download_bert():
     print("\n========== 下载BERT模型 ==========")
-    os.chdir(current_dir)
     bert_hub_dir = os.path.join(current_dir, "bert-hub")
-    if not os.path.exists(bert_hub_dir):
-        os.makedirs(bert_hub_dir)
-    omni_model_files = ["config.json", "model.safetensors", "vocab.txt"]
-    omni_key_files = [os.path.join(bert_hub_dir, f) for f in omni_model_files]
+    omni_key_files = [
+        os.path.join(bert_hub_dir, "config.json"),
+        os.path.join(bert_hub_dir, "model.safetensors"),
+        os.path.join(bert_hub_dir, "vocab.txt"),
+    ]
     if all(os.path.exists(f) for f in omni_key_files):
         print("BERT模型已存在，跳过下载")
         return True
     print(f"开始下载BERT模型到: {bert_hub_dir}")
-    os.chdir(bert_hub_dir)
-    if not download_with_retry("modelscope download --model morelle/Omni_fn_bert --local_dir ./"):
+    if not download_model_direct("morelle/Omni_fn_bert", bert_hub_dir):
         print("BERT模型下载失败")
-        os.chdir(current_dir)
         return False
-    os.chdir(current_dir)
     print("BERT模型下载成功！")
     return True
 
 
 def download_tts(gpu_type=None):
     print("\n========== 下载TTS模型包 ==========")
-    os.chdir(current_dir)
     tts_hub_dir = os.path.join(current_dir, "tts-hub")
-    if not os.path.exists(tts_hub_dir):
-        os.makedirs(tts_hub_dir)
     tts_bundle_dir = os.path.join(tts_hub_dir, "GPT-SoVITS-Bundle")
     tts_key_files = [
         os.path.join(tts_bundle_dir, "runtime"),
@@ -238,7 +269,6 @@ def download_tts(gpu_type=None):
         print("TTS模型包已存在，跳过下载")
         return True
 
-    # 自动检测或使用传入的gpu_type
     if gpu_type is None:
         gpu_type = _detect_gpu_type()
 
@@ -249,7 +279,7 @@ def download_tts(gpu_type=None):
         print("下载标准TTS包...")
         model_name = "morelle/fake-neuro-gsv"
 
-    if not download_with_retry(f"modelscope download --model {model_name} --local_dir ./tts-hub"):
+    if not download_model_direct(model_name, tts_hub_dir):
         print("TTS模型包下载失败")
         return False
 
@@ -268,20 +298,17 @@ def download_tts(gpu_type=None):
 
 def download_rag():
     print("\n========== 下载RAG模型 ==========")
-    os.chdir(current_dir)
     rag_hub_dir = os.path.join(current_dir, "rag-hub")
-    if not os.path.exists(rag_hub_dir):
-        os.makedirs(rag_hub_dir)
     bge_key_files = [
         os.path.join(rag_hub_dir, "config.json"),
         os.path.join(rag_hub_dir, "model.safetensors"),
-        os.path.join(rag_hub_dir, "tokenizer.json")
+        os.path.join(rag_hub_dir, "tokenizer.json"),
     ]
     if all(os.path.exists(f) for f in bge_key_files):
         print("RAG模型已存在，跳过下载")
         return True
     print(f"开始下载RAG模型到: {rag_hub_dir}")
-    if not download_with_retry("modelscope download --model BAAI/bge-m3 --local_dir ./rag-hub"):
+    if not download_model_direct("BAAI/bge-m3", rag_hub_dir):
         print("RAG模型下载失败")
         return False
     print("RAG模型下载成功！")
@@ -290,41 +317,35 @@ def download_rag():
 
 def download_asr():
     print("\n========== 下载ASR模型 ==========")
-    os.chdir(current_dir)
     asr_hub_dir = os.path.join(current_dir, "asr-hub")
-    if not os.path.exists(asr_hub_dir):
-        os.makedirs(asr_hub_dir)
+    os.makedirs(asr_hub_dir, exist_ok=True)
 
     # VAD模型
     print("\n检查VAD模型...")
     vad_target_dir = os.path.join(asr_hub_dir, 'model', 'torch_hub')
-    if not os.path.exists(vad_target_dir):
-        os.makedirs(vad_target_dir)
     vad_model_path = os.path.join(vad_target_dir, "snakers4_silero-vad_master")
     if not os.path.exists(vad_model_path):
-        download_with_retry(f"modelscope download --model morelle/my-neuro-vad --local_dir {vad_target_dir}")
+        download_model_direct("morelle/my-neuro-vad", vad_target_dir)
 
     # ASR主模型
     print("\n检查ASR主模型...")
     asr_model_dir = os.path.join(asr_hub_dir, 'model', 'asr', 'models', 'iic',
                                  'speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch')
-    if not os.path.exists(asr_model_dir):
-        os.makedirs(asr_model_dir)
     asr_key_files = [os.path.join(asr_model_dir, "config.yaml"), os.path.join(asr_model_dir, "model.pb")]
     if not all(os.path.exists(f) for f in asr_key_files):
-        download_with_retry(
-            f"modelscope download --model iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch --local_dir {asr_model_dir}")
+        download_model_direct(
+            "iic/speech_paraformer-large-vad-punc_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
+            asr_model_dir)
 
     # 标点模型
     print("\n检查标点符号模型...")
     punc_model_dir = os.path.join(asr_hub_dir, 'model', 'asr', 'models', 'iic',
                                   'punc_ct-transformer_cn-en-common-vocab471067-large')
-    if not os.path.exists(punc_model_dir):
-        os.makedirs(punc_model_dir)
     punc_key_files = [os.path.join(punc_model_dir, "config.yaml"), os.path.join(punc_model_dir, "model.pt")]
     if not all(os.path.exists(f) for f in punc_key_files):
-        download_with_retry(
-            f"modelscope download --model iic/punc_ct-transformer_cn-en-common-vocab471067-large --local_dir {punc_model_dir}")
+        download_model_direct(
+            "iic/punc_ct-transformer_cn-en-common-vocab471067-large",
+            punc_model_dir)
 
     print("ASR模型下载完成！")
     return True
@@ -360,7 +381,6 @@ if __name__ == '__main__':
     parser.add_argument('--gpu',    default=None, choices=['50', 'non-50'], help='显卡类型（TTS用）')
     args = parser.parse_args()
 
-    # 没有任何参数时默认下载全部（兼容旧的直接运行方式）
     run_all = args.all or not any([args.live2d, args.bert, args.tts, args.rag, args.asr])
 
     if run_all or args.live2d:

@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, scrolledtext
-import threading, os, sys, subprocess, tarfile, re, urllib.request
+import threading, os, sys, subprocess, tarfile, re, urllib.request, traceback
 from datetime import datetime
 
 CONDA_ENV_MODEL = "morelle/my-neuro-env"
@@ -36,6 +36,8 @@ class InstallerApp(tk.Tk):
         self.resizable(False, False)
         self.checks   = {}
         self._vram_ok = True
+        self._log_path = os.path.join(INSTALL_DIR, "installer.log")
+        self._log_file = open(self._log_path, "w", encoding="utf-8", buffering=1)
         self._build_ui()
         self._build_pages()
         self._show("welcome")
@@ -398,9 +400,15 @@ class InstallerApp(tk.Tk):
     # ── 日志 / 进度（线程安全）────────────────────────────
     def log_msg(self, msg):
         ts = datetime.now().strftime("%H:%M:%S")
+        line = f"[{ts}] {msg}\n"
+        try:
+            self._log_file.write(line)
+            self._log_file.flush()
+        except Exception:
+            pass
         def _u():
             self.log.configure(state="normal")
-            self.log.insert("end", f"[{ts}] {msg}\n")
+            self.log.insert("end", line)
             self.log.see("end")
             self.log.configure(state="disabled")
         self.after(0, _u)
@@ -540,11 +548,17 @@ class InstallerApp(tk.Tk):
             self._show("done")
 
         except Exception as e:
+            tb = traceback.format_exc()
             self.log_msg(f"[错误] {e}")
+            try:
+                self._log_file.write(tb)
+                self._log_file.flush()
+            except Exception:
+                pass
             self.set_progress(0, "安装失败")
             self._done_icon.configure(text="✗", fg=RED)
             self._done_title.configure(text="安装失败")
-            self._done_sub.configure(text=str(e))
+            self._done_sub.configure(text=f"{e}\n日志: {self._log_path}")
             self._show("done")
 
 
