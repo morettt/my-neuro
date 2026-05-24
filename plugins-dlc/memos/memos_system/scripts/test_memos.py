@@ -66,7 +66,7 @@ except Exception as e:
 # 测试5: 创建用户
 print("\n5. 创建用户...")
 try:
-    user_id = "feiniu_test"
+    user_id = "default_test"
     mos.create_user(user_id=user_id)
     print(f"✅ 用户创建成功: {user_id}")
 except Exception as e:

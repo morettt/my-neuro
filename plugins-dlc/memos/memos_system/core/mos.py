@@ -85,7 +85,7 @@ class MOSConfig:
     
     @property
     def default_user(self) -> str:
-        return self.config.get('users', {}).get('default_user', 'feiniu_default')
+        return self.config.get('users', {}).get('default_user', 'default_user')
 
 
 class MOS:

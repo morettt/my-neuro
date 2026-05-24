@@ -3,42 +3,37 @@ chcp 65001 >nul
 cd /d %~dp0
 
 REM ============================================================
-REM   MemOS Memory WebUI - Cyberpunk Edition (port 8004)
-REM   依赖：API 服务（MEMOS-API.bat）已启动 + installer.py 装出的 env
+REM   MemOS WebUI Cyberpunk Edition - HTML/JS/CSS (port 8004)
+REM   备选入口 - 推荐双击外层 plugins-dlc\memos\MEMOS-WebUI.bat
 REM ============================================================
 
-set "PY=%~dp0..\..\env\python.exe"
+set "PY=%~dp0..\..\..\env\python.exe"
 if not exist "%PY%" (
     echo [错误] 未检测到 env\python.exe
     echo 请先在 my-neuro 根目录运行 installer.py 安装 Python 环境
+    pause
+    exit /b 1
+)
+
+REM 检查 API
+powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8003/health' -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop; exit 0 } catch { exit 1 }" >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [警告] API 服务未启动 - 请先启动 start_memos.bat
     echo.
     pause
     exit /b 1
 )
 
-REM 检查 API 服务（端口 8003）
-powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8003/health' -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop; exit 0 } catch { exit 1 }" >nul 2>nul
-if %errorlevel% neq 0 (
-    echo [警告] API 服务未启动，WebUI 部分功能不可用
-    echo 请先双击 MEMOS-API.bat 启动后端
-    echo.
-    echo 是否仍然继续启动 WebUI? [Y/N]
-    set /p CONT=
-    if /i not "%CONT%"=="Y" exit /b 1
-)
-
-REM 清理可能残留的 8004 端口
+REM 清理 8004 端口
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr :8004 ^| findstr LISTENING 2^>nul') do (
     taskkill /F /PID %%a >nul 2>nul
 )
 
 echo ============================================================
-echo   Starting MemOS WebUI (Cyberpunk Edition)
-echo   URL: http://localhost:8004
+echo   MEMOS WebUI Cyberpunk Edition - http://localhost:8004
 echo ============================================================
 echo.
 
-REM memos_webui_html.py 启动后会自动打开浏览器
-"%PY%" memos_system\webui\memos_webui_html.py
+"%PY%" webui\memos_webui_html.py
 
 pause

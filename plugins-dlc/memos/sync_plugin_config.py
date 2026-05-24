@@ -29,7 +29,6 @@ if os.path.exists(BACKEND_CONFIG_PATH):
     with open(BACKEND_CONFIG_PATH, 'r', encoding='utf-8') as f:
         backend = json.load(f)
 
-# 同步 LLM
 llm = get_fields(cfg, 'backend_llm')
 if llm:
     backend.setdefault('llm', {})['config'] = {
@@ -38,14 +37,12 @@ if llm:
         'base_url': llm.get('base_url', '')
     }
 
-# 同步 Embedding 配置
 backend.setdefault('embedding', {}).update({
     'use_api':        get_val(cfg, 'use_api_embedding') is True,
     'api_model':      get_val(cfg, 'api_embedding_model') or 'text-embedding-3-large',
     'api_dimensions': get_val(cfg, 'api_embedding_dimensions') or 1024
 })
 
-# 同步检索配置
 search = get_fields(cfg, 'backend_search')
 if search:
     backend.setdefault('search', {}).update({
@@ -55,7 +52,6 @@ if search:
         'similarity_threshold': get_val(cfg, 'similarity_threshold') or 0.6
     })
 
-# 同步功能开关
 features = get_fields(cfg, 'backend_features')
 if features:
     backend.setdefault('entity_extraction', {}).update({

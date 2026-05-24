@@ -9,52 +9,12 @@ import os
 import re
 import asyncio
 from datetime import datetime
+from sentence_transformers import SentenceTransformer
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+import torch
 
-
-class EmbeddingModel:
-    """统一的 Embedding 接口，支持本地 SentenceTransformer 和 OpenAI 兼容 API 两种模式"""
-
-    def __init__(self, emb_type: str, local_model=None,
-                 api_key: str = None, api_base_url: str = None,
-                 api_model: str = None, dimensions: int = None):
-        self.emb_type = emb_type
-        self._local = local_model
-        self._api_key = api_key
-        self._api_base_url = (api_base_url or '').rstrip('/')
-        self._api_model = api_model
-        self._dimensions = dimensions
-
-    def encode(self, texts: list) -> np.ndarray:
-        """与 SentenceTransformer.encode() 兼容的接口，始终返回 np.ndarray"""
-        if self.emb_type == 'local':
-            return self._local.encode(texts)
-        return self._encode_api(texts)
-
-    def _encode_api(self, texts: list) -> np.ndarray:
-        import requests
-        payload = {"model": self._api_model, "input": texts}
-        if self._dimensions:
-            payload["dimensions"] = self._dimensions
-        resp = requests.post(
-            f"{self._api_base_url}/embeddings",
-            headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
-            json=payload,
-            timeout=30
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        vectors = [item["embedding"] for item in sorted(data["data"], key=lambda x: x["index"])]
-        return np.array(vectors, dtype=np.float32)
-
-    def to(self, device):
-        """兼容 .to('cuda') 调用（API 模式下为空操作）"""
-        if self.emb_type == 'local' and self._local is not None:
-            self._local = self._local.to(device)
-        return self
-
-app = FastAPI(title="MemOS API for 肥牛AI", version="1.0.0")
+app = FastAPI(title="MemOS API", version="1.0.0")
 
 # CORS 配置
 app.add_middleware(
@@ -68,7 +28,7 @@ app.add_middleware(
 # 全局变量
 embedding_model = None
 memory_store = []  # 简单的内存存储
-USER_ID = "feiniu_default"
+USER_ID = "default_user"
 llm_config = None  # LLM 配置（用于记忆加工）
 full_config = None  # 完整配置（包含备用模型等）
 
@@ -133,64 +93,22 @@ async def startup_event():
             print(f"⚠️ 配置文件不存在: {config_path}")
             print("   记忆加工功能将不可用")
         
-        # 加载 Embedding 模型
+        # 加载 embedding 模型
+        print("📦 加载 Embedding 模型: ../../full-hub/rag-hub")
+        rag_model_path = os.path.join(os.path.dirname(__file__), "..", "..", "full-hub", "rag-hub")
+        embedding_model = SentenceTransformer(rag_model_path)
+        
+        # 使用 GPU 加速
+        if torch.cuda.is_available():
+            embedding_model = embedding_model.to('cuda')
+            print("✅ 使用 GPU 加速")
+        else:
+            print("ℹ️ 使用 CPU")
+        
+        # 加载已存在的记忆（如果有）
         data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
         os.makedirs(data_dir, exist_ok=True)
         memory_file = os.path.join(data_dir, "memory_store.json")
-        marker_file = os.path.join(data_dir, "embedding_marker.json")
-
-        emb_cfg = (full_config or {}).get('embedding', {})
-        use_api = emb_cfg.get('use_api', False)
-
-        if use_api:
-            api_model = emb_cfg.get('api_model', 'text-embedding-3-large')
-            dimensions = emb_cfg.get('api_dimensions', 1024)
-            api_key = llm_config.get('api_key', '') if llm_config else ''
-            api_base_url = llm_config.get('base_url', '') if llm_config else ''
-            print(f"📦 使用 API Embedding 模型: {api_model} (维度: {dimensions})")
-            new_marker = f"api:{api_model}:{dimensions}"
-            embedding_model = EmbeddingModel(
-                'api', api_key=api_key, api_base_url=api_base_url,
-                api_model=api_model, dimensions=dimensions
-            )
-        else:
-            rag_model_path = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'full-hub', 'rag-hub'))
-            print(f"📦 加载本地 Embedding 模型: {rag_model_path}")
-            try:
-                from sentence_transformers import SentenceTransformer
-                import torch
-                local_model = SentenceTransformer(rag_model_path)
-                if torch.cuda.is_available():
-                    local_model = local_model.to('cuda')
-                    print("✅ 使用 GPU 加速")
-                else:
-                    print("ℹ️ 使用 CPU")
-            except ImportError as ie:
-                raise RuntimeError(f"本地模式需要安装 sentence-transformers 和 torch: {ie}")
-            new_marker = f"local:{rag_model_path}"
-            embedding_model = EmbeddingModel('local', local_model=local_model)
-
-        # 检测 Embedding 模型是否更换，若更换则清空旧记忆（向量空间不兼容）
-        old_marker = None
-        if os.path.exists(marker_file):
-            try:
-                with open(marker_file, 'r', encoding='utf-8') as f:
-                    old_marker = json.load(f).get('marker')
-            except Exception:
-                pass
-        if old_marker and old_marker != new_marker:
-            print(f"⚠️ Embedding 模型已更换 ({old_marker} → {new_marker})")
-            print("🗑️ 清空旧记忆（向量空间不兼容，将重新积累）...")
-            if os.path.exists(memory_file):
-                import shutil
-                backup = memory_file + f".model_change_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                shutil.copy(memory_file, backup)
-                print(f"📦 已备份旧记忆到: {backup}")
-                os.remove(memory_file)
-        with open(marker_file, 'w', encoding='utf-8') as f:
-            json.dump({'marker': new_marker, 'updated_at': datetime.now().isoformat()}, f)
-
-        # 加载已存在的记忆（如果有）
         
         if os.path.exists(memory_file):
             try:
@@ -265,7 +183,7 @@ async def startup_event():
         
         print("✅ MemOS 服务启动成功!")
         print(f"📍 向量存储路径: ./memos_system/data")
-        print(f"🧠 Embedding 模型: {new_marker}")
+        print(f"🧠 Embedding 模型: ./full-hub/rag-hub")
         print(f"🤖 记忆加工 LLM: {llm_config.get('model', 'N/A') if llm_config else '未配置'}")
         
     except Exception as e:
@@ -280,7 +198,7 @@ async def process_memory_with_llm(content: str, role: str = "user") -> dict:
     
     Args:
         content: 对话内容
-        role: 发言者角色 - "user"表示使用者（主人），"assistant"表示AI（肥牛）
+        role: 发言者角色 - "user"表示使用者（用户），"assistant"表示AI（AI）
     
     Returns:
         dict: {"content": 加工后的内容, "importance": 重要度0.1-1.0}
@@ -306,23 +224,23 @@ async def process_memory_with_llm(content: str, role: str = "user") -> dict:
         
         # 根据角色设置不同的提示
         if role == "user":
-            role_hint = "【主人说】"
+            role_hint = "【用户说】"
         else:
-            role_hint = "【肥牛说】"
+            role_hint = "【AI说】"
         
         # 构建记忆加工 prompt（自然语言格式）
         prompt = f"""从对话中提取关键信息，用自然流畅的语言记录。
 
 身份说明：
-- "主人"是使用AI的真人用户
-- "肥牛"是AI助手（不是真人）
+- "用户"是使用AI的真人用户
+- "AI"是AI助手（不是真人）
 
 {role_hint}
 {content}
 
 提取规则：
 1. 用自然的中文描述，像写日记一样
-2. 示例："主人喜欢在晚上聊天；说自己最近工作很忙"
+2. 示例："用户喜欢在晚上聊天；说自己最近工作很忙"
 3. 多个要点用分号连接，保留关键细节
 4. 忽略无意义的闲聊
 
@@ -455,16 +373,16 @@ async def process_conversation_batch(conversation: str) -> Dict[str, Any]:
     prompt = f"""你是记忆提取专家。从以下多轮对话中提取关键事实，用自然流畅的语言记录。
 
 身份说明：
-- "主人"是使用AI的真人用户
-- "肥牛"是AI助手（不是真人）
+- "用户"是使用AI的真人用户
+- "AI"是AI助手（不是真人）
 
 提取规则：
 1. 用自然的中文描述，像写日记一样记录要点
 2. 示例格式：
-   - "主人常在晚上与AI互动，称呼AI为肥牛；喜欢听AI唱歌"
-   - "主人说自己生日是5月20日，希望AI记住"
-   - "主人最近在学Python，问了很多编程问题"
-   - "AI承诺帮主人提醒明天的会议"
+   - "用户常在晚上与AI互动，称呼AI为AI；喜欢听AI唱歌"
+   - "用户说自己生日是5月20日，希望AI记住"
+   - "用户最近在学Python，问了很多编程问题"
+   - "AI承诺帮用户提醒明天的会议"
 3. 多个要点可以用分号或逗号连接
 4. 每条记忆15-80字，保留关键细节
 5. 忽略无意义的闲聊（如"嗯"、"好的"、"知道了"）
@@ -608,7 +526,7 @@ async def process_conversation_batch(conversation: str) -> Dict[str, Any]:
 @app.get("/")
 async def root():
     return {
-        "service": "MemOS API for 肥牛AI",
+        "service": "MemOS API",
         "version": "1.0.0",
         "status": "running",
         "user_id": USER_ID
@@ -649,7 +567,7 @@ async def add_memory(request: AddMemoryRequest):
             content = msg.get('content', '')
             role = msg.get('role', 'user')
             if content and len(content.strip()) > 0:
-                role_label = "主人" if role == 'user' else "肥牛"
+                role_label = "用户" if role == 'user' else "AI"
                 conversation_text.append(f"【{role_label}】{content}")
         
         if not conversation_text:
@@ -1458,7 +1376,7 @@ async def get_statistics():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  MemOS 记忆服务 for 肥牛AI")
+    print("  MemOS 记忆服务 for AIAI")
     print("=" * 60)
     print("  端口: 8003")
     print("  文档: http://127.0.0.1:8003/docs")

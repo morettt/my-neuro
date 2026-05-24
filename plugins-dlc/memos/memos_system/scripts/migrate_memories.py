@@ -75,7 +75,7 @@ def migrate():
             print("=" * 60)
             print()
             print("现在您可以：")
-            print("1. 启动肥牛AI，体验智能记忆召回")
+            print("1. 启动AIAI，体验智能记忆召回")
             print("2. 运行 MEMOS-WebUI.bat 查看和管理记忆")
             print()
         else:

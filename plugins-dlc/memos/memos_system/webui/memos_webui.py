@@ -1293,7 +1293,7 @@ elif page == "🔍 智能检索":
                 try:
                     response = requests.post(
                         f"{MEMOS_API_URL}/search",
-                        json={"query": query, "top_k": top_k, "user_id": "feiniu_default"},
+                        json={"query": query, "top_k": top_k, "user_id": "default_user"},
                         timeout=5
                     )
                     
@@ -1365,7 +1365,7 @@ elif page == "✏️ 新增记忆":
                         f"{MEMOS_API_URL}/add_raw",
                         json={
                             "messages": [{"content": content, "role": "user", "importance": importance}],
-                            "user_id": "feiniu_default"
+                            "user_id": "default_user"
                         },
                         timeout=10
                     )
@@ -1394,7 +1394,7 @@ elif page == "✏️ 新增记忆":
                     try:
                         response = requests.post(
                             f"{MEMOS_API_URL}/add",
-                            json={"messages": [{"role": "user", "content": content}], "user_id": "feiniu_default"},
+                            json={"messages": [{"role": "user", "content": content}], "user_id": "default_user"},
                             timeout=30
                         )
                         if response.status_code == 200:
@@ -1613,6 +1613,6 @@ st.markdown("---")
 st.markdown("""
 <div style="text-align: center; padding: 20px; color: #64748b;">
     <p style="font-family: 'Orbitron', sans-serif; letter-spacing: 2px;">MEMOS</p>
-    <p style="font-size: 0.8em;">Memory Operating System | 肥牛AI 集成版本</p>
+    <p style="font-size: 0.8em;">Memory Operating System | AIAI 集成版本</p>
 </div>
 """, unsafe_allow_html=True)

@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemOS - 记忆中心</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- vis-network for knowledge graph -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+</head>
+<body>
+    <!-- Background Effects -->
+    <div class="cyber-grid-bg"></div>
+    <div class="cyber-scanline"></div>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-container">
+                    <span class="logo-icon">🧠</span>
+                    <h1 class="logo-text">MEMOS</h1>
+                </div>
+                <div class="system-status">
+                    <span class="status-dot" id="api-status-dot"></span>
+                    <span class="status-text" id="api-status-text">系统连接中...</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <button class="nav-btn active" data-tab="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-text">数据总览</span>
+                </button>
+                <button class="nav-btn" data-tab="memory-list">
+                    <span class="nav-icon">📋</span>
+                    <span class="nav-text">记忆管理</span>
+                </button>
+                <button class="nav-btn" data-tab="memory-ops">
+                    <span class="nav-icon">🔧</span>
+                    <span class="nav-text">记忆操作</span>
+                </button>
+                <button class="nav-btn" data-tab="image-memory">
+                    <span class="nav-icon">🖼️</span>
+                    <span class="nav-text">图片记忆</span>
+                </button>
+                <button class="nav-btn" data-tab="knowledge-graph">
+                    <span class="nav-icon">🕸️</span>
+                    <span class="nav-text">知识图谱</span>
+                </button>
+                <button class="nav-btn" data-tab="knowledge-base">
+                    <span class="nav-icon">📥</span>
+                    <span class="nav-text">知识库</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="metric-mini">
+                    <span class="metric-label">总记忆数</span>
+                    <span class="metric-value" id="sidebar-total-memory">0</span>
+                </div>
+                <div class="footer-text">© 2026 MemOS | Powered by AI</div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Tab -->
+            <section id="dashboard" class="tab-pane active">
+                <header class="page-header">
+                    <h2>📊 数据总览</h2>
+                    <p class="subtitle">查看系统统计和实时状态</p>
+                </header>
+                
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-title">总记忆数</div>
+                        <div class="metric-value highlight" id="dash-total-memory">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">实体数</div>
+                        <div class="metric-value" id="dash-entity-count">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">今日新增</div>
+                        <div class="metric-value" id="dash-today-count">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">本周新增</div>
+                        <div class="metric-value" id="dash-week-count">0</div>
+                    </div>
+                </div>
+
+                <div class="status-grid">
+                    <div class="status-card">
+                        <h3 class="card-title">存储状态</h3>
+                        <div class="status-item">
+                            <span class="status-label">平均重要度</span>
+                            <span class="status-value" id="dash-avg-importance">0%</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">向量数据库</span>
+                            <span class="status-value">Qdrant</span>
+                        </div>
+                    </div>
+                    <div class="status-card">
+                        <h3 class="card-title">功能状态</h3>
+                        <div class="status-item">
+                            <span class="status-label">知识图谱</span>
+                            <span class="status-value" id="dash-graph-status">检查中...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">图片记忆</span>
+                            <span class="status-value">已启用</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Memory List Tab -->
+            <section id="memory-list" class="tab-pane">
+                <header class="page-header">
+                    <h2>📋 记忆管理</h2>
+                    <p class="subtitle">浏览、筛选和管理所有记忆</p>
+                </header>
+
+                <div class="filter-bar">
+                    <div class="filter-group">
+                        <select id="filter-type" class="cyber-select">
+                            <option value="">全部类型</option>
+                            <option value="preference">偏好</option>
+                            <option value="fact">事实</option>
+                            <option value="episodic">情景</option>
+                            <option value="semantic">语义</option>
+                            <option value="general">通用</option>
+                        </select>
+                        <input type="text" id="search-keyword" class="cyber-input" placeholder="搜索关键词...">
+                        <select id="filter-limit" class="cyber-select">
+                            <option value="10">10条/页</option>
+                            <option value="20" selected>20条/页</option>
+                            <option value="50">50条/页</option>
+                        </select>
+                        <button id="btn-search" class="cyber-btn primary">搜索</button>
+                    </div>
+                </div>
+
+                <div class="memory-list-container" id="memory-list-container">
+                    <!-- Memory cards will be injected here -->
+                    <div class="loading-text">加载中...</div>
+                </div>
+
+                <div class="pagination" id="pagination">
+                    <!-- Pagination will be injected here -->
+                </div>
+            </section>
+
+            <!-- Memory Operations Tab -->
+            <section id="memory-ops" class="tab-pane">
+                <header class="page-header">
+                    <h2>🔧 记忆操作</h2>
+                    <p class="subtitle">智能检索与新增记忆</p>
+                </header>
+
+                <div class="ops-grid">
+                    <div class="ops-card">
+                        <h3 class="card-title">智能检索</h3>
+                        <div class="form-group">
+                            <input type="text" id="ops-search-query" class="cyber-input full-width" placeholder="输入你想查询的内容...">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label>结果数量: <span id="ops-topk-val">5</span></label>
+                                <input type="range" id="ops-topk" min="1" max="20" value="5" class="cyber-range">
+                            </div>
+                            <div class="form-group half">
+                                <label>相似度阈值: <span id="ops-threshold-val">0.5</span></label>
+                                <input type="range" id="ops-threshold" min="0.1" max="0.9" step="0.1" value="0.5" class="cyber-range">
+                            </div>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="ops-use-graph" checked>
+                            <label for="ops-use-graph">启用图谱增强</label>
+                        </div>
+                        <button id="btn-ops-search" class="cyber-btn primary full-width">开始检索</button>
+                        
+                        <div id="ops-search-results" class="search-results-container">
+                            <!-- Search results will be injected here -->
+                        </div>
+                    </div>
+
+                    <div class="ops-card">
+                        <h3 class="card-title">新增记忆</h3>
+                        <div class="form-group">
+                            <textarea id="ops-add-content" class="cyber-textarea full-width" rows="5" placeholder="输入要添加的记忆内容..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>重要度: <span id="ops-add-imp-val">0.8</span></label>
+                            <input type="range" id="ops-add-imp" min="0.1" max="1.0" step="0.1" value="0.8" class="cyber-range">
+                        </div>
+                        <button id="btn-ops-add" class="cyber-btn success full-width">添加记忆</button>
+                    </div>
+
+                    <div class="ops-card" style="grid-column: 1 / -1;">
+                        <h3 class="card-title">全局去重合并</h3>
+                        <p class="subtitle" style="margin-bottom: 15px;">扫描所有记忆，使用大模型自动合并高度相似的内容。</p>
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label>相似度阈值: <span id="ops-dedup-threshold-val">0.9</span></label>
+                                <input type="range" id="ops-dedup-threshold" min="0.7" max="0.99" step="0.01" value="0.9" class="cyber-range">
+                            </div>
+                            <div class="form-group half" style="display: flex; align-items: flex-end;">
+                                <button id="btn-ops-dedup" class="cyber-btn danger full-width">开始全局去重</button>
+                            </div>
+                        </div>
+                        <div id="ops-dedup-results" class="search-results-container">
+                            <!-- Deduplicate results will be injected here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Image Memory Tab -->
+            <section id="image-memory" class="tab-pane">
+                <header class="page-header">
+                    <h2>🖼️ 图片记忆</h2>
+                    <p class="subtitle">管理视觉记忆</p>
+                </header>
+                <div class="image-gallery" id="image-gallery-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px;">
+                    <div class="loading-text">加载图片中...</div>
+                </div>
+            </section>
+
+            <!-- Knowledge Graph Tab -->
+            <section id="knowledge-graph" class="tab-pane">
+                <header class="page-header">
+                    <h2>🕸️ 知识图谱</h2>
+                    <p class="subtitle">实体关系网络可视化</p>
+                </header>
+                
+                <div class="graph-controls">
+                    <button id="btn-refresh-graph" class="cyber-btn">刷新图谱</button>
+                    <span class="graph-stats" id="graph-stats-info">实体: 0 | 关系: 0</span>
+                </div>
+                
+                <div class="graph-container">
+                    <div id="graph-network"></div>
+                </div>
+            </section>
+
+            <!-- Knowledge Base Tab -->
+            <section id="knowledge-base" class="tab-pane">
+                <header class="page-header">
+                    <h2>📥 知识库</h2>
+                    <p class="subtitle">导入外部知识</p>
+                </header>
+                <div class="ops-card">
+                    <h3 class="card-title">导入文档</h3>
+                    <div class="form-group">
+                        <label>文件路径或 URL (支持 .txt, .pdf, .md, http/https)</label>
+                        <input type="text" id="kb-import-source" class="cyber-input full-width" placeholder="例如: C:\data\doc.pdf 或 https://example.com">
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="kb-extract-entities">
+                        <label for="kb-extract-entities">提取实体到知识图谱</label>
+                    </div>
+                    <button id="btn-kb-import" class="cyber-btn primary full-width">开始导入</button>
+                    
+                    <div id="kb-import-result" class="search-results-container" style="margin-top: 15px;"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Modal for Editing Memory -->
+    <div id="edit-modal" class="cyber-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>✏️ 修改记忆</h3>
+                <button class="close-btn" id="btn-close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="edit-memory-id">
+                <div class="form-group">
+                    <label>内容</label>
+                    <textarea id="edit-memory-content" class="cyber-textarea full-width" rows="4"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="cyber-btn" id="btn-cancel-edit">取消</button>
+                <button class="cyber-btn primary" id="btn-save-edit">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

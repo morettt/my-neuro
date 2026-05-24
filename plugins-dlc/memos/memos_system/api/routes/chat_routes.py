@@ -25,7 +25,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[ChatMessage] = Field(..., description="对话历史")
-    user_id: str = Field(default="feiniu_default", description="用户 ID")
+    user_id: str = Field(default="default_user", description="用户 ID")
     
     # 记忆检索配置
     use_memory: bool = Field(default=True, description="是否使用记忆")
@@ -102,7 +102,7 @@ async def _stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
 @router.post("/memory-chat", summary="带记忆的对话（简化版）")
 async def memory_chat(
     query: str,
-    user_id: str = Query(default="feiniu_default"),
+    user_id: str = Query(default="default_user"),
     top_k: int = Query(default=5, ge=1, le=20)
 ):
     """

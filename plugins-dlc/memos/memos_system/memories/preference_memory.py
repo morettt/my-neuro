@@ -141,7 +141,7 @@ class PreferenceMemory:
             PreferenceCategory.GAME: ['游戏', '玩', 'galgame', 'rpg', 'jrpg', '攻略', '通关', '二次元游戏'],
             PreferenceCategory.HOBBY: ['爱好', '兴趣', '娱乐', '休闲'],
             PreferenceCategory.STYLE: ['风格', '傲娇', '毒舌', '互动', '性格', '态度'],
-            PreferenceCategory.ANIME: ['动漫', '动画', '番剧', '漫画', '二次元', 'vtuber', '声优', 'neuro', 'fake neuro'],
+            PreferenceCategory.ANIME: ['动漫', '动画', '番剧', '漫画', '二次元', 'vtuber', '声优'],
             PreferenceCategory.BOOK: ['书', '阅读', '小说', '文学', '读书'],
             PreferenceCategory.WORK: ['工作', '编程', 'python', 'ai', '代码', '开发'],
             PreferenceCategory.SCHEDULE: ['日程', '时间', '计划', '安排'],

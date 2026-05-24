@@ -108,7 +108,7 @@ class ImageMemoryItem(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now)
     
     # 用户
-    user_id: str = Field(default="feiniu_default")
+    user_id: str = Field(default="default_user")
 
 
 class ImageMemory:
@@ -221,7 +221,7 @@ class ImageMemory:
                     hash=meta_dict.get('hash', ''),
                     description=meta_dict.get('description'),  # 保留描述
                     tags=meta_dict.get('tags', []),
-                    user_id=meta_dict.get('user_id', 'feiniu_default'),
+                    user_id=meta_dict.get('user_id', 'default_user'),
                     created_at=created_at
                 )
                 self.metadata_cache[image_id] = metadata
@@ -296,7 +296,7 @@ class ImageMemory:
         image_type: str = "other",
         description: Optional[str] = None,
         tags: Optional[List[str]] = None,
-        user_id: str = "feiniu_default",
+        user_id: str = "default_user",
         auto_describe: bool = True
     ) -> Optional[ImageMetadata]:
         """
@@ -602,7 +602,7 @@ class ImageMemory:
     async def search(
         self,
         query: str,
-        user_id: str = "feiniu_default",
+        user_id: str = "default_user",
         top_k: int = 5,
         image_type: Optional[str] = None
     ) -> List[Dict[str, Any]]:
@@ -730,7 +730,7 @@ class ImageMemory:
     
     async def list_images(
         self,
-        user_id: str = "feiniu_default",
+        user_id: str = "default_user",
         image_type: Optional[str] = None,
         limit: int = 50
     ) -> List[ImageMetadata]:
@@ -815,7 +815,7 @@ class ImageMemory:
                             hash="",
                             description=None,  # 从文件系统扫描的没有描述
                             tags=[],
-                            user_id="feiniu_default",
+                            user_id="default_user",
                             created_at=datetime.fromtimestamp(stat.st_ctime)
                         )
                         

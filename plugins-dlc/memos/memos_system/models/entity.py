@@ -72,7 +72,7 @@ class Entity(BaseModel):
     
     # 用户
     user_id: str = Field(
-        default="feiniu_default",
+        default="default_user",
         description="所属用户 ID"
     )
     
@@ -121,7 +121,7 @@ class Entity(BaseModel):
             confidence=node_data.get('confidence', 1.0),
             created_at=datetime.fromisoformat(node_data['created_at']) if node_data.get('created_at') else datetime.now(),
             updated_at=datetime.fromisoformat(node_data['updated_at']) if node_data.get('updated_at') else None,
-            user_id=node_data.get('user_id', 'feiniu_default')
+            user_id=node_data.get('user_id', 'default_user')
         )
 
 

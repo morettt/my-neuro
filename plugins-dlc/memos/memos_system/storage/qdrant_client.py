@@ -681,7 +681,7 @@ def migrate_from_json(
             # 构建 payload
             payload = {
                 'content': mem.get('content', ''),
-                'user_id': mem.get('user_id', 'feiniu_default'),
+                'user_id': mem.get('user_id', 'default_user'),
                 'importance': mem.get('importance', 0.5),
                 'memory_type': mem.get('memory_type', 'general'),
                 'tags': mem.get('tags', []),

@@ -17,15 +17,12 @@
     }
   },
   "embedding": {
-    "model_path": "../full-hub/rag-hub",
-    "vector_size": 1024,
-    "use_api": true,
-    "api_model": "text-embedding-3-large",
-    "api_dimensions": 1024
+    "model_path": "../../../full-hub/rag-hub",
+    "vector_size": 1024
   },
   "search": {
-    "default_top_k": 5,
-    "similarity_threshold": 0.3,
+    "default_top_k": 3,
+    "similarity_threshold": 0.5,
     "enable_reranker": false,
     "enable_bm25": true,
     "bm25_weight": 0.3,
@@ -58,21 +55,23 @@
   },
   "llm": {
     "config": {
-      "model": "gemini-2.0-flash",
-      "api_key": "sk-zk225e73a53a5996adbf6bbb7c7a5594b4f69bedbc0be708",
-      "base_url": "https://api.zhizengzeng.com/v1"
+      "model": "deepseek-v4-pro",
+      "api_key": "sk-your-api-key-here",
+      "base_url": "https://api.deepseek.com",
+      "thinking_mode": "enabled",
+      "reasoning_effort": "max"
     }
   },
   "llm_fallback": {
     "enabled": true,
     "config": {
-      "model": "gemini-2.0-flash",
-      "api_key": "sk-zk225e73a53a5996adbf6bbb7c7a5594b4f69bedbc0be708",
-      "base_url": "https://api.zhizengzeng.com/v1"
+      "model": "google/gemini-3.1-pro-preview",
+      "api_key": "sk-your-api-key-here",
+      "base_url": "https://openrouter.ai/api/v1"
     }
   },
   "users": {
-    "default_user": "feiniu_default",
+    "default_user": "default_user",
     "enable_multi_user": false
   }
 }

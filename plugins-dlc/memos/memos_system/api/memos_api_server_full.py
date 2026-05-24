@@ -18,7 +18,7 @@ from memos.embedders.sentence_transformer import SenTranEmbedder, SenTranEmbedde
 from memos.llms.openai import OpenAILLM, OpenAILLMConfig
 from memos.vec_dbs.qdrant import QdrantVecDB, QdrantVecDBConfig
 
-app = FastAPI(title="MemOS API (MemCube版) for 肥牛AI", version="2.0.0")
+app = FastAPI(title="MemOS API (MemCube)", version="2.0.0")
 
 # CORS 配置
 app.add_middleware(
@@ -32,7 +32,7 @@ app.add_middleware(
 # 全局变量
 memcube = None
 llm_processor = None
-USER_ID = "feiniu_default"
+USER_ID = "default_user"
 
 
 # 请求模型
@@ -89,7 +89,7 @@ async def startup_event():
         
         vec_db_config = QdrantVecDBConfig(
             location=os.path.join(data_dir, "qdrant"),
-            collection_name="feiniu_memory"
+            collection_name="memos_collection"
         )
         vec_db = QdrantVecDB(vec_db_config)
         print(f"✅ 向量数据库配置完成: {data_dir}/qdrant")
@@ -138,7 +138,7 @@ async def startup_event():
 @app.get("/")
 async def root():
     return {
-        "service": "MemOS API (MemCube版) for 肥牛AI",
+        "service": "MemOS API (MemCube)",
         "version": "2.0.0",
         "framework": "memcube",
         "status": "running"

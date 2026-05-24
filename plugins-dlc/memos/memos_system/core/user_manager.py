@@ -57,13 +57,13 @@ class UserManager:
     def _create_default_user(self):
         """创建默认用户"""
         default_user = User(
-            id="feiniu_default",
-            name="肥牛默认用户",
+            id="default_user",
+            name="Default User",
             role=UserRole.USER
         )
         self.users[default_user.id] = default_user
         self._save_users()
-        logger.info("创建默认用户: feiniu_default")
+        logger.info("创建默认用户: default_user")
     
     def _save_users(self):
         """保存用户数据"""

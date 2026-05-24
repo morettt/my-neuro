@@ -137,6 +137,14 @@ class EntityExtractor:
                             "max_tokens": 1000
                         }
                         
+                        thinking_mode = str(config.get("thinking_mode", "")).lower()
+                        if thinking_mode in ("enabled", "disabled"):
+                            payload["thinking"] = {"type": thinking_mode}
+                        
+                        reasoning_effort = config.get("reasoning_effort")
+                        if reasoning_effort:
+                            payload["reasoning_effort"] = str(reasoning_effort)
+                        
                         async with session.post(
                             f"{config.get('base_url', '')}/chat/completions",
                             headers=headers,

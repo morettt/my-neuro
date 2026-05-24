@@ -71,7 +71,7 @@ MEMORY_TYPE_WEIGHTS = {
 
 # 兼容旧版：内存备份存储
 memory_store_backup = []
-USER_ID = "feiniu_default"
+USER_ID = "default_user"
 
 
 # ==================== 生命周期管理 ====================
@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="MemOS API for 肥牛AI",
+    title="MemOS API",
     version="2.0.0",
     description="集成 Qdrant + Neo4j 的完整版记忆系统",
     lifespan=lifespan
@@ -623,6 +623,35 @@ def get_storage():
     return qdrant_client
 
 
+def build_chat_completion_payload(
+    model: str,
+    messages: List[Dict[str, str]],
+    max_tokens: int,
+    temperature: float,
+    model_config: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """构建兼容 DeepSeek 思考模式的 Chat Completions 请求体"""
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens
+    }
+
+    model_config = model_config or {}
+    thinking_mode = str(model_config.get("thinking_mode", "")).lower()
+    if thinking_mode in ("enabled", "disabled"):
+        payload["thinking"] = {"type": thinking_mode}
+
+    reasoning_effort = model_config.get("reasoning_effort")
+    if reasoning_effort:
+        payload["reasoning_effort"] = str(reasoning_effort)
+
+    if thinking_mode != "enabled":
+        payload["temperature"] = temperature
+
+    return payload
+
+
 async def process_conversation_batch(conversation: str) -> Dict[str, Any]:
     """使用 LLM 从对话中提取记忆"""
     global llm_config, full_config
@@ -642,7 +671,9 @@ async def process_conversation_batch(conversation: str) -> Dict[str, Any]:
             'name': '主模型',
             'api_key': api_key,
             'model': model,
-            'base_url': base_url
+            'base_url': base_url,
+            'thinking_mode': llm_config.get('thinking_mode'),
+            'reasoning_effort': llm_config.get('reasoning_effort')
         })
     
     # 备用模型
@@ -663,8 +694,8 @@ async def process_conversation_batch(conversation: str) -> Dict[str, Any]:
     prompt = f"""你是记忆提取专家。从以下多轮对话中提取关键事实，并按类型严格分类。
 
 身份说明：
-- "主人"是使用AI的真人用户
-- "肥牛"是AI助手
+- "用户"是使用AI的真人用户
+- "AI"是AI助手
 
 提取规则：
 1. 用自然的中文描述要点，每条记忆15-80字
@@ -683,20 +714,20 @@ async def process_conversation_batch(conversation: str) -> Dict[str, Any]:
 preference > fact > episodic > procedural > semantic > general
 
 **分类示例**：
-- "主人喜欢吃辣的食物" → preference（表达喜好）
-- "主人的生日是5月20日" → fact（个人信息）
-- "主人今天去了健身房锻炼" → episodic（具体事件）
-- "主人每天早上都会喝咖啡" → procedural（日常习惯）
-- "主人了解Python编程" → semantic（知识技能）
+- "用户喜欢吃辣的食物" → preference（表达喜好）
+- "用户的生日是5月20日" → fact（个人信息）
+- "用户今天去了健身房锻炼" → episodic（具体事件）
+- "用户每天早上都会喝咖啡" → procedural（日常习惯）
+- "用户了解Python编程" → semantic（知识技能）
 
 对话内容：
 {conversation}
 
 请返回 JSON：
 {{"memories": [
-  {{"content": "主人喜欢吃辣的食物", "importance": 0.9, "memory_type": "preference", "tags": ["食物", "口味"]}},
-  {{"content": "主人今天去了健身房锻炼", "importance": 0.6, "memory_type": "episodic", "tags": ["健身", "运动"]}},
-  {{"content": "主人的生日是5月20日", "importance": 0.95, "memory_type": "fact", "tags": ["生日", "个人信息"]}}
+  {{"content": "用户喜欢吃辣的食物", "importance": 0.9, "memory_type": "preference", "tags": ["食物", "口味"]}},
+  {{"content": "用户今天去了健身房锻炼", "importance": 0.6, "memory_type": "episodic", "tags": ["健身", "运动"]}},
+  {{"content": "用户的生日是5月20日", "importance": 0.95, "memory_type": "fact", "tags": ["生日", "个人信息"]}}
 ]}}
 """
     
@@ -711,12 +742,13 @@ preference > fact > episodic > procedural > semantic > general
                         "Content-Type": "application/json"
                     }
                     
-                    payload = {
-                        "model": model_info['model'],
-                        "messages": [{"role": "user", "content": prompt}],
-                        "max_tokens": 2000,
-                        "temperature": 0.3
-                    }
+                    payload = build_chat_completion_payload(
+                        model=model_info['model'],
+                        messages=[{"role": "user", "content": prompt}],
+                        max_tokens=2000,
+                        temperature=0.3,
+                        model_config=model_info
+                    )
                     
                     async with session.post(
                         f"{model_info['base_url']}/chat/completions",
@@ -787,7 +819,7 @@ preference > fact > episodic > procedural > semantic > general
 async def root():
     """服务状态"""
     return {
-        "service": "MemOS API for 肥牛AI",
+        "service": "MemOS API",
         "version": "2.0.0",
         "status": "running",
         "storage": "qdrant" if qdrant_client else "memory",
@@ -839,7 +871,7 @@ async def add_memory(request: AddMemoryRequest):
             content = msg.get('content', '')
             role = msg.get('role', 'user')
             if content and len(content.strip()) > 0:
-                role_label = "主人" if role == 'user' else "肥牛"
+                role_label = "用户" if role == 'user' else "AI"
                 conversation_text.append(f"【{role_label}】{content}")
         
         if not conversation_text:
@@ -1367,11 +1399,23 @@ async def search_memory(request: SearchMemoryRequest):
                         for mem_id in graph_memory_ids[:5]:
                             if mem_id not in result_ids:
                                 memory = qdrant_client.get_memory(mem_id)
-                                if memory and memory.get('payload', {}).get('user_id') == user_id:
-                                    memory['graph_boost'] = 0.2
-                                    memory['similarity'] = 0.5  # 基础相似度
-                                    memory['graph_only'] = True
-                                    results.append(memory)
+                                pl = (memory or {}).get('payload') or {}
+                                if memory and pl.get('user_id') == user_id:
+                                    # get_memory 返回的是 {id, content, payload}，时间戳在 payload 内，需展平否则检索结果无 created_at
+                                    row = {
+                                        'id': memory.get('id'),
+                                        'content': memory.get('content') or pl.get('content', ''),
+                                        'similarity': 0.5,
+                                        'importance': pl.get('importance', 0.5),
+                                        'memory_type': pl.get('memory_type', 'general'),
+                                        'tags': pl.get('tags', []),
+                                        'created_at': pl.get('created_at') or pl.get('timestamp'),
+                                        'updated_at': pl.get('updated_at'),
+                                        'entity_ids': pl.get('entity_ids', []),
+                                        'graph_boost': 0.2,
+                                        'graph_only': True,
+                                    }
+                                    results.append(row)
                                     graph_only_count += 1
                         
                         if graph_boost_count > 0 or graph_only_count > 0:
@@ -1416,19 +1460,32 @@ async def search_memory(request: SearchMemoryRequest):
         # 格式化返回
         formatted_results = []
         for r in results:
+            pl = r.get('payload') if isinstance(r.get('payload'), dict) else {}
+            created_at = (
+                r.get('created_at')
+                or r.get('timestamp')
+                or pl.get('created_at')
+                or pl.get('timestamp')
+            )
+            updated_at = r.get('updated_at') or pl.get('updated_at')
+            _tags = r.get('tags')
+            if not isinstance(_tags, list):
+                _tags = pl.get('tags', [])
             item = {
-                "content": r.get('content', ''),
+                "content": r.get('content') or pl.get('content', ''),
                 "similarity": round(r.get('similarity', 0), 4),
-                "importance": r.get('importance', 0.5),
-                "memory_type": r.get('memory_type', 'general'),
-                "tags": r.get('tags', []),
+                "importance": r.get('importance', pl.get('importance', 0.5)),
+                "memory_type": r.get('memory_type', pl.get('memory_type', 'general')),
+                "tags": _tags,
                 "type_weight": r.get('type_weight', 1.0),
                 "graph_boost": round(r.get('graph_boost', 0), 4),
                 "final_score": round(r.get('final_score', 0), 4),
-                "timestamp": r.get('created_at'),
-                "created_at": r.get('created_at'),
-                "updated_at": r.get('updated_at')
+                "timestamp": created_at,
+                "created_at": created_at,
+                "updated_at": updated_at,
             }
+            if r.get('id') is not None:
+                item["id"] = r.get('id')
             # 添加 BM25 相关字段（如果启用）
             if enable_bm25:
                 item["vector_score"] = round(r.get('vector_score', 0), 4)
@@ -1599,12 +1656,13 @@ async def merge_memories_v2(keeper_id: str, content_a: str, content_b: str) -> b
                     "Content-Type": "application/json"
                 }
                 
-                payload = {
-                    "model": model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 2000,
-                    "temperature": 0.2
-                }
+                payload = build_chat_completion_payload(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=2000,
+                    temperature=0.2,
+                    model_config=llm_config
+                )
                 
                 async with session.post(
                     f"{base_url}/chat/completions",

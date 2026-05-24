@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, scrolledtext
-import threading, os, sys, subprocess, tarfile, re, urllib.request, traceback
+import threading, os, sys, subprocess, tarfile, re, urllib.request
 from datetime import datetime
 
 CONDA_ENV_MODEL = "morelle/my-neuro-env"
@@ -36,8 +36,8 @@ class InstallerApp(tk.Tk):
         self.resizable(False, False)
         self.checks   = {}
         self._vram_ok = True
-        self._log_path = os.path.join(INSTALL_DIR, "installer.log")
-        self._log_file = open(self._log_path, "w", encoding="utf-8", buffering=1)
+        self._install_proc = None
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._build_ui()
         self._build_pages()
         self._show("welcome")
@@ -46,6 +46,14 @@ class InstallerApp(tk.Tk):
         self.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
 
     # ── 外壳 ──────────────────────────────────────────────
+    def _on_close(self):
+        if self._install_proc is not None and self._install_proc.poll() is None:
+            try:
+                self._install_proc.terminate()
+            except Exception:
+                pass
+        self.destroy()
+
     def _build_ui(self):
         sidebar = tk.Frame(self, bg=SIDE, width=190)
         sidebar.pack(side="left", fill="y")
@@ -160,7 +168,7 @@ class InstallerApp(tk.Tk):
             self._btn_next.configure(
                 text="关闭", bg=CARD, fg=FG2,
                 activebackground=SEP, state="normal",
-                command=self.destroy)
+                command=self._on_close)
             self._btn_next.pack(side="right", padx=18, pady=10)
 
     def _next(self):
@@ -400,15 +408,9 @@ class InstallerApp(tk.Tk):
     # ── 日志 / 进度（线程安全）────────────────────────────
     def log_msg(self, msg):
         ts = datetime.now().strftime("%H:%M:%S")
-        line = f"[{ts}] {msg}\n"
-        try:
-            self._log_file.write(line)
-            self._log_file.flush()
-        except Exception:
-            pass
         def _u():
             self.log.configure(state="normal")
-            self.log.insert("end", line)
+            self.log.insert("end", f"[{ts}] {msg}\n")
             self.log.see("end")
             self.log.configure(state="disabled")
         self.after(0, _u)
@@ -508,6 +510,12 @@ class InstallerApp(tk.Tk):
                             self.set_file_progress(
                                 int(i / total * 100),
                                 f"解压中...  {i} / {total} 文件")
+                # 解压后必须确认关键文件就位才能删除 tar，
+                # 否则失败重装时还要重新下载 3.6 GB。
+                if not os.path.exists(env_python):
+                    raise RuntimeError(
+                        "环境包解压后未找到 env/python.exe，文件可能不完整。"
+                        "请检查磁盘空间后重试。")
                 os.remove(tar_path)
                 self.log_msg("解压完成")
                 self.set_progress(58, "环境就绪")
@@ -524,11 +532,20 @@ class InstallerApp(tk.Tk):
 
             if flags:
                 cmd = [env_python, batch_script] + flags
+                # 子进程编码 / PATH 双保险：保证 print 中文是 UTF-8（与本侧 encoding="utf-8" 对齐），
+                # 同时把 env/Scripts 加到 PATH，让 modelscope CLI 在干净机器上也能找到。
+                child_env = os.environ.copy()
+                child_env["PYTHONIOENCODING"] = "utf-8"
+                child_env["PYTHONUTF8"] = "1"
+                env_scripts = os.path.join(env_dir, "Scripts")
+                if os.path.isdir(env_scripts):
+                    child_env["PATH"] = env_scripts + os.pathsep + child_env.get("PATH", "")
                 proc = subprocess.Popen(
                     cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     encoding="utf-8", errors="replace", bufsize=1,
-                    cwd=install_dir,
+                    cwd=install_dir, env=child_env,
                     creationflags=subprocess.CREATE_NO_WINDOW)
+                self._install_proc = proc
                 step = 60.0
                 for line in proc.stdout:
                     self._handle_line(line, step)
@@ -536,6 +553,7 @@ class InstallerApp(tk.Tk):
                         step += 0.2
                     self.set_progress(int(step))
                 proc.wait()
+                self._install_proc = None
                 if proc.returncode != 0:
                     raise RuntimeError("模型下载失败")
 
@@ -548,17 +566,11 @@ class InstallerApp(tk.Tk):
             self._show("done")
 
         except Exception as e:
-            tb = traceback.format_exc()
             self.log_msg(f"[错误] {e}")
-            try:
-                self._log_file.write(tb)
-                self._log_file.flush()
-            except Exception:
-                pass
             self.set_progress(0, "安装失败")
             self._done_icon.configure(text="✗", fg=RED)
             self._done_title.configure(text="安装失败")
-            self._done_sub.configure(text=f"{e}\n日志: {self._log_path}")
+            self._done_sub.configure(text=str(e))
             self._show("done")
 
 

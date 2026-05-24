@@ -119,7 +119,7 @@ class TextualMemoryItem(BaseModel):
     
     # 用户
     user_id: str = Field(
-        default="feiniu_default",
+        default="default_user",
         description="所属用户 ID"
     )
     
@@ -171,7 +171,7 @@ class TextualMemoryItem(BaseModel):
             updated_at=datetime.fromisoformat(payload['updated_at']) if payload.get('updated_at') else None,
             merge_count=payload.get('merge_count', 0),
             merged_from=payload.get('merged_from', []),
-            user_id=payload.get('user_id', 'feiniu_default')
+            user_id=payload.get('user_id', 'default_user')
         )
 
 

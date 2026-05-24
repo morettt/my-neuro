@@ -605,7 +605,7 @@ with tab4:
     with op_tab2:
         st.subheader("新增记忆")
         content = st.text_area("内容", height=150, key="t4_content", 
-                               placeholder="输入要保存的记忆内容...\n例如：主人今天说他喜欢吃火锅。")
+                               placeholder="输入要保存的记忆内容...\n例如：用户今天说他喜欢吃火锅。")
         
         # 添加模式选择
         add_mode = st.radio(
@@ -635,7 +635,7 @@ with tab4:
                         # 使用 /add 端点（LLM 加工版）
                         status, result = api_post("/add", {
                             "messages": [{"content": content, "role": "user"}],
-                            "user_id": "feiniu_default"
+                            "user_id": "default_user"
                         }, timeout=60)
                         if status == 200:
                             added = result.get('added', 0)
