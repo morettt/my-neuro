@@ -166,5 +166,11 @@
     "desc": "Python 定时任务插件：到点提醒、定时让 AI 执行任务、定时触发指定 LLM 工具；支持一次性/每天/每周/每月/每年及「仅工作日」「仅法定节假日」（timor.tech 节假日数据 + 本地缓存）。数据 JSON 持久化，重启自动恢复调度。仓库内含 vendor 预下载 wheel，配合新版宿主可从市场/ZIP 离线自动 pip 安装依赖；移植思路来自 astrbot_plugin_sy。",
     "author": "爱熬夜的人形兔",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-timed-tasks"
+  },
+  "screen-narrator": {
+    "display_name": "screen-narrator",
+    "desc": "屏幕感知插件：用户每次发话前自动截取桌面截图，由独立视觉模型（OpenAI 兼容 API，如 Qwen-VL 系列）转述为中文文字，并通过 system prompt 补丁注入主对话上下文，让主 LLM 在不破坏对话历史的前提下感知用户屏幕。支持触发来源过滤（voice/text）、转述间隔复用、超时与长度兜底；截图或视觉模型失败时静默跳过，不阻塞用户消息发送。需自备视觉模型 API Key，与主 LLM 完全隔离。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-screen-narrator"
   }
 }
