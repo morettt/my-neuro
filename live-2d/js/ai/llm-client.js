@@ -1,5 +1,6 @@
 // llm-client.js - 统一的LLM API客户端
 const { logToTerminal, handleAPIError } = require('../api-utils.js');
+const { sanitizeToolMessageSequence } = require('./tool-message-utils.js');
 
 /**
  * 统一的LLM客户端
@@ -38,12 +39,10 @@ class LLMClient {
         // 添加工具列表(如果提供)
         if (tools && tools.length > 0) {
             requestBody.tools = tools;
-        } else if (tools === null) {
-            // null 表示设计预期不传工具（如视觉模型调用），不记录警告
-            console.log('[LLMClient] 本次调用不传递工具列表（预期行为）');
-        } else if (tools && tools.length === 0) {
-            // 空数组表示应该有工具但列表为空，这才是真正的问题
-            logToTerminal('warn', `⚠️ 工具列表为空，请检查工具配置`);
+        } else {
+            // tools 为 null（视觉模型调用）或空数组（强制获取最终回复、未配置任何工具）
+            // 都是预期行为，仅记录 info 便于排查，不输出警告
+            logToTerminal('info', `本次调用未传递工具列表 (tools=${tools ? '[]' : 'null'})`);
         }
 
         logToTerminal('info', `已将内容发送给AI..`);
@@ -147,7 +146,7 @@ class LLMClient {
      * @returns {Array} 清理后的消息数组
      */
     _cleanMessagesForAPI(messages) {
-        return messages.map(msg => {
+        const normalizedMessages = messages.map(msg => {
             // 🔥 处理 assistant 消息的 content 为 null 的情况
             if (msg.role === 'assistant') {
                 // 如果有 tool_calls 但 content 为 null,设为空字符串
@@ -199,6 +198,11 @@ class LLMClient {
             // 其他消息保持原样
             return msg;
         });
+
+        // 🔥 发送前的最后一道防线：清理 assistant.tool_calls 与 tool 响应不配对的序列。
+        // 无论坏数据来自旧版本保存的对话历史、裁剪还是工具执行中断，
+        // 都保证发给 API 的序列合法，避免 "tool_calls must be followed by tool messages" 400 错误
+        return sanitizeToolMessageSequence(normalizedMessages);
     }
 
     /**

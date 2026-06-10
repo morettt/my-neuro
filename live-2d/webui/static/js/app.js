@@ -997,7 +997,6 @@ async function loadLLMConfig() {
 async function saveChatSettings() {
     const settings = {
         intro_text: document.getElementById('intro-text').value,
-        max_rounds: parseInt(document.getElementById('max-rounds').value),
         max_messages: parseInt(document.getElementById('max-messages').value),
         enable_limit: document.getElementById('enable-limit').checked,
         persistent_history: document.getElementById('persistent-history').checked,
@@ -2510,8 +2509,7 @@ async function saveDialogSettings() {
         // 保存基础对话配置到 /api/settings/dialog
         const config = {
             intro_text: document.getElementById('intro-text').value,
-            max_rounds: parseInt(document.getElementById('max-rounds').value) || 10,
-            max_messages: parseInt(document.getElementById('max-messages').value) || 50,
+            max_messages: parseInt(document.getElementById('max-messages').value) || 30,
             enable_limit: document.getElementById('enable-limit').checked,
             persistent_history: document.getElementById('persistent-history').checked,
             tts_enabled: document.getElementById('tts-enabled').checked,
@@ -2571,8 +2569,7 @@ async function loadDialogConfig() {
         if (response.ok) {
             const config = await response.json();
             document.getElementById('intro-text').value = config.intro_text || t('ui_settings.intro_placeholder');
-            document.getElementById('max-rounds').value = config.max_rounds || 10;
-            document.getElementById('max-messages').value = config.max_messages || 50;
+            document.getElementById('max-messages').value = config.max_messages || 30;
             document.getElementById('enable-limit').checked = config.enable_limit === true;
             document.getElementById('persistent-history').checked = config.persistent_history === true;
             document.getElementById('tts-enabled').checked = config.tts_enabled === true;

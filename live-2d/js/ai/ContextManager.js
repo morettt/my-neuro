@@ -1,13 +1,16 @@
 // ContextManager.js - 上下文管理模块
 const fs = require('fs');
 const path = require('path');
+const {
+    sanitizeToolMessageSequence,
+    trimMessagesPreservingToolRounds
+} = require('./tool-message-utils.js');
 
 class ContextManager {
     constructor(voiceChatInterface) {
         this.voiceChat = voiceChatInterface;
         this.enableContextLimit = voiceChatInterface.enableContextLimit;
         this.maxContextMessages = voiceChatInterface.maxContextMessages;
-        this.maxRounds = voiceChatInterface.maxRounds || 10;
     }
 
     // 设置上下文限制
@@ -19,7 +22,7 @@ class ContextManager {
         }
     }
 
-    // 设置最大上下文消息数（兜底）
+    // 设置最大上下文消息数
     setMaxContextMessages(count) {
         if (count < 1) throw new Error('最大消息数不能小于1');
         this.maxContextMessages = count;
@@ -29,81 +32,9 @@ class ContextManager {
         }
     }
 
-    // 设置最大轮数（优先）
-    setMaxRounds(count) {
-        if (count < 1) throw new Error('最大轮数不能小于1');
-        this.maxRounds = count;
-        this.voiceChat.maxRounds = count;
-        if (this.enableContextLimit) {
-            this.trimMessages();
-        }
-    }
-
-    /**
-     * 按轮分组（方案B：完整工具调用链视为一轮）
-     * 一轮 = 从 user 开始，包含完整的工具调用链
-     */
-    groupIntoRounds(messages) {
-        const rounds = [];
-        let currentRound = [];
-        let pendingToolCalls = new Set();
-
-        for (const msg of messages) {
-            // 新一轮开始：user消息 + 当前轮已有内容 + 无待响应工具
-            if (msg.role === 'user' && currentRound.length > 0 && pendingToolCalls.size === 0) {
-                rounds.push(currentRound);
-                currentRound = [];
-            }
-
-            currentRound.push(msg);
-
-            // 记录待响应的tool_calls
-            if (msg.role === 'assistant' && msg.tool_calls) {
-                msg.tool_calls.forEach(tc => pendingToolCalls.add(tc.id));
-            }
-
-            // 移除已响应的tool_calls
-            if (msg.role === 'tool') {
-                pendingToolCalls.delete(msg.tool_call_id);
-            }
-        }
-
-        // 最后一轮
-        if (currentRound.length > 0) {
-            rounds.push(currentRound);
-        }
-
-        return rounds;
-    }
-
-    /**
-     * 清理孤立消息（保险）
-     * 移除没有对应 assistant+tool_calls 的 tool 消息
-     */
-    cleanupIsolatedToolMessages(messages) {
-        const toolCallIds = new Set();
-
-        // 收集所有 tool_call_ids
-        for (const msg of messages) {
-            if (msg.role === 'assistant' && msg.tool_calls) {
-                msg.tool_calls.forEach(tc => toolCallIds.add(tc.id));
-            }
-        }
-
-        // 过滤孤立的 tool 消息
-        return messages.filter(msg => {
-            if (msg.role === 'tool' && !toolCallIds.has(msg.tool_call_id)) {
-                console.log(`[保险] 移除孤立tool响应: ${msg.tool_call_id}`);
-                return false;
-            }
-            return true;
-        });
-    }
-
-    /**
-     * 裁剪消息（按轮优先 + 条数兜底）
-     * 优先保证轮完整性，再用 max_messages 作为上限保险
-     */
+    // 裁剪消息
+    // 以「assistant+tool_calls 及其 tool 响应」为不可分割单元从后向前保留，
+    // 保证裁剪永远不会切断工具调用链（避免严格模式 API 报 400）
     trimMessages() {
         if (!this.enableContextLimit) {
             console.log('上下文限制已禁用，不裁剪消息');
@@ -115,81 +46,10 @@ class ContextManager {
 
         console.log(`裁剪前: 系统消息 ${systemMessages.length} 条, 非系统消息 ${nonSystemMessages.length} 条`);
 
-        // 🔥 步骤1：按轮分组
-        const rounds = this.groupIntoRounds(nonSystemMessages);
-        const maxRounds = this.maxRounds || 10;
+        const recentMessages = trimMessagesPreservingToolRounds(nonSystemMessages, this.maxContextMessages);
+        this.voiceChat.messages = [...systemMessages, ...recentMessages];
 
-        // 🔥 步骤2：保留最近 maxRounds 轮
-        let recentRounds = rounds.slice(-maxRounds);
-        let trimmedMessages = recentRounds.flat();
-
-        // 🔥 步骤3：max_messages 兜底检查
-        // 如果轮裁剪后仍超过 max_messages，按条数裁剪（但会尝试保证完整性）
-        const maxMessages = this.maxContextMessages || 100;
-        if (trimmedMessages.length > maxMessages) {
-            console.log(`[兜底] 轮裁剪后 ${trimmedMessages.length} 条 > max_messages ${maxMessages}，执行条数裁剪`);
-            
-            // 从后向前裁剪，尽量保证完整性
-            const safeTrimmed = this.trimByMessageCount(trimmedMessages, maxMessages);
-            trimmedMessages = safeTrimmed;
-            
-            // 更新 recentRounds 计数（用于日志）
-            recentRounds = this.groupIntoRounds(trimmedMessages);
-        }
-
-        // 🔥 步骤4：清理孤立消息（保险）
-        const cleanedMessages = this.cleanupIsolatedToolMessages(trimmedMessages);
-
-        this.voiceChat.messages = [...systemMessages, ...cleanedMessages];
-
-        console.log(`裁剪后: 消息总数 ${this.voiceChat.messages.length} 条, 保留 ${recentRounds.length} 轮`);
-    }
-
-    /**
-     * 按条数裁剪（兜底逻辑）
-     * 从后向前裁剪，尽量保证不切断 tool 调用链
-     */
-    trimByMessageCount(messages, maxCount) {
-        if (messages.length <= maxCount) {
-            return messages;
-        }
-
-        const result = [];
-        let i = messages.length - 1;
-        let count = 0;
-
-        while (i >= 0 && count < maxCount) {
-            const msg = messages[i];
-            result.unshift(msg);
-            count++;
-
-            // 如果是 tool 消息，尝试包含完整的调用链
-            if (msg.role === 'tool') {
-                // 向前查找对应的 assistant+tool_calls
-                let j = i - 1;
-                while (j >= 0) {
-                    const prevMsg = messages[j];
-                    if (prevMsg.role === 'assistant' && prevMsg.tool_calls) {
-                        // 检查是否包含这个 tool_call_id
-                        const hasThisToolCall = prevMsg.tool_calls.some(tc => tc.id === msg.tool_call_id);
-                        if (hasThisToolCall) {
-                            // 如果还没加入，就加入
-                            if (!result.includes(prevMsg)) {
-                                result.unshift(prevMsg);
-                                count++;
-                            }
-                            break;
-                        }
-                    }
-                    if (prevMsg.role === 'user') break;
-                    j--;
-                }
-            }
-
-            i--;
-        }
-
-        return result;
+        console.log(`裁剪后: 消息总数 ${this.voiceChat.messages.length} 条, 非系统消息 ${recentMessages.length} 条`);
     }
 
     // 保存对话历史 - 改用追加模式（JSONL格式）
@@ -198,52 +58,36 @@ class ContextManager {
             const recordsDir = path.join(__dirname, '..', '..', '..', 'AI记录室');
             const conversationHistoryPath = path.join(recordsDir, '对话历史.jsonl');
 
+            // 确保AI记录室文件夹存在
             if (!fs.existsSync(recordsDir)) {
                 fs.mkdirSync(recordsDir, { recursive: true });
             }
 
-            const currentSessionMessages = this.voiceChat.messages
-                .map(msg => {
-                    if (msg.role === 'system') {
-                        return null;
-                    }
-                    if (msg.role === 'assistant' && msg.tool_calls) {
-                        const toolDescriptions = msg.tool_calls.map(tc => {
-                            const name = tc.function.name;
-                            let args = '';
-                            try {
-                                const argsObj = JSON.parse(tc.function.arguments);
-                                args = Object.entries(argsObj)
-                                    .map(([k, v]) => `${k}=${typeof v === 'string' && v.length > 20 ? v.substring(0, 20) + '...' : v}`)
-                                    .join(', ');
-                            } catch (e) {
-                                args = tc.function.arguments;
-                            }
-                            return `${name}(${args})`;
-                        }).join('、');
-                        
-                        return {
-                            role: 'assistant',
-                            content: `[已调用工具：${toolDescriptions}]${msg.content ? ' ' + msg.content : ''}`
-                        };
-                    }
-                    if (msg.role === 'tool') {
-                        return null;
-                    }
-                    return msg;
-                })
-                .filter(msg => msg !== null);
+            // 保留 tool 消息和 tool_calls 完整结构（工具调用信息不丢失），
+            // 写入前先做序列清理，保证落盘的历史永远是 API 合法序列，
+            // 下次启动加载后不会再出现 "tool_calls must be followed by tool messages"
+            const currentSessionMessages = sanitizeToolMessageSequence(
+                this.voiceChat.messages.filter(msg =>
+                    msg.role === 'user' || msg.role === 'assistant' || msg.role === 'tool'
+                )
+            );
 
+            // 对比 fullConversationHistory，找出本次会话新增的消息
             const newMessages = [];
             for (const msg of currentSessionMessages) {
+                // 检查这条消息是否已经在 fullConversationHistory 中
                 const isInHistory = this.voiceChat.fullConversationHistory.some(historyMsg => {
-                    if (historyMsg.role !== msg.role) return false;
-                    if (msg.content === null && historyMsg.content === null) {
-                        const msgToolCalls = JSON.stringify(msg.tool_calls || []);
-                        const historyToolCalls = JSON.stringify(historyMsg.tool_calls || []);
-                        return msgToolCalls === historyToolCalls;
+                    if (historyMsg.role !== msg.role) {
+                        return false;
                     }
-                    return historyMsg.content === msg.content;
+
+                    // content、tool_call_id、tool_calls 全部一致才算同一条，
+                    // 避免相同内容的工具调用/响应被误判为重复而丢失
+                    const msgToolCalls = JSON.stringify(msg.tool_calls || []);
+                    const historyToolCalls = JSON.stringify(historyMsg.tool_calls || []);
+                    return historyMsg.content === msg.content &&
+                        historyMsg.tool_call_id === msg.tool_call_id &&
+                        msgToolCalls === historyToolCalls;
                 });
 
                 if (!isInHistory) {
@@ -251,17 +95,21 @@ class ContextManager {
                 }
             }
 
+            // 如果没有新消息，直接返回
             if (newMessages.length === 0) {
                 console.log('没有新消息需要保存');
                 return;
             }
 
+            // 📝 逐行追加新消息到 JSONL 文件
             for (const msg of newMessages) {
                 const line = JSON.stringify(msg) + '\n';
                 fs.appendFileSync(conversationHistoryPath, line, 'utf8');
             }
 
+            // 更新完整历史记录供下次使用
             this.voiceChat.fullConversationHistory.push(...newMessages);
+
             console.log(`对话历史已追加，新增 ${newMessages.length} 条消息，总计 ${this.voiceChat.fullConversationHistory.length} 条`);
         } catch (error) {
             console.error('保存对话历史失败:', error);
