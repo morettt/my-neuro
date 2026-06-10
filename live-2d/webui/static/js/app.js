@@ -1148,6 +1148,7 @@ function switchVoiceCloneTab(tab) {
 // 模型文件变量
 let selectedModelFile = null;
 let selectedAudioFile = null;
+let selectedGptModelFile = null;  // 可选：GPT 模型（.ckpt）
 
 // 处理模型文件选择
 function handleModelFileSelect(files) {
@@ -1165,6 +1166,16 @@ function handleAudioFileSelect(files) {
         selectedAudioFile = files[0];
         const statusEl = document.getElementById('audio-file-status');
         statusEl.textContent = t('voice_clone.selected') + selectedAudioFile.name;
+        statusEl.classList.add('has-file');
+    }
+}
+
+// 处理GPT模型文件选择（可选）
+function handleGptModelFileSelect(files) {
+    if (files && files.length > 0) {
+        selectedGptModelFile = files[0];
+        const statusEl = document.getElementById('gpt-model-file-status');
+        statusEl.textContent = t('voice_clone.selected') + selectedGptModelFile.name;
         statusEl.classList.add('has-file');
     }
 }
@@ -1220,6 +1231,30 @@ function initFileDragDrop() {
             }
         });
     }
+
+    // GPT模型文件拖拽（可选）
+    const gptModelDropArea = document.getElementById('gpt-model-drop-area');
+    if (gptModelDropArea) {
+        gptModelDropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            gptModelDropArea.classList.add('drag-over');
+        });
+
+        gptModelDropArea.addEventListener('dragleave', () => {
+            gptModelDropArea.classList.remove('drag-over');
+        });
+
+        gptModelDropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            gptModelDropArea.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+                handleGptModelFileSelect(files);
+                const input = document.getElementById('gpt-model-file-input');
+                input.files = files;
+            }
+        });
+    }
 }
 
 // 生成 TTS 的 bat 文件
@@ -1249,6 +1284,9 @@ async function generateTTSBat() {
         const formData = new FormData();
         formData.append('model_file', selectedModelFile);
         formData.append('audio_file', selectedAudioFile);
+        if (selectedGptModelFile) {
+            formData.append('gpt_model_file', selectedGptModelFile);
+        }
         formData.append('role_name', roleName);
         formData.append('language', language);
         formData.append('text', text);
