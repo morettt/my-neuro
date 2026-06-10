@@ -2793,6 +2793,8 @@ class set_pyqt(QWidget):
         self.ui.saveConfigButton.clicked.connect(self.save_config)
         # 复位皮套位置按钮
         self.ui.pushButton_reset_model_position.clicked.connect(self.reset_model_position)
+        # 调整字幕位置按钮
+        self.ui.pushButton_adjust_subtitle_position.clicked.connect(self.adjust_subtitle_position)
         # 桌宠切换按钮（合并启动和关闭）
         self.ui.pushButton_toggle_live2d.clicked.connect(self.toggle_live_2d)
         self.live2d_running = False  # 桌宠运行状态标志
@@ -4519,6 +4521,22 @@ class set_pyqt(QWidget):
 
         except Exception as e:
             self.toast.show_message(f"复位失败: {e}", 2000)
+
+    def adjust_subtitle_position(self):
+        """调整字幕位置 - 通过API通知前端进入调整模式"""
+        try:
+            import requests
+            response = requests.post('http://127.0.0.1:3002/adjust-subtitle-position', timeout=2)
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success'):
+                    self.toast.show_message("已进入字幕调整模式", 3000)
+                else:
+                    self.toast.show_message("调整失败，请重启桌宠", 2000)
+            else:
+                self.toast.show_message("调整失败，请确保桌宠已启动", 2000)
+        except Exception as e:
+            self.toast.show_message("请先启动桌宠再调整字幕位置", 2000)
 
     def load_config(self):
         with open(self.config_path, 'r', encoding='utf-8') as f:

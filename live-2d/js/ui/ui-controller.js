@@ -14,6 +14,13 @@ class UIController {
         this.bubbleCurrentY = 0;
         this.bubbleTargetX = 0;
         this.bubbleTargetY = 0;
+
+        // 字幕位置调整
+        this.isAdjustingSubtitle = false;
+        this.isDraggingSubtitle = false;
+        this.subtitleScale = 1.0;
+        this._subtitleCenterX = null;
+        this._subtitleCenterY = null;
     }
 
     // 初始化UI控制
@@ -26,6 +33,7 @@ class UIController {
     setupMouseIgnore() {
         const updateMouseIgnore = () => {
             if (!global.currentModel) return;
+            if (this.isAdjustingSubtitle) return;
 
             const shouldIgnore = !global.currentModel.containsPoint(
                 global.pixiApp.renderer.plugins.interaction.mouse.global
@@ -170,6 +178,7 @@ class UIController {
 
         subtitleText.textContent = text;
         container.style.display = 'block';
+        this.applySubtitlePosition();
         container.scrollTop = container.scrollHeight;
 
         // 如果指定了持续时间，设置自动隐藏
@@ -678,6 +687,162 @@ class UIController {
             // 注意：这里不能直接停止，因为可能还有工具气泡。
             // 简单起见，只要有任何气泡显示，就保持追踪。
             // 现有的 stopBubbleTracking 逻辑可能需要调整，或者我们暂时保持它运行。
+        }
+    }
+
+    // ========== 字幕位置调整 ==========
+
+    // 进入调整模式
+    enterSubtitleAdjustMode() {
+        if (this.isAdjustingSubtitle) return; // 防止重复进入导致事件重复绑定
+        const c = document.getElementById('subtitle-container');
+        const t = document.getElementById('subtitle-text');
+        if (!c || !t) return;
+
+        this.isAdjustingSubtitle = true;
+        this._savedText = t.textContent;
+        this._savedDisplay = c.style.display;
+        t.textContent = '1.拖动或滚轮缩放调整\n2.复位皮套按钮复位';
+
+        // 加载已有位置或取当前中心点
+        const pos = this.config?.ui?.subtitle_position;
+        if (pos?.centerX != null) {
+            this._subtitleCenterX = pos.centerX;
+            this._subtitleCenterY = pos.centerY;
+            if (pos.scale != null) this.subtitleScale = pos.scale;
+        } else {
+            c.style.display = 'block'; c.offsetHeight;
+            const r = c.getBoundingClientRect();
+            this._subtitleCenterX = r.left + r.width / 2;
+            this._subtitleCenterY = r.top + r.height / 2;
+        }
+
+        Object.assign(c.style, {
+            bottom: 'auto', left: `${this._subtitleCenterX}px`, top: `${this._subtitleCenterY}px`,
+            transform: `translate(-50%, -50%) scale(${this.subtitleScale})`, transformOrigin: 'center center'
+        });
+        c.classList.add('subtitle-adjusting');
+
+        // 创建遮罩
+        let overlay = document.getElementById('subtitle-adjust-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'subtitle-adjust-overlay';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9998;background:transparent;cursor:grab;';
+            document.body.appendChild(overlay);
+        }
+
+        // 绑定事件
+        this._adjustCleanup = [];
+
+        const onKey = (e) => { if (e.key === 'Escape') this.exitSubtitleAdjustMode(); };
+        document.addEventListener('keydown', onKey);
+        this._adjustCleanup.push(() => document.removeEventListener('keydown', onKey));
+
+        overlay.addEventListener('mouseenter', () =>
+            ipcRenderer.send('set-ignore-mouse-events', { ignore: false, options: { forward: false } }));
+
+        // 拖拽
+        const onDragStart = (e) => {
+            if (e.target.id === 'subtitle-confirm-btn') return;
+            e.preventDefault(); e.stopPropagation();
+            this.isDraggingSubtitle = true; overlay.style.cursor = 'grabbing';
+            const sx = e.clientX, sy = e.clientY, scx = this._subtitleCenterX, scy = this._subtitleCenterY;
+            const onMove = (ev) => {
+                if (!this.isDraggingSubtitle) return;
+                ev.preventDefault();
+                c.style.left = `${this._subtitleCenterX = scx + ev.clientX - sx}px`;
+                c.style.top = `${this._subtitleCenterY = scy + ev.clientY - sy}px`;
+            };
+            const onUp = () => {
+                this.isDraggingSubtitle = false; overlay.style.cursor = 'grab';
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+        overlay.addEventListener('mousedown', onDragStart);
+        this._adjustCleanup.push(() => overlay.removeEventListener('mousedown', onDragStart));
+
+        // 滚轮缩放
+        const onWheel = (e) => {
+            e.preventDefault(); e.stopPropagation();
+            this.subtitleScale = Math.max(0.3, Math.min(3.0, this.subtitleScale + (e.deltaY > 0 ? -0.05 : 0.05)));
+            c.style.transform = `translate(-50%, -50%) scale(${this.subtitleScale})`;
+        };
+        overlay.addEventListener('wheel', onWheel, { passive: false });
+        this._adjustCleanup.push(() => overlay.removeEventListener('wheel', onWheel));
+
+        // 确认按钮
+        const confirmBtn = document.getElementById('subtitle-confirm-btn');
+        if (confirmBtn) {
+            const onConfirm = (e) => { e.stopPropagation(); e.preventDefault(); this.exitSubtitleAdjustMode(); };
+            confirmBtn.addEventListener('click', onConfirm);
+            this._adjustCleanup.push(() => confirmBtn.removeEventListener('click', onConfirm));
+        }
+
+        ipcRenderer.send('set-ignore-mouse-events', { ignore: false, options: { forward: false } });
+    }
+
+    // 退出调整模式
+    exitSubtitleAdjustMode() {
+        const c = document.getElementById('subtitle-container');
+        if (!c) return;
+
+        // 保存位置到内存
+        if (this.config?.ui) {
+            this.config.ui.subtitle_position = {
+                centerX: this._subtitleCenterX, centerY: this._subtitleCenterY, scale: this.subtitleScale
+            };
+        }
+
+        c.classList.remove('subtitle-adjusting');
+        const t = document.getElementById('subtitle-text');
+        if (t) t.textContent = this._savedText || '';
+        if (!this._savedText) c.style.display = this._savedDisplay || 'none';
+
+        // 执行所有清理回调
+        this._adjustCleanup?.forEach(fn => fn());
+        this._adjustCleanup = null;
+        document.getElementById('subtitle-adjust-overlay')?.remove();
+
+        this.isAdjustingSubtitle = this.isDraggingSubtitle = false;
+        ipcRenderer.send('set-ignore-mouse-events', { ignore: true, options: { forward: true } });
+    }
+
+    // 应用保存的字幕位置
+    applySubtitlePosition() {
+        const c = document.getElementById('subtitle-container');
+        if (!c || this.isAdjustingSubtitle) return;
+        const pos = this.config?.ui?.subtitle_position;
+        if (pos?.centerX != null) {
+            Object.assign(c.style, {
+                left: `${pos.centerX}px`, top: `${pos.centerY}px`, bottom: 'auto',
+                transform: `translate(-50%, -50%) scale(${pos.scale || 1})`, transformOrigin: 'center center'
+            });
+        }
+    }
+
+    // 复位字幕到 CSS 默认位置
+    resetSubtitlePosition() {
+        const c = document.getElementById('subtitle-container');
+        if (!c) return;
+
+        if (this.config?.ui) this.config.ui.subtitle_position = null;
+        this._subtitleCenterX = null;
+        this._subtitleCenterY = null;
+        this.subtitleScale = 1;
+
+        if (this.isAdjustingSubtitle) {
+            const tx = window.innerWidth * 0.7, ty = window.innerHeight - 80;
+            this._subtitleCenterX = tx; this._subtitleCenterY = ty;
+            Object.assign(c.style, {
+                left: `${tx}px`, top: `${ty}px`,
+                transform: 'translate(-50%, -50%) scale(1)', transformOrigin: 'center center'
+            });
+        } else {
+            Object.assign(c.style, { left: '', top: '', bottom: '', transform: '', transformOrigin: '' });
         }
     }
 }

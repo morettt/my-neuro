@@ -171,6 +171,8 @@ class AppInitializer {
     initializeUI() {
         console.log('🚀 第二阶段: 初始化UI控制器...');
         this.uiController = new UIController(this.config);
+        // 让后端能通过3002端口调用前端字幕调整功能
+        global.uiController = this.uiController;
         this.uiController.initialize();
 
         // 为EnhancedTextProcessor提供全局字幕函数
