@@ -396,6 +396,14 @@
                             </div>
                             <div class="file-status" id="audio-file-status" data-i18n="voice_clone.audio_status">未上传参考音频（wav）</div>
                         </div>
+                        <div class="form-group">
+                            <label data-i18n="voice_clone.gpt_model_file">GPT 模型（ckpt，可选）</label>
+                            <div class="file-drop-area" id="gpt-model-drop-area" onclick="document.getElementById('gpt-model-file-input').click()">
+                                <input type="file" id="gpt-model-file-input" accept=".ckpt" style="display: none;" onchange="handleGptModelFileSelect(this.files)">
+                                <div class="file-drop-text" data-i18n="voice_clone.gpt_model_drop">选择 GPT 模型文件 或拖拽文件到此处</div>
+                            </div>
+                            <div class="file-status" id="gpt-model-file-status" data-i18n="voice_clone.gpt_model_status">未上传 GPT 模型（ckpt，可选）</div>
+                        </div>
                     </div>
                     
                     <div class="form-group">
