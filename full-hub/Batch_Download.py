@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import zipfile
 import time
@@ -57,6 +58,8 @@ def download_file(url, file_name=None):
     except requests.exceptions.SSLError:
         print("SSL验证失败，使用不安全模式重新尝试...")
         response = session.get(url, stream=True, headers=headers, timeout=30, verify=False)
+    # 镜像返回 404/5xx 时必须抛错，否则错误页会被当成压缩包保存，多源切换也不会触发
+    response.raise_for_status()
     total_size = int(response.headers.get('content-length', 0))
     downloaded_size = 0
     with open(file_name, 'wb') as file:
@@ -203,39 +206,66 @@ def download_model_direct(model_id, local_dir):
 # 各模块下载函数
 # ─────────────────────────────────────────────
 
-def download_live2d():
+def _live2d_installed_version(target_folder):
+    """读取已安装 live-2d 的版本号（与 update.py 相同的约定），读不到返回 None"""
+    try:
+        with open(os.path.join(target_folder, "config.json"), 'r', encoding='utf-8') as f:
+            return json.load(f).get('version')
+    except Exception:
+        return None
+
+
+def download_live2d(force=False):
     print("\n========== 下载Live 2D模型 ==========")
-    os.chdir(os.path.dirname(current_dir))
-    target_folder = "live-2d"
-    if os.path.exists(target_folder):
-        print(f"检测到 {target_folder} 文件夹已存在，正在清空内容...")
-        for item in os.listdir(target_folder):
-            item_path = os.path.join(target_folder, item)
-            if os.path.isfile(item_path) or os.path.islink(item_path):
-                os.unlink(item_path)
-            elif os.path.isdir(item_path):
-                shutil.rmtree(item_path)
+    repo_root = os.path.dirname(current_dir)
+    target_folder = os.path.join(repo_root, "live-2d")
+
+    if not force and _live2d_installed_version(target_folder) == version_tag:
+        print(f"live-2d 已是 {version_tag} 版本，跳过下载（如需重新下载请加 --force-live2d）")
+        return True
+
     download_sources = [
         ('香港镜像', f'https://hk.gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip'),
         ('备用镜像', f'https://gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip'),
         ('GitHub原版', f'https://github.com/morettt/my-neuro/releases/download/{version_tag}/live-2d.zip')
     ]
-    file_name = 'live-2d.zip'
+    zip_path = os.path.join(repo_root, 'live-2d.zip')
     downloaded_file = None
     for source_name, url in download_sources:
         try:
             print(f"尝试使用 {source_name} 下载...")
-            downloaded_file = download_file(url, file_name)
+            downloaded_file = download_file(url, zip_path)
             print(f"[OK] {source_name} 下载成功!")
             break
         except Exception as e:
             print(f"[FAIL] {source_name} 下载失败: {e}")
-    if downloaded_file:
-        extract_success = extract_zip(downloaded_file, target_folder)
-        if extract_success and os.path.exists(downloaded_file):
-            os.remove(downloaded_file)
-        return extract_success
-    return False
+    if not downloaded_file:
+        print("所有下载源均失败，保留现有 live-2d 文件夹")
+        return False
+
+    # 先解压到临时文件夹，全部成功后再替换旧文件夹（与 update.py 的更新策略一致），
+    # 避免下载/解压中途失败时用户原有的 live-2d（含配置和记忆数据）已被清空
+    temp_folder = os.path.join(repo_root, 'live-2d-temp')
+    if os.path.exists(temp_folder):
+        shutil.rmtree(temp_folder)
+    extract_success = extract_zip(downloaded_file, temp_folder)
+    if os.path.exists(downloaded_file):
+        os.remove(downloaded_file)
+    if not extract_success:
+        shutil.rmtree(temp_folder, ignore_errors=True)
+        return False
+
+    try:
+        if os.path.exists(target_folder):
+            shutil.rmtree(target_folder)
+        os.rename(temp_folder, target_folder)
+    except Exception as e:
+        print(f"替换 live-2d 文件夹失败（若 live-2d 正在运行请先关闭后重试）: {e}")
+        if os.path.exists(temp_folder) and not os.path.exists(target_folder):
+            os.rename(temp_folder, target_folder)
+        return False
+    print(f"live-2d {version_tag} 下载完成")
+    return True
 
 
 def download_bert():
@@ -319,13 +349,14 @@ def download_asr():
     print("\n========== 下载ASR模型 ==========")
     asr_hub_dir = os.path.join(current_dir, "asr-hub")
     os.makedirs(asr_hub_dir, exist_ok=True)
+    ok = True
 
     # VAD模型
     print("\n检查VAD模型...")
     vad_target_dir = os.path.join(asr_hub_dir, 'model', 'torch_hub')
     vad_model_path = os.path.join(vad_target_dir, "snakers4_silero-vad_master")
     if not os.path.exists(vad_model_path):
-        download_model_direct("morelle/my-neuro-vad", vad_target_dir)
+        ok = download_model_direct("morelle/my-neuro-vad", vad_target_dir) and ok
 
     # ASR主模型
     print("\n检查ASR主模型...")
@@ -333,9 +364,9 @@ def download_asr():
                                  'speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch')
     asr_key_files = [os.path.join(asr_model_dir, "config.yaml")]
     if not all(os.path.exists(f) for f in asr_key_files):
-        download_model_direct(
+        ok = download_model_direct(
             "iic/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch",
-            asr_model_dir)
+            asr_model_dir) and ok
 
     # 标点模型
     print("\n检查标点符号模型...")
@@ -343,25 +374,36 @@ def download_asr():
                                   'punc_ct-transformer_cn-en-common-vocab471067-large')
     punc_key_files = [os.path.join(punc_model_dir, "config.yaml"), os.path.join(punc_model_dir, "model.pt")]
     if not all(os.path.exists(f) for f in punc_key_files):
-        download_model_direct(
+        ok = download_model_direct(
             "iic/punc_ct-transformer_cn-en-common-vocab471067-large",
-            punc_model_dir)
+            punc_model_dir) and ok
 
-    print("ASR模型下载完成！")
-    return True
+    if ok:
+        print("ASR模型下载完成！")
+    else:
+        print("部分ASR模型下载失败")
+    return ok
 
 
 def _detect_gpu_type():
-    try:
-        result = subprocess.run(['wmic', 'path', 'win32_VideoController', 'get', 'name'],
-                                capture_output=True, text=True, timeout=5)
-        if result.returncode == 0:
-            for gpu in result.stdout.strip().split('\n')[1:]:
-                if 'RTX 50' in gpu:
-                    return '50'
-        return 'non-50'
-    except Exception:
-        return 'non-50'
+    # wmic 在新版 Windows 11 中已被移除，按顺序尝试多种检测方式
+    probes = [
+        ['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'],
+        ['wmic', 'path', 'win32_VideoController', 'get', 'name'],
+        ['powershell', '-NoProfile', '-Command', '(Get-CimInstance Win32_VideoController).Name'],
+    ]
+    for probe in probes:
+        try:
+            result = subprocess.run(probe, capture_output=True, text=True, timeout=15)
+        except Exception:
+            continue
+        if result.returncode == 0 and result.stdout.strip():
+            names = [l.strip() for l in result.stdout.splitlines()
+                     if l.strip() and l.strip() != 'Name']
+            print(f"检测到显卡: {' / '.join(names)}")
+            return '50' if 'RTX 50' in result.stdout else 'non-50'
+    print("无法自动检测显卡，默认按非50系处理（50系显卡请用 --gpu 50 指定）")
+    return 'non-50'
 
 
 # ─────────────────────────────────────────────
@@ -379,19 +421,26 @@ if __name__ == '__main__':
     parser.add_argument('--asr',    action='store_true', help='下载ASR模型')
     parser.add_argument('--all',    action='store_true', help='下载全部模型')
     parser.add_argument('--gpu',    default=None, choices=['50', 'non-50'], help='显卡类型（TTS用）')
+    parser.add_argument('--force-live2d', action='store_true', help='live-2d 已是当前版本时也强制重新下载')
     args = parser.parse_args()
 
     run_all = args.all or not any([args.live2d, args.bert, args.tts, args.rag, args.asr])
 
+    results = {}
     if run_all or args.live2d:
-        download_live2d()
+        results['live-2d'] = download_live2d(force=args.force_live2d)
     if run_all or args.bert:
-        download_bert()
+        results['bert'] = download_bert()
     if run_all or args.tts:
-        download_tts(args.gpu)
+        results['tts'] = download_tts(args.gpu)
     if run_all or args.rag:
-        download_rag()
+        results['rag'] = download_rag()
     if run_all or args.asr:
-        download_asr()
+        results['asr'] = download_asr()
+
+    failed = [name for name, ok in results.items() if not ok]
+    if failed:
+        print(f"\n以下模块下载失败: {', '.join(failed)}，请重新运行重试")
+        sys.exit(1)
 
     print("\n所有下载操作完成！")
