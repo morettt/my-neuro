@@ -694,6 +694,7 @@ class UIController {
 
     // 进入调整模式
     enterSubtitleAdjustMode() {
+        if (this.isAdjustingSubtitle) return; // 防止重复进入导致事件重复绑定
         const c = document.getElementById('subtitle-container');
         const t = document.getElementById('subtitle-text');
         if (!c || !t) return;

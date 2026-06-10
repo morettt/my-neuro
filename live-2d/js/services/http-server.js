@@ -313,14 +313,16 @@ class HttpServer {
 
             const jsCode = `(() => {
                 const uic = global.uiController;
-                if (!uic?.enterSubtitleAdjustMode) return '字幕控制器未初始化';
+                if (!uic?.enterSubtitleAdjustMode) return false;
                 uic.enterSubtitleAdjustMode();
-                return '字幕调整模式已开启';
+                return true;
             })()`;
 
             try {
-                const result = await mainWindow.webContents.executeJavaScript(jsCode);
-                res.json({ success: true, message: result });
+                const ok = await mainWindow.webContents.executeJavaScript(jsCode);
+                res.json(ok
+                    ? { success: true, message: '字幕调整模式已开启' }
+                    : { success: false, message: '字幕控制器未初始化' });
             } catch (error) {
                 res.json({ success: false, message: error.toString() });
             }
