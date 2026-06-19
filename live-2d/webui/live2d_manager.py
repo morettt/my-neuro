@@ -96,6 +96,17 @@ def save_live2d_model():
         if not model_name:
             return jsonify({'success': False, 'error': '未提供模型名称'})
 
+        from .config_manager import load_config, save_config
+        config = load_config()
+        if 'ui' not in config:
+            config['ui'] = {}
+        config['ui']['model_type'] = 'live2d'
+        config['ui']['vrm_model'] = ''
+        config['ui']['vrm_model_path'] = ''
+        config['ui']['live2d_model'] = model_name
+        if not save_config(config):
+            return jsonify({'success': False, 'error': '保存配置失败'}), 500
+
         main_js_path = PROJECT_ROOT / 'main.js'
         if main_js_path.exists():
             with open(main_js_path, 'r', encoding='utf-8') as f:

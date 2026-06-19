@@ -9,6 +9,40 @@ const screenshot = require('screenshot-desktop');
 // 添加配置文件路径
 const configPath = path.join(app.getAppPath(), 'config.json');
 
+function loadConfigData() {
+    return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+}
+
+function saveConfigData(configData) {
+    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+}
+
+function setLive2DConfig(modelName) {
+    const configData = loadConfigData();
+    if (!configData.ui) configData.ui = {};
+    configData.ui.model_type = 'live2d';
+    configData.ui.vrm_model = '';
+    configData.ui.vrm_model_path = '';
+    if (modelName) {
+        configData.ui.live2d_model = modelName;
+    }
+    saveConfigData(configData);
+}
+
+function setVRMConfig(vrmFileName) {
+    const configData = loadConfigData();
+    if (!configData.ui) configData.ui = {};
+    configData.ui.model_type = 'vrm';
+    configData.ui.vrm_model = vrmFileName;
+    configData.ui.vrm_model_path = `3D/${vrmFileName}`;
+    saveConfigData(configData);
+}
+
+function reloadSenderWindow(event) {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) win.reload();
+}
+
 // Live2D模型优先级配置（Python程序会修改这个列表来切换模型）
 const priorityFolders = ['肥牛', 'Hiyouri', 'Default', 'Main'];
 
@@ -377,6 +411,8 @@ ipcMain.handle('switch-live2d-model', async (event, modelName) => {
     try {
         console.log(`切换模型到: ${modelName}`);
 
+        setLive2DConfig(modelName);
+
         // 更新priorityFolders，将选中的模型放在第一位
         const index = priorityFolders.indexOf(modelName);
         if (index > 0) {
@@ -418,8 +454,7 @@ ipcMain.handle('switch-live2d-model', async (event, modelName) => {
         modelPathUpdater.update();
 
         // 通知渲染进程需要重新加载以应用新模型
-        const win = BrowserWindow.fromWebContents(event.sender)
-        win.reload()
+        reloadSenderWindow(event)
 
         return { success: true, message: `模型已切换到 ${modelName}，页面将重新加载` }
     } catch (error) {
@@ -495,16 +530,10 @@ ipcMain.handle('switch-vrm-model', async (event, vrmFileName) => {
         console.log(`切换VRM模型到: ${vrmFileName}`);
 
         // 更新config.json
-        const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        if (!configData.ui) configData.ui = {};
-        configData.ui.model_type = 'vrm';
-        configData.ui.vrm_model = vrmFileName;
-        configData.ui.vrm_model_path = `3D/${vrmFileName}`;
-        fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+        setVRMConfig(vrmFileName);
 
         // 重新加载窗口
-        const win = BrowserWindow.fromWebContents(event.sender);
-        win.reload();
+        reloadSenderWindow(event);
 
         return { success: true, message: `VRM模型已切换到 ${vrmFileName}，页面将重新加载` };
     } catch (error) {

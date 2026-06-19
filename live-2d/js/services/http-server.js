@@ -249,7 +249,7 @@ class HttpServer {
             if (model_type === 'vrm') {
                 // VRM模型切换：通过IPC触发
                 mainWindow.webContents.executeJavaScript(
-                    `require('electron').ipcRenderer.invoke('switch-vrm-model', '${model_name}')`
+                    `require('electron').ipcRenderer.invoke('switch-vrm-model', ${JSON.stringify(model_name)})`
                 ).then(() => {
                     res.json({ success: true, message: `VRM模型切换到 ${model_name}` });
                 }).catch(error => {
@@ -258,7 +258,7 @@ class HttpServer {
             } else {
                 // Live2D模型切换
                 mainWindow.webContents.executeJavaScript(
-                    `require('electron').ipcRenderer.invoke('switch-live2d-model', '${model_name}')`
+                    `require('electron').ipcRenderer.invoke('switch-live2d-model', ${JSON.stringify(model_name)})`
                 ).then(() => {
                     res.json({ success: true, message: `模型切换到 ${model_name}` });
                 }).catch(error => {
