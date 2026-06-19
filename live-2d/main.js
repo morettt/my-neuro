@@ -43,6 +43,10 @@ function reloadSenderWindow(event) {
     if (win) win.reload();
 }
 
+function serializePriorityFolders(folders) {
+    return `[${folders.map(folder => JSON.stringify(folder)).join(', ')}]`;
+}
+
 // Live2D模型优先级配置（Python程序会修改这个列表来切换模型）
 const priorityFolders = ['肥牛', 'Hiyouri', 'Default', 'Main'];
 
@@ -433,7 +437,7 @@ ipcMain.handle('switch-live2d-model', async (event, modelName) => {
             let mainJsContent = fs.readFileSync(mainJsPath, 'utf8');
 
             // 构建新的priorityFolders数组字符串
-            const newPriorityString = `['${priorityFolders.join("', '")}']`;
+            const newPriorityString = serializePriorityFolders(priorityFolders);
 
             // 替换main.js中的priorityFolders定义
             mainJsContent = mainJsContent.replace(

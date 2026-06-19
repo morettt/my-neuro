@@ -212,13 +212,19 @@ class HttpServer {
 		            const isDualRight = window.innerWidth > window.screen.width * 1.2 && mc.config?.ui?.screen_extend?.right;
 		            const relX = isDualRight ? 0.825 : 0.65;
 		            const relY = 0.38;
-		            const defaultX = relX * window.innerWidth * scaleFactor;
-		            const defaultY = relY * window.innerHeight * scaleFactor;
 		            const scale = 0.65;
-		            model.x = defaultX;
-		            model.y = defaultY;
-		            model.scale.set(scale);
-		            mc.updateInteractionArea();
+
+		            if (model.modelType === 'vrm') {
+		                model.viewRect = mc._savedToViewRect(relX, relY, scale);
+		                if (mc._clampViewRect) mc._clampViewRect();
+		            } else {
+		                const defaultX = relX * window.innerWidth * scaleFactor;
+		                const defaultY = relY * window.innerHeight * scaleFactor;
+		                model.x = defaultX;
+		                model.y = defaultY;
+		                if (model.scale?.set) model.scale.set(scale);
+		                if (mc.updateInteractionArea) mc.updateInteractionArea();
+		            }
 		
 		            ipcRenderer.send('save-model-position', { x: relX, y: relY, scale, dual: isDualRight });
 
