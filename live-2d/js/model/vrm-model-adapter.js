@@ -503,6 +503,7 @@ class VRMModelAdapter extends EventEmitter {
     // 获取/设置VRM渲染状态
     setRenderingEnabled(enabled) {
         this._renderingEnabled = enabled;
+        this._visible = enabled;
         // 使用vrmGroup控制可见性（它包裹了vrm.scene）
         if (this.vrmGroup) {
             this.vrmGroup.visible = enabled;

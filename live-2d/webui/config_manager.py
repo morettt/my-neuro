@@ -455,16 +455,25 @@ def handle_current_model():
         
         main_js_path = PROJECT_ROOT / 'main.js'
         
+        config = load_config()
+        ui_config = config.get('ui', {})
+
         # GET 请求：读取当前模型
         if request.method == 'GET':
+            if ui_config.get('model_type') == 'vrm':
+                return jsonify({
+                    'success': True,
+                    'model': ui_config.get('vrm_model', ''),
+                    'model_type': 'vrm'
+                })
             if main_js_path.exists():
                 with open(main_js_path, 'r', encoding='utf-8') as f:
                     content = f.read()
                 match = re.search(r"const priorityFolders = \['([^']+)'", content)
                 if match:
                     current_model = match.group(1)
-                    return jsonify({'success': True, 'model': current_model})
-            return jsonify({'success': True, 'model': '肥牛'})
+                    return jsonify({'success': True, 'model': current_model, 'model_type': 'live2d'})
+            return jsonify({'success': True, 'model': '肥牛', 'model_type': 'live2d'})
         
         # POST 请求：设置模型
         data = request.get_json()
@@ -472,6 +481,15 @@ def handle_current_model():
         
         if not model_name:
             return jsonify({'success': False, 'error': '未提供模型名称'})
+
+        if 'ui' not in config:
+            config['ui'] = {}
+        config['ui']['model_type'] = 'live2d'
+        config['ui']['vrm_model'] = ''
+        config['ui']['vrm_model_path'] = ''
+        config['ui']['live2d_model'] = model_name
+        if not save_config(config):
+            return jsonify({'success': False, 'error': '保存配置失败'}), 500
         
         # 更新 main.js 的 priorityFolders
         if main_js_path.exists():

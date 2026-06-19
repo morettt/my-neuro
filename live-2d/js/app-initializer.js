@@ -270,10 +270,13 @@ class AppInitializer {
         // VRM模式：替换modelController并更新TTS唇形回调
         if (result.vrmController) {
             this.modelController = result.vrmController;
+            global.modelController = result.vrmController;
             if (this.ttsProcessor?.playbackEngine) {
                 this.ttsProcessor.playbackEngine.onAudioDataCallback =
                     (value) => result.vrmController.setMouthOpenY(value);
             }
+        } else {
+            global.modelController = this.modelController;
         }
 
         global.currentModel = this.model;
