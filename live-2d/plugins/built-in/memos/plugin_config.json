@@ -143,6 +143,41 @@
         "type": "bool",
         "default": true,
         "value": true
+      },
+      "enable_reranker": {
+        "title": "启用 CrossEncoder 精排",
+        "description": "对粗排召回结果进行二次重排序。模型较大，低配设备可保持关闭。",
+        "type": "bool",
+        "default": false,
+        "value": false
+      },
+      "reranker_auto_download": {
+        "title": "自动下载精排模型",
+        "description": "启用精排且本地缺少模型时，启动 MemOS 后端自动下载 BAAI/bge-reranker-v2-m3。",
+        "type": "bool",
+        "default": false,
+        "value": false
+      },
+      "reranker_model_id": {
+        "title": "精排模型 ID",
+        "description": "ModelScope/Hugging Face 模型 ID，默认使用多语言 bge-reranker-v2-m3。",
+        "type": "string",
+        "default": "BAAI/bge-reranker-v2-m3",
+        "value": "BAAI/bge-reranker-v2-m3"
+      },
+      "reranker_model_path": {
+        "title": "精排模型本地路径",
+        "description": "模型下载和加载目录，默认放在项目根目录 full-hub/reranker-hub。",
+        "type": "string",
+        "default": "../../../full-hub/reranker-hub",
+        "value": "../../../full-hub/reranker-hub"
+      },
+      "rerank_top_n": {
+        "title": "精排候选数量",
+        "description": "从粗排结果中取多少条进入 CrossEncoder 精排。",
+        "type": "int",
+        "default": 20,
+        "value": 20
       }
     }
   },

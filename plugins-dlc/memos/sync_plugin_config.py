@@ -51,6 +51,11 @@ if search:
         'enable_bm25':         search.get('enable_bm25', True),
         'bm25_weight':         search.get('bm25_weight', 0.3),
         'enable_graph_query':  search.get('enable_graph_query', True),
+        'enable_reranker':     search.get('enable_reranker', False),
+        'reranker_auto_download': search.get('reranker_auto_download', False),
+        'reranker_model_id':   search.get('reranker_model_id') or 'BAAI/bge-reranker-v2-m3',
+        'reranker_model_path': search.get('reranker_model_path') or '../../../full-hub/reranker-hub',
+        'rerank_top_n':        search.get('rerank_top_n', 20),
         'similarity_threshold': get_val(cfg, 'similarity_threshold') or 0.6
     })
 

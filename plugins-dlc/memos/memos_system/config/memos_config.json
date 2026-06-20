@@ -17,12 +17,15 @@
     }
   },
   "embedding": {
-    "model_path": "../full-hub/rag-hub",
-    "vector_size": 1024
+    "model_path": "../../../full-hub/rag-hub",
+    "vector_size": 1024,
+    "use_api": false,
+    "api_model": "text-embedding-3-large",
+    "api_dimensions": 1024
   },
   "search": {
     "default_top_k": 5,
-    "similarity_threshold": 0.3,
+    "similarity_threshold": 0.5,
     "enable_reranker": false,
     "enable_bm25": true,
     "bm25_weight": 0.3,
@@ -36,7 +39,11 @@
       "UserMemory": 0.25
     },
     "recency_weight": 0.1,
-    "frequency_weight": 0.1
+    "frequency_weight": 0.1,
+    "reranker_auto_download": false,
+    "reranker_model_id": "BAAI/bge-reranker-v2-m3",
+    "reranker_model_path": "../../../full-hub/reranker-hub",
+    "rerank_top_n": 20
   },
   "entity_extraction": {
     "enabled": true,

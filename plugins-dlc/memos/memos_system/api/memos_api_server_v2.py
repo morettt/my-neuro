@@ -32,6 +32,8 @@ import uuid
 import logging
 import hashlib
 import math
+import shutil
+import subprocess
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -44,6 +46,98 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def _find_project_root() -> Path:
+    """Find the repository root from either root/memos_system or plugins-dlc/memos layout."""
+    here = Path(__file__).resolve()
+    for parent in (here.parent, *here.parents):
+        if (parent / 'live-2d').exists() and (parent / 'full-hub').exists():
+            return parent
+        if (parent / 'live-2d').exists():
+            return parent
+    return here.parents[1]
+
+
+PROJECT_ROOT = _find_project_root()
+MEMOS_SYSTEM_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _resolve_runtime_path(raw_path: str) -> str:
+    """Resolve model/data paths while preferring the project-level full-hub directory."""
+    path = Path(raw_path or '')
+    if path.is_absolute():
+        return str(path)
+
+    parts = path.parts
+    candidates = []
+    if 'full-hub' in parts:
+        idx = parts.index('full-hub')
+        candidates.append(PROJECT_ROOT.joinpath(*parts[idx:]))
+
+    candidates.extend([
+        MEMOS_SYSTEM_ROOT / path,
+        PROJECT_ROOT / path,
+    ])
+
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate.resolve())
+
+    return str(candidates[0].resolve() if candidates else (MEMOS_SYSTEM_ROOT / path).resolve())
+
+
+def _is_model_dir_complete(model_path: str) -> bool:
+    path = Path(model_path)
+    key_files = ['config.json', 'model.safetensors']
+    has_tokenizer = any((path / name).exists() for name in ['tokenizer.json', 'sentencepiece.bpe.model'])
+    return path.exists() and all((path / name).exists() for name in key_files) and has_tokenizer
+
+
+def _download_modelscope_model(model_id: str, target_path: str) -> bool:
+    target = Path(target_path)
+    target.mkdir(parents=True, exist_ok=True)
+
+    try:
+        from modelscope import snapshot_download
+        snapshot_download(model_id, local_dir=str(target))
+        return True
+    except Exception as exc:
+        print(f"[警告] ModelScope Python 下载失败，尝试 CLI: {exc}")
+
+    exe = shutil.which('modelscope')
+    if not exe:
+        print("[警告] 未找到 modelscope 命令，请先安装 requirements.txt 中的 modelscope")
+        return False
+
+    result = subprocess.run(
+        [exe, 'download', '--model', model_id, '--local_dir', str(target)],
+        cwd=str(PROJECT_ROOT),
+        check=False
+    )
+    return result.returncode == 0
+
+
+def _prepare_reranker_model(search_config: Dict[str, Any]) -> Optional[str]:
+    raw_path = search_config.get('reranker_model_path') or '../../../full-hub/reranker-hub'
+    model_path = _resolve_runtime_path(raw_path)
+
+    if _is_model_dir_complete(model_path):
+        return model_path
+
+    if not search_config.get('reranker_auto_download', False):
+        print(f"[警告] 重排序模型不存在或不完整，回退粗排: {model_path}")
+        print("       如需自动下载，请在 MemOS 插件配置中打开“自动下载精排模型”。")
+        return None
+
+    model_id = search_config.get('reranker_model_id') or 'BAAI/bge-reranker-v2-m3'
+    print(f"[下载] 重排序模型缺失，开始下载 {model_id} -> {model_path}")
+    if _download_modelscope_model(model_id, model_path) and _is_model_dir_complete(model_path):
+        print(f"[OK] 重排序模型下载完成: {model_path}")
+        return model_path
+
+    print(f"[警告] 重排序模型下载失败或文件不完整，回退粗排: {model_path}")
+    return None
 
 
 def _apply_llm_env_overrides(loaded_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -383,9 +477,7 @@ async def startup_event():
         import torch
 
         model_path = config.get('embedding', {}).get('model_path', '../full-hub/rag-hub')
-        if not os.path.isabs(model_path):
-            model_path = os.path.join(os.path.dirname(__file__), "..", model_path)
-        model_path = os.path.normpath(model_path)
+        model_path = _resolve_runtime_path(model_path)
 
         embedding_model = SentenceTransformer(model_path)
         if torch.cuda.is_available():
@@ -522,11 +614,8 @@ async def startup_event():
             print("[初始化] CrossEncoder 重排序器...")
             try:
                 from utils.search_utils import Reranker
-                reranker_path = search_config.get('reranker_model_path', '../full-hub/reranker-hub')
-                if reranker_path and not os.path.isabs(reranker_path):
-                    reranker_path = os.path.join(os.path.dirname(__file__), "..", reranker_path)
-                reranker_path = os.path.normpath(reranker_path) if reranker_path else None
-                if reranker_path and os.path.exists(reranker_path):
+                reranker_path = _prepare_reranker_model(search_config)
+                if reranker_path:
                     reranker = Reranker(reranker_path)
                     if reranker.is_available():
                         print(f"[OK] 重排序器已就绪: {reranker_path}")
@@ -534,7 +623,6 @@ async def startup_event():
                         print("[警告] 重排序器不可用，检索将回退粗排")
                         reranker = None
                 else:
-                    print(f"[警告] 重排序模型不存在，回退粗排: {reranker_path}")
                     reranker = None
             except Exception as e:
                 print(f"[警告] 重排序器初始化失败，回退粗排: {e}")

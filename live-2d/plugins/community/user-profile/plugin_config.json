@@ -194,5 +194,19 @@
     "type": "string",
     "default": "hybrid",
     "value": "hybrid"
+  },
+  "max_candidates": {
+    "title": "候选池最大条数",
+    "description": "限制后台画像候选池体积，超过后保留最近最有用的候选。",
+    "type": "int",
+    "default": 200,
+    "value": 200
+  },
+  "max_archived_candidates": {
+    "title": "候选归档最大条数",
+    "description": "限制候选归档记录体积，避免画像候选文件长期无限增长。",
+    "type": "int",
+    "default": 200,
+    "value": 200
   }
 }

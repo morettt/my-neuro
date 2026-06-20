@@ -568,6 +568,7 @@ ${JSON.stringify(candidates.map(c => ({
 
     _saveCandidates() {
         this._candidateStore.updated_at = this._nowIso();
+        this._compactCandidateStore();
         this._writeJson(this._candidatePath, this._candidateStore);
     }
 
@@ -628,7 +629,51 @@ ${JSON.stringify(candidates.map(c => ({
             memos_support: c.memos_support || null,
             promoted_at: c.promoted_at || undefined
         })).filter(c => c.text);
-        return next;
+        this._candidateStore = next;
+        this._compactCandidateStore();
+        return this._candidateStore;
+    }
+
+    _compactCandidateStore() {
+        if (!this._candidateStore) return;
+
+        const maxCandidates = Math.max(1, this._numberCfg('max_candidates', 200));
+        const maxArchived = Math.max(0, this._numberCfg('max_archived_candidates', 200));
+        const today = this._today();
+
+        const sortByFreshness = (a, b) => {
+            const ad = new Date(a.last_seen || a.promoted_at || a.first_seen || a.archived_at || 0).getTime() || 0;
+            const bd = new Date(b.last_seen || b.promoted_at || b.first_seen || b.archived_at || 0).getTime() || 0;
+            const ac = Number(a.count || 0);
+            const bc = Number(b.count || 0);
+            return (bd - ad) || (bc - ac);
+        };
+
+        const byId = new Map();
+        for (const candidate of Array.isArray(this._candidateStore.candidates) ? this._candidateStore.candidates : []) {
+            const id = candidate.id || this._candidateId(candidate.category, candidate.text);
+            const prev = byId.get(id);
+            if (!prev || sortByFreshness(candidate, prev) < 0) {
+                byId.set(id, { ...candidate, id });
+            }
+        }
+
+        const sorted = Array.from(byId.values()).sort(sortByFreshness);
+        const kept = sorted.slice(0, maxCandidates);
+        const overflow = sorted.slice(maxCandidates).map(candidate => ({
+            ...candidate,
+            status: 'archived',
+            archived_at: today,
+            archived_reason: 'candidate_capacity'
+        }));
+
+        const archived = [
+            ...(Array.isArray(this._candidateStore.archived) ? this._candidateStore.archived : []),
+            ...overflow
+        ].sort(sortByFreshness).slice(0, maxArchived);
+
+        this._candidateStore.candidates = kept;
+        this._candidateStore.archived = archived;
     }
 
     _refreshRenderedProfile() {

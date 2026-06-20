@@ -36,14 +36,14 @@ if exist "%ROOT%env\python.exe" (
     echo [INFO] 使用项目自带 Python 环境。
     "%ROOT%env\python.exe" sync_plugin_config.py
     if errorlevel 1 goto error
-    "%ROOT%env\python.exe" memos_system\api\memos_api_server.py
+    powershell -ExecutionPolicy Bypass -File "memos_system\start_memos.ps1"
 ) else (
     echo [INFO] 未发现 env\python.exe，尝试使用 conda 环境: my-neuro
     call conda activate my-neuro
     if errorlevel 1 goto error
     python sync_plugin_config.py
     if errorlevel 1 goto error
-    python memos_system\api\memos_api_server.py
+    powershell -ExecutionPolicy Bypass -File "memos_system\start_memos.ps1"
 )
 
 goto end
