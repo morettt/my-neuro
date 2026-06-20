@@ -11,7 +11,9 @@ class MemosPlugin extends Plugin {
     async onInit() {
         const cfg = this.context.getPluginFileConfig();
         this.client = new MemosClient(cfg);
-        this.tools = new MemosTools(this.client.apiUrl);
+        this.tools = new MemosTools(this.client.apiUrl, {
+            similarityThreshold: this.client.similarityThreshold
+        });
         this._cfg = cfg;
     }
 
@@ -34,14 +36,14 @@ class MemosPlugin extends Plugin {
     }
 
     async onUserInput(event) {
-        if (!this.client?.enabled) return;
+        if (!this.client?.enabled || !this._cfg.auto_inject) return;
         if (!['voice', 'text'].includes(event.source)) return;
 
         try {
             const memories = await this.client.search(event.text);
             if (memories.length > 0) {
                 const text = this.client.formatMemoriesForPrompt(memories);
-                this.context.addSystemPromptPatch('memos-recall', `\n\n【你对主人的已知记忆，回答时必须自然融入，不要说"根据记忆"】:\n${text}`);
+                this.context.addSystemPromptPatch('memos-recall', `\n【你对主人的已知记忆，回答时必须自然融入，不要说"根据记忆"】:\n${text}`);
             } else {
                 this.context.removeSystemPromptPatch('memos-recall');
             }
@@ -51,20 +53,19 @@ class MemosPlugin extends Plugin {
     }
 
     async onLLMResponse(response) {
-        if (!this.client?.enabled) return;
+        if (!this.client?.enabled || !this._cfg.auto_save) return;
+        if (response.proactive_internal) return;
 
-        try {
-            const messages = this.context.getMessages();
-            const lastUser = [...messages].reverse().find(m => m.role === 'user');
-            if (!lastUser) return;
+        const messages = this.context.getMessages();
+        const lastUser = [...messages].reverse().find(m => m.role === 'user');
+        if (!lastUser) return;
 
-            await this.client.addWithBuffer([
-                { role: 'user', content: lastUser.content },
-                { role: 'assistant', content: response.text }
-            ]);
-        } catch (err) {
+        this.client.addWithBuffer([
+            { role: 'user', content: lastUser.content },
+            { role: 'assistant', content: response.text }
+        ]).catch(err => {
             this.context.log('error', `MemOS 保存对话失败: ${err.message}`);
-        }
+        });
     }
 
     getTools() {
@@ -88,14 +89,29 @@ class MemosPlugin extends Plugin {
             }
 
             const cfg = this._cfg;
+            const mainLlm = global.voiceChat || {};
+            const mainBaseUrl = mainLlm.API_URL || '';
 
             // LLM
             if (cfg.backend_llm) {
                 backendCfg.llm = backendCfg.llm || {};
                 backendCfg.llm.config = {
-                    model: cfg.backend_llm.model || backendCfg.llm?.config?.model || '',
-                    api_key: cfg.backend_llm.api_key || backendCfg.llm?.config?.api_key || '',
-                    base_url: cfg.backend_llm.base_url || backendCfg.llm?.config?.base_url || ''
+                    model: cfg.backend_llm.model || mainLlm.MODEL || backendCfg.llm?.config?.model || '',
+                    api_key: cfg.backend_llm.api_key || mainLlm.API_KEY || backendCfg.llm?.config?.api_key || '',
+                    base_url: cfg.backend_llm.base_url || mainBaseUrl.replace(/\/chat\/completions\/?$/, '') || backendCfg.llm?.config?.base_url || '',
+                    max_tokens: cfg.backend_llm.max_tokens || backendCfg.llm?.config?.max_tokens || 8000
+                };
+            }
+
+            // LLM fallback
+            if (cfg.backend_llm_fallback) {
+                backendCfg.llm_fallback = {
+                    enabled: cfg.backend_llm_fallback.enabled !== false,
+                    config: {
+                        model: cfg.backend_llm_fallback.model || backendCfg.llm_fallback?.config?.model || '',
+                        api_key: cfg.backend_llm_fallback.api_key || backendCfg.llm_fallback?.config?.api_key || '',
+                        base_url: cfg.backend_llm_fallback.base_url || backendCfg.llm_fallback?.config?.base_url || ''
+                    }
                 };
             }
 
@@ -105,14 +121,9 @@ class MemosPlugin extends Plugin {
                 if (cfg.backend_search.enable_bm25 !== undefined) backendCfg.search.enable_bm25 = cfg.backend_search.enable_bm25;
                 if (cfg.backend_search.bm25_weight !== undefined) backendCfg.search.bm25_weight = cfg.backend_search.bm25_weight;
                 if (cfg.backend_search.enable_graph_query !== undefined) backendCfg.search.enable_graph_query = cfg.backend_search.enable_graph_query;
-                backendCfg.search.similarity_threshold = cfg.similarity_threshold || backendCfg.search.similarity_threshold || 0.5;
             }
-
-            // Embedding
-            backendCfg.embedding = backendCfg.embedding || {};
-            backendCfg.embedding.use_api = cfg.use_api_embedding === true;
-            backendCfg.embedding.api_model = cfg.api_embedding_model || 'text-embedding-3-large';
-            backendCfg.embedding.api_dimensions = cfg.api_embedding_dimensions || 1024;
+            backendCfg.search = backendCfg.search || {};
+            backendCfg.search.similarity_threshold = cfg.similarity_threshold ?? backendCfg.search.similarity_threshold ?? 0.5;
 
             // Features
             if (cfg.backend_features) {

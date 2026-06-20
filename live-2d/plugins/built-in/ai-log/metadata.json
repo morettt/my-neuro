@@ -1,0 +1,10 @@
+{
+  "name": "ai-log",
+  "displayName": "思痕之册",
+  "version": "1.0.0",
+  "author": "official",
+  "description": "每一天的对话都值得铭记 —— 夜幕降临时自动凝结当日思绪为观察日志，汇聚月光编织月度回忆录，让 AI 的记忆跨越每一次重启",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

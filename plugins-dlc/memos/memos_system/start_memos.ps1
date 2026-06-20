@@ -7,6 +7,33 @@ Write-Host "================================================================" -F
 
 Set-Location $PSScriptRoot
 
+$projectRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..\..")
+$embeddedPython = Join-Path $projectRoot "env\python.exe"
+$pythonExe = "python"
+
+if (Test-Path $embeddedPython) {
+    Write-Host "`n[0] Using bundled Python environment..." -ForegroundColor Yellow
+    $pythonExe = $embeddedPython
+    Write-Host "  Python: $pythonExe" -ForegroundColor Green
+} else {
+    # Activate conda environment
+    Write-Host "`n[0] Activating conda environment (my-neuro)..." -ForegroundColor Yellow
+    $condaBase = (conda info --base 2>$null)
+    if ($condaBase) {
+        $condaHook = Join-Path $condaBase "shell\condabin\conda-hook.ps1"
+        if (Test-Path $condaHook) {
+            . $condaHook
+            conda activate my-neuro
+            Write-Host "  Environment: my-neuro" -ForegroundColor Green
+        } else {
+            # Fallback: use conda activate directly
+            conda activate my-neuro 2>$null
+        }
+    } else {
+        Write-Host "  [WARN] conda not found, using system Python" -ForegroundColor Red
+    }
+}
+
 # Clean port and lock file
 Write-Host "`n[1] Cleaning up..." -ForegroundColor Yellow
 Get-NetTCPConnection -LocalPort 8003 -ErrorAction SilentlyContinue | ForEach-Object {
@@ -24,7 +51,7 @@ Write-Host "  Press Ctrl+C to stop" -ForegroundColor Gray
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-python api\memos_api_server_v2.py
+& $pythonExe api\memos_api_server_v2.py
 
 Write-Host "`nServer stopped." -ForegroundColor Red
 Read-Host "Press Enter to exit"

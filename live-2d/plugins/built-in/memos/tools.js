@@ -164,8 +164,9 @@ const TOOL_DEFINITIONS = [
 // ==================== 工具执行 ====================
 
 class MemosTools {
-    constructor(apiUrl) {
+    constructor(apiUrl, options = {}) {
         this.apiUrl = apiUrl;
+        this.similarityThreshold = options.similarityThreshold ?? 0.6;
     }
 
     getDefinitions() {
@@ -207,9 +208,19 @@ class MemosTools {
     _formatTime(ts) {
         if (!ts) return '';
         try {
-            return new Date(ts).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+            const d = new Date(ts);
+            if (isNaN(d.getTime())) return typeof ts === 'string' ? ts : String(ts);
+            return d.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
         } catch (_) {
-            return ts.substring(0, 10);
+            return typeof ts === 'string' ? ts : String(ts);
         }
     }
 
@@ -222,15 +233,22 @@ class MemosTools {
     async _searchMemory({ query, top_k = 5 }) {
         if (!query) return '错误：未提供搜索查询 (query)。';
         try {
-            const { data } = await axios.post(`${this.apiUrl}/search`, { query, top_k, user_id: 'feiniu_default' }, { timeout: 5000 });
+            const { data } = await axios.post(`${this.apiUrl}/search`, {
+                query, top_k, user_id: 'feiniu_default',
+                similarity_threshold: this.similarityThreshold
+            }, { timeout: 5000 });
             const memories = data.memories || [];
             if (memories.length === 0) return `在记忆中没有找到关于"${query}"的相关信息。`;
 
             const lines = memories.map((mem, i) => {
                 const content = typeof mem === 'string' ? mem : mem.content;
-                const timeStr = this._formatTime(mem.created_at || mem.timestamp);
-                const updateMark = (mem.updated_at && mem.updated_at !== (mem.created_at || mem.timestamp)) ? '（已更新）' : '';
-                return timeStr ? `${i + 1}. ${content} 【${timeStr}】${updateMark}` : `${i + 1}. ${content}`;
+                const pl = mem && typeof mem.payload === 'object' && mem.payload ? mem.payload : null;
+                const rawCreated = mem.created_at || mem.timestamp || (pl && (pl.created_at || pl.timestamp));
+                const rawUpdated = mem.updated_at || (pl && pl.updated_at);
+                const timeStr = this._formatTime(rawCreated);
+                const updateMark = (rawUpdated && rawUpdated !== rawCreated) ? '（已更新）' : '';
+                const idTag = mem.id ? ` [ID: ${mem.id}]` : '';
+                return timeStr ? `${i + 1}. ${content} 【${timeStr}】${updateMark}${idTag}` : `${i + 1}. ${content}${idTag}`;
             });
             return `找到 ${memories.length} 条相关记忆：\n${lines.join('\n')}`;
         } catch (error) {
@@ -241,7 +259,7 @@ class MemosTools {
     async _addMemory({ content }) {
         if (!content) return '错误：未提供要记住的内容 (content)。';
         try {
-            await axios.post(`${this.apiUrl}/add`, { messages: [{ role: 'user', content }], user_id: 'feiniu_default' }, { timeout: 15000 });
+            await axios.post(`${this.apiUrl}/add`, { messages: [{ role: 'user', content }], user_id: 'feiniu_default' }, { timeout: 60000 });
             return `已成功记住: ${content}`;
         } catch (error) {
             return this._connRefused(error) || `添加记忆时出错: ${error.message}`;
@@ -347,13 +365,20 @@ class MemosTools {
                     (r.parameters && JSON.stringify(r.parameters).toLowerCase().includes(kw))
                 );
             }
-            if (records.length === 0) return tool_name ? `没有找到工具「${tool_name}」的使用记录。` : '没有找到工具使用记录。';
+            if (records.length === 0) {
+                const hints = [tool_name && `工具「${tool_name}」`, keyword && `关键词「${keyword}」`].filter(Boolean);
+                return hints.length > 0 ? `没有找到匹配 ${hints.join('、')} 的工具使用记录。` : '没有找到工具使用记录。';
+            }
 
             const lines = records.map((r, i) => {
                 const name = r.tool_name || 'unknown';
                 const summary = r.result_summary || '无摘要';
                 const time = r.timestamp ? new Date(r.timestamp).toLocaleString('zh-CN') : '';
-                const p = r.parameters ? ` (参数: ${JSON.stringify(r.parameters).substring(0, 50)}...)` : '';
+                let p = '';
+                if (r.parameters) {
+                    const paramStr = JSON.stringify(r.parameters);
+                    p = paramStr.length > 50 ? ` (参数: ${paramStr.substring(0, 50)}...)` : ` (参数: ${paramStr})`;
+                }
                 return `${i + 1}. 【${name}】${summary}${p}${time ? ` - ${time}` : ''}`;
             });
             return `找到 ${records.length} 条工具使用记录：\n${lines.join('\n')}`;
@@ -380,6 +405,12 @@ class MemosTools {
     async _importDocument({ file_path, tags = [] }) {
         if (!file_path) return '错误：未提供文档路径。';
         try {
+            if (!file_path.startsWith('http://') && !file_path.startsWith('https://')) {
+                if (!fs.existsSync(file_path)) return `错误：文件不存在: ${file_path}`;
+                const ext = path.extname(file_path).toLowerCase();
+                const supported = ['.txt', '.pdf', '.md'];
+                if (!supported.includes(ext)) return `错误：不支持的文档格式 (${ext})。支持：${supported.join(', ')}`;
+            }
             const { data } = await axios.post(`${this.apiUrl}/kb/import`, { source: file_path, tags: ['document', ...tags], user_id: 'feiniu_default' }, { timeout: 120000 });
             if (data.status === 'success') return `已成功导入文档！\n- 路径: ${file_path}\n- 分块数: ${data.chunks_count || 0}\n- 导入记忆: ${data.imported_count || 0} 条`;
             return `导入失败: ${data.message || '未知错误'}`;
@@ -398,7 +429,7 @@ class MemosTools {
             return `错误：${action === 'correct' ? '修正' : '补充'}操作需要提供 new_content。`;
         }
         try {
-            const reqData = { memory_id, feedback_type: action, reason: reason || '' };
+            const reqData = { memory_id, feedback_type: action, reason: reason || '', user_id: 'feiniu_default' };
             if (action === 'correct' || action === 'supplement') reqData.correction = new_content;
 
             const { data } = await axios.post(`${this.apiUrl}/memory/feedback`, reqData, { timeout: 10000 });
@@ -418,7 +449,9 @@ class MemosTools {
 
     async _getPreferences({ category, include_details = true }) {
         try {
-            const { data: summaryData } = await axios.get(`${this.apiUrl}/preferences/summary`, { params: { user_id: 'feiniu_default' }, timeout: 5000 });
+            const summaryParams = { user_id: 'feiniu_default' };
+            if (category) summaryParams.category = category;
+            const { data: summaryData } = await axios.get(`${this.apiUrl}/preferences/summary`, { params: summaryParams, timeout: 5000 });
             const summary = summaryData.summary || {};
 
             let preferences = [];

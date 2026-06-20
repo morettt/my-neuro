@@ -1,0 +1,9 @@
+{
+  "name": "dawn-dusk-line",
+  "displayName": "晨昏之线",
+  "version": "1.1.0",
+  "author": "爱熬夜的人形兔",
+  "description": "时间与环境感知：可配置时区、精确时间戳、上午/中午/下午/晚上/深夜、中国法定节假日与调休（chinese-workday）；每次 LLM 请求可注入感知前缀。另含整点主动问候与时间查询工具。插件目录需 npm install。",
+  "main": "index.js",
+  "lang": "js"
+}

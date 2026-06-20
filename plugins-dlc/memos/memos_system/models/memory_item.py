@@ -91,12 +91,31 @@ class TextualMemoryItem(BaseModel):
         description="自定义标签"
     )
     
+    # 生命周期分层（与 memory_type 正交）
+    layer: str = Field(
+        default="WorkingMemory",
+        description="生命周期层: WorkingMemory, LongTermMemory, UserMemory"
+    )
+    status: str = Field(
+        default="active",
+        description="状态: active, archived, deleted"
+    )
+    access_count: int = Field(
+        default=0,
+        ge=0,
+        description="被检索命中的次数"
+    )
+    last_accessed_at: Optional[datetime] = Field(
+        default=None,
+        description="最近一次被检索命中的时间"
+    )
+
     # 可见性
     visibility: str = Field(
         default="private",
         description="可见性: private, shared, public"
     )
-    
+
     # 时间戳
     created_at: datetime = Field(
         default_factory=datetime.now,
@@ -145,6 +164,10 @@ class TextualMemoryItem(BaseModel):
             'source_id': self.source_id,
             'entity_ids': self.entity_ids,
             'tags': self.tags,
+            'layer': self.layer,
+            'status': self.status,
+            'access_count': self.access_count,
+            'last_accessed_at': self.last_accessed_at.isoformat() if self.last_accessed_at else None,
             'visibility': self.visibility,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
@@ -166,6 +189,10 @@ class TextualMemoryItem(BaseModel):
             source_id=payload.get('source_id'),
             entity_ids=payload.get('entity_ids', []),
             tags=payload.get('tags', []),
+            layer=payload.get('layer', 'LongTermMemory'),
+            status=payload.get('status', 'active'),
+            access_count=payload.get('access_count', 0),
+            last_accessed_at=datetime.fromisoformat(payload['last_accessed_at']) if payload.get('last_accessed_at') else None,
             visibility=payload.get('visibility', 'private'),
             created_at=datetime.fromisoformat(payload['created_at']) if payload.get('created_at') else datetime.now(),
             updated_at=datetime.fromisoformat(payload['updated_at']) if payload.get('updated_at') else None,

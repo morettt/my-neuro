@@ -1,0 +1,10 @@
+{
+  "name": "user-profile",
+  "displayName": "用户画像",
+  "version": "1.0.0",
+  "author": "community",
+  "description": "从长期记忆和对话中保守沉淀用户画像，支持首次诊断、候选池、跨天证据晋升和自动注入",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

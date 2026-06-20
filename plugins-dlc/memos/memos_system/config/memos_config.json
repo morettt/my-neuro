@@ -17,22 +17,33 @@
     }
   },
   "embedding": {
-    "model_path": "../full-hub/rag-hub",
+    "model_path": "../../../full-hub/rag-hub",
     "vector_size": 1024,
-    "use_api": true,
+    "use_api": false,
     "api_model": "text-embedding-3-large",
     "api_dimensions": 1024
   },
   "search": {
     "default_top_k": 5,
-    "similarity_threshold": 0.3,
+    "similarity_threshold": 0.5,
     "enable_reranker": false,
     "enable_bm25": true,
     "bm25_weight": 0.3,
     "enable_graph_query": true,
     "graph_max_depth": 2,
     "importance_weight": 0.3,
-    "type_weight_factor": 0.2
+    "type_weight_factor": 0.2,
+    "layer_weights": {
+      "WorkingMemory": 0.05,
+      "LongTermMemory": 0.15,
+      "UserMemory": 0.25
+    },
+    "recency_weight": 0.1,
+    "frequency_weight": 0.1,
+    "reranker_auto_download": true,
+    "reranker_model_id": "BAAI/bge-reranker-v2-m3",
+    "reranker_model_path": "../../../full-hub/reranker-hub",
+    "rerank_top_n": 20
   },
   "entity_extraction": {
     "enabled": true,
@@ -58,21 +69,36 @@
   },
   "llm": {
     "config": {
-      "model": "gemini-2.0-flash",
-      "api_key": "sk-zk225e73a53a5996adbf6bbb7c7a5594b4f69bedbc0be708",
-      "base_url": "https://api.zhizengzeng.com/v1"
+      "model": "",
+      "api_key": "",
+      "base_url": "",
+      "max_tokens": 8000
     }
   },
   "llm_fallback": {
-    "enabled": true,
+    "enabled": false,
     "config": {
-      "model": "gemini-2.0-flash",
-      "api_key": "sk-zk225e73a53a5996adbf6bbb7c7a5594b4f69bedbc0be708",
-      "base_url": "https://api.zhizengzeng.com/v1"
+      "model": "",
+      "api_key": "",
+      "base_url": ""
     }
   },
   "users": {
     "default_user": "feiniu_default",
     "enable_multi_user": false
+  },
+  "evolution": {
+    "enabled": true,
+    "evolve_interval": 86400,
+    "timeout": 600,
+    "promote_access": 3,
+    "promote_importance": 0.7,
+    "promote_age_days": 7,
+    "user_confidence": 0.75,
+    "archive_days": 60,
+    "archive_importance": 0.2,
+    "decay_rate": 0.05,
+    "decay_floor": 0.1,
+    "merge_threshold": 0.95
   }
 }

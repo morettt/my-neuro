@@ -1,0 +1,212 @@
+{
+  "enabled": {
+    "title": "启用用户画像",
+    "description": "是否启用自动用户画像系统",
+    "type": "bool",
+    "default": true,
+    "value": true
+  },
+  "inject_profile": {
+    "title": "注入用户画像",
+    "description": "每次 LLM 请求前将正式用户画像注入到系统提示词",
+    "type": "bool",
+    "default": true,
+    "value": true
+  },
+  "idle_time": {
+    "title": "空闲触发时间（毫秒）",
+    "description": "对话结束后空闲多久开始后台分析画像，默认 3 分钟",
+    "type": "int",
+    "default": 180000,
+    "value": 180000
+  },
+  "update_on_exit": {
+    "title": "退出时尝试更新",
+    "description": "插件停止时如果有未分析对话，尝试做一次画像分析",
+    "type": "bool",
+    "default": true,
+    "value": true
+  },
+  "min_new_messages": {
+    "title": "最少新消息数",
+    "description": "距离上次分析至少新增多少条消息才触发分析",
+    "type": "int",
+    "default": 4,
+    "value": 4
+  },
+  "max_context_messages": {
+    "title": "最大上下文消息数",
+    "description": "每次分析最多取最近多少条对话消息",
+    "type": "int",
+    "default": 40,
+    "value": 40
+  },
+  "max_items_per_field": {
+    "title": "每字段最大条目数",
+    "description": "画像每个列表字段最多保留多少条，控制注入体积",
+    "type": "int",
+    "default": 20,
+    "value": 20
+  },
+  "profile_file": {
+    "title": "画像文件",
+    "description": "正式画像 JSON 文件路径，相对于 live-2d 根目录",
+    "type": "string",
+    "default": "AI记录室/用户画像.json",
+    "value": "AI记录室/用户画像.json"
+  },
+  "candidate_file": {
+    "title": "候选池文件",
+    "description": "候选观察 JSON 文件路径，相对于 live-2d 根目录；候选不会注入提示词",
+    "type": "string",
+    "default": "AI记录室/用户画像_候选.json",
+    "value": "AI记录室/用户画像_候选.json"
+  },
+  "profile_llm": {
+    "title": "专用画像模型",
+    "description": "用于画像诊断、候选提取和晋升润色的独立模型；留空则回退主对话模型",
+    "type": "object",
+    "fields": {
+      "model": {
+        "title": "模型名称",
+        "description": "例如 deepseek-v4-pro",
+        "type": "string",
+        "default": "",
+        "value": ""
+      },
+      "api_key": {
+        "title": "API Key",
+        "description": "专用画像模型 API Key",
+        "type": "string",
+        "default": "",
+        "value": ""
+      },
+      "base_url": {
+        "title": "Base URL",
+        "description": "OpenAI 兼容接口地址，例如 https://api.deepseek.com",
+        "type": "string",
+        "default": "",
+        "value": ""
+      },
+      "max_tokens": {
+        "title": "最大输出 Token",
+        "description": "画像分析输出 token 上限",
+        "type": "int",
+        "default": 4000,
+        "value": 4000
+      },
+      "timeout_seconds": {
+        "title": "超时时间（秒）",
+        "description": "专用模型单次请求超时时间",
+        "type": "int",
+        "default": 120,
+        "value": 120
+      }
+    }
+  },
+  "profile_llm_fallback": {
+    "title": "专用画像备用模型",
+    "description": "主画像模型失败时切换的备用模型",
+    "type": "object",
+    "fields": {
+      "enabled": {
+        "title": "启用备用模型",
+        "description": "专用画像模型失败时是否自动切换备用模型",
+        "type": "bool",
+        "default": false,
+        "value": false
+      },
+      "model": {
+        "title": "备用模型名称",
+        "description": "备用模型名称",
+        "type": "string",
+        "default": "",
+        "value": ""
+      },
+      "api_key": {
+        "title": "备用 API Key",
+        "description": "备用模型 API Key",
+        "type": "string",
+        "default": "",
+        "value": ""
+      },
+      "base_url": {
+        "title": "备用 Base URL",
+        "description": "备用模型 OpenAI 兼容接口地址",
+        "type": "string",
+        "default": "",
+        "value": ""
+      }
+    }
+  },
+  "bootstrap_on_first_run": {
+    "title": "首次从 MemOS 诊断",
+    "description": "首次启动时从 MemOS 已有长期记忆冷启动生成初始画像",
+    "type": "bool",
+    "default": true,
+    "value": true
+  },
+  "memos_api_url": {
+    "title": "MemOS API 地址",
+    "description": "用于首次诊断和复现佐证的 MemOS 后端地址",
+    "type": "string",
+    "default": "http://127.0.0.1:8003",
+    "value": "http://127.0.0.1:8003"
+  },
+  "bootstrap_max_memories": {
+    "title": "首次诊断记忆上限",
+    "description": "从 MemOS 取多少条长期信号喂给画像模型",
+    "type": "int",
+    "default": 200,
+    "value": 200
+  },
+  "promote_count": {
+    "title": "行为类晋升次数",
+    "description": "习惯/做派候选至少跨多少个不同日期出现才晋升",
+    "type": "int",
+    "default": 3,
+    "value": 3
+  },
+  "promote_span_days": {
+    "title": "行为类晋升跨度（天）",
+    "description": "习惯/做派候选首次与最近出现至少跨越多少天才晋升",
+    "type": "int",
+    "default": 3,
+    "value": 3
+  },
+  "candidate_ttl_days": {
+    "title": "候选过期天数",
+    "description": "候选自 last_seen 起多久未复现则归档清理",
+    "type": "int",
+    "default": 30,
+    "value": 30
+  },
+  "profile_stale_days": {
+    "title": "正式画像过期天数",
+    "description": "正式画像项多久零复现才软降级回候选",
+    "type": "int",
+    "default": 180,
+    "value": 180
+  },
+  "recurrence_source": {
+    "title": "复现证据源",
+    "description": "local=仅本地候选池，memos=依赖 MemOS，hybrid=本地为主且 MemOS 佐证",
+    "type": "string",
+    "default": "hybrid",
+    "value": "hybrid"
+  },
+  "max_candidates": {
+    "title": "候选池最大条数",
+    "description": "限制后台画像候选池体积，超过后保留最近最有用的候选。",
+    "type": "int",
+    "default": 200,
+    "value": 200
+  },
+  "max_archived_candidates": {
+    "title": "候选归档最大条数",
+    "description": "限制候选归档记录体积，避免画像候选文件长期无限增长。",
+    "type": "int",
+    "default": 200,
+    "value": 200
+  }
+}
