@@ -155,8 +155,8 @@
         "title": "自动下载精排模型",
         "description": "启用精排且本地缺少模型时，启动 MemOS 后端自动下载 BAAI/bge-reranker-v2-m3。",
         "type": "bool",
-        "default": false,
-        "value": false
+        "default": true,
+        "value": true
       },
       "reranker_model_id": {
         "title": "精排模型 ID",

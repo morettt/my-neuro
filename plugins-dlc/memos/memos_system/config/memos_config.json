@@ -40,7 +40,7 @@
     },
     "recency_weight": 0.1,
     "frequency_weight": 0.1,
-    "reranker_auto_download": false,
+    "reranker_auto_download": true,
     "reranker_model_id": "BAAI/bge-reranker-v2-m3",
     "reranker_model_path": "../../../full-hub/reranker-hub",
     "rerank_top_n": 20
