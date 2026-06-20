@@ -1,0 +1,14 @@
+{
+  "name": "dawn-dusk-line",
+  "version": "1.1.0",
+  "private": true,
+  "description": "晨昏之线插件本地依赖：中国法定节假日与调休数据（chinese-workday）",
+  "main": "index.js",
+  "scripts": {
+    "test:workday": "node test-load-workday.cjs"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "chinese-workday": "^2.0.0"
+  }
+}

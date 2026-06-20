@@ -1,0 +1,65 @@
+{
+  "timezone": {
+    "title": "感知与时钟时区",
+    "description": "IANA 时区名（如 Asia/Shanghai）。用于时间戳、工作日/节假日判断的「当地日期」、整点问候触发时刻",
+    "type": "string",
+    "default": "Asia/Shanghai",
+    "value": "Asia/Shanghai"
+  },
+  "injectEnvironmentPerception": {
+    "title": "注入环境感知到 LLM",
+    "description": "每次调用大模型时，在最后一条用户消息前附加 [发送时间: … | 星期, 工作日/节假日/调休, 时段]，便于模型像 LLMPerception 一样感知场景",
+    "type": "bool",
+    "default": true,
+    "value": true
+  },
+  "enableHolidayPerception": {
+    "title": "启用中国节假日与调休",
+    "description": "依赖 chinese-workday（插件目录 npm install）。关闭后仅按周一～周五/周末区分",
+    "type": "bool",
+    "default": true,
+    "value": true
+  },
+  "holidayCountry": {
+    "title": "节假日地区代码",
+    "description": "目前仅 CN 使用国务院放假数据；其他值将退化为仅周末判断",
+    "type": "string",
+    "default": "CN",
+    "value": "CN"
+  },
+  "greetingHours": {
+    "title": "问候整点时刻",
+    "description": "在哪些整点触发主动问候（24小时制，逗号分隔，按上方时区）",
+    "type": "string",
+    "default": "0,8,12,18",
+    "value": "0,8,12,18"
+  },
+  "quietThreshold": {
+    "title": "静默判定阈值（分钟）",
+    "description": "距上次交互超过此时间视为静默，直接主动问候",
+    "type": "int",
+    "default": 10,
+    "value": 10
+  },
+  "activeThreshold": {
+    "title": "活跃判定阈值（分钟）",
+    "description": "距上次交互小于此时间视为活跃对话中，改为注入提示词",
+    "type": "int",
+    "default": 3,
+    "value": 3
+  },
+  "deferTimeout": {
+    "title": "延迟等待超时（分钟）",
+    "description": "半活跃状态下最多等待多久，超时则放弃本次问候",
+    "type": "int",
+    "default": 30,
+    "value": 30
+  },
+  "checkInterval": {
+    "title": "时间检查间隔（秒）",
+    "description": "每隔多少秒检查一次是否到达问候时刻",
+    "type": "int",
+    "default": 30,
+    "value": 30
+  }
+}

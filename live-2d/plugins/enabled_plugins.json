@@ -3,9 +3,9 @@
     "built-in/code-executor",
     "built-in/memos",
     "built-in/ai-log",
-    "built-in/screenshot",
     "built-in/web-search",
     "community/core-memory-injector",
-    "community/user-profile"
+    "community/user-profile",
+    "community/dawn-dusk-line"
   ]
 }

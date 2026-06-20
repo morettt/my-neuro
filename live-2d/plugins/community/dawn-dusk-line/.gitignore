@@ -1,0 +1,2 @@
+# 运行时从 node_modules 复制的 CJS 缓存（纯 .cjs 后缀供 require）
+.chinese-workday-bundle.cjs
