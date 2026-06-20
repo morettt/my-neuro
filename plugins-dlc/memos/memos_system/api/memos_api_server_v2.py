@@ -2159,11 +2159,16 @@ async def search_memory(request: SearchMemoryRequest):
         # 排序
         results.sort(key=lambda x: x.get('final_score', 0), reverse=True)
 
-        # 基于原始相似度（混合后）过滤，而非 final_score
-        # 这样阈值的含义始终是"语义相关度门槛"，不会被重要度/类型权重干扰
+        # 基于原始相似度（混合后）过滤，而非 final_score。
+        # BM25-only 结果没有向量相似度，使用归一化后的 bm25_score 过同一阈值，
+        # 避免先乘 bm25_weight 后被默认 0.5 阈值全部误杀。
         threshold = request.similarity_threshold
         before_filter = len(results)
-        results = [r for r in results if r.get('similarity', 0) >= threshold]
+        results = [
+            r for r in results
+            if r.get('similarity', 0) >= threshold
+            or (r.get('bm25_only') and r.get('bm25_score', 0) >= threshold)
+        ]
         if before_filter > len(results):
             print(f"   🔻 阈值过滤: {before_filter} → {len(results)} 条 (阈值={threshold}, 基于相似度)")
 

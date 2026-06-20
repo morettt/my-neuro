@@ -36,45 +36,45 @@
   },
   "diary_folder": {
     "title": "日志保存目录",
-    "description": "AI 日志文件保存的绝对路径",
+    "description": "AI 日志文件保存目录。支持相对于程序根目录的路径（如 AI记录室/AI日志）或绝对路径",
     "type": "string",
-    "default": "AI???/AI??",
-    "value": "AI???/AI??"
+    "default": "AI记录室/AI日志",
+    "value": "AI记录室/AI日志"
   },
   "diary_filename_template": {
     "title": "日志文件名模板",
     "description": "每日日志的文件名模板，{date} 会被替换为日期（如 2026-03-16）",
     "type": "string",
-    "default": "{date}-AI??.txt",
-    "value": "{date}-AI??.txt"
+    "default": "{date}-AI日志.txt",
+    "value": "{date}-AI日志.txt"
   },
   "monthly_filename_template": {
     "title": "月度总结文件名模板",
     "description": "月度总结的文件名模板，{month} 会被替换为年月（如 2026-03）",
     "type": "string",
-    "default": "{month}-????.txt",
-    "value": "{month}-????.txt"
+    "default": "{month}-月度总结.txt",
+    "value": "{month}-月度总结.txt"
   },
   "core_memory_file": {
     "title": "核心记忆文件",
-    "description": "核心用户记忆文件路径。支持绝对路径（如 D:\\AI记忆\\核心用户记忆.txt）或相对于程序根目录的路径（如 AI记录室/核心用户记忆.txt）",
+    "description": "核心用户记忆文件路径。支持相对于程序根目录的路径（如 AI记录室/核心用户记忆.txt）或绝对路径",
     "type": "string",
-    "default": "AI???/??????.txt",
-    "value": "AI???/??????.txt"
+    "default": "AI记录室/核心用户记忆.txt",
+    "value": "AI记录室/核心用户记忆.txt"
   },
   "conversation_history_file": {
     "title": "对话历史文件",
-    "description": "对话历史（记忆库）文件路径。支持绝对路径（如 D:\\AI记忆\\记忆库.txt）或相对于程序根目录的路径（如 AI记录室/记忆库.txt）。该文件由主程序写入，AI 日志插件读取并在生成日志后备份+清空",
+    "description": "对话历史（记忆库）文件路径。支持相对于程序根目录的路径（如 AI记录室/记忆库.txt）或绝对路径。该文件由主程序写入，AI 日志插件读取并在生成日志后备份+清空",
     "type": "string",
-    "default": "AI???/???.txt",
-    "value": "AI???/???.txt"
+    "default": "AI记录室/记忆库.txt",
+    "value": "AI记录室/记忆库.txt"
   },
   "history_backup_folder": {
     "title": "记忆库备份目录",
-    "description": "写完日志后，将记忆库文件备份到此目录（绝对路径）。备份文件名为 记忆库-{日期}.txt，备份后清空原记忆库。留空则不备份。",
+    "description": "写完日志后，将记忆库文件备份到此目录。支持相对或绝对路径。备份文件名为 记忆库-{日期}.txt，备份后清空原记忆库。留空则不备份。",
     "type": "string",
-    "default": "AI???/?????",
-    "value": "AI???/?????"
+    "default": "AI记录室/记忆库备份",
+    "value": "AI记录室/记忆库备份"
   },
   "daily_prompt": {
     "title": "每日日志提示词",
