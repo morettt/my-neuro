@@ -1063,7 +1063,7 @@ elif page == "📋 记忆库":
     st.markdown('<p style="color: #64748b;">查看和管理所有存储的记忆数据</p>', unsafe_allow_html=True)
     
     try:
-        response = requests.get(f"{MEMOS_API_URL}/list", params={"limit": 9999}, timeout=10)
+        response = requests.get(f"{MEMOS_API_URL}/list", params={"limit": 0}, timeout=300)
         if response.status_code == 200:
             data = response.json()
             memories = data.get('memories', [])

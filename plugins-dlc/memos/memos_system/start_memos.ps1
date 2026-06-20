@@ -7,6 +7,23 @@ Write-Host "================================================================" -F
 
 Set-Location $PSScriptRoot
 
+# Activate conda environment
+Write-Host "`n[0] Activating conda environment (my-neuro)..." -ForegroundColor Yellow
+$condaBase = (conda info --base 2>$null)
+if ($condaBase) {
+    $condaHook = Join-Path $condaBase "shell\condabin\conda-hook.ps1"
+    if (Test-Path $condaHook) {
+        . $condaHook
+        conda activate my-neuro
+        Write-Host "  Environment: my-neuro" -ForegroundColor Green
+    } else {
+        # Fallback: use conda activate directly
+        conda activate my-neuro 2>$null
+    }
+} else {
+    Write-Host "  [WARN] conda not found, using system Python" -ForegroundColor Red
+}
+
 # Clean port and lock file
 Write-Host "`n[1] Cleaning up..." -ForegroundColor Yellow
 Get-NetTCPConnection -LocalPort 8003 -ErrorAction SilentlyContinue | ForEach-Object {

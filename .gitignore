@@ -40,3 +40,28 @@ env/
 
 # Claude 内部文件
 .claude/
+
+# Runtime caches and private memory data
+__pycache__/
+**/__pycache__/
+*.pyc
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+
+plugins-dlc/memos/memos_system/data/**
+!plugins-dlc/memos/memos_system/data/
+!plugins-dlc/memos/memos_system/data/.gitkeep
+!plugins-dlc/memos/memos_system/data/images/
+!plugins-dlc/memos/memos_system/data/images/.gitkeep
+!plugins-dlc/memos/memos_system/data/images/thumbnails/
+!plugins-dlc/memos/memos_system/data/images/thumbnails/.gitkeep
+!plugins-dlc/memos/memos_system/data/qdrant/
+!plugins-dlc/memos/memos_system/data/qdrant/.gitkeep
+
+live-2d/plugins/**/outputs/
+live-2d/plugins/**/.runtime/
+live-2d/plugins/community/agent-dream/dream_logs/
+live-2d/plugins/community/agent-dream/dream_state.json

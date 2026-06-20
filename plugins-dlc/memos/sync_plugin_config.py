@@ -32,11 +32,10 @@ if os.path.exists(BACKEND_CONFIG_PATH):
 # 同步 LLM
 llm = get_fields(cfg, 'backend_llm')
 if llm:
-    backend.setdefault('llm', {})['config'] = {
-        'model':    llm.get('model', ''),
-        'api_key':  llm.get('api_key', ''),
-        'base_url': llm.get('base_url', '')
-    }
+    llm_config = backend.setdefault('llm', {}).setdefault('config', {})
+    for key in ['model', 'api_key', 'base_url', 'max_tokens']:
+        if llm.get(key):
+            llm_config[key] = llm.get(key)
 
 # 同步 Embedding 配置
 backend.setdefault('embedding', {}).update({
