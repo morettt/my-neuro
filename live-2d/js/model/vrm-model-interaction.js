@@ -6,6 +6,8 @@ const VRM_VIEWPORT_ASPECT = 1.5;   // 视口高宽比（height / width）
 const VRM_SCALE_FACTOR = 0.896;    // saved_scale * factor = viewport_width / innerWidth
 const VRM_PADDING_X = 0.104;       // 模型左边缘在视口中的水平偏移（占视口宽度比例）
 const VRM_PADDING_Y = 0.282;       // 模型顶部在视口中的垂直偏移（占视口高度比例）
+// 模型可见区域的垂直中心占视口高度的比例（上 VRM_PADDING_Y、下 0.96 之间的中点），用于跨屏中心判定
+const VRM_CENTER_Y_FRAC = (VRM_PADDING_Y + 0.96) / 2;
 
 // VRM模型交互控制器
 class VRMInteractionController {
@@ -282,7 +284,7 @@ class VRMInteractionController {
             }
         });
 
-        window.addEventListener('mouseup', (e) => {
+        window.addEventListener('mouseup', async (e) => {
             if (e.button === 0 && this.isDragging) {
                 this.isDragging = false;
 
@@ -298,8 +300,12 @@ class VRMInteractionController {
                     }
                 }
 
-                this._clampViewRect();
-                this.saveModelPosition();
+                // 松手时检测模型是否越出当前窗口并整窗重定位到目标显示器。
+                const switched = await this.checkAndSwitchDisplay();
+                if (!switched) {
+                    this._clampViewRect();
+                    this.saveModelPosition();
+                }
 
                 setTimeout(() => {
                     if (!model.containsPoint({ x: e.clientX, y: e.clientY })) {
@@ -387,6 +393,72 @@ class VRMInteractionController {
         });
     }
 
+    // ===== 跨屏：松手时检测模型是否越出当前窗口，并整窗重定位到目标显示器 =====
+    // VRM 在 client/CSS 像素下工作（渲染器 1:1，无 ×2）。
+    async checkAndSwitchDisplay() {
+        if (!window.electronScreen || !window.electronScreen.moveWindowToDisplay) return false;
+        if (!this.model || !this.model.viewRect) return false;
+
+        try {
+            const vr = this.model.viewRect;
+            // 模型“可见区域”的视觉中心（client 像素）
+            const modelCenterX = vr.x + 0.5 * vr.width;
+            const modelCenterY = vr.y + VRM_CENTER_Y_FRAC * vr.height;
+
+            const displays = await window.electronScreen.getAllDisplays();
+            if (!displays || displays.length <= 1) return false;
+
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            // 模型中心仍在当前窗口内 → 不切屏
+            if (modelCenterX >= 0 && modelCenterX < windowWidth &&
+                modelCenterY >= 0 && modelCenterY < windowHeight) {
+                return false;
+            }
+
+            const currentDisplay = await window.electronScreen.getCurrentDisplay();
+            if (!currentDisplay) return false;
+
+            const modelScreenX = currentDisplay.screenX + modelCenterX;
+            const modelScreenY = currentDisplay.screenY + modelCenterY;
+
+            let targetDisplay = null;
+            for (const d of displays) {
+                if (modelScreenX >= d.screenX && modelScreenX < d.screenX + d.width &&
+                    modelScreenY >= d.screenY && modelScreenY < d.screenY + d.height) {
+                    targetDisplay = d;
+                    break;
+                }
+            }
+            if (!targetDisplay) return false;
+
+            console.log('[VRM] 检测到模型移出当前屏幕，准备切换到屏幕:', targetDisplay.id);
+            const result = await window.electronScreen.moveWindowToDisplay(modelScreenX, modelScreenY);
+            if (result && result.success && !result.sameDisplay) {
+                if (result.scaleRatio && result.scaleRatio !== 1) {
+                    // 保持模型原大小，仅调整位置。
+                    console.log('[VRM] 屏幕缩放比变化:', result.scaleRatio);
+                }
+
+                // 模型视觉中心放到新窗口内对应位置（client 像素，无 ×2）。只依赖目标屏 DIP 原点，与 resize 无关；
+                // 命中目标屏说明中心点必在目标屏范围内，无需再 clamp。
+                const newCenterX = modelScreenX - targetDisplay.screenX;
+                const newCenterY = modelScreenY - targetDisplay.screenY;
+                this.model.viewRect.x = newCenterX - 0.5 * this.model.viewRect.width;
+                this.model.viewRect.y = newCenterY - VRM_CENTER_Y_FRAC * this.model.viewRect.height;
+
+                // 保存：用目标显示器 DIP 尺寸作基准，避免依赖跨屏后尚未稳定的 innerWidth。
+                this.saveModelPosition(targetDisplay.width, targetDisplay.height);
+                console.log('[VRM] 跨屏切换完成，viewRect:', this.model.viewRect);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('[VRM] 跨屏检测/切换出错:', error);
+            return false;
+        }
+    }
+
 
    // 设置嘴部动画
     setMouthOpenY(v) {
@@ -438,12 +510,12 @@ class VRMInteractionController {
     }
 
     // 保存VRM视口位置（Live2D兼容格式）
-    saveModelPosition() {
+    saveModelPosition(overrideWidth, overrideHeight) {
         if (!this.model || !this.config) return;
         const vr = this.model.viewRect;
         if (!vr || !this.config.ui?.model_position?.remember_position) return;
 
-        const saved = this._viewRectToSaved();
+        const saved = this._viewRectToSaved(overrideWidth, overrideHeight);
         this.config.ui.model_position.x = saved.x;
         this.config.ui.model_position.y = saved.y;
         this.config.ui.model_scale = saved.scale;
@@ -469,10 +541,11 @@ class VRMInteractionController {
     }
 
     // 将VRM视口矩形转换为Live2D兼容保存值
-    _viewRectToSaved() {
+    // overrideWidth/Height：跨屏切换时传入“目标显示器的 DIP 尺寸”，避免依赖尚未稳定的 innerWidth。
+    _viewRectToSaved(overrideWidth, overrideHeight) {
         const vr = this.model.viewRect;
-        const iW = window.innerWidth;
-        const iH = window.innerHeight;
+        const iW = overrideWidth || window.innerWidth;
+        const iH = overrideHeight || window.innerHeight;
         return {
             x: (vr.x + VRM_PADDING_X * vr.width) * 2 / iW,
             y: (vr.y + VRM_PADDING_Y * vr.height) * 2 / iH,

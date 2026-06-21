@@ -102,31 +102,26 @@ class ModelInteractionController {
         // 鼠标移动事件
         this.model.on('mousemove', (e) => {
             if (this.isDragging) {
-                let newX = e.data.global.x - this.dragOffset.x;
-                let newY = e.data.global.y - this.dragOffset.y;
-
-                // 限制模型移动范围
-                if (this.config && this.config.ui && this.config.ui.screen_extend) {
-                    const extend = this.config.ui.screen_extend;
-                    if (extend.extend && extend.left) {
-                        // 限制在主屏幕范围内 (假设主屏幕在右侧，左侧是扩展屏)
-                        // 这里需要根据实际屏幕布局调整，假设主屏幕宽度为 screen.getPrimaryDisplay().size.width
-                        // 简单处理：限制 x 不能小于 0
-                        if (newX < 0) newX = 0;
-                    }
-                }
-
+                // 拖动期间模型自由跟随光标，允许超出当前窗口边缘（会被窗口裁切）；
+                // 跨屏判定推迟到松手时的 checkAndSwitchDisplay，不在拖动中限制范围。
+                const newX = e.data.global.x - this.dragOffset.x;
+                const newY = e.data.global.y - this.dragOffset.y;
                 this.model.position.set(newX, newY);
                 this.updateInteractionArea();
             }
         });
 
         // 全局鼠标释放事件
-        window.addEventListener('mouseup', () => {
+        window.addEventListener('mouseup', async () => {
             if (this.isDragging) {
                 this.isDragging = false;
-                // 保存模型位置
-                this.saveModelPosition();
+                // 松手时先检测模型中心是否越出当前窗口，若是则整窗重定位到目标显示器。
+                const switched = await this.checkAndSwitchDisplay();
+                if (!switched) {
+                    // 未切屏：若模型中心越出当前窗口（目标屏不存在），吸回窗口内，避免模型“走丢”。
+                    this._clampModelToWindow();
+                    this.saveModelPosition();
+                }
                 setTimeout(() => {
                     if (!this.model.containsPoint(this.app.renderer.plugins.interaction.mouse.global)) {
                         ipcRenderer.send('set-ignore-mouse-events', {
@@ -254,13 +249,18 @@ class ModelInteractionController {
             }
         }, { passive: false });
 
-        // 窗口大小改变事件
+        // 窗口大小改变事件（跨屏重定位到不同尺寸的显示器时也会触发）
         window.addEventListener('resize', () => {
             if (this.app && this.app.renderer) {
                 const actualWidth = window.actualWidth || window.innerWidth;
                 const actualHeight = window.actualHeight || window.innerHeight;
                 const scaleFactor = window.canvasScaleFactor || 2;
                 this.app.renderer.resize(actualWidth * scaleFactor, actualHeight * scaleFactor);
+                // 同步 canvas 的 CSS 尺寸到当前窗口（2x 缓冲区需配对正确的 CSS 尺寸，否则跨屏后会被拉伸）
+                if (this.app.view && this.app.view.style) {
+                    this.app.view.style.width = actualWidth + 'px';
+                    this.app.view.style.height = actualHeight + 'px';
+                }
                 //多屏幕坐标系统，不设置pivot/position,舞台从0,0开始
                 this.updateInteractionArea();
             }
@@ -276,6 +276,102 @@ class ModelInteractionController {
         this.model.on('rightdown', (e) => {
             e.stopPropagation();
         });
+    }
+
+    // ===== 跨屏：松手时检测模型是否越出当前窗口，并整窗重定位到目标显示器 =====
+    // 把模型中心换算成屏幕绝对坐标来判断目标屏；
+    // 适配 myneuro 的坐标约定：canvas 坐标 = 窗口 CSS 坐标 × canvasScaleFactor(=2)。
+    async checkAndSwitchDisplay() {
+        // 仅在 Electron 桥接可用时执行
+        if (!window.electronScreen || !window.electronScreen.moveWindowToDisplay) return false;
+        if (!this.model) return false;
+
+        try {
+            const sf = window.canvasScaleFactor || 2;
+
+            // 模型中心（canvas 坐标）→ 当前窗口 CSS 坐标
+            const bounds = this.model.getBounds();
+            const modelCenterX = ((bounds.left + bounds.right) / 2) / sf;
+            const modelCenterY = ((bounds.top + bounds.bottom) / 2) / sf;
+
+            const displays = await window.electronScreen.getAllDisplays();
+            if (!displays || displays.length <= 1) return false;
+
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            // 模型中心仍在当前窗口内 → 不切屏
+            if (modelCenterX >= 0 && modelCenterX < windowWidth &&
+                modelCenterY >= 0 && modelCenterY < windowHeight) {
+                return false;
+            }
+
+            const currentDisplay = await window.electronScreen.getCurrentDisplay();
+            if (!currentDisplay) return false;
+
+            // 模型中心的屏幕绝对坐标
+            const modelScreenX = currentDisplay.screenX + modelCenterX;
+            const modelScreenY = currentDisplay.screenY + modelCenterY;
+
+            // 找到包含该点的目标显示器
+            let targetDisplay = null;
+            for (const d of displays) {
+                if (modelScreenX >= d.screenX && modelScreenX < d.screenX + d.width &&
+                    modelScreenY >= d.screenY && modelScreenY < d.screenY + d.height) {
+                    targetDisplay = d;
+                    break;
+                }
+            }
+            if (!targetDisplay) return false;
+
+            console.log('[Live2D] 检测到模型移出当前屏幕，准备切换到屏幕:', targetDisplay.id);
+
+            const result = await window.electronScreen.moveWindowToDisplay(modelScreenX, modelScreenY);
+            if (result && result.success && !result.sameDisplay) {
+                if (result.scaleRatio && result.scaleRatio !== 1) {
+                    // 不同屏缩放比变化时保持模型原大小，仅调整位置。
+                    console.log('[Live2D] 屏幕缩放比变化:', result.scaleRatio);
+                }
+
+                // 把模型放到新窗口内对应位置：模型视觉中心 = 屏幕坐标 − 新窗口屏幕原点，再换算回 canvas 坐标。
+                // 该坐标只依赖目标显示器 DIP 原点和 canvasScaleFactor，与窗口/缓冲区是否已 resize 无关；
+                // 命中目标屏说明中心点必落在 [0,target.width)×[0,target.height) 内，故无需再 clamp。
+                const targetCenterX = (modelScreenX - targetDisplay.screenX) * sf;
+                const targetCenterY = (modelScreenY - targetDisplay.screenY) * sf;
+                const b2 = this.model.getBounds();
+                const curCenterX = (b2.left + b2.right) / 2;
+                const curCenterY = (b2.top + b2.bottom) / 2;
+                this.model.x += targetCenterX - curCenterX;
+                this.model.y += targetCenterY - curCenterY;
+                this.updateInteractionArea();
+
+                // 保存：用“目标显示器的 DIP 尺寸”算相对位置，避免依赖跨屏后仍在重申/尚未稳定的 innerWidth。
+                this.saveModelPosition(targetDisplay.width, targetDisplay.height);
+                console.log('[Live2D] 跨屏切换完成，模型新位置:', this.model.x, this.model.y);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('[Live2D] 跨屏检测/切换出错:', error);
+            return false;
+        }
+    }
+
+    // 若模型中心越出当前窗口，吸回窗口内（保持中心位于 [0,innerWidth]×[0,innerHeight]，canvas 坐标）。
+    _clampModelToWindow() {
+        if (!this.model) return;
+        const sf = window.canvasScaleFactor || 2;
+        const maxX = window.innerWidth * sf;
+        const maxY = window.innerHeight * sf;
+        const b = this.model.getBounds();
+        const cx = (b.left + b.right) / 2;
+        const cy = (b.top + b.bottom) / 2;
+        const clampedX = Math.min(Math.max(cx, 0), maxX);
+        const clampedY = Math.min(Math.max(cy, 0), maxY);
+        if (clampedX !== cx || clampedY !== cy) {
+            this.model.x += clampedX - cx;
+            this.model.y += clampedY - cy;
+            this.updateInteractionArea();
+        }
     }
 
 
@@ -318,23 +414,25 @@ class ModelInteractionController {
         const actualHeight = window.actualHeight || window.innerHeight;
         const scaleFactor = window.canvasScaleFactor || 2;
 
-        const scaleX = (actualWidth * scaleMultiplier) / this.model.width;
-        const scaleY = (actualHeight * scaleMultiplier) / this.model.height;
         this.model.scale.set(scaleMultiplier);
 
-        const isDualRight = window.innerWidth > window.screen.width * 1.2 && this.config?.ui?.screen_extend?.right;
+        // 窗口已由主进程落在“上次所在的显示器”，这里只按当前显示器内的相对位置摆放，
+        // 不再依据 isDualRight 切换 x_dual/y_dual。
         const pos = this.config?.ui?.model_position;
-        const defaultRelX = isDualRight ? (pos?.x_dual ?? 0.825) : (pos?.x ?? 0.65);
-        const defaultRelY = isDualRight ? (pos?.y_dual ?? 0.38) : (pos?.y ?? 0.38);
+        const defaultRelX = pos?.x ?? 0.65;
+        const defaultRelY = pos?.y ?? 0.38;
 
         this.model.x = defaultRelX * actualWidth * scaleFactor;
         this.model.y = defaultRelY * actualHeight * scaleFactor;
 
         this.updateInteractionArea();
+        // 防御：若配置里存了越界的相对位置（例如旧版跨屏 bug 导致的负值），启动时吸回当前窗口内。
+        this._clampModelToWindow();
     }
 
     // 保存模型位置到配置文件
-    saveModelPosition() {
+    // 只保存“当前显示器内的相对位置（0~1）”；所在显示器的屏幕原点由主进程附加（save-model-position）。
+    saveModelPosition(overrideWidth, overrideHeight) {
         if (!this.model || !this.config) return;
 
         // 检查是否启用位置记忆
@@ -342,12 +440,12 @@ class ModelInteractionController {
             return;
         }
 
-        // 使用实际窗口尺寸计算相对位置
-        const actualWidth = window.actualWidth || window.innerWidth;
-        const actualHeight = window.actualHeight || window.innerHeight;
+        // 计算相对位置的基准宽高：跨屏切换时传入“目标显示器的 DIP 尺寸”，避免依赖尚未稳定的 innerWidth。
+        const actualWidth = overrideWidth || window.actualWidth || window.innerWidth;
+        const actualHeight = overrideHeight || window.actualHeight || window.innerHeight;
         const scaleFactor = window.canvasScaleFactor || 2;
 
-        //将canvas坐标转换为相对于窗口的坐标，在计算相对位置
+        //将canvas坐标转换为相对于窗口的坐标，再计算相对位置
         const windowX = this.model.x / scaleFactor;
         const windowY = this.model.y / scaleFactor;
 
@@ -355,26 +453,18 @@ class ModelInteractionController {
         const relativeX = windowX / actualWidth;
         const relativeY = windowY / actualHeight;
 
-        const isDualRight = window.innerWidth > window.screen.width * 1.2 && this.config?.ui?.screen_extend?.right;
-
         // 更新配置对象
-        if (isDualRight) {
-            this.config.ui.model_position.x_dual = relativeX;
-            this.config.ui.model_position.y_dual = relativeY;
-        } else {
-            this.config.ui.model_position.x = relativeX;
-            this.config.ui.model_position.y = relativeY;
-        }
+        this.config.ui.model_position.x = relativeX;
+        this.config.ui.model_position.y = relativeY;
 
-        // 发送IPC消息保存位置
+        // 发送IPC消息保存位置（dual 字段已废弃；显示器原点由主进程根据窗口位置写入）
         ipcRenderer.send('save-model-position', {
             x: relativeX,
             y: relativeY,
-            scale: this.model.scale.x,
-            dual: isDualRight
+            scale: this.model.scale.x
         });
 
-        console.log('保存模型位置:', { 
+        console.log('保存模型位置:', {
             canvasPos: { x: this.model.x, y: this.model.y },
             windowPos: { x: windowX, y: windowY },
             relativePos: { x: relativeX, y: relativeY },
