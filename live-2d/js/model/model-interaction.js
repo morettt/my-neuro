@@ -260,8 +260,42 @@ class ModelInteractionController {
                 const actualWidth = window.actualWidth || window.innerWidth;
                 const actualHeight = window.actualHeight || window.innerHeight;
                 const scaleFactor = window.canvasScaleFactor || 2;
+
+                // 调整渲染器尺寸
                 this.app.renderer.resize(actualWidth * scaleFactor, actualHeight * scaleFactor);
-                //多屏幕坐标系统，不设置pivot/position,舞台从0,0开始
+
+                // 如果配置中保存了参考分辨率和原始 model_scale，尝试补偿缩放和位置
+                try {
+                    const cfg = this.config?.ui || {};
+                    const ref = cfg.model_scale_reference;
+                    const baseScale = cfg.model_scale || this.model.scale.x;
+
+                    if (ref && ref.width > 0 && ref.height > 0) {
+                        // 使用面积比的平方根做缩放补偿，兼顾宽高比变化
+                        const areaRatio = (actualWidth * actualHeight) / (ref.width * ref.height);
+                        const areaComp = Math.sqrt(Math.max(areaRatio, 0.000001));
+                        const newScale = baseScale * areaComp;
+                        this.model.scale.set(newScale);
+                    } else {
+                        // 无参考分辨率时，保持现有 scale
+                    }
+
+                    // 重新计算模型像素坐标：优先使用保存的相对位置
+                    const isDualRight = window.innerWidth > window.screen.width * 1.2 && cfg?.screen_extend?.right;
+                    const pos = cfg.model_position || {};
+                    const relX = isDualRight ? (pos.x_dual ?? pos.x) : (pos.x ?? pos.x_dual);
+                    const relY = isDualRight ? (pos.y_dual ?? pos.y) : (pos.y ?? pos.y_dual);
+
+                    if (relX != null && relY != null) {
+                        this.model.x = relX * actualWidth * scaleFactor;
+                        this.model.y = relY * actualHeight * scaleFactor;
+                    }
+
+                } catch (err) {
+                    console.error('resize 处理失败:', err);
+                }
+
+                // 多屏幕坐标系统，不设置pivot/position,舞台从0,0开始
                 this.updateInteractionArea();
             }
         });
@@ -318,9 +352,12 @@ class ModelInteractionController {
         const actualHeight = window.actualHeight || window.innerHeight;
         const scaleFactor = window.canvasScaleFactor || 2;
 
-        const scaleX = (actualWidth * scaleMultiplier) / this.model.width;
-        const scaleY = (actualHeight * scaleMultiplier) / this.model.height;
-        this.model.scale.set(scaleMultiplier);
+        // 基于保存时窗口高度做缩放补偿，尽量保持不同分辨率下占屏体积一致
+        const scaleRef = this.config?.ui?.model_scale_reference;
+        const refHeight = Number(scaleRef?.height);
+        const heightCompensation = refHeight > 0 ? (actualHeight / refHeight) : 1;
+        const resolvedScale = scaleMultiplier * heightCompensation;
+        this.model.scale.set(resolvedScale);
 
         const isDualRight = window.innerWidth > window.screen.width * 1.2 && this.config?.ui?.screen_extend?.right;
         const pos = this.config?.ui?.model_position;
@@ -371,7 +408,11 @@ class ModelInteractionController {
             x: relativeX,
             y: relativeY,
             scale: this.model.scale.x,
-            dual: isDualRight
+            dual: isDualRight,
+            scaleReference: {
+                width: actualWidth,
+                height: actualHeight
+            }
         });
 
         console.log('保存模型位置:', { 

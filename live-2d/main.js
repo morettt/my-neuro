@@ -520,6 +520,14 @@ ipcMain.on('save-model-position', (event, position) => {
         }
         configData.ui.model_scale = position.scale;
 
+        // 记录缩放值对应的参考分辨率，供后续分辨率变化时做补偿
+        if (position.scaleReference && position.scaleReference.width > 0 && position.scaleReference.height > 0) {
+            configData.ui.model_scale_reference = {
+                width: position.scaleReference.width,
+                height: position.scaleReference.height
+            };
+        }
+
         // 保存到文件
         fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
 
