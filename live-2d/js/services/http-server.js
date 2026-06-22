@@ -209,8 +209,8 @@ class HttpServer {
 		            const { ipcRenderer } = require('electron');
 		            const model = mc.model;
 		            const scaleFactor = window.canvasScaleFactor || 2;
-		            const isDualRight = window.innerWidth > window.screen.width * 1.2 && mc.config?.ui?.screen_extend?.right;
-		            const relX = isDualRight ? 0.825 : 0.65;
+		            // 窗口只覆盖当前显示器，重置到当前窗口内的默认相对位置即可（不再区分单/双屏）。
+		            const relX = 0.65;
 		            const relY = 0.38;
 		            const scale = 0.65;
 
@@ -226,7 +226,7 @@ class HttpServer {
 		                if (mc.updateInteractionArea) mc.updateInteractionArea();
 		            }
 		
-		            ipcRenderer.send('save-model-position', { x: relX, y: relY, scale, dual: isDualRight });
+		            ipcRenderer.send('save-model-position', { x: relX, y: relY, scale });
 
 		            // 同步复位字幕位置
 		            const uic = global.uiController;

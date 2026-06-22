@@ -31,15 +31,27 @@ class UIController {
 
     // 设置鼠标穿透
     setupMouseIgnore() {
-        const updateMouseIgnore = () => {
+        // 这些可交互 UI 容器悬停时必须“不穿透”，否则点击会穿过去。
+        // 快捷面板(#quick-settings)原本没被纳入判定，只靠模型命中盒蹭——单屏布局下齿轮落在
+        // 命中盒外就点不动了。这里统一把它们纳入：鼠标在这些元素上时保持窗口可交互。
+        const INTERACTIVE_UI = '#quick-settings, #text-chat-container, #model-controls';
+        const updateMouseIgnore = (e) => {
             if (!global.currentModel) return;
             if (this.isAdjustingSubtitle) return;
 
-            const shouldIgnore = !global.currentModel.containsPoint(
+            // 鼠标悬在可交互 UI 元素上 → 不穿透
+            let overUI = false;
+            if (e) {
+                const el = document.elementFromPoint(e.clientX, e.clientY);
+                if (el && el.closest && el.closest(INTERACTIVE_UI)) overUI = true;
+            }
+
+            const overModel = global.currentModel.containsPoint(
                 global.pixiApp.renderer.plugins.interaction.mouse.global
             );
+
             ipcRenderer.send('set-ignore-mouse-events', {
-                ignore: shouldIgnore,
+                ignore: !overModel && !overUI,
                 options: { forward: true }
             });
         };
@@ -55,9 +67,6 @@ class UIController {
 
         if (!chatInput || !textChatContainer || !submitBtn) return;
 
-        // 强制固定对话框位置逻辑
-        const screenExtend = this.config.ui?.screen_extend || { extend: false, left: false, right: true };
-        
         // 基础定位样式
         textChatContainer.style.setProperty('position', 'fixed', 'important');
         textChatContainer.style.setProperty('z-index', '10000', 'important');
@@ -78,54 +87,22 @@ class UIController {
             textChatContainer.style.setProperty('opacity', '0', 'important');
         }
 
-        // 统一使用屏幕信息进行定位，确保无论是否扩展，对话框都显示在主屏右下角
-        const screenInfo = ipcRenderer.sendSync('get-screen-info-sync');
-        if (screenInfo) {
-            const { primaryDisplay, windowBounds } = screenInfo;
-            
-            // 使用主进程返回的实际窗口边界，确保坐标系完全匹配
-            const winX = windowBounds ? windowBounds.x : 0;
-            const winY = windowBounds ? windowBounds.y : 0;
-            const winH = windowBounds ? windowBounds.height : window.innerHeight;
-            
-            // 计算主屏相对于窗口左侧和底部的偏移
-            // 窗口坐标 (0,0) 对应屏幕坐标 (winX, winY)
-            const primaryLeftOffset = primaryDisplay.bounds.x - winX;
-            const primaryTopOffset = primaryDisplay.bounds.y - winY;
-            const primaryBottomOffset = winH - (primaryTopOffset + primaryDisplay.bounds.height);
+        // 窗口只覆盖“当前显示器”，聊天框/字幕直接锚定到本窗口的右下角即可，
+        // 不再需要 get-screen-info-sync 把坐标换算到主屏（那是旧巨型跨屏窗口才需要的）。
+        textChatContainer.style.setProperty('left', 'auto', 'important');
+        textChatContainer.style.setProperty('right', '20px', 'important');
+        textChatContainer.style.setProperty('bottom', '50px', 'important');
 
-            // 始终定位到主屏右下角 (相对于窗口左侧)
-            // 350是对话框宽度，20是右边距
-            const rightPos = primaryLeftOffset + primaryDisplay.bounds.width - 350 - 20;
-            
-            textChatContainer.style.setProperty('left', rightPos + 'px', 'important');
-            textChatContainer.style.setProperty('right', 'auto', 'important');
-            textChatContainer.style.setProperty('bottom', (primaryBottomOffset + 50) + 'px', 'important');
-
-            // 同时确保字幕容器在主屏显示
-            const subtitleContainer = document.getElementById('subtitle-container');
-            if (subtitleContainer) {
-                subtitleContainer.style.setProperty('position', 'fixed', 'important');
-                subtitleContainer.style.setProperty('bottom', (primaryBottomOffset + 20) + 'px', 'important');
-                // 字幕在主屏右下角距离屏幕右侧800px处开始显示，显示范围不超过400px/行
-                const subtitleLeft = primaryLeftOffset + primaryDisplay.bounds.width - 800;
-                subtitleContainer.style.setProperty('left', subtitleLeft + 'px', 'important');
-                subtitleContainer.style.setProperty('width', '400px', 'important');
-                subtitleContainer.style.setProperty('max-width', '400px', 'important');
-                subtitleContainer.style.setProperty('transform', 'none', 'important');
-                subtitleContainer.style.setProperty('display', 'block', 'important');
-            }
-
-            console.log('跨屏定位调试:', {
-                winX, winY, winH,
-                primaryX: primaryDisplay.bounds.x,
-                primaryY: primaryDisplay.bounds.y,
-                primaryW: primaryDisplay.bounds.width,
-                primaryH: primaryDisplay.bounds.height,
-                primaryLeftOffset,
-                primaryBottomOffset,
-                rightPos
-            });
+        const subtitleContainer = document.getElementById('subtitle-container');
+        if (subtitleContainer) {
+            subtitleContainer.style.setProperty('position', 'fixed', 'important');
+            subtitleContainer.style.setProperty('left', 'auto', 'important');
+            subtitleContainer.style.setProperty('right', '20px', 'important');
+            subtitleContainer.style.setProperty('bottom', '20px', 'important');
+            subtitleContainer.style.setProperty('width', '400px', 'important');
+            subtitleContainer.style.setProperty('max-width', '400px', 'important');
+            subtitleContainer.style.setProperty('transform', 'none', 'important');
+            subtitleContainer.style.setProperty('display', 'block', 'important');
         }
 
         textChatContainer.addEventListener('mouseenter', () => {
