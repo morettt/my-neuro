@@ -112,11 +112,11 @@ class ModelInteractionController {
         });
 
         // 全局鼠标释放事件
-        window.addEventListener('mouseup', async () => {
+        window.addEventListener('mouseup', async (e) => {
             if (this.isDragging) {
                 this.isDragging = false;
-                // 松手时先检测模型中心是否越出当前窗口，若是则整窗重定位到目标显示器。
-                const switched = await this.checkAndSwitchDisplay();
+                // 松手时若“光标拖到了窗口边缘 + 模型越过该边”，则整窗重定位到那一侧的显示器。
+                const switched = await this.checkAndSwitchDisplay(e.clientX, e.clientY);
                 if (!switched) {
                     // 未切屏：若模型中心越出当前窗口（目标屏不存在），吸回窗口内，避免模型“走丢”。
                     this._clampModelToWindow();
@@ -278,65 +278,72 @@ class ModelInteractionController {
         });
     }
 
-    // ===== 跨屏：松手时检测模型是否越出当前窗口，并整窗重定位到目标显示器 =====
-    // 把模型中心换算成屏幕绝对坐标来判断目标屏；
-    // 适配 myneuro 的坐标约定：canvas 坐标 = 窗口 CSS 坐标 × canvasScaleFactor(=2)。
-    async checkAndSwitchDisplay() {
+    // ===== 跨屏：松手时若“光标拖到窗口边缘 + 模型越过该边”，整窗重定位到那一侧的显示器 =====
+    // 触发用“光标贴边(EDGE 内) 且 模型可见区也越过该边”双重确认：光标到边缘=明确要往那侧推出去，
+    // 松手在屏幕中间不会误触；光标永远能拖到边缘，故四向、任意抓取点都对称。
+    // 坐标约定：canvas 坐标 = 窗口 CSS 坐标 × canvasScaleFactor(=2)，getBounds 返回 canvas 坐标。
+    // cursorX/cursorY：松手时光标在当前窗口的 CSS 像素坐标。
+    async checkAndSwitchDisplay(cursorX, cursorY) {
         // 仅在 Electron 桥接可用时执行
         if (!window.electronScreen || !window.electronScreen.moveWindowToDisplay) return false;
         if (!this.model) return false;
+        if (!Number.isFinite(cursorX) || !Number.isFinite(cursorY)) return false;
 
         try {
-            const sf = window.canvasScaleFactor || 2;
-
-            // 模型中心（canvas 坐标）→ 当前窗口 CSS 坐标
-            const bounds = this.model.getBounds();
-            const modelCenterX = ((bounds.left + bounds.right) / 2) / sf;
-            const modelCenterY = ((bounds.top + bounds.bottom) / 2) / sf;
-
             const displays = await window.electronScreen.getAllDisplays();
             if (!displays || displays.length <= 1) return false;
-
-            const windowWidth = window.innerWidth;
-            const windowHeight = window.innerHeight;
-            // 模型中心仍在当前窗口内 → 不切屏
-            if (modelCenterX >= 0 && modelCenterX < windowWidth &&
-                modelCenterY >= 0 && modelCenterY < windowHeight) {
-                return false;
-            }
-
             const currentDisplay = await window.electronScreen.getCurrentDisplay();
             if (!currentDisplay) return false;
 
-            // 模型中心的屏幕绝对坐标
-            const modelScreenX = currentDisplay.screenX + modelCenterX;
-            const modelScreenY = currentDisplay.screenY + modelCenterY;
+            const sf = window.canvasScaleFactor || 2;
+            const W = window.innerWidth, H = window.innerHeight;
+            // 模型可见区域在当前窗口 client 像素下的边界（getBounds 是 canvas 坐标，÷sf 回到 client）
+            const b = this.model.getBounds();
+            const vLeft = b.left / sf, vRight = b.right / sf, vTop = b.top / sf, vBottom = b.bottom / sf;
 
-            // 找到包含该点的目标显示器
-            let targetDisplay = null;
-            for (const d of displays) {
-                if (modelScreenX >= d.screenX && modelScreenX < d.screenX + d.width &&
-                    modelScreenY >= d.screenY && modelScreenY < d.screenY + d.height) {
-                    targetDisplay = d;
-                    break;
+            // 光标贴到哪条边(EDGE 内) 且 模型也越过该边，就在那侧“边外一点”探测目标显示器；另一轴用光标位置。
+            const EDGE = 10;
+            const sX = currentDisplay.screenX, sY = currentDisplay.screenY;
+            const probes = [];
+            if (cursorX <= EDGE && vLeft < 0)       probes.push({ x: sX - 1,      y: sY + cursorY });
+            if (cursorX >= W - EDGE && vRight > W)   probes.push({ x: sX + W + 1,  y: sY + cursorY });
+            if (cursorY <= EDGE && vTop < 0)        probes.push({ x: sX + cursorX, y: sY - 1 });
+            if (cursorY >= H - EDGE && vBottom > H)  probes.push({ x: sX + cursorX, y: sY + H + 1 });
+
+            let targetDisplay = null, probe = null;
+            for (const p of probes) {
+                for (const d of displays) {
+                    if (d.id === currentDisplay.id) continue;
+                    if (p.x >= d.screenX && p.x < d.screenX + d.width &&
+                        p.y >= d.screenY && p.y < d.screenY + d.height) {
+                        targetDisplay = d; probe = p; break;
+                    }
                 }
+                if (targetDisplay) break;
             }
             if (!targetDisplay) return false;
 
-            console.log('[Live2D] 检测到模型移出当前屏幕，准备切换到屏幕:', targetDisplay.id);
+            console.log('[Live2D] 光标拖到屏幕边缘，准备切换到屏幕:', targetDisplay.id);
 
-            const result = await window.electronScreen.moveWindowToDisplay(modelScreenX, modelScreenY);
+            const result = await window.electronScreen.moveWindowToDisplay(probe.x, probe.y);
             if (result && result.success && !result.sameDisplay) {
                 if (result.scaleRatio && result.scaleRatio !== 1) {
-                    // 不同屏缩放比变化时保持模型原大小，仅调整位置。
                     console.log('[Live2D] 屏幕缩放比变化:', result.scaleRatio);
                 }
 
-                // 把模型放到新窗口内对应位置：模型视觉中心 = 屏幕坐标 − 新窗口屏幕原点，再换算回 canvas 坐标。
-                // 该坐标只依赖目标显示器 DIP 原点和 canvasScaleFactor，与窗口/缓冲区是否已 resize 无关；
-                // 命中目标屏说明中心点必落在 [0,target.width)×[0,target.height) 内，故无需再 clamp。
-                const targetCenterX = (modelScreenX - targetDisplay.screenX) * sf;
-                const targetCenterY = (modelScreenY - targetDisplay.screenY) * sf;
+                // 以探测点为视觉中心，夹住可见模型完整落入目标屏（目标屏 DIP 尺寸），换算到 canvas 后用 delta 落位。
+                const tw = targetDisplay.width, th = targetDisplay.height;
+                const halfVisW = (vRight - vLeft) / 2;
+                const halfVisH = (vBottom - vTop) / 2;
+                const margin = 16;
+                let cx = probe.x - targetDisplay.screenX;
+                let cy = probe.y - targetDisplay.screenY;
+                const loX = margin + halfVisW, hiX = tw - margin - halfVisW;
+                const loY = margin + halfVisH, hiY = th - margin - halfVisH;
+                cx = hiX >= loX ? Math.min(Math.max(cx, loX), hiX) : tw / 2;
+                cy = hiY >= loY ? Math.min(Math.max(cy, loY), hiY) : th / 2;
+
+                const targetCenterX = cx * sf, targetCenterY = cy * sf; // canvas 坐标
                 const b2 = this.model.getBounds();
                 const curCenterX = (b2.left + b2.right) / 2;
                 const curCenterY = (b2.top + b2.bottom) / 2;
@@ -345,7 +352,7 @@ class ModelInteractionController {
                 this.updateInteractionArea();
 
                 // 保存：用“目标显示器的 DIP 尺寸”算相对位置，避免依赖跨屏后仍在重申/尚未稳定的 innerWidth。
-                this.saveModelPosition(targetDisplay.width, targetDisplay.height);
+                this.saveModelPosition(tw, th);
                 console.log('[Live2D] 跨屏切换完成，模型新位置:', this.model.x, this.model.y);
                 return true;
             }

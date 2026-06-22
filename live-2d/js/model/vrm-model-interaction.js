@@ -300,8 +300,8 @@ class VRMInteractionController {
                     }
                 }
 
-                // 松手时检测模型是否越出当前窗口并整窗重定位到目标显示器。
-                const switched = await this.checkAndSwitchDisplay();
+                // 松手时若“光标拖到了窗口边缘 + 模型越过该边”，整窗重定位到那一侧的显示器。
+                const switched = await this.checkAndSwitchDisplay(e.clientX, e.clientY);
                 if (!switched) {
                     this._clampViewRect();
                     this.saveModelPosition();
@@ -393,62 +393,75 @@ class VRMInteractionController {
         });
     }
 
-    // ===== 跨屏：松手时检测模型是否越出当前窗口，并整窗重定位到目标显示器 =====
-    // VRM 在 client/CSS 像素下工作（渲染器 1:1，无 ×2）。
-    async checkAndSwitchDisplay() {
+    // ===== 跨屏：松手时若“光标拖到窗口边缘 + 模型越过该边”，整窗重定位到那一侧的显示器 =====
+    // 触发用“光标贴边(EDGE 内) 且 模型可见区也越过该边”双重确认：光标到边缘=明确要往那侧推出去，
+    // 松手在屏幕中间不会误触；光标永远能拖到边缘，故四向、任意抓取点都对称。
+    // VRM 在 client/CSS 像素下工作（渲染器 1:1，无 ×2）。cursorX/cursorY：松手时光标的窗口 CSS 坐标。
+    async checkAndSwitchDisplay(cursorX, cursorY) {
         if (!window.electronScreen || !window.electronScreen.moveWindowToDisplay) return false;
         if (!this.model || !this.model.viewRect) return false;
+        if (!Number.isFinite(cursorX) || !Number.isFinite(cursorY)) return false;
 
         try {
-            const vr = this.model.viewRect;
-            // 模型“可见区域”的视觉中心（client 像素）
-            const modelCenterX = vr.x + 0.5 * vr.width;
-            const modelCenterY = vr.y + VRM_CENTER_Y_FRAC * vr.height;
-
             const displays = await window.electronScreen.getAllDisplays();
             if (!displays || displays.length <= 1) return false;
-
-            const windowWidth = window.innerWidth;
-            const windowHeight = window.innerHeight;
-            // 模型中心仍在当前窗口内 → 不切屏
-            if (modelCenterX >= 0 && modelCenterX < windowWidth &&
-                modelCenterY >= 0 && modelCenterY < windowHeight) {
-                return false;
-            }
-
             const currentDisplay = await window.electronScreen.getCurrentDisplay();
             if (!currentDisplay) return false;
 
-            const modelScreenX = currentDisplay.screenX + modelCenterX;
-            const modelScreenY = currentDisplay.screenY + modelCenterY;
+            const vr = this.model.viewRect;
+            const W = window.innerWidth, H = window.innerHeight;
+            // 模型可见区域在当前窗口 client 像素下的边界
+            const vLeft = vr.x + VRM_PADDING_X * vr.width;
+            const vRight = vr.x + (1 - VRM_PADDING_X) * vr.width;
+            const vTop = vr.y + VRM_PADDING_Y * vr.height;
+            const vBottom = vr.y + 0.96 * vr.height;
 
-            let targetDisplay = null;
-            for (const d of displays) {
-                if (modelScreenX >= d.screenX && modelScreenX < d.screenX + d.width &&
-                    modelScreenY >= d.screenY && modelScreenY < d.screenY + d.height) {
-                    targetDisplay = d;
-                    break;
+            // 光标贴到哪条边(EDGE 内) 且 模型也越过该边，就在那侧“边外一点”探测目标显示器；另一轴用光标位置。
+            const EDGE = 10;
+            const sX = currentDisplay.screenX, sY = currentDisplay.screenY;
+            const probes = [];
+            if (cursorX <= EDGE && vLeft < 0)       probes.push({ x: sX - 1,      y: sY + cursorY });
+            if (cursorX >= W - EDGE && vRight > W)   probes.push({ x: sX + W + 1,  y: sY + cursorY });
+            if (cursorY <= EDGE && vTop < 0)        probes.push({ x: sX + cursorX, y: sY - 1 });
+            if (cursorY >= H - EDGE && vBottom > H)  probes.push({ x: sX + cursorX, y: sY + H + 1 });
+
+            let targetDisplay = null, probe = null;
+            for (const p of probes) {
+                for (const d of displays) {
+                    if (d.id === currentDisplay.id) continue;
+                    if (p.x >= d.screenX && p.x < d.screenX + d.width &&
+                        p.y >= d.screenY && p.y < d.screenY + d.height) {
+                        targetDisplay = d; probe = p; break;
+                    }
                 }
+                if (targetDisplay) break;
             }
             if (!targetDisplay) return false;
 
-            console.log('[VRM] 检测到模型移出当前屏幕，准备切换到屏幕:', targetDisplay.id);
-            const result = await window.electronScreen.moveWindowToDisplay(modelScreenX, modelScreenY);
+            console.log('[VRM] 光标拖到屏幕边缘，准备切换到屏幕:', targetDisplay.id);
+            const result = await window.electronScreen.moveWindowToDisplay(probe.x, probe.y);
             if (result && result.success && !result.sameDisplay) {
                 if (result.scaleRatio && result.scaleRatio !== 1) {
-                    // 保持模型原大小，仅调整位置。
                     console.log('[VRM] 屏幕缩放比变化:', result.scaleRatio);
                 }
 
-                // 模型视觉中心放到新窗口内对应位置（client 像素，无 ×2）。只依赖目标屏 DIP 原点，与 resize 无关；
-                // 命中目标屏说明中心点必在目标屏范围内，无需再 clamp。
-                const newCenterX = modelScreenX - targetDisplay.screenX;
-                const newCenterY = modelScreenY - targetDisplay.screenY;
-                this.model.viewRect.x = newCenterX - 0.5 * this.model.viewRect.width;
-                this.model.viewRect.y = newCenterY - VRM_CENTER_Y_FRAC * this.model.viewRect.height;
+                // 以探测点为视觉中心放到新窗口，再夹住可见模型完整落入目标屏（用目标屏 DIP 尺寸，免受 innerWidth 未稳定影响）。
+                const tw = targetDisplay.width, th = targetDisplay.height;
+                const halfVisW = (vRight - vLeft) / 2;
+                const halfVisH = (vBottom - vTop) / 2; // VRM_CENTER_Y_FRAC 取可见区上下中点，故上下对称
+                const margin = 16;
+                let cx = probe.x - targetDisplay.screenX;
+                let cy = probe.y - targetDisplay.screenY;
+                const loX = margin + halfVisW, hiX = tw - margin - halfVisW;
+                const loY = margin + halfVisH, hiY = th - margin - halfVisH;
+                cx = hiX >= loX ? Math.min(Math.max(cx, loX), hiX) : tw / 2;
+                cy = hiY >= loY ? Math.min(Math.max(cy, loY), hiY) : th / 2;
+
+                this.model.viewRect.x = cx - 0.5 * vr.width;
+                this.model.viewRect.y = cy - VRM_CENTER_Y_FRAC * vr.height;
 
                 // 保存：用目标显示器 DIP 尺寸作基准，避免依赖跨屏后尚未稳定的 innerWidth。
-                this.saveModelPosition(targetDisplay.width, targetDisplay.height);
+                this.saveModelPosition(tw, th);
                 console.log('[VRM] 跨屏切换完成，viewRect:', this.model.viewRect);
                 return true;
             }
