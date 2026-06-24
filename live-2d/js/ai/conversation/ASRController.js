@@ -232,6 +232,12 @@ class ASRController {
         }
     }
 
+    pttCancelRecording(reason) {
+        if (this.asrEnabled && this.asrProcessor?.pttCancelRecording) {
+            this.asrProcessor.pttCancelRecording(reason);
+        }
+    }
+
     /**
      * 检查ASR是否可用
      */
