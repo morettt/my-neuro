@@ -274,6 +274,7 @@ class ASRProcessor {
         }
         if (this.silenceTimeout) {
             clearTimeout(this.silenceTimeout);
+            this.silenceTimeout = null;
         }
     }
 
@@ -506,6 +507,24 @@ class ASRProcessor {
         this.isRecording = true;
         this.recordingStartIndex = this.continuousBuffer.length;
         console.log('PTT: 开始录音');
+    }
+
+    // PTT: cancel current recording without submitting it to ASR
+    pttCancelRecording(reason = 'cancelled') {
+        if (!this.isRecording) return;
+
+        if (this.silenceTimeout) {
+            clearTimeout(this.silenceTimeout);
+            this.silenceTimeout = null;
+        }
+
+        this.isRecording = false;
+        this.asrLocked = false;
+        this.hasInterruptedThisSession = false;
+        this.recordingStartIndex = this.continuousBuffer.length;
+        this.continuousBuffer = this.continuousBuffer.slice(-this.PRE_RECORD_SAMPLES);
+
+        console.log(`PTT: recording cancelled (${reason})`);
     }
 
     // PTT：松开触发，强制结束录音并送 ASR

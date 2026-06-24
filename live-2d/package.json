@@ -20,7 +20,8 @@
     "play-sound": "^1.1.6",
     "screenshot-desktop": "^1.15.3",
     "socket.io-client": "^4.8.1",
-    "three": "^0.183.2"
+    "three": "^0.183.2",
+    "uiohook-napi": "^1.5.5"
   },
   "keywords": [],
   "author": "",

@@ -8,6 +8,7 @@ const screenshot = require('screenshot-desktop');
 
 // 添加配置文件路径
 const configPath = path.join(app.getAppPath(), 'config.json');
+let shortcutManager = null;
 
 function loadConfigData() {
     return JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -238,8 +239,9 @@ function createWindow () {
 app.whenReady().then(() => {
     // 读取配置判断模型类型
     let modelType = 'live2d';
+    let configData = {};
     try {
-        const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
         modelType = configData.ui?.model_type || 'live2d';
     } catch (e) {
         console.log('读取配置失败，使用默认Live2D模式');
@@ -260,7 +262,7 @@ app.whenReady().then(() => {
     httpServer.start();
 
     // 注册全局快捷键
-    const shortcutManager = new ShortcutManager();
+    shortcutManager = new ShortcutManager(configData);
     shortcutManager.registerAll();
 });
 
@@ -271,6 +273,13 @@ app.on('window-all-closed', () => {
     }
     if (process.platform !== 'darwin') {
         app.quit()
+    }
+})
+
+app.on('will-quit', () => {
+    if (shortcutManager) {
+        shortcutManager.unregisterAll();
+        shortcutManager = null;
     }
 })
 

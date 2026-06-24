@@ -223,6 +223,10 @@ class VoiceChatFacade {
         return this.asrController.pttStopRecording();
     }
 
+    pttCancelRecording(reason) {
+        return this.asrController.pttCancelRecording(reason);
+    }
+
     getVoiceBargeInStatus() {
         return this.asrController.getVoiceBargeInStatus();
     }

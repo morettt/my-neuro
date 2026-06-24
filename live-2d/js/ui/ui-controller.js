@@ -21,6 +21,8 @@ class UIController {
         this.subtitleScale = 1.0;
         this._subtitleCenterX = null;
         this._subtitleCenterY = null;
+        this._pttCleanup = null;
+        this._cancelActivePTT = null;
     }
 
     // 初始化UI控制
@@ -591,44 +593,196 @@ class UIController {
         toggleModeBtn.addEventListener('click', () => {
             const proc = voiceChat.asrController?.asrProcessor;
             if (!proc) return;
-            proc.pttModeEnabled = !proc.pttModeEnabled;
+            const nextPTTMode = !proc.pttModeEnabled;
+            if (typeof this._cancelActivePTT === 'function') {
+                this._cancelActivePTT('mode-toggle');
+            }
+            proc.pttModeEnabled = nextPTTMode;
+            config.asr = config.asr || {};
             config.asr.ptt_enabled = proc.pttModeEnabled;
             toggleModeBtn.classList.toggle('active', proc.pttModeEnabled);
         });
     }
 
-    // PTT（按住说话）模式按键监听
+    // PTT global/local hold-to-talk listener
     setupPTT(voiceChat, config) {
-        const pttKey = (config.asr?.ptt_key || 'v').toLowerCase();
+        if (typeof this._pttCleanup === 'function') {
+            this._pttCleanup();
+        }
+
+        const normalizeKey = (value) => {
+            const raw = String(value || '').trim().toLowerCase();
+            const aliases = {
+                ' ': 'space',
+                spacebar: 'space',
+                return: 'enter',
+                esc: 'escape',
+                control: 'ctrl',
+                command: 'meta',
+                cmd: 'meta',
+                win: 'meta',
+                windows: 'meta',
+                option: 'alt',
+                left: 'arrowleft',
+                up: 'arrowup',
+                right: 'arrowright',
+                down: 'arrowdown'
+            };
+            return aliases[raw] || raw;
+        };
+
+        const pttKey = normalizeKey(config.asr?.ptt_key || 'v') || 'v';
+        const recordingText = '\u5f55\u97f3\u4e2d...';
         let pttActive = false;
+        let pttSource = null;
 
-        const isPTTEnabled = () => voiceChat.asrController?.asrProcessor?.pttModeEnabled || false;
-
+        const getProcessor = () => voiceChat.asrController?.asrProcessor;
+        const isPTTEnabled = () => getProcessor()?.pttModeEnabled || false;
+        const matchesPTTKey = (key) => normalizeKey(key) === pttKey;
         const isInputFocused = () => {
             const el = document.activeElement;
             if (!el) return false;
             const tag = el.tagName;
-            return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+            return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+        };
+        const shouldSkipForInput = (source) => {
+            if (!isInputFocused()) return false;
+            return source === 'local' || document.hasFocus();
         };
 
-        document.addEventListener('keydown', (e) => {
-            if (e.key.toLowerCase() !== pttKey) return;
-            if (!isPTTEnabled()) return;
-            if (e.repeat || pttActive || isInputFocused()) return;
-            pttActive = true;
-            voiceChat.pttStartRecording();
-            this.showSubtitle('录音中...', 0);
-        });
+        const cancelProcessor = (reason) => {
+            const proc = getProcessor();
+            if (typeof voiceChat.pttCancelRecording === 'function') {
+                voiceChat.pttCancelRecording(reason);
+                return;
+            }
+            if (typeof proc?.pttCancelRecording === 'function') {
+                proc.pttCancelRecording(reason);
+                return;
+            }
+            if (!proc) return;
+            proc.isRecording = false;
+            proc.asrLocked = false;
+            proc.hasInterruptedThisSession = false;
+            if (proc.silenceTimeout) {
+                clearTimeout(proc.silenceTimeout);
+                proc.silenceTimeout = null;
+            }
+        };
 
-        document.addEventListener('keyup', (e) => {
-            if (e.key.toLowerCase() !== pttKey || !pttActive) return;
+        const cancelPTT = (reason = 'cancelled') => {
+            const wasActive = pttActive;
             pttActive = false;
-            if (!isPTTEnabled()) return;
-            voiceChat.pttStopRecording();
-            this.hideSubtitle();
-        });
+            pttSource = null;
+            if (wasActive) {
+                cancelProcessor(reason);
+                this.hideSubtitle();
+                logToTerminal('info', `[PTT] cancelled: ${reason}`);
+            }
+            return wasActive;
+        };
 
-        console.log(`PTT按键监听已注册，按键: ${pttKey.toUpperCase()}`);
+        const startPTT = (source) => {
+            if (!isPTTEnabled()) return false;
+            if (pttActive) {
+                if (source === 'global') pttSource = 'global';
+                return true;
+            }
+            if (shouldSkipForInput(source)) {
+                logToTerminal('info', `[PTT] ${source} keydown ignored because input is focused`);
+                return false;
+            }
+
+            pttActive = true;
+            pttSource = source;
+            logToTerminal('info', `[PTT] ${source} keydown, start recording`);
+            if (typeof voiceChat.pttStartRecording === 'function') {
+                voiceChat.pttStartRecording();
+            }
+            this.showSubtitle(recordingText, 0);
+            return true;
+        };
+
+        const stopPTT = (source, reason = 'keyup') => {
+            if (!pttActive) return false;
+            const activeSource = pttSource;
+            pttActive = false;
+            pttSource = null;
+
+            if (!isPTTEnabled()) {
+                cancelProcessor(reason);
+                this.hideSubtitle();
+                logToTerminal('info', `[PTT] ${source} ${reason}, mode disabled so recording was cancelled`);
+                return true;
+            }
+
+            logToTerminal('info', `[PTT] ${source} ${reason}, stop recording from ${activeSource || 'unknown'}`);
+            if (typeof voiceChat.pttStopRecording === 'function') {
+                voiceChat.pttStopRecording();
+            }
+            this.hideSubtitle();
+            return true;
+        };
+
+        const onLocalKeyDown = (e) => {
+            if (!matchesPTTKey(e.key) || e.repeat) return;
+            startPTT('local');
+        };
+
+        const onLocalKeyUp = (e) => {
+            if (!matchesPTTKey(e.key)) return;
+            stopPTT('local');
+        };
+
+        const onGlobalPTT = (_event, payload = {}) => {
+            if (!payload || !matchesPTTKey(payload.key)) return;
+            if (payload.action === 'down') {
+                startPTT('global');
+            } else if (payload.action === 'up') {
+                stopPTT('global');
+            }
+        };
+
+        const onWindowBlur = () => {
+            setTimeout(() => {
+                if (pttActive && pttSource !== 'global') {
+                    stopPTT('window-blur', 'blur');
+                }
+            }, 50);
+        };
+
+        const onVisibilityChange = () => {
+            if (document.hidden) {
+                cancelPTT('visibility-hidden');
+            }
+        };
+
+        const onBeforeUnload = () => {
+            cancelPTT('beforeunload');
+        };
+
+        document.addEventListener('keydown', onLocalKeyDown);
+        document.addEventListener('keyup', onLocalKeyUp);
+        ipcRenderer.on('ptt-global-key', onGlobalPTT);
+        window.addEventListener('blur', onWindowBlur);
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        window.addEventListener('beforeunload', onBeforeUnload);
+
+        this._cancelActivePTT = cancelPTT;
+        this._pttCleanup = () => {
+            document.removeEventListener('keydown', onLocalKeyDown);
+            document.removeEventListener('keyup', onLocalKeyUp);
+            ipcRenderer.removeListener('ptt-global-key', onGlobalPTT);
+            window.removeEventListener('blur', onWindowBlur);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+            window.removeEventListener('beforeunload', onBeforeUnload);
+            if (this._cancelActivePTT === cancelPTT) {
+                this._cancelActivePTT = null;
+            }
+            this._pttCleanup = null;
+        };
+
+        console.log(`PTT listener registered, key: ${pttKey.toUpperCase()} (global + local fallback)`);
     }
 
     // 显示歌词气泡
