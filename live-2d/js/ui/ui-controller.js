@@ -594,13 +594,8 @@ class UIController {
             const proc = voiceChat.asrController?.asrProcessor;
             if (!proc) return;
             const nextPTTMode = !proc.pttModeEnabled;
-            const cancelledPTT = typeof this._cancelActivePTT === 'function'
-                ? this._cancelActivePTT('mode-toggle')
-                : false;
-            if (!cancelledPTT && typeof voiceChat.pttCancelRecording === 'function') {
-                voiceChat.pttCancelRecording('mode-toggle');
-            } else if (!cancelledPTT && typeof proc.pttCancelRecording === 'function') {
-                proc.pttCancelRecording('mode-toggle');
+            if (typeof this._cancelActivePTT === 'function') {
+                this._cancelActivePTT('mode-toggle');
             }
             proc.pttModeEnabled = nextPTTMode;
             config.asr = config.asr || {};

@@ -511,6 +511,8 @@ class ASRProcessor {
 
     // PTT: cancel current recording without submitting it to ASR
     pttCancelRecording(reason = 'cancelled') {
+        if (!this.isRecording) return;
+
         if (this.silenceTimeout) {
             clearTimeout(this.silenceTimeout);
             this.silenceTimeout = null;
