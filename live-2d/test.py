@@ -550,6 +550,10 @@ class set_pyqt(QWidget):
         self.selected_audio_path = None  # 选择的音频文件路径
         self.config_path = 'config.json'
         self.config = self.load_config()
+        self.config_dirty = False
+        self._loading_config_ui = False
+        self._config_dirty_widgets = []
+        self._save_button_default_style = ''
 
         # 日志读取相关
         self.log_readers = {}
@@ -690,6 +694,7 @@ class set_pyqt(QWidget):
         # 保持原来的功能
         self.set_btu()
         self.set_config()
+        self._init_config_dirty_tracking()
 
         # 云端版本隐藏本地专属功能入口
         if IS_CLOUD_VERSION:
@@ -735,6 +740,10 @@ class set_pyqt(QWidget):
 
     def closeEvent(self, event):
         """处理窗口关闭事件"""
+        if not self._confirm_discard_unsaved_config("关闭前保存配置"):
+            event.ignore()
+            return
+
         try:
             # 重新加载配置，确保使用最新的设置
             try:
@@ -2780,6 +2789,136 @@ class set_pyqt(QWidget):
             # 静默失败，不显示错误
             pass
 
+    def _mark_config_dirty(self):
+        if self._loading_config_ui:
+            return
+        self.config_dirty = True
+        self._update_config_dirty_indicator()
+
+    def _clear_config_dirty(self):
+        self.config_dirty = False
+        self._update_config_dirty_indicator()
+
+    def _update_config_dirty_indicator(self):
+        if not hasattr(self, 'ui') or not hasattr(self.ui, 'saveConfigButton'):
+            return
+
+        if self.config_dirty:
+            self.ui.saveConfigButton.setStyleSheet("""
+                QPushButton {
+                    background-color: #eab308;
+                    color: #111111;
+                    border-radius: 8px;
+                    border: 1px solid #ca8a04;
+                    padding: 6px 12px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #f59e0b;
+                }
+            """)
+            self.ui.saveConfigButton.setToolTip("当前配置有未保存的修改，请先保存配置")
+        else:
+            self.ui.saveConfigButton.setStyleSheet(self._save_button_default_style)
+            self.ui.saveConfigButton.setToolTip("")
+
+    def _init_config_dirty_tracking(self):
+        self._save_button_default_style = self.ui.saveConfigButton.styleSheet()
+        self._config_dirty_widgets = [
+            self.ui.lineEdit,
+            self.ui.lineEdit_2,
+            self.ui.lineEdit_3,
+            self.ui.textEdit_3,
+            self.ui.doubleSpinBox_temperature,
+            self.ui.checkBox_temperature_enabled,
+            self.ui.lineEdit_4,
+            self.ui.lineEdit_5,
+            self.ui.checkBox_mcp_enable,
+            self.ui.checkBox_5,
+            self.ui.checkBox_3,
+            self.ui.checkBox_4,
+            self.ui.checkBox_asr,
+            self.ui.checkBox_tts,
+            self.ui.checkBox_persistent_history,
+            self.ui.checkBox_voice_barge_in,
+            self.ui.checkBox_ptt_enabled,
+            self.ui.comboBox_tts_language,
+            self.ui.checkBox_subtitle_enabled,
+            self.ui.lineEdit_user_name,
+            self.ui.lineEdit_ai_name,
+            self.ui.checkBox_hide_model,
+            self.ui.checkBox_auto_close_services,
+            self.ui.lineEdit_cloud_provider,
+            self.ui.lineEdit_cloud_api_key,
+            self.ui.checkBox_cloud_tts_enabled,
+            self.ui.lineEdit_cloud_tts_url,
+            self.ui.lineEdit_cloud_tts_model,
+            self.ui.lineEdit_cloud_tts_voice,
+            self.ui.comboBox_cloud_tts_format,
+            self.ui.doubleSpinBox_cloud_tts_speed,
+            self.ui.checkBox_aliyun_tts_enabled,
+            self.ui.lineEdit_aliyun_tts_api_key,
+            self.ui.lineEdit_aliyun_tts_model,
+            self.ui.lineEdit_aliyun_tts_voice,
+            self.ui.checkBox_volcengine_tts_enabled,
+            self.ui.lineEdit_volcengine_tts_appid,
+            self.ui.lineEdit_volcengine_tts_access_token,
+            self.ui.lineEdit_volcengine_tts_voice_type,
+            self.ui.checkBox_cloud_asr_enabled,
+            self.ui.lineEdit_cloud_asr_url,
+            self.ui.lineEdit_cloud_asr_appid,
+            self.ui.lineEdit_cloud_asr_appkey,
+            self.ui.lineEdit_cloud_asr_dev_pid,
+            self.ui.checkBox_gateway_enabled,
+            self.ui.lineEdit_gateway_base_url,
+            self.ui.lineEdit_gateway_api_key,
+            self.ui.checkBox_use_vision_model,
+            self.ui.lineEdit_vision_api_key,
+            self.ui.lineEdit_vision_api_url,
+            self.ui.lineEdit_vision_model,
+        ]
+
+        if hasattr(self, 'checkBox_vmc_enabled'):
+            self._config_dirty_widgets.extend([
+                self.checkBox_vmc_enabled,
+                self.lineEdit_vmc_host,
+                self.lineEdit_vmc_port,
+            ])
+
+        for widget in self._config_dirty_widgets:
+            try:
+                if isinstance(widget, QLineEdit):
+                    widget.textChanged.connect(self._mark_config_dirty)
+                elif isinstance(widget, QTextEdit):
+                    widget.textChanged.connect(self._mark_config_dirty)
+                elif isinstance(widget, QCheckBox):
+                    widget.stateChanged.connect(lambda *_: self._mark_config_dirty())
+                elif isinstance(widget, QComboBox):
+                    widget.currentIndexChanged.connect(lambda *_: self._mark_config_dirty())
+                elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+                    widget.valueChanged.connect(lambda *_: self._mark_config_dirty())
+            except RuntimeError:
+                pass
+
+        self._clear_config_dirty()
+
+    def _confirm_discard_unsaved_config(self, title="未保存配置"):
+        if not self.config_dirty:
+            return True
+        reply = QMessageBox.warning(
+            self,
+            title,
+            "当前配置有未保存的修改，继续操作可能导致配置未生效。\n\n是否仍要继续？",
+            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+            QMessageBox.Save
+        )
+        if reply == QMessageBox.Save:
+            self.save_config()
+            return not self.config_dirty
+        if reply == QMessageBox.Discard:
+            return True
+        return False
+
     def set_btu(self):
         self.ui.pushButton.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(1))
         self.ui.pushButton_3.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(0))
@@ -3331,6 +3470,7 @@ class set_pyqt(QWidget):
 
 
     def set_config(self):
+        self._loading_config_ui = True
         self.ui.lineEdit.setText(self.config['llm']['api_key'])
         self.ui.lineEdit_2.setText(self.config['llm']['api_url'])
         self.ui.lineEdit_3.setText(self.config['llm']['model'])
@@ -3434,6 +3574,7 @@ class set_pyqt(QWidget):
             self.checkBox_vmc_enabled.setChecked(vmc_config.get('enabled', False))
             self.lineEdit_vmc_host.setText(vmc_config.get('host', '127.0.0.1'))
             self.lineEdit_vmc_port.setText(str(vmc_config.get('port', 39539)))
+        self._loading_config_ui = False
 
 
     # ===== 插件配置文件读写 =====
@@ -4080,6 +4221,7 @@ class set_pyqt(QWidget):
             with open(cfg_path, 'w', encoding='utf-8') as f:
                 import json
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
+            self._clear_config_dirty()
             self.toast.show_message("配置已保存", 1500)
         except Exception as e:
             self.toast.show_message(f"保存失败: {e}", 3000)
@@ -4379,6 +4521,8 @@ class set_pyqt(QWidget):
             self.update_toggle_button_style(False)
         else:
             # 当前未运行，执行启动操作
+            if not self._confirm_discard_unsaved_config("启动前保存配置"):
+                return
             self.start_live_2d()
             self.live2d_running = True
             self.update_toggle_button_style(True)
@@ -4770,6 +4914,7 @@ class set_pyqt(QWidget):
 
         # 重新加载配置到内存，确保立即生效
         self.config = current_config
+        self._clear_config_dirty()
 
         # 使用Toast提示替代QMessageBox
         self.toast.show_message("配置已保存，模型选择已应用", 1500)

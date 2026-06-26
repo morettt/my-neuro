@@ -221,6 +221,7 @@ def handle_ui_settings():
         subtitle_config = config.get('subtitle_labels', {})
         return jsonify({
             'show_chat_box': ui_config.get('show_chat_box', True),
+            'intro_text': ui_config.get('intro_text', '你好啊'),
             'show_model': ui_config.get('show_model', True),
             'model_scale': ui_config.get('model_scale', 2.3),
             'subtitle_user': subtitle_config.get('user', '用户'),
@@ -235,6 +236,7 @@ def handle_ui_settings():
             if 'subtitle_labels' not in config:
                 config['subtitle_labels'] = {}
             config['ui']['show_chat_box'] = data.get('show_chat_box', True)
+            config['ui']['intro_text'] = data.get('intro_text', config['ui'].get('intro_text', '你好啊'))
             config['ui']['show_model'] = data.get('show_model', True)
             config['ui']['model_scale'] = data.get('model_scale', 2.3)
             config['subtitle_labels']['user'] = data.get('subtitle_user', '用户')

@@ -1,6 +1,11 @@
 // My Neuro WebUI - 前端 JavaScript v3.3
 
 const serviceStates = {};
+const UNSAVED_CONFIG_MESSAGE = '当前配置有未保存的修改，请先保存配置。';
+const START_WITH_UNSAVED_MESSAGE = '当前配置有未保存的修改，启动桌宠前建议先保存配置。仍要继续启动吗？';
+const CONFIG_DIRTY_PANELS = new Set(['llm-config', 'voice-settings', 'ui-settings', 'dialog-config']);
+const configDirtyItems = new Set();
+let isConfigDirtyTrackingReady = false;
 let currentLogTab = 'system-log';
 let logPollingInterval = null;
 let lastPetLogCount = 0;  // 记录上次桌宠日志数量
@@ -794,6 +799,9 @@ async function toggleLive2dService() {
     if (serviceStates['live2d'] === 'running') {
         await stopService('live2d');
     } else {
+        if (hasUnsavedConfig() && !confirm(START_WITH_UNSAVED_MESSAGE)) {
+            return;
+        }
         await startService('live2d');
     }
 }
@@ -912,7 +920,98 @@ async function stopAllServices() {
 }
 
 // 切换标签页
+function getDirtyKeyForConfigElement(element) {
+    if (!element || !element.closest) return null;
+    if (element.id === 'live2d-model-select') return null;
+
+    const pluginModal = element.closest('#pluginConfigModal');
+    if (pluginModal && pluginModal.style.display !== 'none') {
+        return 'plugin-config';
+    }
+
+    const panel = element.closest('.tab-content');
+    if (!panel || !CONFIG_DIRTY_PANELS.has(panel.id)) return null;
+    return panel.id;
+}
+
+function getConfigSaveButton(dirtyKey) {
+    if (dirtyKey === 'plugin-config') {
+        return document.getElementById('saveConfigBtn');
+    }
+    const panel = document.getElementById(dirtyKey);
+    return panel ? panel.querySelector('.config-save-button') : null;
+}
+
+function updateConfigDirtyIndicators() {
+    CONFIG_DIRTY_PANELS.forEach(panelId => {
+        const button = getConfigSaveButton(panelId);
+        const tabButton = document.querySelector(`.tab-button[onclick="switchTab('${panelId}')"]`);
+        const isDirty = configDirtyItems.has(panelId);
+
+        if (button) {
+            button.classList.toggle('config-unsaved', isDirty);
+            button.title = isDirty ? UNSAVED_CONFIG_MESSAGE : '';
+        }
+        if (tabButton) {
+            tabButton.classList.toggle('has-unsaved-config', isDirty);
+        }
+    });
+
+    const pluginButton = getConfigSaveButton('plugin-config');
+    if (pluginButton) {
+        const isPluginDirty = configDirtyItems.has('plugin-config');
+        pluginButton.classList.toggle('config-unsaved', isPluginDirty);
+        pluginButton.title = isPluginDirty ? UNSAVED_CONFIG_MESSAGE : '';
+    }
+}
+
+function markConfigDirty(dirtyKey) {
+    if (!dirtyKey) return;
+    configDirtyItems.add(dirtyKey);
+    updateConfigDirtyIndicators();
+}
+
+function clearConfigDirty(dirtyKey) {
+    configDirtyItems.delete(dirtyKey);
+    updateConfigDirtyIndicators();
+}
+
+function clearAllConfigDirty() {
+    configDirtyItems.clear();
+    updateConfigDirtyIndicators();
+}
+
+function hasUnsavedConfig() {
+    return configDirtyItems.size > 0;
+}
+
+function initConfigDirtyTracking() {
+    if (isConfigDirtyTrackingReady) return;
+    const markFromEvent = (event) => {
+        const element = event.target;
+        const tagName = element && element.tagName ? element.tagName.toLowerCase() : '';
+        if (!['input', 'textarea', 'select'].includes(tagName)) return;
+        if (element.type && ['button', 'submit', 'reset', 'file', 'hidden'].includes(element.type)) return;
+
+        markConfigDirty(getDirtyKeyForConfigElement(element));
+    };
+
+    document.addEventListener('input', markFromEvent, true);
+    document.addEventListener('change', markFromEvent, true);
+    isConfigDirtyTrackingReady = true;
+}
+
+function confirmLeaveDirtyConfig(dirtyKey) {
+    if (!configDirtyItems.has(dirtyKey)) return true;
+    return confirm(UNSAVED_CONFIG_MESSAGE);
+}
+
 function switchTab(tabName) {
+    const currentPanel = document.querySelector('.tab-content.active');
+    if (currentPanel && currentPanel.id !== tabName && !confirmLeaveDirtyConfig(currentPanel.id)) {
+        return;
+    }
+
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
     document.getElementById(tabName).classList.add('active');
@@ -929,7 +1028,7 @@ function switchTab(tabName) {
 // ============ 配置保存 ============
 
 // 保存配置的通用函数
-async function saveConfig(url, data, successMsg) {
+async function saveConfig(url, data, successMsg, dirtyKey = null) {
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -939,6 +1038,9 @@ async function saveConfig(url, data, successMsg) {
         const result = await response.json();
         if (response.ok && result.success) {
             addLog(successMsg, 'success', 'system');
+            if (dirtyKey) {
+                clearConfigDirty(dirtyKey);
+            }
         } else {
             addLog(t('common.save') + t('common.error') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
         }
@@ -966,6 +1068,7 @@ async function saveLLMConfig() {
         if (response.ok && result.success) {
             addLog(t('llm_config.save_success'), 'success', 'system');
             showSuccess(t('llm_config.save_success'));
+            clearConfigDirty('llm-config');
         } else {
             addLog(t('llm_config.save_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
             showError(t('llm_config.save_failed') + '：' + (result.error || t('common.unknown_error')));
@@ -1052,6 +1155,7 @@ async function saveCloudSettings() {
         if (response.ok && result.success) {
             addLog(t('cloud_config.save_success'), 'success', 'system');
             showSuccess(t('cloud_config.save_success'));
+            clearConfigDirty('voice-settings');
         } else {
             addLog(t('cloud_config.save_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
             showError(t('cloud_config.save_failed') + '：' + (result.error || t('common.unknown_error')));
@@ -1321,6 +1425,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         try { await window.i18nReady; } catch (e) { console.error('i18n init failed:', e); }
     }
     // 初始化保存按钮状态（防止页面跳动）
+    initConfigDirtyTracking();
     switchTab('dashboard');
 
     // 检查服务状态
@@ -1369,7 +1474,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     console.log(t('logs.init_complete'));
 
     // 页面卸载时停止所有轮询
-    window.addEventListener('beforeunload', () => {
+    window.addEventListener('beforeunload', (event) => {
+        if (hasUnsavedConfig()) {
+            event.preventDefault();
+            event.returnValue = '';
+            return;
+        }
         stopLogPolling();
         stopChatHistoryPolling();
     });
@@ -1448,8 +1558,12 @@ async function saveCurrentModel() {
 // 保存 UI 设置
 async function saveUISettings() {
     const settings = {
+        intro_text: document.getElementById('intro-text').value,
         show_chat_box: document.getElementById('show-chat-box').checked,
         show_model: !document.getElementById('hide-model').checked,  // 勾选表示隐藏，所以取反
+        subtitle_enabled: document.getElementById('subtitle-enabled').checked,
+        subtitle_user: document.getElementById('subtitle-user').value,
+        subtitle_ai: document.getElementById('subtitle-ai').value,
         subtitle_labels: {
             enabled: document.getElementById('subtitle-enabled').checked,
             user: document.getElementById('subtitle-user').value,
@@ -1466,6 +1580,7 @@ async function saveUISettings() {
         if (response.ok && result.success) {
             addLog(t('ui_settings.ui_save_success'), 'success', 'system');
             showSuccess(t('ui_settings.ui_save_success'));
+            clearConfigDirty('ui-settings');
         } else {
             addLog(t('ui_settings.ui_save_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
             showError(t('ui_settings.ui_save_failed') + '：' + (result.error || t('common.unknown_error')));
@@ -2092,7 +2207,10 @@ function openPluginConfigModal(pluginPath, displayName) {
 }
 
 // 关闭插件配置模态框
-function closePluginConfigModal() {
+function closePluginConfigModal(force = false) {
+    if (!force && !confirmLeaveDirtyConfig('plugin-config')) {
+        return;
+    }
     // 恢复背景滚动
     document.body.style.overflow = '';
     document.documentElement.style.overflow = '';
@@ -2180,6 +2298,7 @@ async function loadPluginConfig(displayName) {
             
             // 渲染配置表单（使用键顺序）
             renderPluginConfigForm(result.config);
+            clearConfigDirty('plugin-config');
             
             // 检查 README 是否存在
             checkReadmeExists(displayName);
@@ -2300,6 +2419,7 @@ function resetPluginConfig() {
         resetFieldToDefault(key, field);
     }
     
+    markConfigDirty('plugin-config');
     addLog(t('plugins.reset_default'), 'info', 'system');
 }
 
@@ -2345,7 +2465,8 @@ async function savePluginConfig() {
         if (response.ok && result.success) {
             addLog(t('plugins.save_success'), 'success', 'system');
             showSuccess(t('plugins.save_success'));
-            closePluginConfigModal();
+            clearConfigDirty('plugin-config');
+            closePluginConfigModal(true);
             // 重新加载插件列表以更新状态
             loadPlugins();
         } else {
@@ -2593,6 +2714,8 @@ async function saveDialogSettings() {
         if (response1.ok && result1.success && response2.ok && result2.success) {
             addLog(t('dialog_config.save_success'), 'success', 'system');
             showSuccess(t('dialog_config.save_success'));
+            clearConfigDirty('dialog-config');
+            clearConfigDirty('ui-settings');
         } else {
             const errorMsg = (result1.error || result2.error || t('common.unknown_error'));
             addLog(t('dialog_config.save_failed') + '：' + errorMsg, 'error', 'system');
