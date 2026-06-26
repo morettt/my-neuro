@@ -153,6 +153,10 @@ h1 {
     background: #3b82f6;
     border-color: rgba(59, 130, 246, 0.5);
 }
+.tab-button.has-unsaved-config {
+    border-color: rgba(234, 179, 8, 0.8);
+    box-shadow: inset 3px 0 0 var(--yellow);
+}
 .tab-content {
     display: none; background: rgba(255, 255, 255, 0.05);
     border-radius: 0 12px 12px 12px; padding: 25px; backdrop-filter: blur(10px);
@@ -211,6 +215,17 @@ h1 {
     background: #1d4ed8;
     transform: none;
     box-shadow: none;
+}
+.config-save-button.config-unsaved,
+.btn-primary.config-unsaved {
+    background: #eab308;
+    color: #111111;
+    box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25);
+}
+
+.config-save-button.config-unsaved:hover,
+.btn-primary.config-unsaved:hover {
+    background: #f59e0b;
 }
 .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
 @media (max-width: 1200px) {
