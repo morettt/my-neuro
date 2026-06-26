@@ -18,15 +18,14 @@
 </p>
 
 ## Deployment guide: [Official Website](http://mynewbot.com/tutorials)
-## [How to submit a PR](./commit_PR.md)
 
 ---
 
-#### My-neuro's goal is to build a truly personal AI character — an AI companion that feels genuinely human. Shaped by your own data and preferences, it becomes the ideal partner you envision.
+My-neuro's goal is to build a truly personal AI character — an AI companion that feels genuinely human. Shaped by your own data and preferences, it becomes the ideal partner you envision.
 
-#### This project was inspired by Neuro-sama, hence the name "my-neuro" (community-suggested). You can train its voice, customize its personality, and swap out its appearance. The only limit is your imagination. Think of this project as a workstation — a set of well-packaged tools that let you craft your ideal AI character step by step.
+This project was inspired by Neuro-sama, hence the name "my-neuro" (community-suggested). You can train its voice, customize its personality, and swap out its appearance. The only limit is your imagination. Think of this project as a workstation — a set of well-packaged tools that let you craft your ideal AI character step by step.
 
-#### If you want to run everything locally using a local large language model (LLM) for inference or fine-tuning — without relying on any third-party API — head to the `LLM-studio` folder for local model inference and fine-tuning guides.
+If you want to run everything locally using a local large language model (LLM) for inference or fine-tuning — without relying on any third-party API — head to the `LLM-studio` folder for local model inference and fine-tuning guides.
 
 ### For closed-source AI models, we recommend [DMXAPI](https://www.dmxapi.cn)
 ### Supports unified access to most mainstream AI models on the market.
