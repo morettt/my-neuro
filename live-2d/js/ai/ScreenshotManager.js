@@ -11,11 +11,12 @@ class ScreenshotManager {
         // 根据配置选择本地或云端模式
         const gatewayConfig = voiceChatInterface.config?.api_gateway || {};
         const bertConfig = voiceChatInterface.config?.bert || {};
+        const bertEnabledByConfig = bertConfig.enabled === true;
 
         const useBaiduASR = voiceChatInterface.config?.cloud?.baidu_asr?.enabled === true;
 
-        if (useBaiduASR) {
-            // 百度ASR不走BERT
+        if (useBaiduASR || !bertEnabledByConfig) {
+            // 百度ASR不走BERT；未显式启用时也不调用BERT，避免默认报错。
             this.bertEnabled = false;
             this.bertUrl = null;
             this.bertApiKey = null;

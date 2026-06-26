@@ -297,6 +297,7 @@ def handle_advanced_settings():
         ui_config = config.get('ui', {})
         mcp_config = config.get('mcp', {})
         asr_config = config.get('asr', {})
+        bert_config = config.get('bert', {})
         
         return jsonify({
             'auto_screenshot': vision_config.get('auto_screenshot', False),
@@ -306,7 +307,8 @@ def handle_advanced_settings():
             'show_chat_box': ui_config.get('show_chat_box', True),
             'show_model': ui_config.get('show_model', True),
             'voice_barge_in': asr_config.get('voice_barge_in', True),
-            'mcp_enabled': mcp_config.get('enabled', True)
+            'mcp_enabled': mcp_config.get('enabled', True),
+            'bert_enabled': bert_config.get('enabled', False)
         })
     elif request.method == 'POST':
         try:
@@ -321,6 +323,8 @@ def handle_advanced_settings():
                 config['mcp'] = {}
             if 'asr' not in config:
                 config['asr'] = {}
+            if 'bert' not in config:
+                config['bert'] = {}
             
             config['vision']['auto_screenshot'] = data.get('auto_screenshot', False)
             config['vision']['use_vision_model'] = data.get('use_vision_model', False)
@@ -329,6 +333,7 @@ def handle_advanced_settings():
             config['ui']['show_model'] = data.get('show_model', True)
             config['asr']['voice_barge_in'] = data.get('voice_barge_in', True)
             config['mcp']['enabled'] = data.get('mcp_enabled', True)
+            config['bert']['enabled'] = data.get('bert_enabled', False)
             
             if 'vision_model' in data:
                 config['vision']['vision_model'] = data['vision_model']

@@ -1501,6 +1501,7 @@ async function saveMoodChatSettings() {
 async function saveAdvancedSettings() {
     const settings = {
         auto_screenshot: document.getElementById('auto-screenshot').checked,
+        bert_enabled: document.getElementById('bert-enabled').checked,
         use_vision_model: document.getElementById('use-vision-model').checked,
         memory_enabled: document.getElementById('memory-enabled').checked,
         memos_auto_inject: document.getElementById('memos-auto-inject').checked,
@@ -2482,6 +2483,7 @@ async function saveBasicSettings() {
     try {
         const config = {
             auto_screenshot: document.getElementById('auto-screenshot').checked,
+            bert_enabled: document.getElementById('bert-enabled').checked,
             use_vision_model: document.getElementById('use-vision-model').checked,
             show_chat_box: document.getElementById('show-chat-box').checked,
             show_model: !document.getElementById('hide-model').checked,  // 勾选表示隐藏，所以取反
@@ -2522,6 +2524,7 @@ async function loadBasicConfig() {
         if (response.ok) {
             const config = await response.json();
             _setChk('auto-screenshot', config.auto_screenshot === true);
+            _setChk('bert-enabled', config.bert_enabled === true);
             _setChk('use-vision-model', config.use_vision_model === true);
             _setChk('auto-close-services', config.auto_close_services === true);
             _setChk('show-chat-box', config.show_chat_box === true);
@@ -2565,6 +2568,7 @@ async function saveDialogSettings() {
         // 保存高级配置到 /api/settings/advanced
         const advancedConfig = {
             auto_screenshot: document.getElementById('auto-screenshot').checked,
+            bert_enabled: document.getElementById('bert-enabled').checked,
             use_vision_model: document.getElementById('use-vision-model').checked,
             show_chat_box: document.getElementById('show-chat-box').checked,
             show_model: !document.getElementById('hide-model').checked,
@@ -2805,6 +2809,8 @@ async function applyPrompt(title) {
 
 
 let pluginMarketUpdateCandidates = [];
+let pluginMarketItems = [];
+let pluginMarketRefreshSeq = 0;
 
 function escapeJsString(value) {
     return String(value || '')
@@ -2832,24 +2838,40 @@ function updatePluginMarketToolbar() {
     toolbar.classList.remove('is-hidden');
 }
 
+function renderPluginMarketList(plugins) {
+    const listElement = document.getElementById('plugin-market-list');
+    if (!listElement) return;
+
+    if (!plugins || plugins.length === 0) {
+        listElement.innerHTML = '<div class="log-entry log-info">' + t('market.no_plugin') + '</div>';
+        return;
+    }
+
+    listElement.innerHTML = '';
+    plugins.forEach((plugin) => {
+        const card = createPluginMarketCard(plugin);
+        listElement.appendChild(card);
+    });
+}
+
 // 刷新插件广场
 async function refreshPluginMarket() {
     try {
+        const refreshSeq = ++pluginMarketRefreshSeq;
         const listElement = document.getElementById('plugin-market-list');
         listElement.innerHTML = '<div class="log-entry log-info">' + t('market.loading_plugin_list') + '</div>';
         pluginMarketUpdateCandidates = [];
+        pluginMarketItems = [];
         updatePluginMarketToolbar();
 
-        const response = await fetch('/api/market/plugins');
+        const response = await fetch('/api/market/plugins?check_updates=false');
         const data = await response.json();
 
         if (data.success && data.plugins && data.plugins.length > 0) {
-            pluginMarketUpdateCandidates = data.plugins.filter((plugin) => plugin.installed && plugin.has_update);
-            updatePluginMarketToolbar();
-            listElement.innerHTML = '';
-            data.plugins.forEach((plugin) => {
-                const card = createPluginMarketCard(plugin);
-                listElement.appendChild(card);
+            pluginMarketItems = data.plugins;
+            renderPluginMarketList(pluginMarketItems);
+            refreshPluginMarketUpdates(refreshSeq).catch((error) => {
+                console.warn('插件更新检查失败:', error);
             });
         } else if (data.success) {
             listElement.innerHTML = '<div class="log-entry log-info">' + t('market.no_plugin') + '</div>';
@@ -2860,6 +2882,27 @@ async function refreshPluginMarket() {
         document.getElementById('plugin-market-list').innerHTML =
             '<div class="log-entry log-error">' + t('market.load_error') + '：' + error.message + '</div>';
     }
+}
+
+async function refreshPluginMarketUpdates(refreshSeq) {
+    const response = await fetch('/api/market/plugins/check-updates');
+    const data = await response.json();
+
+    if (refreshSeq !== pluginMarketRefreshSeq) return;
+
+    if (!data.success || !Array.isArray(data.plugins)) {
+        console.warn('插件更新检查失败:', data.error || 'unknown error');
+        return;
+    }
+
+    const updatesByName = new Map(data.plugins.map((plugin) => [plugin.name, plugin]));
+    pluginMarketItems = pluginMarketItems.map((plugin) => {
+        const updateInfo = updatesByName.get(plugin.name);
+        return updateInfo ? { ...plugin, ...updateInfo } : plugin;
+    });
+    pluginMarketUpdateCandidates = pluginMarketItems.filter((plugin) => plugin.installed && plugin.has_update);
+    updatePluginMarketToolbar();
+    renderPluginMarketList(pluginMarketItems);
 }
 
 // 创建插件广场卡片
@@ -2934,6 +2977,7 @@ function createPluginMarketCard(plugin) {
 // 安装插件
 async function installPlugin(pluginName, downloadUrl) {
     try {
+        pluginMarketRefreshSeq++;
         // 更新按钮状态
         const card = document.querySelector(`.market-card[data-plugin-name="${pluginName}"]`);
         if (card) {
@@ -3040,6 +3084,7 @@ async function pollPluginInstalled(pluginName) {
 // 更新单个插件
 async function updatePlugin(pluginName, repo) {
     try {
+        pluginMarketRefreshSeq++;
         const card = document.querySelector(`.market-card[data-plugin-name="${pluginName}"]`);
         if (card) {
             const btn = card.querySelector('button');
@@ -3082,6 +3127,7 @@ async function updateAllPlugins() {
         return;
     }
 
+    pluginMarketRefreshSeq++;
     const names = pluginMarketUpdateCandidates.map((plugin) => plugin.name);
     const updateAllBtn = document.getElementById('plugin-market-update-all-btn');
     const originalText = updateAllBtn ? updateAllBtn.textContent : '';
