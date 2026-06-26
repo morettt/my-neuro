@@ -859,7 +859,7 @@ class UIController {
         if (!overlay) {
             overlay = document.createElement('div');
             overlay.id = 'subtitle-adjust-overlay';
-            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9998;background:transparent;cursor:grab;';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9998;background:transparent;cursor:default;';
             document.body.appendChild(overlay);
         }
 
@@ -877,7 +877,7 @@ class UIController {
         const onDragStart = (e) => {
             if (e.target.id === 'subtitle-confirm-btn') return;
             e.preventDefault(); e.stopPropagation();
-            this.isDraggingSubtitle = true; overlay.style.cursor = 'grabbing';
+            this.isDraggingSubtitle = true; c.style.cursor = 'grabbing';
             const sx = e.clientX, sy = e.clientY, scx = this._subtitleCenterX, scy = this._subtitleCenterY;
             const onMove = (ev) => {
                 if (!this.isDraggingSubtitle) return;
@@ -886,15 +886,15 @@ class UIController {
                 c.style.top = `${this._subtitleCenterY = scy + ev.clientY - sy}px`;
             };
             const onUp = () => {
-                this.isDraggingSubtitle = false; overlay.style.cursor = 'grab';
+                this.isDraggingSubtitle = false; c.style.cursor = '';
                 document.removeEventListener('mousemove', onMove);
                 document.removeEventListener('mouseup', onUp);
             };
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
         };
-        overlay.addEventListener('mousedown', onDragStart);
-        this._adjustCleanup.push(() => overlay.removeEventListener('mousedown', onDragStart));
+        c.addEventListener('mousedown', onDragStart);
+        this._adjustCleanup.push(() => c.removeEventListener('mousedown', onDragStart));
 
         // 滚轮缩放
         const onWheel = (e) => {
@@ -902,8 +902,8 @@ class UIController {
             this.subtitleScale = Math.max(0.3, Math.min(3.0, this.subtitleScale + (e.deltaY > 0 ? -0.05 : 0.05)));
             c.style.transform = `translate(-50%, -50%) scale(${this.subtitleScale})`;
         };
-        overlay.addEventListener('wheel', onWheel, { passive: false });
-        this._adjustCleanup.push(() => overlay.removeEventListener('wheel', onWheel));
+        c.addEventListener('wheel', onWheel, { passive: false });
+        this._adjustCleanup.push(() => c.removeEventListener('wheel', onWheel));
 
         // 确认按钮
         const confirmBtn = document.getElementById('subtitle-confirm-btn');
@@ -929,6 +929,7 @@ class UIController {
         }
 
         c.classList.remove('subtitle-adjusting');
+        c.style.cursor = '';
         const t = document.getElementById('subtitle-text');
         if (t) t.textContent = this._savedText || '';
         if (!this._savedText) c.style.display = this._savedDisplay || 'none';

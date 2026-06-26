@@ -843,7 +843,8 @@ body.screen-left #text-chat-container {
     z-index: 9999 !important;
     background: rgba(0, 0, 0, 0.5) !important;
     box-sizing: border-box;
-    pointer-events: none;
+    cursor: grab;
+    pointer-events: auto;
 }
 
 /* 字幕调整操作按钮 */
