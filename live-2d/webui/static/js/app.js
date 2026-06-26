@@ -794,12 +794,16 @@ function updateServiceStatus(serviceName, status) {
     }
 }
 
+function confirmStartLive2dWithCurrentConfig() {
+    return !hasUnsavedConfig() || confirm(START_WITH_UNSAVED_MESSAGE);
+}
+
 // Live2D 启动/关闭切换
 async function toggleLive2dService() {
     if (serviceStates['live2d'] === 'running') {
         await stopService('live2d');
     } else {
-        if (hasUnsavedConfig() && !confirm(START_WITH_UNSAVED_MESSAGE)) {
+        if (!confirmStartLive2dWithCurrentConfig()) {
             return;
         }
         await startService('live2d');
@@ -845,6 +849,9 @@ async function stopService(serviceName) {
 // 重启服务（仅 Live2D）
 async function restartService(serviceName) {
     try {
+        if (serviceName === 'live2d' && !confirmStartLive2dWithCurrentConfig()) {
+            return;
+        }
         addLog(t('services.restarting') + ' ' + serviceName + ' ' + t('services.service_suffix'), 'info', 'system');
         await stopService(serviceName);
         setTimeout(function() { startService(serviceName); }, 1500);
@@ -855,6 +862,10 @@ async function restartService(serviceName) {
 
 // 一键启动全部服务
 async function startAllServices() {
+    if (serviceStates['live2d'] !== 'running' && !confirmStartLive2dWithCurrentConfig()) {
+        return;
+    }
+
     addLog(t('services.start_all_begin'), 'info', 'system');
     const services = ['live2d', 'asr', 'tts', 'memos', 'rag', 'bert'];
     let successCount = 0;
