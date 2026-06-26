@@ -2977,6 +2977,7 @@ function createPluginMarketCard(plugin) {
 // 安装插件
 async function installPlugin(pluginName, downloadUrl) {
     try {
+        pluginMarketRefreshSeq++;
         // 更新按钮状态
         const card = document.querySelector(`.market-card[data-plugin-name="${pluginName}"]`);
         if (card) {
@@ -3083,6 +3084,7 @@ async function pollPluginInstalled(pluginName) {
 // 更新单个插件
 async function updatePlugin(pluginName, repo) {
     try {
+        pluginMarketRefreshSeq++;
         const card = document.querySelector(`.market-card[data-plugin-name="${pluginName}"]`);
         if (card) {
             const btn = card.querySelector('button');
@@ -3125,6 +3127,7 @@ async function updateAllPlugins() {
         return;
     }
 
+    pluginMarketRefreshSeq++;
     const names = pluginMarketUpdateCandidates.map((plugin) => plugin.name);
     const updateAllBtn = document.getElementById('plugin-market-update-all-btn');
     const originalText = updateAllBtn ? updateAllBtn.textContent : '';
