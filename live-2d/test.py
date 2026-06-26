@@ -534,6 +534,8 @@ class set_pyqt(QWidget):
     # 添加信号用于线程安全的日志更新
     log_signal = pyqtSignal(str)
     mcp_log_signal = pyqtSignal(str)
+    plugin_market_loaded = pyqtSignal(list)
+    plugin_market_failed = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -715,6 +717,8 @@ class set_pyqt(QWidget):
         # 连接日志信号
         self.log_signal.connect(self.update_log)
         self.mcp_log_signal.connect(self.update_tool_log)
+        self.plugin_market_loaded.connect(self._on_plugin_market_loaded)
+        self.plugin_market_failed.connect(self._on_plugin_market_failed)
 
         # 设置动画控制按钮
         self.setup_motion_buttons()
@@ -4219,25 +4223,43 @@ class set_pyqt(QWidget):
     def refresh_plugin_market(self):
         RAW_URL = "https://raw.githubusercontent.com/morettt/my-neuro/main/live-2d/plugins/plugin-house/plugin_hub.json"
         print("开始刷新插件广场...")
-        try:
-            resp = requests.get(RAW_URL, timeout=15)
-            resp.raise_for_status()
-            data = resp.json()
-            plugins = [
-                {
-                    "id":           key,
-                    "display_name": info.get("display_name", key),
-                    "desc":         info.get("desc", ""),
-                    "author":       info.get("author", ""),
-                    "repo":         info.get("repo", ""),
-                }
-                for key, info in data.items()
-            ]
-            self._display_plugin_market(plugins)
-            self.toast.show_message(f"插件广场已加载，共 {len(plugins)} 个插件", 2000)
-        except Exception as e:
-            print(f"拉取插件列表失败: {e}")
-            self.toast.show_message(f"获取插件列表失败: {e}", 3000)
+        if getattr(self, "_plugin_market_loading", False):
+            self.toast.show_message("插件广场正在加载中...", 1500)
+            return
+
+        self._plugin_market_loading = True
+        self.toast.show_message("正在加载插件广场...", 1500)
+
+        def _worker():
+            try:
+                resp = requests.get(RAW_URL, timeout=15)
+                resp.raise_for_status()
+                data = resp.json()
+                plugins = [
+                    {
+                        "id":           key,
+                        "display_name": info.get("display_name", key),
+                        "desc":         info.get("desc", ""),
+                        "author":       info.get("author", ""),
+                        "repo":         info.get("repo", ""),
+                    }
+                    for key, info in data.items()
+                ]
+                self.plugin_market_loaded.emit(plugins)
+            except Exception as e:
+                self.plugin_market_failed.emit(str(e))
+
+        Thread(target=_worker, daemon=True).start()
+
+    def _on_plugin_market_loaded(self, plugins):
+        self._plugin_market_loading = False
+        self._display_plugin_market(plugins)
+        self.toast.show_message(f"插件广场已加载，共 {len(plugins)} 个插件", 2000)
+
+    def _on_plugin_market_failed(self, error):
+        self._plugin_market_loading = False
+        print(f"拉取插件列表失败: {error}")
+        self.toast.show_message(f"获取插件列表失败: {error}", 3000)
 
     def _display_plugin_market(self, plugins):
         layout = self._plugin_market_layout
