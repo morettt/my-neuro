@@ -165,6 +165,7 @@
     "plugin_installing": "⏳ Installing...",
     "plugin_installed": "✓ Installed",
     "author": "Author",
+    "view_source": "View source",
     "unknown_author": "Unknown Author",
     "no_desc": "No description",
     "install_failed": "Install failed",
