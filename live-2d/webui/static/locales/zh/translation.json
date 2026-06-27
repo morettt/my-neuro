@@ -384,5 +384,18 @@
     "hour": "小时",
     "minute": "分钟",
     "second": "秒"
+  },
+  "releases": {
+    "check_update": "检查更新",
+    "title": "版本更新",
+    "current_version": "当前版本",
+    "latest": "最新版",
+    "new_available": "有新版本",
+    "prerelease": "预发布",
+    "view_on_github": "在 GitHub 查看",
+    "no_releases": "暂无版本信息",
+    "fetch_error": "获取版本信息失败",
+    "retry": "重试",
+    "loading": "加载中..."
   }
 }

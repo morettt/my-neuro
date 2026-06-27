@@ -2104,6 +2104,14 @@ body.header-collapsed .collapse-icon {
     border: 1px solid rgba(255, 255, 255, 0.1);
     transition: all 0.3s ease;
     flex-shrink: 0;
+    /* 重置 <button> 默认样式，保持与 <a> 对齐一致 */
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    line-height: 0;
+    appearance: none;
+    -webkit-appearance: none;
 }
 
 .header-icon svg {
