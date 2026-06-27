@@ -165,6 +165,7 @@
     "plugin_installing": "⏳ 安装中...",
     "plugin_installed": "✓ 已安装",
     "author": "作者",
+    "view_source": "查看来源",
     "unknown_author": "未知作者",
     "no_desc": "无描述",
     "install_failed": "安装失败",
