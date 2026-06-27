@@ -14,12 +14,20 @@ if exist %~dp0..\env\python.exe (
         echo Flask 未安装，正在安装...
         %~dp0..\env\python.exe -m pip install flask
     )
+    %~dp0..\env\python.exe -c "import requests" >nul 2>&1 || (
+        echo requests 未安装，正在安装...
+        %~dp0..\env\python.exe -m pip install requests
+    )
     %~dp0..\env\python.exe -c "from webui import run_app; run_app()"
 ) else (
     call conda activate my-neuro
     python -c "import flask" >nul 2>&1 || (
         echo Flask 未安装，正在安装...
         pip install flask
+    )
+    python -c "import requests" >nul 2>&1 || (
+        echo requests 未安装，正在安装...
+        pip install requests
     )
     python -c "from webui import run_app; run_app()"
 )

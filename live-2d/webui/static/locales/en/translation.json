@@ -384,5 +384,18 @@
     "hour": "h",
     "minute": "m",
     "second": "s"
+  },
+  "releases": {
+    "check_update": "Check for Updates",
+    "title": "Releases",
+    "current_version": "Current",
+    "latest": "Latest",
+    "new_available": "New version",
+    "prerelease": "Pre-release",
+    "view_on_github": "View on GitHub",
+    "no_releases": "No releases found",
+    "fetch_error": "Failed to fetch releases",
+    "retry": "Retry",
+    "loading": "Loading..."
   }
 }
