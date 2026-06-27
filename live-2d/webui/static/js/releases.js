@@ -9,6 +9,7 @@
     let currentVersion = '';
     let releases = [];
     let hasNewVersion = false;
+    let latestReleaseTag = '';
 
     // ============ 注入样式 ============
     function injectStyles() {
@@ -262,21 +263,41 @@
     }
 
     // ============ 版本比较 ============
+    function parseVersion(tagName) {
+        const match = String(tagName || '').trim().match(/^[vV]?(\d+(?:\.\d+)*)(?:[-_].*)?$/);
+        if (!match) return null;
+        return match[1].split('.').map(part => Number.parseInt(part, 10));
+    }
+
+    function compareVersions(left, right) {
+        const leftVersion = parseVersion(left);
+        const rightVersion = parseVersion(right);
+        if (!leftVersion || !rightVersion) return 0;
+
+        const maxLength = Math.max(leftVersion.length, rightVersion.length);
+        for (let i = 0; i < maxLength; i++) {
+            const leftPart = leftVersion[i] || 0;
+            const rightPart = rightVersion[i] || 0;
+            if (leftPart > rightPart) return 1;
+            if (leftPart < rightPart) return -1;
+        }
+        return 0;
+    }
+
     function isNewer(tagName) {
-        const currentRelease = releases.find(r => r.tag_name === currentVersion);
-        if (!currentRelease || !currentRelease.published_at) return false;
-        const targetRelease = releases.find(r => r.tag_name === tagName);
-        if (!targetRelease || !targetRelease.published_at) return false;
-        return new Date(targetRelease.published_at).getTime() > new Date(currentRelease.published_at).getTime();
+        const release = releases.find(r => r.tag_name === tagName);
+        if (release && typeof release.is_newer === 'boolean') return release.is_newer;
+        return compareVersions(tagName, currentVersion) > 0;
     }
 
     function checkHasNewVersion() {
-        const currentRelease = releases.find(r => r.tag_name === currentVersion);
-        if (!currentRelease || !currentRelease.published_at) return false;
-        return releases.some(r =>
-            !r.prerelease && r.published_at &&
-            new Date(r.published_at).getTime() > new Date(currentRelease.published_at).getTime()
-        );
+        return releases.some(r => !r.prerelease && isNewer(r.tag_name));
+    }
+
+    function getLatestStableRelease() {
+        return releases
+            .filter(r => !r.prerelease && parseVersion(r.tag_name))
+            .sort((a, b) => compareVersions(b.tag_name, a.tag_name))[0] || null;
     }
 
     // ============ Markdown 渲染 ============
@@ -339,13 +360,14 @@
         if (releases.length === 0) return renderEmpty();
 
         let html = '<div class="releases-list">';
-        releases.forEach(function (release, index) {
+        releases.forEach(function (release) {
             const name = release.name || release.tag_name;
             const isNew = isNewer(release.tag_name);
+            const isLatest = release.is_latest || release.tag_name === latestReleaseTag;
 
             // 标签
             let badges = '';
-            if (index === 0) {
+            if (isLatest) {
                 badges += `<span class="badge badge-latest">${t('releases.latest')}</span>`;
             }
             if (isNew) {
@@ -428,7 +450,11 @@
 
             currentVersion = data.current_version || '';
             releases = data.releases || [];
-            hasNewVersion = checkHasNewVersion();
+            const latestRelease = data.latest_release || getLatestStableRelease();
+            latestReleaseTag = latestRelease ? latestRelease.tag_name : '';
+            hasNewVersion = typeof data.has_new_version === 'boolean'
+                ? data.has_new_version
+                : checkHasNewVersion();
             updateButtonHighlight();
 
             if (!isAutoCheck) {
