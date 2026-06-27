@@ -131,19 +131,34 @@ class UIController {
         textChatContainer.addEventListener('mouseenter', captureChatMouse);
 
         textChatContainer.addEventListener('mouseleave', () => {
+            if (chatPointerDown) return;
             setMousePassthrough(true, true);
         });
 
-        chatInput.addEventListener('pointerdown', () => {
-            chatPointerDown = true;
-            captureChatMouse();
-        });
+        const releasePointerCapture = (event) => {
+            if (
+                event?.pointerId != null &&
+                chatInput.hasPointerCapture?.(event.pointerId)
+            ) {
+                chatInput.releasePointerCapture(event.pointerId);
+            }
+        };
 
-        document.addEventListener('pointerup', () => {
+        const finishChatPointer = (event) => {
             if (!chatPointerDown) return;
             chatPointerDown = false;
+            releasePointerCapture(event);
             releaseChatMouseForTyping();
+        };
+
+        chatInput.addEventListener('pointerdown', (event) => {
+            chatPointerDown = true;
+            captureChatMouse();
+            chatInput.setPointerCapture?.(event.pointerId);
         });
+
+        document.addEventListener('pointerup', finishChatPointer);
+        document.addEventListener('pointercancel', finishChatPointer);
 
         chatInput.addEventListener('focus', () => {
             captureChatMouse();
