@@ -2958,6 +2958,17 @@ function escapeAttribute(value) {
     return escapeHtml(value).replace(/"/g, '&quot;');
 }
 
+function formatCount(value) {
+    const count = Number(value) || 0;
+    if (count >= 1000000) {
+        return (count / 1000000).toFixed(count >= 10000000 ? 0 : 1).replace(/\.0$/, '') + 'M';
+    }
+    if (count >= 1000) {
+        return (count / 1000).toFixed(count >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'k';
+    }
+    return String(Math.max(0, count));
+}
+
 function updatePluginMarketToolbar() {
     const toolbar = document.getElementById('plugin-market-update-toolbar');
     const updateAllBtn = document.getElementById('plugin-market-update-all-btn');
@@ -3056,6 +3067,9 @@ function createPluginMarketCard(plugin) {
     const localVersion = plugin.local_version || plugin.version || '';
     const latestVersion = plugin.latest_version || plugin.version || '';
     const hasUpdate = installed && plugin.has_update && latestVersion;
+    const downloads = Number(plugin.downloads) || 0;
+    const stars = Number(plugin.stars) || 0;
+    const starred = !!plugin.starred;
 
     // 根据状态设置按钮文本和样式（hasUpdate / installed / installing 顺序判断）
     let btnText, btnDisabled, btnI18n, buttonAction;
@@ -3090,11 +3104,22 @@ function createPluginMarketCard(plugin) {
             ${latestVersion ? `<span class="version-badge ${hasUpdate ? 'update-badge' : ''}">${escapeHtml(t('market.version_latest', { version: latestVersion }))}</span>` : ''}
             ${plugin.update_error ? `<span class="version-badge muted-badge" title="${escapeAttribute(plugin.update_error)}">${escapeHtml(t('market.update_check_failed'))}</span>` : ''}
            </div>`;
+    const statsBlock = `<div class="market-card-stats">
+            <span class="market-stat" title="${escapeAttribute(t('market.download_count_full', { count: downloads }))}">⬇ ${escapeHtml(t('market.download_count', { count: formatCount(downloads) }))}</span>
+            <button type="button"
+                class="star-btn ${starred ? 'starred' : ''}"
+                data-plugin-name="${escapeAttribute(pluginName)}"
+                data-stars="${stars}"
+                aria-pressed="${starred ? 'true' : 'false'}"
+                title="${escapeAttribute(starred ? t('market.star_remove') : t('market.star_add'))}"
+                onclick="togglePluginStar('${escapeJsString(pluginName)}', this)">★ <span class="star-count">${escapeHtml(formatCount(stars))}</span></button>
+           </div>`;
 
     const html = `<div class="market-card-header">
         <h4 class="market-card-title">🧩 ${escapeHtml(displayName)}</h4>
         <p class="market-card-author">${t('plugins.author')}${escapeHtml(author)}</p>
         ${versionBlock}
+        ${statsBlock}
         <p class="market-card-summary">${escapeHtml(desc)}</p>
         <div class="install-progress" id="progress-${escapeAttribute(pluginName)}" style="display: none;">
             <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
@@ -3102,10 +3127,52 @@ function createPluginMarketCard(plugin) {
         </div>
     </div>
     <button ${buttonAction ? `onclick="${escapeAttribute(buttonAction)}"` : ''}
-        class="btn-sm" style="margin-top: 10px;" ${btnDisabled} data-i18n="${btnI18n}">${escapeHtml(btnText)}</button>`;
+        class="btn-sm market-action-btn" style="margin-top: 10px;" ${btnDisabled} data-i18n="${btnI18n}">${escapeHtml(btnText)}</button>`;
 
     card.innerHTML = html;
     return card;
+}
+
+async function togglePluginStar(pluginName, btnEl) {
+    if (!btnEl || btnEl.disabled) return;
+
+    btnEl.disabled = true;
+    try {
+        const response = await fetch('/api/market/plugins/star', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plugin_name: pluginName })
+        });
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            const errorKey = result.error === 'stats_disabled'
+                ? 'market.stats_disabled'
+                : 'market.star_failed';
+            showError(t(errorKey));
+            return;
+        }
+
+        const stars = Number(result.stars) || 0;
+        btnEl.dataset.stars = String(stars);
+        btnEl.classList.toggle('starred', !!result.starred);
+        btnEl.setAttribute('aria-pressed', result.starred ? 'true' : 'false');
+        btnEl.setAttribute('title', result.starred ? t('market.star_remove') : t('market.star_add'));
+
+        const countEl = btnEl.querySelector('.star-count');
+        if (countEl) {
+            countEl.textContent = formatCount(stars);
+        }
+
+        pluginMarketItems = pluginMarketItems.map((plugin) => {
+            if (plugin.name !== pluginName) return plugin;
+            return { ...plugin, stars, starred: !!result.starred };
+        });
+    } catch (error) {
+        showError(t('market.star_error') + '：' + error.message);
+    } finally {
+        btnEl.disabled = false;
+    }
 }
 
 // 安装插件
@@ -3115,7 +3182,7 @@ async function installPlugin(pluginName, downloadUrl) {
         // 更新按钮状态
         const card = document.querySelector(`.market-card[data-plugin-name="${pluginName}"]`);
         if (card) {
-            const btn = card.querySelector('button');
+            const btn = card.querySelector('.market-action-btn');
             btn.disabled = true;
             btn.textContent = t('market.plugin_installing');
             btn.setAttribute('data-i18n', 'market.plugin_installing');
@@ -3153,7 +3220,7 @@ async function installPlugin(pluginName, downloadUrl) {
 function restoreInstallButton(pluginName, text) {
     const card = document.querySelector(`.market-card[data-plugin-name="${pluginName}"]`);
     if (card) {
-        const btn = card.querySelector('button');
+        const btn = card.querySelector('.market-action-btn');
         btn.disabled = false;
         btn.textContent = text;
         btn.setAttribute('data-i18n', 'market.plugin_install');
@@ -3221,7 +3288,7 @@ async function updatePlugin(pluginName, repo) {
         pluginMarketRefreshSeq++;
         const card = document.querySelector(`.market-card[data-plugin-name="${pluginName}"]`);
         if (card) {
-            const btn = card.querySelector('button');
+            const btn = card.querySelector('.market-action-btn');
             btn.disabled = true;
             btn.textContent = t('market.plugin_updating');
             btn.classList.add('btn-installing');

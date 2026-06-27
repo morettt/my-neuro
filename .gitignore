@@ -63,5 +63,6 @@ plugins-dlc/memos/memos_system/data/**
 
 live-2d/plugins/**/outputs/
 live-2d/plugins/**/.runtime/
+live-2d/plugins/.stats_client_id
 live-2d/plugins/community/agent-dream/dream_logs/
 live-2d/plugins/community/agent-dream/dream_state.json

@@ -18,6 +18,7 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Blueprint, request, jsonify
 
+from . import marketplace_stats
 from .utils import PROJECT_ROOT, logger
 from .marketplace_updater import (
     check_updates_for_plugins,
@@ -127,6 +128,20 @@ def _build_market_plugin_items(check_updates=True):
             plugin['has_update'] = bool(plugin.get('installed') and info.get('has_update'))
             plugin['update_error'] = info.get('update_error', '')
             plugin['remote_metadata'] = info.get('remote_metadata')
+
+    try:
+        stats_map = marketplace_stats.fetch_stats_map()
+        for plugin in plugins:
+            stats = stats_map.get(plugin['name'], {})
+            plugin['downloads'] = stats.get('downloads', 0)
+            plugin['stars'] = stats.get('stars', 0)
+            plugin['starred'] = stats.get('starred', False)
+    except Exception as e:
+        logger.warning('Plugin marketplace stats merge failed: %s', e)
+        for plugin in plugins:
+            plugin['downloads'] = 0
+            plugin['stars'] = 0
+            plugin['starred'] = False
 
     return plugins
 
@@ -279,6 +294,7 @@ def _install_plugin_worker(plugin_name, plugin_url, plugin_dir):
 
         installing_tasks[plugin_name]['status'] = 'completed'
         installing_tasks[plugin_name]['progress'] = 100
+        marketplace_stats.increment_download(plugin_name)
         logger.info(f'插件安装完成：{plugin_name}')
         
         # 清理任务记录（让刷新列表时能正确显示已安装状态）
@@ -470,6 +486,19 @@ def check_plugin_installed(plugin_name):
         'success': True,
         'installed': is_installed
     })
+
+
+@market_bp.route('/api/market/plugins/star', methods=['POST'])
+def toggle_plugin_star():
+    """Toggle an anonymous per-device star for a marketplace plugin."""
+    try:
+        data = request.get_json() or {}
+        plugin_name = data.get('plugin_name') or data.get('name') or ''
+        result = marketplace_stats.toggle_star(plugin_name)
+        status = 200 if result.get('success') else 400
+        return jsonify(result), status
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'starred': False, 'stars': 0}), 500
 
 
 # ============ 工具广场 ============
