@@ -107,32 +107,52 @@ class UIController {
             subtitleContainer.style.setProperty('display', 'block', 'important');
         }
 
-        textChatContainer.addEventListener('mouseenter', () => {
+        const setMousePassthrough = (ignore, forward = true) => {
             ipcRenderer.send('set-ignore-mouse-events', {
-                ignore: false,
-                options: { forward: false }
+                ignore,
+                options: { forward }
             });
-        });
+        };
+
+        let chatPointerDown = false;
+
+        const captureChatMouse = () => {
+            setMousePassthrough(false, false);
+        };
+
+        const releaseChatMouseForTyping = () => {
+            requestAnimationFrame(() => {
+                if (chatPointerDown || document.activeElement !== chatInput) return;
+                // Keep keyboard focus in the editor, but let video windows underneath keep rendering.
+                setMousePassthrough(true, true);
+            });
+        };
+
+        textChatContainer.addEventListener('mouseenter', captureChatMouse);
 
         textChatContainer.addEventListener('mouseleave', () => {
-            ipcRenderer.send('set-ignore-mouse-events', {
-                ignore: true,
-                options: { forward: true }
-            });
+            setMousePassthrough(true, true);
+        });
+
+        chatInput.addEventListener('pointerdown', () => {
+            chatPointerDown = true;
+            captureChatMouse();
+        });
+
+        document.addEventListener('pointerup', () => {
+            if (!chatPointerDown) return;
+            chatPointerDown = false;
+            releaseChatMouseForTyping();
         });
 
         chatInput.addEventListener('focus', () => {
-            ipcRenderer.send('set-ignore-mouse-events', {
-                ignore: false,
-                options: { forward: false }
-            });
+            captureChatMouse();
+            releaseChatMouseForTyping();
         });
 
         chatInput.addEventListener('blur', () => {
-            ipcRenderer.send('set-ignore-mouse-events', {
-                ignore: true,
-                options: { forward: true }
-            });
+            chatPointerDown = false;
+            setMousePassthrough(true, true);
         });
         
     }
