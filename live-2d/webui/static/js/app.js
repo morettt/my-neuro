@@ -2958,6 +2958,15 @@ function escapeAttribute(value) {
     return escapeHtml(value).replace(/"/g, '&quot;');
 }
 
+function getSafeExternalHref(value) {
+    try {
+        const url = new URL(String(value || '').trim());
+        return (url.protocol === 'http:' || url.protocol === 'https:') ? url.href : '';
+    } catch (e) {
+        return '';
+    }
+}
+
 function formatCount(value) {
     const count = Number(value) || 0;
     if (count >= 1000000) {
@@ -3100,7 +3109,7 @@ function createPluginMarketCard(plugin) {
     }
 
     const authorLine = escapeHtml(author);
-    const repoHref = repo ? escapeHtml(repo) : '';
+    const repoHref = getSafeExternalHref(repo);
     const versionBlock = `<div class="market-card-versions">
             ${localVersion ? `<span class="version-badge">${escapeHtml(t('market.version_current', { version: localVersion }))}</span>` : ''}
             ${latestVersion ? `<span class="version-badge ${hasUpdate ? 'update-badge' : ''}">${escapeHtml(t('market.version_latest', { version: latestVersion }))}</span>` : ''}
@@ -3117,10 +3126,10 @@ function createPluginMarketCard(plugin) {
                 onclick="togglePluginStar('${escapeJsString(pluginName)}', this)">★ <span class="star-count">${escapeHtml(formatCount(stars))}</span></button>
            </div>`;
 
-    const metaBlock = repo
+    const metaBlock = repoHref
         ? `<div class="market-card-meta">
             <span class="market-card-author">${t('plugins.author')}${authorLine}</span>
-            <a class="market-card-source-link" href="${repoHref}" target="_blank" rel="noopener noreferrer">📎 ${escapeHtml(t('market.view_source'))}</a>
+            <a class="market-card-source-link" href="${escapeAttribute(repoHref)}" target="_blank" rel="noopener noreferrer">📎 ${escapeHtml(t('market.view_source'))}</a>
            </div>`
         : `<p class="market-card-author">${t('plugins.author')}${authorLine}</p>`;
 
