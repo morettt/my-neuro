@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>插件使用教程 · my-neuro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Orbitron:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="docs.css">
+</head>
+<body>
+  <div class="bg-grid"></div>
+
+  <header class="site-header">
+    <a class="brand" href="index.html">
+      <div class="brand-icon">🧩</div>
+      <div>
+        <span class="brand-text">MY-NEURO DOCS</span>
+        <span class="brand-sub">插件使用教程</span>
+      </div>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="guide-usage.html">使用教程</a>
+      <a href="guide-aliyun-tts.html">阿里云 TTS</a>
+      <a href="guide-plugins.html" class="active">插件</a>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-label">目录</div>
+      <nav class="toc">
+        <a href="#overview">概述</a>
+        <a href="#manage">如何管理插件</a>
+        <a href="#list">插件一览（33 个）</a>
+        <span class="toc-divider">默认启用 · 7</span>
+        <a href="#memos">MemOS 长期记忆</a>
+        <a href="#ai-log">思痕之册</a>
+        <a href="#dawn-dusk">晨昏之线</a>
+        <a href="#core-memory">核心记忆注入</a>
+        <a href="#code-executor">代码执行</a>
+        <a href="#web-search">网络搜索</a>
+        <a href="#user-profile">用户画像</a>
+        <span class="toc-divider">插件广场 · 6</span>
+        <a href="#mood-chat">心情对话系统</a>
+        <a href="#check-in">定时问候</a>
+        <span class="toc-divider">其他预装 · 24</span>
+        <a href="#diary">AI 日记</a>
+        <a href="#bilibili-live">B站直播弹幕</a>
+        <a href="#minecraft">Minecraft 游戏集成</a>
+        <a href="#pc-control">PC 屏幕控制</a>
+        <a href="#rag-memory">RAG 记忆检索</a>
+        <a href="#context-compressor">上下文压缩</a>
+        <a href="#translation">同声传译</a>
+        <a href="#screenshot">截图</a>
+        <a href="#web-navigator">打开网页</a>
+        <a href="#schedule">日程管理</a>
+        <a href="#note">用户记忆</a>
+        <a href="#wait">等待</a>
+        <a href="#auto-chat">自动对话模块</a>
+        <a href="#typing">自动打字</a>
+        <a href="#keyboard">键盘控制</a>
+        <a href="#music">音乐播放</a>
+        <a href="#sfx">音效播放</a>
+        <a href="#mouse-click">鼠标点击</a>
+        <a href="#llm-inspector">LLM 抓包器</a>
+        <a href="#dynamic-persona">动态人格</a>
+        <a href="#notes">备忘录</a>
+        <a href="#smart-barrage">智能弹幕过滤</a>
+        <a href="#test-logger">测试插件</a>
+        <a href="#watch-screen">看视频</a>
+        <a href="#relations">插件协作关系</a>
+        <a href="#faq">常见问题</a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <div class="hero">
+        <div class="hero-badge">🧩 本包预装 33 个 · 默认启用 7 个</div>
+        <h1>插件使用教程</h1>
+        <div class="hero-meta">
+          <span>📦 my-neuro v6.6 线上版</span>
+          <span>⚙️ WebUI → 插件管理</span>
+          <span>🔗 <a href="http://mynewbot.com/plugin-hub" target="_blank" rel="noopener">插件广场</a> 同步 6 个</span>
+        </div>
+        <p class="hero-desc">线上安装包 <code>live-2d/plugins</code> 自带 <strong>33 个插件</strong>。其中 <strong>7 个默认启用</strong>；另 6 个与插件广场同步。下文逐一说明怎么配、怎么用。</p>
+      </div>
+
+      <section id="overview">
+        <h2>概述</h2>
+        <p>插件是肥牛的「技能模块」。启用后 AI 会通过 <strong>Function Call</strong> 或自动逻辑使用相关能力。</p>
+        <div class="callout callout-info">
+          <strong>前提：</strong> WebUI → 基础配置 → 开启 <strong>启用 Function Call 工具</strong>。记忆类插件需先启动 <a href="guide-usage.html#memory">MemOS 记忆系统</a>。
+        </div>
+        <p>默认启用见 <code>enabled_plugins.json</code>（7 个）。全文覆盖本安装包全部 33 个预装插件；标「插件广场」的可在 <a href="http://mynewbot.com/plugin-hub" target="_blank" rel="noopener">mynewbot.com/plugin-hub</a> 查看仓库。</p>
+      </section>
+
+      <section id="manage">
+        <h2>如何管理插件</h2>
+        <ol class="step-list">
+          <li>WebUI → <strong>插件管理</strong></li>
+          <li>内置 / 社区页签中找到插件</li>
+          <li>开关 <strong>启用 / 关闭</strong>，点 <strong>配置</strong> 改参数</li>
+          <li>保存后 <strong>重启 Live2D 桌宠</strong></li>
+        </ol>
+        <div class="callout callout-warn">改配置后务必重启桌宠。MemOS 相关改动可能还需重启记忆系统。</div>
+      </section>
+
+      <section id="list">
+        <h2>插件一览（33 个）</h2>
+        <div class="table-wrap">
+          <table class="plugin-list">
+            <thead>
+              <tr>
+                <th class="col-plugin">插件</th>
+                <th class="col-type">类型</th>
+                <th class="col-status">状态</th>
+                <th class="col-desc">说明</th>
+                <th class="col-config">配置</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="col-plugin"><strong>MemOS 长期记忆</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag required">默认启用</span><span class="plugin-tag required">必启后端</span></div></td>
+                <td class="col-desc">为 AI 提供跨会话长期记忆能力，自动检索注入记忆、自动保存对话、12 个 Function Call 工具（搜索/添加记忆、图片记忆、知识库导入、记忆修正、偏好查询），后端基于 Qdrant 向量库…</td>
+                <td class="col-config">MemOS API + 后端 LLM</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>思痕之册</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag required">默认启用</span></div></td>
+                <td class="col-desc">AI日志插件：用户说晚安时自动生成每日观察日志、查看最近日志、生成月度总结，日志写入核心记忆实现长期记忆，支持记忆库每日备份与清空</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>晨昏之线</strong></td>
+                <td class="col-type"><span class="plugin-tag community">社区</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag required">默认启用</span></div></td>
+                <td class="col-desc">时间感知与整点主动问候插件：提供时间查询工具，并在 0/8/12/18 点智能发起问候，根据对话活跃度自动选择直接问候或自然融入回复，避免打断正在进行的对话</td>
+                <td class="col-config">npm install</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>核心记忆注入</strong></td>
+                <td class="col-type"><span class="plugin-tag community">社区</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag required">默认启用</span></div></td>
+                <td class="col-desc">启动时读取核心用户记忆.txt并注入到系统提示词，文件变更时自动刷新</td>
+                <td class="col-config">编辑核心用户记忆.txt</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>代码执行</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag required">默认启用</span></div></td>
+                <td class="col-desc">执行 AI 生成的 Python 代码，提供 execute_code / install_packages 工具</td>
+                <td class="col-config">conda 环境 my-neuro</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>网络搜索</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag required">默认启用</span></div></td>
+                <td class="col-desc">游览器搜索，桌宠可使用此插件获取最新的互联网内容</td>
+                <td class="col-config"><strong>Tavily API Key</strong></td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>用户画像</strong></td>
+                <td class="col-type"><span class="plugin-tag community">社区</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag required">默认启用</span></div></td>
+                <td class="col-desc">从长期记忆和对话中保守沉淀用户画像，支持首次诊断、候选池、跨天证据晋升和自动注入</td>
+                <td class="col-config">依赖 MemOS</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>心情对话系统</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">广场可选</span></div></td>
+                <td class="col-desc">潮汐之音：基于心情评估的智能主动对话模块。通过AI日志评估初始心情、实时对话情感分析、回复速度感知等多维度影响心情值，根据心情自动调整主动对话频率与风格，支持心情持久化与离线回归</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>定时问候</strong></td>
+                <td class="col-type"><span class="plugin-tag community">社区</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">广场可选</span></div></td>
+                <td class="col-desc">每隔一段时间让 AI 主动问用户在做什么</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>AI 日记</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">闲置一段时间后自动让 AI 写日记，TTS 结束时重置计时器</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>B站直播弹幕</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">监听B站直播间弹幕，自动读取并让AI回应</td>
+                <td class="col-config">直播间 ID</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>Minecraft 游戏集成</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">连接 Mindcraft 服务器，将语音输入转发给 MC 机器人</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>PC 屏幕控制</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">基于视觉识别点击屏幕指定元素，提供 pc_screen_click 工具</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>RAG 记忆检索</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">从 RAG 记忆系统中检索相关历史对话，提供 search_memory 工具</td>
+                <td class="col-config">已弃用</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>上下文压缩</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">对话超过阈值时自动压缩旧消息，节省token</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>同声传译</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">将送入TTS的文本翻译为目标语言，字幕保持原文不变</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>截图</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">截取当前屏幕供 AI 分析，提供 take_screenshot 工具</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>打开网页</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">在默认浏览器中打开指定网址，提供 open_webpage 工具</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>日程管理</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">记录、查看、完成、删除、修改日程，数据持久化保存到本地 JSON 文件，重启后依然有效</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>用户记忆</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">记录/读取/搜索/删除用户核心记忆，提供 record_memory / read_memory / delete_memory / search_memory 工具</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>等待</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">让 AI 等待指定时间，提供 wait 工具</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>自动对话模块</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">空闲时自动发起对话，可配置触发间隔</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>自动打字</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">在当前焦点位置模拟输入文字，提供 type_text 工具</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>键盘控制</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">按方向键控制，提供 press_arrow 工具</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>音乐播放</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">控制歌曲播放/停止/列表，提供 play_random_music / stop_music / list_music_files / play_specific_music 工具</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>音效播放</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">播放音效增强对话表现力，提供 play_sound_effect 工具</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>鼠标点击</strong></td>
+                <td class="col-type"><span class="plugin-tag builtin">内置</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">点击鼠标当前位置，提供 click_mouse 工具</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>LLM 抓包器</strong></td>
+                <td class="col-type"><span class="plugin-tag community">社区</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">拦截每次 LLM 请求，完整记录 system/user/assistant/tool 消息和工具定义，同步输出到终端和日志文件</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>动态人格</strong></td>
+                <td class="col-type"><span class="plugin-tag community">社区</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">根据用户消息和时间动态调整AI当前状态，让回复更有生命力</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>备忘录</strong></td>
+                <td class="col-type"><span class="plugin-tag community">社区</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">让 AI 帮你记备忘，支持保存、查看、删除，数据持久化到本地文件</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>智能弹幕过滤</strong></td>
+                <td class="col-type"><span class="plugin-tag community">社区</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">批量收集弹幕，由 LLM 自动挑选值得回复的内容；带 # 前缀的弹幕可立即点名回复</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>测试插件</strong></td>
+                <td class="col-type"><span class="plugin-tag community">社区</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">验证插件框架是否正常工作</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+              <tr>
+                <td class="col-plugin"><strong>看视频</strong></td>
+                <td class="col-type"><span class="plugin-tag community">社区</span></td>
+                <td class="col-status"><div class="tag-group"><span class="plugin-tag optional">需手动启用</span></div></td>
+                <td class="col-desc">实时截图，保留最近5帧上下文。被动：每次用户说话时自动把最新屏幕注入LLM。主动：定时观察屏幕，有趣时自主评论。</td>
+                <td class="col-config">见插件配置 / README</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+<section id="memos" class="plugin-section">
+        <h2>MemOS 长期记忆 <span class="plugin-tag builtin">内置</span></h2>
+        <p>最核心的插件。负责让肥牛<strong>记住跨天、跨重启的对话</strong>。线上版<strong>必须先启动 MemOS 后端</strong>，桌宠才能正常运行。</p>
+
+        <h3>你能感受到什么</h3>
+        <ul>
+          <li>聊过的事过几天还能被提起（自动检索注入）</li>
+          <li>对话会自动写入长期记忆（默认每 5 轮批量保存）</li>
+          <li>可对 AI 说「帮我记住……」，它会调用记忆工具</li>
+        </ul>
+
+        <h3>必做配置</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>配置项</th><th>建议</th></tr></thead>
+            <tbody>
+              <tr><td>启用 MemOS</td><td>保持开启</td></tr>
+              <tr><td>MemOS API 地址</td><td><code>http://127.0.0.1:8003</code></td></tr>
+              <tr><td>自动注入记忆</td><td>建议开启</td></tr>
+              <tr><td>自动保存对话</td><td>建议开启</td></tr>
+              <tr><td>后端 LLM</td><td>用于记忆总结/实体提取，可与对话模型相同或更便宜的模型</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>AI 可用工具（12 个）</h3>
+        <p>
+          <span class="tool-pill">memos_search_memory</span>
+          <span class="tool-pill">memos_add_memory</span>
+          <span class="tool-pill">memos_upload_image</span>
+          <span class="tool-pill">memos_search_images</span>
+          <span class="tool-pill">memos_save_screenshot</span>
+          <span class="tool-pill">memos_import_url</span>
+          <span class="tool-pill">memos_import_document</span>
+          <span class="tool-pill">memos_correct_memory</span>
+          <span class="tool-pill">memos_get_preferences</span>
+          <span class="tool-pill">…</span>
+        </p>
+
+        <h3>怎么说 / 怎么用</h3>
+        <ul>
+          <li>「你还记得我上次说的那件事吗？」— 自动检索记忆</li>
+          <li>「把这个记一下：我周五一般不加班」— AI 会写入记忆</li>
+          <li>「帮我搜一下记忆里关于 XX 的内容」— 调用搜索工具</li>
+        </ul>
+        <p>详细记忆管理见 <a href="guide-usage.html#memory">使用教程 · 记忆系统</a>，后端说明见插件内「📖 配置说明」。</p>
+      </section>
+<section id="ai-log" class="plugin-section">
+        <h2>思痕之册 <span class="plugin-tag builtin">内置</span></h2>
+        <p>帮肥牛把一天的对话凝结成<strong>观察日志</strong>，并可按月生成<strong>月度总结</strong>，部分摘要会写入核心记忆。</p>
+
+        <h3>日志保存位置</h3>
+        <p>默认：<code>live-2d/AI记录室/AI日志/{日期}-AI日志.txt</code></p>
+        <p>月度总结：<code>{年月}-月度总结.txt</code></p>
+
+        <h3>AI 可用工具</h3>
+        <p class="tool-list">
+          <span class="tool-pill">write_ai_diary</span>
+          <span class="tool-pill">read_recent_diary</span>
+          <span class="tool-pill">write_monthly_summary</span>
+        </p>
+
+        <h3>怎么说</h3>
+        <ul>
+          <li>「帮我写今天的 AI 日志」— 明确要求时触发</li>
+          <li>晚上说「晚安，我去睡了」— 在设定时间段内可自动触发写日志</li>
+          <li>「读一下最近三天的日志」</li>
+        </ul>
+        <div class="callout callout-info">插件<strong>不会</strong>在未经你同意时偷偷写日志；晚安触发也需在当前消息里明确出现睡觉相关词语。</div>
+      </section>
+<section id="dawn-dusk" class="plugin-section">
+        <h2>晨昏之线 <span class="plugin-tag community">社区</span></h2>
+        <p>让肥牛感知<strong>当前时间、星期、中国节假日/调休、上午/下午/晚上</strong>，并在设定整点主动问候。</p>
+
+        <h3>首次使用</h3>
+        <p>在插件目录执行一次依赖安装（节假日数据需要）：</p>
+        <div class="code-block">
+          <span class="code-lang">powershell</span>
+          <pre>cd live-2d\plugins\community\dawn-dusk-line
+npm install</pre>
+        </div>
+
+        <h3>主要配置</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>配置项</th><th>默认 / 说明</th></tr></thead>
+            <tbody>
+              <tr><td>感知与时钟时区</td><td><code>Asia/Shanghai</code></td></tr>
+              <tr><td>注入环境感知到 LLM</td><td>每次对话附带时间/工作日/时段前缀</td></tr>
+              <tr><td>问候整点时刻</td><td><code>0,8,12,18</code>（午夜/早/午/傍晚）</td></tr>
+              <tr><td>静默判定阈值</td><td>超过 10 分钟无交互会主动问候</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>AI 可用工具</h3>
+        <p>
+          <span class="tool-pill">dawn_dusk_get_time</span>
+          <span class="tool-pill">dawn_dusk_greeting_check</span>
+        </p>
+
+        <h3>你能感受到什么</h3>
+        <ul>
+          <li>肥牛更知道「现在几点、是不是周末、是不是法定节假日」</li>
+          <li>在 0/8/12/18 点等时刻可能主动说早安、提醒吃饭、问今天过得怎样</li>
+          <li>你正在聊天时，整点问候会改成「注入提示」而不是硬打断</li>
+        </ul>
+      </section>
+<section id="core-memory" class="plugin-section">
+        <h2>核心记忆注入 <span class="plugin-tag community">社区</span></h2>
+        <p>比 MemOS 更「硬」的一层记忆：每次对话都会把文件内容<strong>完整注入</strong>系统提示词，适合放<strong>绝对不能忘</strong>的信息。</p>
+
+        <h3>记忆文件位置</h3>
+        <p><code>live-2d/AI记录室/核心用户记忆.txt</code></p>
+        <p>文件不存在时插件会跳过；你可以用记事本直接编辑，保存后约 1 秒自动重载。</p>
+
+        <h3>AI 可用工具</h3>
+        <p class="tool-list">
+          <span class="tool-pill">core_memory_write</span>
+          <span class="tool-pill">core_memory_list</span>
+        </p>
+
+        <h3>怎么说</h3>
+        <ul>
+          <li>「写入核心记忆：我叫小明，讨厌被叫全名」</li>
+          <li>「这个要永远记住：我对花生过敏」</li>
+          <li>「看看核心记忆里有什么」</li>
+        </ul>
+        <div class="callout callout-tip"><strong>与 MemOS 的区别：</strong> 核心记忆是文本文件、每次全量加载、优先级最高；MemOS 是向量检索、按需召回、容量更大。</div>
+      </section>
+<section id="code-executor" class="plugin-section">
+        <h2>代码执行 <span class="plugin-tag builtin">内置</span></h2>
+        <p>允许 AI 在本地 <strong>conda 环境 my-neuro</strong> 中运行 Python 代码，用于计算、数据处理、文件操作等。</p>
+
+        <h3>AI 可用工具</h3>
+        <p class="tool-list">
+          <span class="tool-pill">execute_code</span>
+          <span class="tool-pill">install_packages</span>
+        </p>
+
+        <h3>怎么说</h3>
+        <ul>
+          <li>「用 Python 算一下 123456 的平方根」</li>
+          <li>「帮我把桌面某个 txt 文件里的重复行去掉」</li>
+          <li>「需要的话你可以写代码跑一下」</li>
+        </ul>
+        <div class="callout callout-warn"><strong>安全提示：</strong> 代码会在你电脑上真实执行。只在你信任的场景下让 AI 跑代码；涉及删除文件、网络请求等操作请留意 AI 的具体代码内容。</div>
+      </section>
+<section id="web-search" class="plugin-section">
+        <h2>网络搜索 <span class="plugin-tag builtin">内置</span></h2>
+        <p>让肥牛能查<strong>互联网上的最新信息</strong>，基于 Tavily 搜索 API。</p>
+
+        <h3>必配项</h3>
+        <p>插件配置 → <strong>Tavily API Key</strong></p>
+        <p>前往 <a href="https://tavily.com" target="_blank" rel="noopener">tavily.com</a> 注册获取。未填写 Key 时，搜索工具不会注册，AI 无法联网搜索。</p>
+
+        <h3>AI 可用工具</h3>
+        <p><span class="tool-pill">web_search</span></p>
+
+        <h3>怎么说</h3>
+        <ul>
+          <li>「搜一下今天 XX 的新闻」</li>
+          <li>「帮我查一下 Python 3.13 有什么新特性」</li>
+          <li>「这个我不确定，你去网上查查」</li>
+        </ul>
+        <p>每次搜索返回 AI 摘要 + 若干条结果链接与片段。</p>
+      </section>
+<section id="user-profile" class="plugin-section">
+        <h2>用户画像 <span class="plugin-tag community">社区</span></h2>
+        <p>从长期记忆和近期对话中<strong>保守地</strong>归纳你的画像（习惯、偏好、性格观察等），并在每次对话前注入。</p>
+
+        <h3>工作方式</h3>
+        <ul>
+          <li><code>AI记录室/用户画像.json</code> — 正式画像，会注入提示词</li>
+          <li><code>AI记录室/用户画像_候选.json</code> — 候选观察，不注入，用于跨天累积证据</li>
+          <li>同一习惯需多个不同日期佐证才会「晋升」为正式画像（防误判）</li>
+          <li>首次启动会尝试从 MemOS 拉取数据做<strong>初始诊断</strong></li>
+        </ul>
+
+        <h3>主要配置</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>配置项</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td>注入用户画像</td><td>是否每次对话注入正式画像</td></tr>
+              <tr><td>专用画像模型 profile_llm</td><td>可单独配 API，留空则用主对话模型</td></tr>
+              <tr><td>晋升门槛 promote_count / promote_span_days</td><td>候选升级为正式画像的条件</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>AI 可用工具</h3>
+        <p>
+          <span class="tool-pill">profile_view</span>
+          <span class="tool-pill">profile_update</span>
+          <span class="tool-pill">profile_rebuild</span>
+        </p>
+
+        <h3>怎么说</h3>
+        <ul>
+          <li>「你现在对我的印象是什么？」— 查看画像</li>
+          <li>「我习惯晚上写代码，这个记进画像」— 强信号可快速晋升</li>
+          <li>「重新从我的记忆里诊断一下画像」— 调用 rebuild</li>
+        </ul>
+      </section>
+
+      <section id="mood-chat" class="plugin-section">
+        <h2>心情对话系统 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/mood-chat</code> · <a href="http://mynewbot.com/plugin-hub" target="_blank" rel="noopener">插件广场</a> 已收录</p>
+        <p>潮汐之音：基于心情评估的智能主动对话模块。通过AI日志评估初始心情、实时对话情感分析、回复速度感知等多维度影响心情值，根据心情自动调整主动对话频率与风格，支持心情持久化与离线回归</p>
+        <p><a href="https://github.com/A-night-owl-Rabbit/my-neuro-plugin-mood-chat" target="_blank" rel="noopener">GitHub 仓库</a> · 作者 LikeNightRabbit</p>
+        <h3>怎么用</h3>
+        <ul><li>根据心情主动找你说</li><li>插件管理里手动启用</li></ul>
+      </section>
+
+      <section id="check-in" class="plugin-section">
+        <h2>定时问候 <span class="plugin-tag community">社区</span></h2>
+        <p><code>live-2d/plugins/community/check-in</code> · <a href="http://mynewbot.com/plugin-hub" target="_blank" rel="noopener">插件广场</a> 已收录</p>
+        <p>每隔一段时间让 AI 主动问用户在做什么</p>
+        <p><a href="https://github.com/morettt/my-neuro-check-in" target="_blank" rel="noopener">GitHub 仓库</a> · 作者 xxxiu</p>
+        <h3>怎么用</h3>
+        <ul><li>定时问你在做什么</li><li>插件管理里手动启用</li></ul>
+      </section>
+
+      <section id="diary" class="plugin-section">
+        <h2>AI 日记 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/diary</code></p>
+        <p>闲置一段时间后自动让 AI 写日记，TTS 结束时重置计时器</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>自动写日记</li><li>见插件配置</li></ul>
+      </section>
+
+      <section id="bilibili-live" class="plugin-section">
+        <h2>B站直播弹幕 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/bilibili-live</code></p>
+        <p>监听B站直播间弹幕，自动读取并让AI回应</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>监听 B 站直播间弹幕</li><li>需填直播间号</li></ul>
+      </section>
+
+      <section id="minecraft" class="plugin-section">
+        <h2>Minecraft 游戏集成 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/minecraft</code></p>
+        <p>连接 Mindcraft 服务器，将语音输入转发给 MC 机器人</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="pc-control" class="plugin-section">
+        <h2>PC 屏幕控制 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/pc-control</code></p>
+        <p>基于视觉识别点击屏幕指定元素，提供 pc_screen_click 工具</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="rag-memory" class="plugin-section">
+        <h2>RAG 记忆检索 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/rag-memory</code></p>
+        <p>从 RAG 记忆系统中检索相关历史对话，提供 search_memory 工具</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>已弃用，请用 MemOS</li><li>勿启用</li></ul>
+      </section>
+
+      <section id="context-compressor" class="plugin-section">
+        <h2>上下文压缩 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/context-compressor</code></p>
+        <p>对话超过阈值时自动压缩旧消息，节省token</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="translation" class="plugin-section">
+        <h2>同声传译 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/translation</code></p>
+        <p>将送入TTS的文本翻译为目标语言，字幕保持原文不变</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>翻译功能</li><li>见插件配置</li></ul>
+      </section>
+
+      <section id="screenshot" class="plugin-section">
+        <h2>截图 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/screenshot</code></p>
+        <p>截取当前屏幕供 AI 分析，提供 take_screenshot 工具</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="web-navigator" class="plugin-section">
+        <h2>打开网页 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/web-navigator</code></p>
+        <p>在默认浏览器中打开指定网址，提供 open_webpage 工具</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="schedule" class="plugin-section">
+        <h2>日程管理 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/schedule</code></p>
+        <p>记录、查看、完成、删除、修改日程，数据持久化保存到本地 JSON 文件，重启后依然有效</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="note" class="plugin-section">
+        <h2>用户记忆 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/note</code></p>
+        <p>记录/读取/搜索/删除用户核心记忆，提供 record_memory / read_memory / delete_memory / search_memory 工具</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="wait" class="plugin-section">
+        <h2>等待 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/wait</code></p>
+        <p>让 AI 等待指定时间，提供 wait 工具</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="auto-chat" class="plugin-section">
+        <h2>自动对话模块 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/auto-chat</code></p>
+        <p>空闲时自动发起对话，可配置触发间隔</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>长时间不说话时主动开口</li><li>可与心情对话配合</li></ul>
+      </section>
+
+      <section id="typing" class="plugin-section">
+        <h2>自动打字 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/typing</code></p>
+        <p>在当前焦点位置模拟输入文字，提供 type_text 工具</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="keyboard" class="plugin-section">
+        <h2>键盘控制 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/keyboard</code></p>
+        <p>按方向键控制，提供 press_arrow 工具</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="music" class="plugin-section">
+        <h2>音乐播放 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/music</code></p>
+        <p>控制歌曲播放/停止/列表，提供 play_random_music / stop_music / list_music_files / play_specific_music 工具</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="sfx" class="plugin-section">
+        <h2>音效播放 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/sfx</code></p>
+        <p>播放音效增强对话表现力，提供 play_sound_effect 工具</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="mouse-click" class="plugin-section">
+        <h2>鼠标点击 <span class="plugin-tag builtin">内置</span></h2>
+        <p><code>live-2d/plugins/built-in/mouse-click</code></p>
+        <p>点击鼠标当前位置，提供 click_mouse 工具</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="llm-inspector" class="plugin-section">
+        <h2>LLM 抓包器 <span class="plugin-tag community">社区</span></h2>
+        <p><code>live-2d/plugins/community/llm-inspector</code></p>
+        <p>拦截每次 LLM 请求，完整记录 system/user/assistant/tool 消息和工具定义，同步输出到终端和日志文件</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="dynamic-persona" class="plugin-section">
+        <h2>动态人格 <span class="plugin-tag community">社区</span></h2>
+        <p><code>live-2d/plugins/community/dynamic-persona</code></p>
+        <p>根据用户消息和时间动态调整AI当前状态，让回复更有生命力</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="notes" class="plugin-section">
+        <h2>备忘录 <span class="plugin-tag community">社区</span></h2>
+        <p><code>live-2d/plugins/community/notes</code></p>
+        <p>让 AI 帮你记备忘，支持保存、查看、删除，数据持久化到本地文件</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="smart-barrage" class="plugin-section">
+        <h2>智能弹幕过滤 <span class="plugin-tag community">社区</span></h2>
+        <p><code>live-2d/plugins/community/smart-barrage</code></p>
+        <p>批量收集弹幕，由 LLM 自动挑选值得回复的内容；带 # 前缀的弹幕可立即点名回复</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="test-logger" class="plugin-section">
+        <h2>测试插件 <span class="plugin-tag community">社区</span></h2>
+        <p><code>live-2d/plugins/community/test-logger</code></p>
+        <p>验证插件框架是否正常工作</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="watch-screen" class="plugin-section">
+        <h2>看视频 <span class="plugin-tag community">社区</span></h2>
+        <p><code>live-2d/plugins/community/watch-screen</code></p>
+        <p>实时截图，保留最近5帧上下文。被动：每次用户说话时自动把最新屏幕注入LLM。主动：定时观察屏幕，有趣时自主评论。</p>
+        
+        <h3>怎么用</h3>
+        <ul><li>WebUI → 插件管理 → 启用/配置</li></ul>
+      </section>
+
+      <section id="relations">
+        <h2>插件协作关系</h2>
+        <div class="flow">
+          <div class="flow-step">MemOS 后端（必启）→ 长期记忆 / 用户画像 / AI 日志</div>
+          <div class="flow-arrow">↓</div>
+          <div class="flow-step">核心记忆.txt + 思痕之册 + 晨昏之线 → 注入上下文</div>
+          <div class="flow-arrow">↓</div>
+          <div class="flow-step">网络搜索 / 代码执行 → 按需扩展</div>
+          <div class="flow-arrow">↓</div>
+          <div class="flow-step">心情对话 / 定时问候 / 自动聊天 → 主动陪伴（按需启用）</div>
+        </div>
+        <p>默认 7 个插件已覆盖记忆、搜索、代码、时间感知。其余 26 个预装插件按需启用，避免同类主动对话插件同时开太多。</p>
+      </section>
+
+      <section id="faq">
+        <h2>常见问题</h2>
+        <div class="faq-item open">
+          <button class="faq-q" type="button">改了插件配置没生效？<span class="arrow">▼</span></button>
+          <div class="faq-a"><p>保存后重启 <strong>Live2D 主服务</strong>。MemOS 后端 LLM 改动还需重启<strong>记忆系统</strong>。</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" type="button">为什么教程里插件比默认启用多？<span class="arrow">▼</span></button>
+          <div class="faq-a"><p>安装包预装了 33 个插件，默认只开 7 个。其余在插件管理里手动启用即可，本文一并说明。</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" type="button">AI 不会联网搜索？<span class="arrow">▼</span></button>
+          <div class="faq-a"><p>确认「网络搜索」已启用且填写 <strong>Tavily API Key</strong>。</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" type="button">想装更多插件？<span class="arrow">▼</span></button>
+          <div class="faq-a"><p>WebUI → <strong>广场</strong> 或 <a href="http://mynewbot.com/plugin-hub" target="_blank" rel="noopener">插件广场</a> 下载。本文已覆盖本包自带的 33 个。</p></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <a href="guide-usage.html">← 返回使用教程</a> · <a href="index.html">教程首页</a>
+  </footer>
+
+  <script src="docs.js"></script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>my-neuro 线上版 · 教程中心</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="docs.css">
+</head>
+<body>
+  <div class="bg-grid"></div>
+
+  <header class="site-header">
+    <a class="brand" href="index.html">
+      <div class="brand-icon">🐂</div>
+      <div>
+        <span class="brand-text">MY-NEURO DOCS</span>
+        <span class="brand-sub">线上版本教程中心</span>
+      </div>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html" class="active">首页</a>
+      <a href="guide-usage.html">使用教程</a>
+      <a href="guide-aliyun-tts.html">阿里云 TTS</a>
+      <a href="guide-plugins.html">插件</a>
+    </nav>
+  </header>
+
+  <div class="home-hero">
+    <div class="hero-badge">📦 线上安装包 · v6.6</div>
+    <h1>my-neuro 教程中心</h1>
+    <p>从零开始，手把手教你启动桌宠、配置 API、接入云端语音。打开浏览器就能看，不用装别的软件。</p>
+  </div>
+
+  <div class="home-cards">
+    <a class="home-card usage" href="guide-usage.html">
+      <span class="tag">新手必读</span>
+      <h2>📖 线上版本使用教程</h2>
+      <p>第一次用不知道点哪里？这篇教你打开控制面板、配 API、启动肥牛、语音/打字聊天，还有快捷键和常见问题。</p>
+      <span class="arrow-link">开始阅读 →</span>
+    </a>
+
+    <a class="home-card tts" href="guide-aliyun-tts.html">
+      <span class="tag">语音配置</span>
+      <h2>🔊 阿里云 TTS 部署教程</h2>
+      <p>让肥牛「开口说话」。开通百炼、获取 API Key、选音色或声音复刻，并在 WebUI 里完成配置。</p>
+      <span class="arrow-link">开始阅读 →</span>
+    </a>
+
+    <a class="home-card usage" href="guide-plugins.html" style="border-color: rgba(157, 124, 255, 0.35);">
+      <span class="tag" style="background: var(--purple-dim); color: var(--purple);">扩展能力</span>
+      <h2>🧩 插件使用教程</h2>
+      <p>本安装包预装 <strong>33 个插件</strong>（默认启用 7 个），含配置说明与用法示例。</p>
+      <span class="arrow-link">开始阅读 →</span>
+    </a>
+  </div>
+
+  <div style="max-width:720px;margin:0 auto 48px;padding:0 28px;position:relative;z-index:1;">
+    <div class="callout callout-warn">
+      <strong>⚠️ 已弃用功能：</strong>「全云端肥牛」和 <code>RAG.bat</code> 已不再维护，请勿使用。<br>
+      <strong>✅ 启动顺序：</strong> ASR → <strong>记忆系统（必做）</strong> → Live2D → 配好 LLM + 阿里云 TTS。
+    </div>
+    <div class="callout callout-tip" style="margin-top:12px;">
+      <strong>💡 建议阅读顺序：</strong> 使用教程 → 阿里云 TTS → <a href="guide-plugins.html">插件教程</a>。
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    my-neuro v6.6 · 更多资料见 <a href="http://mynewbot.com/tutorials">官方教程站</a>
+  </footer>
+</body>
+</html>
