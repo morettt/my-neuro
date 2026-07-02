@@ -55,11 +55,15 @@ const API = {
 
     async deleteMemory(id, hard = false) {
         try {
-            const response = await fetch(`${API_BASE_URL}/delete/${id}?hard=${hard}`, { method: 'DELETE' });
+            const response = await fetch(`${API_BASE_URL}/delete/${encodeURIComponent(id)}?hard=${hard}`, { method: 'DELETE' });
             return response.ok;
         } catch (e) {
             return false;
         }
+    },
+
+    async deleteArchivedMemory(id) {
+        return this.deleteMemory(id, true);
     },
 
     async recoverMemory(memoryId, deleteRecordId) {

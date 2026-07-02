@@ -207,6 +207,8 @@ DEFAULT_LAYER_WEIGHTS = {
     "LongTermMemory": 0.15,
     "UserMemory": 0.25,
 }
+LAYER_RANK = {"WorkingMemory": 0, "LongTermMemory": 1, "UserMemory": 2}
+DEDUPLICATE_ACTIONS = {"archive", "soft_delete", "delete"}
 
 EVOLUTION_STATE_FILE = Path(__file__).resolve().parent.parent / "data" / "evolution_state.json"
 
@@ -253,6 +255,64 @@ def safe_int(value: Any, default: int = 0) -> int:
         return int(value)
     except Exception:
         return default
+
+
+def payload_of(memory: Dict[str, Any]) -> Dict[str, Any]:
+    payload = memory.get('payload')
+    return payload if isinstance(payload, dict) else {}
+
+
+def ensure_list(value: Any) -> List[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def merge_unique_list(*values: Any) -> List[Any]:
+    merged = []
+    for value in values:
+        for item in ensure_list(value):
+            if item is not None and item not in merged:
+                merged.append(item)
+    return merged
+
+
+def deduplicate_keeper_score(memory: Dict[str, Any]) -> tuple:
+    """Choose the highest-value memory as the merge keeper."""
+    payload = payload_of(memory)
+    created_at = parse_iso_datetime(payload.get('created_at') or memory.get('created_at')) or datetime.max
+    created_key = -(
+        created_at.toordinal() * 86400
+        + created_at.hour * 3600
+        + created_at.minute * 60
+        + created_at.second
+    )
+    layer = normalize_layer(payload.get('layer') or memory.get('layer'), default='LongTermMemory')
+    return (
+        safe_float(payload.get('importance', memory.get('importance', 0.5)), 0.5),
+        LAYER_RANK.get(layer, 1),
+        safe_int(payload.get('access_count', memory.get('access_count', 0)), 0),
+        safe_int(payload.get('merge_count', memory.get('merge_count', 0)), 0),
+        created_key,
+    )
+
+
+def choose_deduplicate_keeper(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
+    return left if deduplicate_keeper_score(left) >= deduplicate_keeper_score(right) else right
+
+
+def normalize_duplicate_action(action: Optional[str]) -> str:
+    normalized = (action or "soft_delete").strip().lower().replace("-", "_")
+    if normalized == "hard_delete":
+        normalized = "delete"
+    if normalized not in DEDUPLICATE_ACTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="duplicate_action 必须是 archive、soft_delete 或 delete"
+        )
+    return normalized
 
 
 def recency_boost_for(payload: Dict[str, Any], weight: float) -> float:
@@ -406,6 +466,11 @@ app.add_middleware(
 class AddMemoryRequest(BaseModel):
     messages: List[Dict[str, str]]
     user_id: Optional[str] = USER_ID
+    # 压缩后的历史对话摘要，仅作为记忆提取的背景参考，不会直接入库
+    context_summary: Optional[str] = None
+    history_summary: Optional[str] = None
+    conversation_summary: Optional[str] = None
+    compressed_context: Optional[str] = None
 
 
 class RawMemoryMessage(BaseModel):
@@ -1332,7 +1397,29 @@ def _parse_memories_json(response_text):
     return None
 
 
-async def process_conversation_batch(conversation: str) -> Dict[str, Any]:
+MAX_CONTEXT_SUMMARY_CHARS = 6000
+
+
+def normalize_context_summary(*values: Any) -> Optional[str]:
+    """Pick the first non-empty summary and keep it within a prompt-safe size."""
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        summary = value.strip()
+        if not summary:
+            continue
+        if len(summary) <= MAX_CONTEXT_SUMMARY_CHARS:
+            return summary
+        half = MAX_CONTEXT_SUMMARY_CHARS // 2
+        return (
+            summary[:half].rstrip()
+            + "\n...[历史摘要过长，已保留开头和结尾]...\n"
+            + summary[-half:].lstrip()
+        )
+    return None
+
+
+async def process_conversation_batch(conversation: str, context_summary: Optional[str] = None) -> Dict[str, Any]:
     """使用 LLM 从对话中提取记忆"""
     global llm_config, full_config
 
@@ -1373,6 +1460,20 @@ async def process_conversation_batch(conversation: str) -> Dict[str, Any]:
 
     import aiohttp
 
+    context_summary = normalize_context_summary(context_summary)
+    context_summary_section = ""
+    if context_summary:
+        context_summary_section = f"""
+历史压缩摘要（仅供理解当前对话背景）：
+{context_summary}
+
+注意：
+- 历史摘要只用于理解代词、简称、延续话题和人物关系。
+- 不要仅凭历史摘要生成新记忆，也不要把历史摘要整段改写成记忆。
+- 只有当前待总结对话明确提到、确认、更新或修正的信息，才可以提取为记忆。
+- 如果当前对话与历史摘要冲突，以当前对话为准。
+"""
+
     prompt = f"""你是记忆提取专家。从以下多轮对话中提取关键事实，并按类型严格分类。
 
 身份说明：
@@ -1402,7 +1503,9 @@ preference > fact > episodic > procedural > semantic > general
 - "主人每天早上都会喝咖啡" → procedural（日常习惯）
 - "主人了解Python编程" → semantic（知识技能）
 
-对话内容：
+{context_summary_section}
+
+当前待总结对话：
 {conversation}
 
 请返回 JSON：
@@ -1414,6 +1517,8 @@ preference > fact > episodic > procedural > semantic > general
 """
 
     logger.info(f"[记忆提取] 输入对话 {len(conversation)} 字，预览: {conversation[:200].replace(chr(10), ' | ')}")
+    if context_summary:
+        logger.info(f"[记忆提取] 已附加历史压缩摘要 {len(context_summary)} 字作为背景参考")
 
     # 记忆提取输出 token 预算：thinking 开启时由思考与正文共享，越大越不易被截断
     # 可在 memos_config.json 的 llm.config.max_tokens 调整（默认 8000）
@@ -1589,14 +1694,25 @@ async def add_memory(request: AddMemoryRequest):
             return {"status": "success", "message": "无有效对话", "added": 0}
 
         full_conversation = "\n".join(conversation_text)
+        context_summary = normalize_context_summary(
+            request.context_summary,
+            request.history_summary,
+            request.conversation_summary,
+            request.compressed_context
+        )
 
         # 🧠 对话总结日志开始
         print(f"\n{'='*60}")
         print(f"🧠 [记忆总结] 正在处理 {len(request.messages)} 条对话消息...")
+        if context_summary:
+            print(f"🧠 [记忆总结] 已附加历史压缩摘要 {len(context_summary)} 字作为背景")
         print(f"{'='*60}")
 
         # ========== 1. LLM 提取记忆 ==========
-        processed_result = await process_conversation_batch(full_conversation)
+        processed_result = await process_conversation_batch(
+            full_conversation,
+            context_summary=context_summary
+        )
 
         if processed_result.get("memories"):
             # 处理每条记忆
@@ -1680,7 +1796,7 @@ async def add_memory(request: AddMemoryRequest):
         if entity_extractor and neo4j_client:
             try:
                 print(f"\n🕸️ [实体提取] 正在分析知识图谱实体...")
-                entities, relations = await entity_extractor.extract(full_conversation)
+                entities, relations = await entity_extractor.extract(full_conversation, context_summary)
 
                 if entities:
                     print(f"   发现 {len(entities)} 个实体, {len(relations) if relations else 0} 个关系:")
@@ -2488,7 +2604,14 @@ async def get_statistics():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def merge_memories_v2(keeper_id: str, content_a: str, content_b: str) -> bool:
+async def merge_memories_v2(
+    keeper_id: str,
+    content_a: str,
+    content_b: str,
+    duplicate_id: Optional[str] = None,
+    duplicate_payload: Optional[Dict[str, Any]] = None,
+    similarity: Optional[float] = None
+) -> Optional[str]:
     """使用 LLM 智能合并两条相似记忆（适配 Qdrant 存储）
 
     将两条记忆的内容交给 LLM 融合，保留双方的独特信息，去除重复部分。
@@ -2498,15 +2621,18 @@ async def merge_memories_v2(keeper_id: str, content_a: str, content_b: str) -> b
         keeper_id: 要保留的记忆 ID（合并后的内容写入这条）
         content_a: 第一条记忆的内容
         content_b: 第二条记忆的内容
+        duplicate_id: 被合并的重复记忆 ID
+        duplicate_payload: 被合并记忆的 payload，用于保留元数据
+        similarity: 两条记忆的向量相似度
 
     Returns:
-        True 表示合并成功，False 表示失败（两条均应保留）
+        合并后的内容；None 表示失败（两条均应保留）
     """
     global llm_config
 
     if not llm_config:
         print("⚠️ LLM 未配置，无法合并记忆")
-        return False
+        return None
 
     import aiohttp
 
@@ -2516,7 +2642,7 @@ async def merge_memories_v2(keeper_id: str, content_a: str, content_b: str) -> b
 
     if not all([api_key, model, base_url]):
         print("⚠️ LLM 配置不完整，无法合并记忆")
-        return False
+        return None
 
     prompt = f"""合并以下两条相似的记忆，保留所有有价值的信息，去除重复内容：
 
@@ -2564,27 +2690,58 @@ async def merge_memories_v2(keeper_id: str, content_a: str, content_b: str) -> b
                         full_mem = qdrant_client.get_memory(keeper_id)
                         if not full_mem:
                             print(f"⚠️ 找不到记忆 {keeper_id}，合并失败")
-                            return False
+                            return None
 
-                        keeper_payload = full_mem.get('payload', {})
+                        keeper_payload = (full_mem.get('payload', {}) or {}).copy()
+                        duplicate_payload = duplicate_payload or {}
+                        merged_at = datetime.now().isoformat()
 
                         # 更新 payload
                         keeper_payload['content'] = merged_content
-                        keeper_payload['updated_at'] = datetime.now().isoformat()
-                        keeper_payload['merge_count'] = keeper_payload.get('merge_count', 0) + 1
+                        keeper_payload['updated_at'] = merged_at
+                        keeper_payload['merge_count'] = safe_int(keeper_payload.get('merge_count'), 0) + 1
+                        keeper_payload['merged_from'] = merge_unique_list(
+                            keeper_payload.get('merged_from'),
+                            duplicate_id
+                        )
+                        keeper_payload['tags'] = merge_unique_list(
+                            keeper_payload.get('tags'),
+                            duplicate_payload.get('tags')
+                        )
+                        keeper_payload['importance'] = max(
+                            safe_float(keeper_payload.get('importance'), 0.5),
+                            safe_float(duplicate_payload.get('importance'), 0.5)
+                        )
+                        keeper_payload['access_count'] = (
+                            safe_int(keeper_payload.get('access_count'), 0)
+                            + safe_int(duplicate_payload.get('access_count'), 0)
+                        )
+                        if duplicate_id:
+                            merge_records = ensure_list(keeper_payload.get('merge_records'))
+                            merge_records.append({
+                                'source_id': duplicate_id,
+                                'merged_at': merged_at,
+                                'similarity': round(similarity, 4) if similarity is not None else None,
+                                'source_importance': duplicate_payload.get('importance'),
+                                'source_memory_type': duplicate_payload.get('memory_type'),
+                                'source_created_at': duplicate_payload.get('created_at'),
+                            })
+                            keeper_payload['merge_records'] = merge_records
 
                         # 写入 Qdrant
-                        qdrant_client.update_memory(keeper_id, keeper_payload, new_vector)
+                        if not qdrant_client.update_memory(keeper_id, keeper_payload, new_vector):
+                            print(f"⚠️ 更新保留记忆 {keeper_id} 失败")
+                            return None
 
                         # 更新 BM25 索引
                         update_bm25_index(keeper_id, merged_content)
 
                         print(f"   🤖 LLM合并成功 (第 {keeper_payload['merge_count']} 次): {merged_content[:50]}...")
-                        return True
+                        return merged_content
                     else:
                         error_text = await response.text()
                         print(f"⚠️ LLM API 返回错误 {response.status}: {error_text[:200]}")
-                        return False  # API 错误不重试
+                        return None  # API 错误不重试
 
         except asyncio.TimeoutError:
             print(f"⚠️ LLM 合并超时 (第 {attempt + 1}/{max_retries} 次, {timeouts[attempt]}秒)")
@@ -2597,13 +2754,51 @@ async def merge_memories_v2(keeper_id: str, content_a: str, content_b: str) -> b
                 await asyncio.sleep(3)
 
     print(f"❌ LLM 合并失败（已重试 {max_retries} 次），两条记忆均保留")
-    return False
+    return None
+
+
+def dispose_merged_duplicate(
+    duplicate_id: str,
+    keeper_id: str,
+    duplicate_action: str,
+    similarity: Optional[float] = None
+) -> bool:
+    """Hide or delete a duplicate after its content has been merged."""
+    duplicate_action = normalize_duplicate_action(duplicate_action)
+
+    if duplicate_action == "delete":
+        success = qdrant_client.delete_memory(duplicate_id)
+        if success:
+            remove_bm25_document(duplicate_id)
+        return success
+
+    merge_metadata = {
+        'merged_into': keeper_id,
+        'merged_at': datetime.now().isoformat(),
+        'deduplicate_action': duplicate_action,
+        'deduplicate_similarity': round(similarity, 4) if similarity is not None else None,
+    }
+    if not qdrant_client.update_memory(duplicate_id, merge_metadata):
+        return False
+
+    if duplicate_action == "archive":
+        success = qdrant_client.archive_memory(duplicate_id, reason='deduplicate')
+    else:
+        success = qdrant_client.soft_delete_memory(duplicate_id, reason='deduplicate')
+
+    if success:
+        remove_bm25_document(duplicate_id)
+    return success
 
 
 @app.post("/deduplicate")
 async def deduplicate_memories(
     threshold: float = 0.90,
-    by_type: bool = True  # 🔥 新增：是否按记忆类型分组去重
+    by_type: bool = True,  # 🔥 新增：是否按记忆类型分组去重
+    duplicate_action: str = Query(
+        "soft_delete",
+        description="重复项处理: archive=进归档, soft_delete=软删除, delete=物理删除"
+    )
 ):
     """去重（支持按记忆类型分组）
 
@@ -2612,20 +2807,75 @@ async def deduplicate_memories(
         by_type: 是否按 memory_type 分组去重，默认 True
                  - True: 只在同类型记忆之间去重（推荐，避免不同类型记忆被错误合并）
                  - False: 全局去重（所有记忆之间比较）
+        duplicate_action: 重复项处理方式，默认 soft_delete，避免污染归档区。
     """
     try:
         if not qdrant_client or not qdrant_client.is_available():
             return {"status": "error", "message": "存储不可用"}
 
+        duplicate_action = normalize_duplicate_action(duplicate_action)
+
         # 获取所有记忆
         memories = qdrant_client.get_all_memories(limit=10000)
 
         if len(memories) < 2:
-            return {"status": "success", "merged_count": 0, "by_type": by_type}
+            return {
+                "status": "success",
+                "merged_count": 0,
+                "by_type": by_type,
+                "duplicate_action": duplicate_action,
+                "merge_details": []
+            }
 
-        deleted_ids = set()
+        disposed_ids = set()
         merged_count = 0
+        failed_count = 0
+        merge_details = []
         type_stats = {}  # 记录每个类型的去重统计
+
+        async def merge_pair(full_mem_i, full_mem_j, similarity, label):
+            keeper = choose_deduplicate_keeper(full_mem_i, full_mem_j)
+            keeper_id = keeper.get('id')
+            duplicate = full_mem_j if keeper_id == full_mem_i.get('id') else full_mem_i
+            duplicate_id = duplicate.get('id')
+
+            if not keeper_id or not duplicate_id or keeper_id == duplicate_id:
+                return None
+
+            keeper_payload = payload_of(keeper)
+            duplicate_payload = payload_of(duplicate)
+            keeper_content = keeper_payload.get('content') or keeper.get('content', '')
+            duplicate_content = duplicate_payload.get('content') or duplicate.get('content', '')
+
+            print(f"   🎯 [{label}] 保留 {keeper_id}，合并重复项 {duplicate_id}")
+            merged_content = await merge_memories_v2(
+                keeper_id=keeper_id,
+                content_a=keeper_content,
+                content_b=duplicate_content,
+                duplicate_id=duplicate_id,
+                duplicate_payload=duplicate_payload,
+                similarity=similarity
+            )
+            if not merged_content:
+                print(f"   ⏭️ [{label}] LLM合并失败，两条均保留")
+                return {"success": False, "keeper_id": keeper_id, "duplicate_id": duplicate_id}
+
+            if not dispose_merged_duplicate(duplicate_id, keeper_id, duplicate_action, similarity):
+                print(f"   ⚠️ [{label}] 重复项处置失败: {duplicate_id}")
+                return {"success": False, "keeper_id": keeper_id, "duplicate_id": duplicate_id}
+
+            return {
+                "success": True,
+                "keeper_id": keeper_id,
+                "duplicate_id": duplicate_id,
+                "similarity": round(similarity * 100, 2),
+                "memory_1": keeper_content,
+                "memory_2": duplicate_content,
+                "result": merged_content,
+                "duplicate_action": duplicate_action,
+                "keeper_importance": safe_float(keeper_payload.get('importance'), 0.5),
+                "duplicate_importance": safe_float(duplicate_payload.get('importance'), 0.5),
+            }
 
         if by_type:
             # 🔥 按 memory_type 分组
@@ -2643,10 +2893,10 @@ async def deduplicate_memories(
                 if len(group) < 2:
                     continue
 
-                group_deleted = 0
+                group_merged = 0
 
                 for i, mem_i in enumerate(group):
-                    if mem_i['id'] in deleted_ids:
+                    if mem_i['id'] in disposed_ids:
                         continue
 
                     full_mem_i = qdrant_client.get_memory(mem_i['id'])
@@ -2657,7 +2907,7 @@ async def deduplicate_memories(
 
                     for j in range(i + 1, len(group)):
                         mem_j = group[j]
-                        if mem_j['id'] in deleted_ids:
+                        if mem_j['id'] in disposed_ids:
                             continue
 
                         full_mem_j = qdrant_client.get_memory(mem_j['id'])
@@ -2673,28 +2923,29 @@ async def deduplicate_memories(
                             print(f"      记忆1: {mem_i.get('content', '')[:50]}...")
                             print(f"      记忆2: {mem_j.get('content', '')[:50]}...")
 
-                            # 使用 LLM 智能合并（保留双方独特信息）
-                            merge_success = await merge_memories_v2(
-                                keeper_id=mem_i['id'],
-                                content_a=mem_i.get('content', ''),
-                                content_b=mem_j.get('content', '')
-                            )
-
-                            if merge_success:
-                                deleted_ids.add(mem_j['id'])
+                            detail = await merge_pair(full_mem_i, full_mem_j, similarity, mem_type)
+                            if detail and detail.get('success'):
+                                disposed_ids.add(detail['duplicate_id'])
+                                merge_details.append(detail)
                                 merged_count += 1
-                                group_deleted += 1
+                                group_merged += 1
+                                if detail['keeper_id'] == mem_i['id']:
+                                    full_mem_i = qdrant_client.get_memory(mem_i['id']) or full_mem_i
+                                    if full_mem_i.get('vector'):
+                                        emb_i = np.array(full_mem_i['vector'])
+                                else:
+                                    break
                             else:
-                                print(f"   ⏭️ [{mem_type}] LLM合并失败，两条均保留")
+                                failed_count += 1
 
-                if group_deleted > 0:
-                    type_stats[mem_type] = group_deleted
+                if group_merged > 0:
+                    type_stats[mem_type] = group_merged
         else:
             # 🔥 原有全局去重逻辑
             print(f"🔍 全局去重（阈值: {threshold}）")
 
             for i, mem_i in enumerate(memories):
-                if mem_i['id'] in deleted_ids:
+                if mem_i['id'] in disposed_ids:
                     continue
 
                 full_mem_i = qdrant_client.get_memory(mem_i['id'])
@@ -2705,7 +2956,7 @@ async def deduplicate_memories(
 
                 for j in range(i + 1, len(memories)):
                     mem_j = memories[j]
-                    if mem_j['id'] in deleted_ids:
+                    if mem_j['id'] in disposed_ids:
                         continue
 
                     full_mem_j = qdrant_client.get_memory(mem_j['id'])
@@ -2721,36 +2972,32 @@ async def deduplicate_memories(
                         print(f"      记忆1: {mem_i.get('content', '')[:50]}...")
                         print(f"      记忆2: {mem_j.get('content', '')[:50]}...")
 
-                        # 使用 LLM 智能合并（保留双方独特信息）
-                        merge_success = await merge_memories_v2(
-                            keeper_id=mem_i['id'],
-                            content_a=mem_i.get('content', ''),
-                            content_b=mem_j.get('content', '')
-                        )
-
-                        if merge_success:
-                            deleted_ids.add(mem_j['id'])
+                        detail = await merge_pair(full_mem_i, full_mem_j, similarity, "global")
+                        if detail and detail.get('success'):
+                            disposed_ids.add(detail['duplicate_id'])
+                            merge_details.append(detail)
                             merged_count += 1
+                            if detail['keeper_id'] == mem_i['id']:
+                                full_mem_i = qdrant_client.get_memory(mem_i['id']) or full_mem_i
+                                if full_mem_i.get('vector'):
+                                    emb_i = np.array(full_mem_i['vector'])
+                            else:
+                                break
                         else:
-                            print(f"   ⏭️ LLM合并失败，两条均保留")
-
-        # 归档重复记忆：自动流程不做软删除/物理删除，便于从归档区恢复
-        if deleted_ids:
-            for memory_id in deleted_ids:
-                if hasattr(qdrant_client, 'archive_memory'):
-                    qdrant_client.archive_memory(memory_id, reason='deduplicate')
-                else:
-                    qdrant_client.update_memory(memory_id, {'status': 'archived', 'archived_at': datetime.now().isoformat(), 'feedback_reason': 'deduplicate'})
-                remove_bm25_document(memory_id)
+                            failed_count += 1
 
         print(f"✅ 去重完成！合并 {merged_count} 条记忆")
 
         return {
             "status": "success",
             "merged_count": merged_count,
-            "remaining_count": len(memories) - len(deleted_ids),
+            "disposed_count": len(disposed_ids),
+            "remaining_count": len(memories) - len(disposed_ids),
             "by_type": by_type,
-            "type_stats": type_stats if by_type else None
+            "duplicate_action": duplicate_action,
+            "type_stats": type_stats if by_type else None,
+            "failed_count": failed_count,
+            "merge_details": merge_details
         }
 
     except Exception as e:

@@ -417,6 +417,7 @@ function renderArchivedMemoryList() {
                 <div>重要度 ${imp.toFixed(0)}% | ${timeStr} | 层级 ${escapeHtml(layerLabel)} | 状态 archived</div>
                 <div class="memory-actions">
                     <button type="button" class="cyber-btn success" onclick="restoreArchivedMemory('${mem.id}')">♻️ 恢复</button>
+                    <button type="button" class="cyber-btn danger" onclick="deleteArchivedMemory('${mem.id}')">🗑️ 删除</button>
                 </div>
             </div>
         `;
@@ -433,6 +434,19 @@ window.restoreArchivedMemory = async function(id) {
         loadDashboardData();
     } else {
         showToast('恢复失败', 'error');
+    }
+};
+
+window.deleteArchivedMemory = async function(id) {
+    if (!confirm('确定要彻底删除这条归档记忆吗？删除后无法从归档区恢复。')) return;
+
+    const success = await API.deleteArchivedMemory(id);
+    if (success) {
+        showToast('归档记忆已删除', 'success');
+        loadArchivedMemories();
+        loadDashboardData();
+    } else {
+        showToast('删除归档记忆失败', 'error');
     }
 };
 
