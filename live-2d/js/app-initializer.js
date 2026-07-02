@@ -171,6 +171,8 @@ class AppInitializer {
     initializeUI() {
         console.log('🚀 第二阶段: 初始化UI控制器...');
         this.uiController = new UIController(this.config);
+        // 让后端能通过3002端口调用前端字幕调整功能
+        global.uiController = this.uiController;
         this.uiController.initialize();
 
         // 为EnhancedTextProcessor提供全局字幕函数
@@ -268,10 +270,13 @@ class AppInitializer {
         // VRM模式：替换modelController并更新TTS唇形回调
         if (result.vrmController) {
             this.modelController = result.vrmController;
+            global.modelController = result.vrmController;
             if (this.ttsProcessor?.playbackEngine) {
                 this.ttsProcessor.playbackEngine.onAudioDataCallback =
                     (value) => result.vrmController.setMouthOpenY(value);
             }
+        } else {
+            global.modelController = this.modelController;
         }
 
         global.currentModel = this.model;
@@ -369,6 +374,8 @@ class AppInitializer {
         // 聊天界面设置
         const shouldShowChatBox = this.uiController.setupChatBoxVisibility(this.ttsEnabled, this.asrEnabled);
         this.uiController.setupChatInput(this.voiceChat);
+        this.uiController.setupPTT(this.voiceChat, this.config);
+        this.uiController.setupQuickPanel(this.voiceChat, this.config);
 
         // 初始化IPC处理器
         this.ipcHandlers = new IPCHandlers();

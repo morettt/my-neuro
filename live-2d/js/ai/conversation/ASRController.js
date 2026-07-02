@@ -215,6 +215,30 @@ class ASRController {
     }
 
     /**
+     * PTT：按下，开始录音
+     */
+    pttStartRecording() {
+        if (this.asrEnabled && this.asrProcessor?.pttStartRecording) {
+            this.asrProcessor.pttStartRecording();
+        }
+    }
+
+    /**
+     * PTT：松开，结束录音并触发识别
+     */
+    pttStopRecording() {
+        if (this.asrEnabled && this.asrProcessor?.pttStopRecording) {
+            this.asrProcessor.pttStopRecording();
+        }
+    }
+
+    pttCancelRecording(reason) {
+        if (this.asrEnabled && this.asrProcessor?.pttCancelRecording) {
+            this.asrProcessor.pttCancelRecording(reason);
+        }
+    }
+
+    /**
      * 检查ASR是否可用
      */
     isEnabled() {

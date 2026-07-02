@@ -136,5 +136,41 @@
     "desc": "对接 MiniMax 官方音乐生成 API（music-2.6 / music-cover 及对应 free 版）：支持原创歌曲（歌词+风格描述，可选 lyrics_optimizer 自动歌词）、纯音乐/BGM（is_instrumental）、参考音频翻唱（URL 或 Base64）；可配置输出目录、mp3/wav/pcm、采样率、比特率、AIGC 水印与免费模型回退。需用户自备 MiniMax API Key，仓库提供脱敏 plugin_config.json 模板与中文 README，不含 node 额外依赖。",
     "author": "爱熬夜的人形兔",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-minimax-music"
+  },
+  "feiniu-board-game": {
+    "display_name": "feiniu-board-game",
+    "desc": "Web UI 棋盘对弈：井字棋、五子棋、围棋（练习规则）、中国象棋、军棋（明棋）；内置本地 HTTP 服务与静态网页，默认 127.0.0.1:22335；棋力随 built-in/mood-chat 心情分变化；对局中与终局可向 LLM 注入盘面文本概要，局后可按配置注入限时 system 文案并支持安全词中止；含悔棋（井字棋/五子棋）、象棋交叉点渲染、终局自动对话等可选能力。必备依赖：built-in/mood-chat；需宿主提供 express 等。单目录社区插件，README 含安装路径、配置项说明与设计参考。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-feiniu-board-game"
+  },
+  "kimi-search": {
+    "display_name": "kimi-search",
+    "desc": "Kimi 联网搜索插件：通过 Kimi-Free-API 调用 Kimi 网页版内置联网搜索能力，并作为 Function Calling 工具 kimi_web_search 暴露给主 LLM；支持普通联网问答、深度研究模式、引用源剥离、自动拉起内置 backend/kimi-free-api 后端，也可切换 Moonshot 官方 API 模式。仓库已包含插件依赖与后端依赖，用户只需按 README 自行配置 refresh_token 或 official_api_key，仓库不包含任何敏感凭据。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-kimi-search"
+  },
+  "agent-dream": {
+    "display_name": "agent-dream",
+    "desc": "my-neuro live-2d 社区梦系统插件：在深夜静默窗口内让数字角色进入仿生梦境，结合 MemOS 记忆涟漪与语义联想生成第一人称意识流梦叙事；支持独立梦境 LLM、梦境文本本地保存、梦后关键词/重要度/梦残像处理、达标写入长期记忆；可选梦中图书馆好奇心检索，梦中记忆合并/删除等操作带审批窗口。公开仓库已脱敏，需用户自行配置 API Key、角色梦境提示词与 MemOS/搜索插件。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-agent-dream"
+  },
+  "qq-connect": {
+    "display_name": "qq-connect",
+    "desc": "通过 OneBot 11 协议（推荐 LLBot / LLOneBot）把肥牛桥接到 QQ：admin 私聊与电脑端语音共享同一份带压缩、可持久化的主上下文（voiceChat.messages），群聊与陌生人走独立会话不污染电脑端；三级用户权限（admin / trusted / normal）+ 三级群权限（trusted / open / normal）；admin 可通过 Function Calling 调用 my-neuro 当前所有已启用插件暴露工具的并集（含本插件自带 12 个：文件读写/重命名/列目录/系统命令/桌面 TTS/Live2D 表情/QQ 主动外发/状态查询）；按 key 分桶限流（stall / discard）；合并转发自动展开与外发；长回复可按句号分段；MemOS 集成自动注入记忆与回写。零 npm 运行时依赖。README 含 LLBot 从下载、扫码登录到配置 OneBot 11 正向 WS 的完整教程，并专章说明 admin 工具能力的攻击面放大场景与缓解措施（不需要工具时设 enable_agent_tools=false）。仓库已脱敏：token / trusted_users / 真实 QQ 号全部清空。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-qq-connect"
+  },
+  "timed-tasks": {
+    "display_name": "timed-tasks",
+    "desc": "Python 定时任务插件：到点提醒、定时让 AI 执行任务、定时触发指定 LLM 工具；支持一次性/每天/每周/每月/每年及「仅工作日」「仅法定节假日」（timor.tech 节假日数据 + 本地缓存）。数据 JSON 持久化，重启自动恢复调度。仓库内含 vendor 预下载 wheel，配合新版宿主可从市场/ZIP 离线自动 pip 安装依赖；移植思路来自 astrbot_plugin_sy。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-timed-tasks"
+  },
+  "screen-narrator": {
+    "display_name": "screen-narrator",
+    "desc": "屏幕感知插件：用户每次发话前自动截取桌面截图，由独立视觉模型（OpenAI 兼容 API，如 Qwen-VL 系列）转述为中文文字，并通过 system prompt 补丁注入主对话上下文，让主 LLM 在不破坏对话历史的前提下感知用户屏幕。支持触发来源过滤（voice/text）、转述间隔复用、超时与长度兜底；截图或视觉模型失败时静默跳过，不阻塞用户消息发送。需自备视觉模型 API Key，与主 LLM 完全隔离。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-screen-narrator"
   }
 }

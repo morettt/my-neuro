@@ -14,6 +14,15 @@ class UIController {
         this.bubbleCurrentY = 0;
         this.bubbleTargetX = 0;
         this.bubbleTargetY = 0;
+
+        // 字幕位置调整
+        this.isAdjustingSubtitle = false;
+        this.isDraggingSubtitle = false;
+        this.subtitleScale = 1.0;
+        this._subtitleCenterX = null;
+        this._subtitleCenterY = null;
+        this._pttCleanup = null;
+        this._cancelActivePTT = null;
     }
 
     // 初始化UI控制
@@ -24,14 +33,27 @@ class UIController {
 
     // 设置鼠标穿透
     setupMouseIgnore() {
-        const updateMouseIgnore = () => {
+        // 这些可交互 UI 容器悬停时必须“不穿透”，否则点击会穿过去。
+        // 快捷面板(#quick-settings)原本没被纳入判定，只靠模型命中盒蹭——单屏布局下齿轮落在
+        // 命中盒外就点不动了。这里统一把它们纳入：鼠标在这些元素上时保持窗口可交互。
+        const INTERACTIVE_UI = '#quick-settings, #text-chat-container, #model-controls';
+        const updateMouseIgnore = (e) => {
             if (!global.currentModel) return;
+            if (this.isAdjustingSubtitle) return;
 
-            const shouldIgnore = !global.currentModel.containsPoint(
+            // 鼠标悬在可交互 UI 元素上 → 不穿透
+            let overUI = false;
+            if (e) {
+                const el = document.elementFromPoint(e.clientX, e.clientY);
+                if (el && el.closest && el.closest(INTERACTIVE_UI)) overUI = true;
+            }
+
+            const overModel = global.currentModel.containsPoint(
                 global.pixiApp.renderer.plugins.interaction.mouse.global
             );
+
             ipcRenderer.send('set-ignore-mouse-events', {
-                ignore: shouldIgnore,
+                ignore: !overModel && !overUI,
                 options: { forward: true }
             });
         };
@@ -47,94 +69,105 @@ class UIController {
 
         if (!chatInput || !textChatContainer || !submitBtn) return;
 
-        // 强制固定对话框位置逻辑
-        const screenExtend = this.config.ui?.screen_extend || { extend: false, left: false, right: true };
-        
-        // 无论是否扩展，都确保对话框样式正确
+        // 基础定位样式
         textChatContainer.style.setProperty('position', 'fixed', 'important');
-        textChatContainer.style.setProperty('display', 'block', 'important');
-        textChatContainer.style.setProperty('visibility', 'visible', 'important');
-        textChatContainer.style.setProperty('opacity', '1', 'important');
         textChatContainer.style.setProperty('z-index', '10000', 'important');
         textChatContainer.style.setProperty('width', '350px', 'important');
         textChatContainer.style.setProperty('height', 'auto', 'important');
 
-        // 统一使用屏幕信息进行定位，确保无论是否扩展，对话框都显示在主屏右下角
-        const screenInfo = ipcRenderer.sendSync('get-screen-info-sync');
-        if (screenInfo) {
-            const { primaryDisplay, windowBounds } = screenInfo;
-            
-            // 使用主进程返回的实际窗口边界，确保坐标系完全匹配
-            const winX = windowBounds ? windowBounds.x : 0;
-            const winY = windowBounds ? windowBounds.y : 0;
-            const winH = windowBounds ? windowBounds.height : window.innerHeight;
-            
-            // 计算主屏相对于窗口左侧和底部的偏移
-            // 窗口坐标 (0,0) 对应屏幕坐标 (winX, winY)
-            const primaryLeftOffset = primaryDisplay.bounds.x - winX;
-            const primaryTopOffset = primaryDisplay.bounds.y - winY;
-            const primaryBottomOffset = winH - (primaryTopOffset + primaryDisplay.bounds.height);
-
-            // 始终定位到主屏右下角 (相对于窗口左侧)
-            // 350是对话框宽度，20是右边距
-            const rightPos = primaryLeftOffset + primaryDisplay.bounds.width - 350 - 20;
-            
-            textChatContainer.style.setProperty('left', rightPos + 'px', 'important');
-            textChatContainer.style.setProperty('right', 'auto', 'important');
-            textChatContainer.style.setProperty('bottom', (primaryBottomOffset + 50) + 'px', 'important');
-
-            // 同时确保字幕容器在主屏显示
-            const subtitleContainer = document.getElementById('subtitle-container');
-            if (subtitleContainer) {
-                subtitleContainer.style.setProperty('position', 'fixed', 'important');
-                subtitleContainer.style.setProperty('bottom', (primaryBottomOffset + 20) + 'px', 'important');
-                // 字幕在主屏右下角距离屏幕右侧800px处开始显示，显示范围不超过400px/行
-                const subtitleLeft = primaryLeftOffset + primaryDisplay.bounds.width - 800;
-                subtitleContainer.style.setProperty('left', subtitleLeft + 'px', 'important');
-                subtitleContainer.style.setProperty('width', '400px', 'important');
-                subtitleContainer.style.setProperty('max-width', '400px', 'important');
-                subtitleContainer.style.setProperty('transform', 'none', 'important');
-                subtitleContainer.style.setProperty('display', 'block', 'important');
-            }
-
-            console.log('跨屏定位调试:', {
-                winX, winY, winH,
-                primaryX: primaryDisplay.bounds.x,
-                primaryY: primaryDisplay.bounds.y,
-                primaryW: primaryDisplay.bounds.width,
-                primaryH: primaryDisplay.bounds.height,
-                primaryLeftOffset,
-                primaryBottomOffset,
-                rightPos
-            });
+        // 初始化时立即根据配置设置可见性，避免先显示再隐藏的闪烁
+        const shouldShow = this.config.ui && this.config.ui.hasOwnProperty('show_chat_box')
+            ? this.config.ui.show_chat_box
+            : true;
+        if (shouldShow) {
+            textChatContainer.style.setProperty('display', 'block', 'important');
+            textChatContainer.style.setProperty('visibility', 'visible', 'important');
+            textChatContainer.style.setProperty('opacity', '1', 'important');
+        } else {
+            textChatContainer.style.setProperty('display', 'none', 'important');
+            textChatContainer.style.setProperty('visibility', 'hidden', 'important');
+            textChatContainer.style.setProperty('opacity', '0', 'important');
         }
 
-        textChatContainer.addEventListener('mouseenter', () => {
+        // 窗口只覆盖“当前显示器”，聊天框/字幕直接锚定到本窗口的右下角即可，
+        // 不再需要 get-screen-info-sync 把坐标换算到主屏（那是旧巨型跨屏窗口才需要的）。
+        textChatContainer.style.setProperty('left', 'auto', 'important');
+        textChatContainer.style.setProperty('right', '20px', 'important');
+        textChatContainer.style.setProperty('bottom', '50px', 'important');
+
+        const subtitleContainer = document.getElementById('subtitle-container');
+        if (subtitleContainer) {
+            subtitleContainer.style.setProperty('position', 'fixed', 'important');
+            subtitleContainer.style.setProperty('left', 'auto', 'important');
+            subtitleContainer.style.setProperty('right', '20px', 'important');
+            subtitleContainer.style.setProperty('bottom', '20px', 'important');
+            subtitleContainer.style.setProperty('width', '400px', 'important');
+            subtitleContainer.style.setProperty('max-width', '400px', 'important');
+            subtitleContainer.style.setProperty('transform', 'none', 'important');
+            subtitleContainer.style.setProperty('display', 'block', 'important');
+        }
+
+        const setMousePassthrough = (ignore, forward = true) => {
             ipcRenderer.send('set-ignore-mouse-events', {
-                ignore: false,
-                options: { forward: false }
+                ignore,
+                options: { forward }
             });
-        });
+        };
+
+        let chatPointerDown = false;
+
+        const captureChatMouse = () => {
+            setMousePassthrough(false, false);
+        };
+
+        const releaseChatMouseForTyping = () => {
+            requestAnimationFrame(() => {
+                if (chatPointerDown || document.activeElement !== chatInput) return;
+                // Keep keyboard focus in the editor, but let video windows underneath keep rendering.
+                setMousePassthrough(true, true);
+            });
+        };
+
+        textChatContainer.addEventListener('mouseenter', captureChatMouse);
 
         textChatContainer.addEventListener('mouseleave', () => {
-            ipcRenderer.send('set-ignore-mouse-events', {
-                ignore: true,
-                options: { forward: true }
-            });
+            if (chatPointerDown) return;
+            setMousePassthrough(true, true);
         });
 
+        const releasePointerCapture = (event) => {
+            if (
+                event?.pointerId != null &&
+                chatInput.hasPointerCapture?.(event.pointerId)
+            ) {
+                chatInput.releasePointerCapture(event.pointerId);
+            }
+        };
+
+        const finishChatPointer = (event) => {
+            if (!chatPointerDown) return;
+            chatPointerDown = false;
+            releasePointerCapture(event);
+            releaseChatMouseForTyping();
+        };
+
+        chatInput.addEventListener('pointerdown', (event) => {
+            chatPointerDown = true;
+            captureChatMouse();
+            chatInput.setPointerCapture?.(event.pointerId);
+        });
+
+        document.addEventListener('pointerup', finishChatPointer);
+        document.addEventListener('pointercancel', finishChatPointer);
+
         chatInput.addEventListener('focus', () => {
-            ipcRenderer.send('set-ignore-mouse-events', {
-                ignore: false,
-                options: { forward: false }
-            });
+            captureChatMouse();
+            releaseChatMouseForTyping();
         });
 
         chatInput.addEventListener('blur', () => {
-            ipcRenderer.send('set-ignore-mouse-events', {
-                ignore: true,
-                options: { forward: true }
-            });
+            chatPointerDown = false;
+            setMousePassthrough(true, true);
         });
         
     }
@@ -159,6 +192,7 @@ class UIController {
 
         subtitleText.textContent = text;
         container.style.display = 'block';
+        this.applySubtitlePosition();
         container.scrollTop = container.scrollHeight;
 
         // 如果指定了持续时间，设置自动隐藏
@@ -435,18 +469,22 @@ class UIController {
         // 根据配置设置对话框显示状态
         const shouldShowChatBox = this.config.ui && this.config.ui.hasOwnProperty('show_chat_box')
             ? this.config.ui.show_chat_box
-            : true; // 默认强制显示
+            : true;
 
-        textChatContainer.style.setProperty('display', 'block', 'important');
-        textChatContainer.style.setProperty('visibility', 'visible', 'important');
-        textChatContainer.style.setProperty('opacity', '1', 'important');
+        if (shouldShowChatBox) {
+            textChatContainer.style.setProperty('display', 'block', 'important');
+            textChatContainer.style.setProperty('visibility', 'visible', 'important');
+            textChatContainer.style.setProperty('opacity', '1', 'important');
+            textChatContainer.style.setProperty('pointer-events', 'auto', 'important');
+        } else {
+            textChatContainer.style.setProperty('display', 'none', 'important');
+            textChatContainer.style.setProperty('visibility', 'hidden', 'important');
+            textChatContainer.style.setProperty('opacity', '0', 'important');
+            textChatContainer.style.setProperty('pointer-events', 'none', 'important');
+        }
         textChatContainer.style.setProperty('z-index', '10000', 'important');
-        textChatContainer.style.setProperty('pointer-events', 'auto', 'important');
-        
-        // 重新触发一次位置计算，确保可见性切换后位置正确
-        this.setupChatBoxEvents();
 
-        console.log('强制显示聊天框');
+        console.log(`聊天框: ${shouldShowChatBox ? '显示' : '隐藏'}`);
 
         // 调试：确保对话框在可见范围内
         setTimeout(() => {
@@ -486,7 +524,8 @@ class UIController {
                 e.preventDefault();
                 const chatContainer = document.getElementById('text-chat-container');
                 if (chatContainer) {
-                    chatContainer.style.display = chatContainer.style.display === 'none' ? 'block' : 'none';
+                    const isHidden = window.getComputedStyle(chatContainer).display === 'none';
+                    chatContainer.style.setProperty('display', isHidden ? 'block' : 'none', 'important');
                 }
             }
 
@@ -535,6 +574,252 @@ class UIController {
         chatSendBtn.addEventListener('click', handleSendMessage);
     }
 
+    // 快捷设置面板（齿轮菜单）
+    setupQuickPanel(voiceChat, config) {
+        const gear = document.getElementById('quick-gear');
+        const items = document.getElementById('quick-settings-items');
+        const toggleModeBtn = document.getElementById('btn-toggle-mode');
+        const toggleChatBtn = document.getElementById('btn-toggle-chat');
+        if (!gear || !items) return;
+
+        let panelOpen = false;
+
+        // 初始化按钮激活状态
+        const isPTT = voiceChat.asrController?.asrProcessor?.pttModeEnabled || false;
+        toggleModeBtn.classList.toggle('active', isPTT);
+
+        const chatContainer = document.getElementById('text-chat-container');
+        const chatVisible = chatContainer && window.getComputedStyle(chatContainer).display !== 'none';
+        toggleChatBtn.classList.toggle('active', chatVisible);
+
+        gear.addEventListener('click', (e) => {
+            e.stopPropagation();
+            panelOpen = !panelOpen;
+            items.classList.toggle('expanded', panelOpen);
+            gear.classList.toggle('open', panelOpen);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (panelOpen && !e.target.closest('#quick-settings')) {
+                panelOpen = false;
+                items.classList.remove('expanded');
+                gear.classList.remove('open');
+            }
+        });
+
+        toggleChatBtn.addEventListener('click', () => {
+            const chatContainer = document.getElementById('text-chat-container');
+            if (!chatContainer) return;
+            const visible = window.getComputedStyle(chatContainer).display !== 'none';
+            if (visible) {
+                chatContainer.style.setProperty('display', 'none', 'important');
+                chatContainer.style.setProperty('visibility', 'hidden', 'important');
+                chatContainer.style.setProperty('opacity', '0', 'important');
+                chatContainer.style.setProperty('pointer-events', 'none', 'important');
+            } else {
+                chatContainer.style.setProperty('display', 'block', 'important');
+                chatContainer.style.setProperty('visibility', 'visible', 'important');
+                chatContainer.style.setProperty('opacity', '1', 'important');
+                chatContainer.style.setProperty('pointer-events', 'auto', 'important');
+            }
+            toggleChatBtn.classList.toggle('active', !visible);
+        });
+
+        toggleModeBtn.addEventListener('click', () => {
+            const proc = voiceChat.asrController?.asrProcessor;
+            if (!proc) return;
+            const nextPTTMode = !proc.pttModeEnabled;
+            if (typeof this._cancelActivePTT === 'function') {
+                this._cancelActivePTT('mode-toggle');
+            }
+            proc.pttModeEnabled = nextPTTMode;
+            config.asr = config.asr || {};
+            config.asr.ptt_enabled = proc.pttModeEnabled;
+            toggleModeBtn.classList.toggle('active', proc.pttModeEnabled);
+        });
+    }
+
+    // PTT global/local hold-to-talk listener
+    setupPTT(voiceChat, config) {
+        if (typeof this._pttCleanup === 'function') {
+            this._pttCleanup();
+        }
+
+        const normalizeKey = (value) => {
+            const raw = String(value || '').trim().toLowerCase();
+            const aliases = {
+                ' ': 'space',
+                spacebar: 'space',
+                return: 'enter',
+                esc: 'escape',
+                control: 'ctrl',
+                command: 'meta',
+                cmd: 'meta',
+                win: 'meta',
+                windows: 'meta',
+                option: 'alt',
+                left: 'arrowleft',
+                up: 'arrowup',
+                right: 'arrowright',
+                down: 'arrowdown'
+            };
+            return aliases[raw] || raw;
+        };
+
+        const pttKey = normalizeKey(config.asr?.ptt_key || 'v') || 'v';
+        const recordingText = '\u5f55\u97f3\u4e2d...';
+        let pttActive = false;
+        let pttSource = null;
+
+        const getProcessor = () => voiceChat.asrController?.asrProcessor;
+        const isPTTEnabled = () => getProcessor()?.pttModeEnabled || false;
+        const matchesPTTKey = (key) => normalizeKey(key) === pttKey;
+        const isInputFocused = () => {
+            const el = document.activeElement;
+            if (!el) return false;
+            const tag = el.tagName;
+            return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+        };
+        const shouldSkipForInput = (source) => {
+            if (!isInputFocused()) return false;
+            return source === 'local' || document.hasFocus();
+        };
+
+        const cancelProcessor = (reason) => {
+            const proc = getProcessor();
+            if (typeof voiceChat.pttCancelRecording === 'function') {
+                voiceChat.pttCancelRecording(reason);
+                return;
+            }
+            if (typeof proc?.pttCancelRecording === 'function') {
+                proc.pttCancelRecording(reason);
+                return;
+            }
+            if (!proc) return;
+            proc.isRecording = false;
+            proc.asrLocked = false;
+            proc.hasInterruptedThisSession = false;
+            if (proc.silenceTimeout) {
+                clearTimeout(proc.silenceTimeout);
+                proc.silenceTimeout = null;
+            }
+        };
+
+        const cancelPTT = (reason = 'cancelled') => {
+            const wasActive = pttActive;
+            pttActive = false;
+            pttSource = null;
+            if (wasActive) {
+                cancelProcessor(reason);
+                this.hideSubtitle();
+                logToTerminal('info', `[PTT] cancelled: ${reason}`);
+            }
+            return wasActive;
+        };
+
+        const startPTT = (source) => {
+            if (!isPTTEnabled()) return false;
+            if (pttActive) {
+                if (source === 'global') pttSource = 'global';
+                return true;
+            }
+            if (shouldSkipForInput(source)) {
+                logToTerminal('info', `[PTT] ${source} keydown ignored because input is focused`);
+                return false;
+            }
+
+            pttActive = true;
+            pttSource = source;
+            logToTerminal('info', `[PTT] ${source} keydown, start recording`);
+            if (typeof voiceChat.pttStartRecording === 'function') {
+                voiceChat.pttStartRecording();
+            }
+            this.showSubtitle(recordingText, 0);
+            return true;
+        };
+
+        const stopPTT = (source, reason = 'keyup') => {
+            if (!pttActive) return false;
+            const activeSource = pttSource;
+            pttActive = false;
+            pttSource = null;
+
+            if (!isPTTEnabled()) {
+                cancelProcessor(reason);
+                this.hideSubtitle();
+                logToTerminal('info', `[PTT] ${source} ${reason}, mode disabled so recording was cancelled`);
+                return true;
+            }
+
+            logToTerminal('info', `[PTT] ${source} ${reason}, stop recording from ${activeSource || 'unknown'}`);
+            if (typeof voiceChat.pttStopRecording === 'function') {
+                voiceChat.pttStopRecording();
+            }
+            this.hideSubtitle();
+            return true;
+        };
+
+        const onLocalKeyDown = (e) => {
+            if (!matchesPTTKey(e.key) || e.repeat) return;
+            startPTT('local');
+        };
+
+        const onLocalKeyUp = (e) => {
+            if (!matchesPTTKey(e.key)) return;
+            stopPTT('local');
+        };
+
+        const onGlobalPTT = (_event, payload = {}) => {
+            if (!payload || !matchesPTTKey(payload.key)) return;
+            if (payload.action === 'down') {
+                startPTT('global');
+            } else if (payload.action === 'up') {
+                stopPTT('global');
+            }
+        };
+
+        const onWindowBlur = () => {
+            setTimeout(() => {
+                if (pttActive && pttSource !== 'global') {
+                    stopPTT('window-blur', 'blur');
+                }
+            }, 50);
+        };
+
+        const onVisibilityChange = () => {
+            if (document.hidden) {
+                cancelPTT('visibility-hidden');
+            }
+        };
+
+        const onBeforeUnload = () => {
+            cancelPTT('beforeunload');
+        };
+
+        document.addEventListener('keydown', onLocalKeyDown);
+        document.addEventListener('keyup', onLocalKeyUp);
+        ipcRenderer.on('ptt-global-key', onGlobalPTT);
+        window.addEventListener('blur', onWindowBlur);
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        window.addEventListener('beforeunload', onBeforeUnload);
+
+        this._cancelActivePTT = cancelPTT;
+        this._pttCleanup = () => {
+            document.removeEventListener('keydown', onLocalKeyDown);
+            document.removeEventListener('keyup', onLocalKeyUp);
+            ipcRenderer.removeListener('ptt-global-key', onGlobalPTT);
+            window.removeEventListener('blur', onWindowBlur);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+            window.removeEventListener('beforeunload', onBeforeUnload);
+            if (this._cancelActivePTT === cancelPTT) {
+                this._cancelActivePTT = null;
+            }
+            this._pttCleanup = null;
+        };
+
+        console.log(`PTT listener registered, key: ${pttKey.toUpperCase()} (global + local fallback)`);
+    }
+
     // 显示歌词气泡
     showLyricsBubble(text) {
         const bubbleContainer = document.getElementById('lyrics-bubble-container');
@@ -568,6 +853,163 @@ class UIController {
             // 注意：这里不能直接停止，因为可能还有工具气泡。
             // 简单起见，只要有任何气泡显示，就保持追踪。
             // 现有的 stopBubbleTracking 逻辑可能需要调整，或者我们暂时保持它运行。
+        }
+    }
+
+    // ========== 字幕位置调整 ==========
+
+    // 进入调整模式
+    enterSubtitleAdjustMode() {
+        if (this.isAdjustingSubtitle) return; // 防止重复进入导致事件重复绑定
+        const c = document.getElementById('subtitle-container');
+        const t = document.getElementById('subtitle-text');
+        if (!c || !t) return;
+
+        this.isAdjustingSubtitle = true;
+        this._savedText = t.textContent;
+        this._savedDisplay = c.style.display;
+        t.textContent = '1.拖动或滚轮缩放调整\n2.复位皮套按钮复位';
+
+        // 加载已有位置或取当前中心点
+        const pos = this.config?.ui?.subtitle_position;
+        if (pos?.centerX != null) {
+            this._subtitleCenterX = pos.centerX;
+            this._subtitleCenterY = pos.centerY;
+            if (pos.scale != null) this.subtitleScale = pos.scale;
+        } else {
+            c.style.display = 'block'; c.offsetHeight;
+            const r = c.getBoundingClientRect();
+            this._subtitleCenterX = r.left + r.width / 2;
+            this._subtitleCenterY = r.top + r.height / 2;
+        }
+
+        Object.assign(c.style, {
+            bottom: 'auto', left: `${this._subtitleCenterX}px`, top: `${this._subtitleCenterY}px`,
+            transform: `translate(-50%, -50%) scale(${this.subtitleScale})`, transformOrigin: 'center center'
+        });
+        c.classList.add('subtitle-adjusting');
+
+        // 创建遮罩
+        let overlay = document.getElementById('subtitle-adjust-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'subtitle-adjust-overlay';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9998;background:transparent;cursor:default;';
+            document.body.appendChild(overlay);
+        }
+
+        // 绑定事件
+        this._adjustCleanup = [];
+
+        const onKey = (e) => { if (e.key === 'Escape') this.exitSubtitleAdjustMode(); };
+        document.addEventListener('keydown', onKey);
+        this._adjustCleanup.push(() => document.removeEventListener('keydown', onKey));
+
+        overlay.addEventListener('mouseenter', () =>
+            ipcRenderer.send('set-ignore-mouse-events', { ignore: false, options: { forward: false } }));
+
+        // 拖拽
+        const onDragStart = (e) => {
+            if (e.target.id === 'subtitle-confirm-btn') return;
+            e.preventDefault(); e.stopPropagation();
+            this.isDraggingSubtitle = true; c.style.cursor = 'grabbing';
+            const sx = e.clientX, sy = e.clientY, scx = this._subtitleCenterX, scy = this._subtitleCenterY;
+            const onMove = (ev) => {
+                if (!this.isDraggingSubtitle) return;
+                ev.preventDefault();
+                c.style.left = `${this._subtitleCenterX = scx + ev.clientX - sx}px`;
+                c.style.top = `${this._subtitleCenterY = scy + ev.clientY - sy}px`;
+            };
+            const onUp = () => {
+                this.isDraggingSubtitle = false; c.style.cursor = '';
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+        c.addEventListener('mousedown', onDragStart);
+        this._adjustCleanup.push(() => c.removeEventListener('mousedown', onDragStart));
+
+        // 滚轮缩放
+        const onWheel = (e) => {
+            e.preventDefault(); e.stopPropagation();
+            this.subtitleScale = Math.max(0.3, Math.min(3.0, this.subtitleScale + (e.deltaY > 0 ? -0.05 : 0.05)));
+            c.style.transform = `translate(-50%, -50%) scale(${this.subtitleScale})`;
+        };
+        c.addEventListener('wheel', onWheel, { passive: false });
+        this._adjustCleanup.push(() => c.removeEventListener('wheel', onWheel));
+
+        // 确认按钮
+        const confirmBtn = document.getElementById('subtitle-confirm-btn');
+        if (confirmBtn) {
+            const onConfirm = (e) => { e.stopPropagation(); e.preventDefault(); this.exitSubtitleAdjustMode(); };
+            confirmBtn.addEventListener('click', onConfirm);
+            this._adjustCleanup.push(() => confirmBtn.removeEventListener('click', onConfirm));
+        }
+
+        ipcRenderer.send('set-ignore-mouse-events', { ignore: false, options: { forward: false } });
+    }
+
+    // 退出调整模式
+    exitSubtitleAdjustMode() {
+        const c = document.getElementById('subtitle-container');
+        if (!c) return;
+
+        // 保存位置到内存
+        if (this.config?.ui) {
+            this.config.ui.subtitle_position = {
+                centerX: this._subtitleCenterX, centerY: this._subtitleCenterY, scale: this.subtitleScale
+            };
+        }
+
+        c.classList.remove('subtitle-adjusting');
+        c.style.cursor = '';
+        const t = document.getElementById('subtitle-text');
+        if (t) t.textContent = this._savedText || '';
+        if (!this._savedText) c.style.display = this._savedDisplay || 'none';
+
+        // 执行所有清理回调
+        this._adjustCleanup?.forEach(fn => fn());
+        this._adjustCleanup = null;
+        document.getElementById('subtitle-adjust-overlay')?.remove();
+
+        this.isAdjustingSubtitle = this.isDraggingSubtitle = false;
+        ipcRenderer.send('set-ignore-mouse-events', { ignore: true, options: { forward: true } });
+    }
+
+    // 应用保存的字幕位置
+    applySubtitlePosition() {
+        const c = document.getElementById('subtitle-container');
+        if (!c || this.isAdjustingSubtitle) return;
+        const pos = this.config?.ui?.subtitle_position;
+        if (pos?.centerX != null) {
+            Object.assign(c.style, {
+                left: `${pos.centerX}px`, top: `${pos.centerY}px`, bottom: 'auto',
+                transform: `translate(-50%, -50%) scale(${pos.scale || 1})`, transformOrigin: 'center center'
+            });
+        }
+    }
+
+    // 复位字幕到 CSS 默认位置
+    resetSubtitlePosition() {
+        const c = document.getElementById('subtitle-container');
+        if (!c) return;
+
+        if (this.config?.ui) this.config.ui.subtitle_position = null;
+        this._subtitleCenterX = null;
+        this._subtitleCenterY = null;
+        this.subtitleScale = 1;
+
+        if (this.isAdjustingSubtitle) {
+            const tx = window.innerWidth * 0.7, ty = window.innerHeight - 80;
+            this._subtitleCenterX = tx; this._subtitleCenterY = ty;
+            Object.assign(c.style, {
+                left: `${tx}px`, top: `${ty}px`,
+                transform: 'translate(-50%, -50%) scale(1)', transformOrigin: 'center center'
+            });
+        } else {
+            Object.assign(c.style, { left: '', top: '', bottom: '', transform: '', transformOrigin: '' });
         }
     }
 }

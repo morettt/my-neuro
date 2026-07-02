@@ -207,6 +207,7 @@ def generate_tts_bat():
         # 获取上传的文件
         model_file = request.files.get('model_file')
         audio_file = request.files.get('audio_file')
+        gpt_model_file = request.files.get('gpt_model_file')  # 可选：GPT 模型（.ckpt）
         role_name = request.form.get('role_name', '')
         language = request.form.get('language', 'zh')
         text = request.form.get('text', '')
@@ -228,6 +229,18 @@ def generate_tts_bat():
         audio_path = voice_model_dir / audio_filename
         audio_file.save(audio_path)
 
+        # 保存 GPT 模型文件（可选，未提供时 api.py 使用默认 GPT 权重）
+        gpt_model_path = None
+        if gpt_model_file and gpt_model_file.filename:
+            gpt_model_path = voice_model_dir / f'{role_name}.ckpt'
+            gpt_model_file.save(gpt_model_path)
+
+        # 生成启动命令（与桌面端保持一致，调用 GPT-SoVITS 的 api.py）
+        cmd = (f'python api.py -p 5000 -d cuda '
+               f'-s "{model_path}" -dr "{audio_path}" -dt "{text}" -dl {language}')
+        if gpt_model_path is not None:
+            cmd += f' -g "{gpt_model_path}"'
+
         # 生成 bat 文件
         bat_content = f'''@echo off
 chcp 65001 >nul
@@ -236,18 +249,9 @@ echo ========================================
 echo  TTS 声音克隆 - {role_name}
 echo ========================================
 echo.
-echo 正在生成 TTS...
-echo.
-
-python -m tools.tts_inference \\
-    --model_path "Voice_Model_Factory/{model_filename}" \\
-    --audio_path "Voice_Model_Factory/{audio_filename}" \\
-    --language {language} \\
-    --text "{text}"
-
-echo.
-echo 生成完成！
-echo.
+set "PATH=%~dp0..\\..\\full-hub\\tts-hub\\GPT-SoVITS-Bundle\\runtime;%PATH%"
+cd /d %~dp0..\\..\\full-hub\\tts-hub\\GPT-SoVITS-Bundle
+{cmd}
 pause
 '''
 

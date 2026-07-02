@@ -31,6 +31,7 @@ def create_app():
     from .marketplace import market_bp
     from .log_monitor import log_bp
     from .live2d_manager import live2d_bp
+    from .updater import updater_bp
 
     app.register_blueprint(service_bp)
     app.register_blueprint(config_bp)
@@ -39,14 +40,14 @@ def create_app():
     app.register_blueprint(market_bp)
     app.register_blueprint(log_bp)
     app.register_blueprint(live2d_bp)
+    app.register_blueprint(updater_bp)
     
     # 注册首页路由（必须在蓝图之后，确保根路径被正确处理）
     @app.route('/')
     def dashboard():
         """主页"""
         start_time_str = START_TIME.strftime('%Y-%m-%d %H:%M:%S')
-        port = find_free_port()
-        return render_template('index.html', port=port, start_time=start_time_str, is_cloud=IS_CLOUD_VERSION)
+        return render_template('index.html', start_time=start_time_str, is_cloud=IS_CLOUD_VERSION)
 
     # 提供 live-2d 目录的静态文件访问（路由保持 /live-2d/ 不变，但路径指向 PROJECT_ROOT）
     @app.route('/live-2d/<path:filename>')

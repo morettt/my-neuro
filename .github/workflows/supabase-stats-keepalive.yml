@@ -1,0 +1,27 @@
+name: Supabase Stats Keepalive
+
+on:
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping marketplace stats RPC
+        env:
+          SUPABASE_STATS_URL: https://rwlgilizuhdnulguytta.supabase.co
+          SUPABASE_STATS_KEY: sb_publishable_D204Eas7z6amn-YbXpCiyQ_wkTUOXYr
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent \
+            "${SUPABASE_STATS_URL}/rest/v1/rpc/get_all_stats" \
+            -H "apikey: ${SUPABASE_STATS_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_STATS_KEY}" \
+            -H "Content-Type: application/json" \
+            --data '{"p_device":"github-actions-keepalive"}' \
+            >/dev/null

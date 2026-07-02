@@ -153,6 +153,10 @@ h1 {
     background: #3b82f6;
     border-color: rgba(59, 130, 246, 0.5);
 }
+.tab-button.has-unsaved-config {
+    border-color: rgba(234, 179, 8, 0.8);
+    box-shadow: inset 3px 0 0 var(--yellow);
+}
 .tab-content {
     display: none; background: rgba(255, 255, 255, 0.05);
     border-radius: 0 12px 12px 12px; padding: 25px; backdrop-filter: blur(10px);
@@ -211,6 +215,17 @@ h1 {
     background: #1d4ed8;
     transform: none;
     box-shadow: none;
+}
+.config-save-button.config-unsaved,
+.btn-primary.config-unsaved {
+    background: #eab308;
+    color: #111111;
+    box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25);
+}
+
+.config-save-button.config-unsaved:hover,
+.btn-primary.config-unsaved:hover {
+    background: #f59e0b;
 }
 .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
 @media (max-width: 1200px) {
@@ -913,6 +928,108 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
     padding: 10px;
 }
 
+.market-update-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 10px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+}
+
+.market-update-count {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.is-hidden {
+    display: none !important;
+}
+
+.market-card-versions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.version-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.75);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.update-badge {
+    color: #facc15;
+    background: rgba(234, 179, 8, 0.12);
+    border-color: rgba(234, 179, 8, 0.25);
+}
+
+.muted-badge {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.market-card-stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+}
+
+.market-stat,
+.star-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.market-stat {
+    color: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.star-btn {
+    gap: 4px;
+    color: rgba(255, 255, 255, 0.78);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.star-btn:hover:not(:disabled) {
+    color: #fde68a;
+    background: rgba(250, 204, 21, 0.12);
+    border-color: rgba(250, 204, 21, 0.3);
+}
+
+.star-btn.starred {
+    color: #facc15;
+    background: rgba(250, 204, 21, 0.16);
+    border-color: rgba(250, 204, 21, 0.38);
+}
+
+.star-btn:disabled {
+    cursor: wait;
+    opacity: 0.7;
+}
+
 .market-card {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 12px;
@@ -948,6 +1065,36 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
     font-size: 13px;
     color: rgba(255, 255, 255, 0.6);
     margin: 0;
+}
+
+.market-card-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.market-card-meta .market-card-author {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.market-card-source-link {
+    color: var(--accent-light);
+    text-decoration: none;
+    font-size: 12px;
+    white-space: nowrap;
+    transition: var(--transition);
+}
+
+.market-card-source-link:hover {
+    color: #c7d2fe;
+    text-decoration: underline;
 }
 
 .market-card-summary {
@@ -1663,6 +1810,10 @@ h3, h4 { border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; }
     color: rgba(255, 255, 255, 0.6);
 }
 
+.mt-2\.5 {
+    margin-top: 0.625rem;
+}
+
 .icon-gear::before {
     content: "⚙️";
     margin-right: 8px;
@@ -2036,6 +2187,14 @@ body.header-collapsed .collapse-icon {
     border: 1px solid rgba(255, 255, 255, 0.1);
     transition: all 0.3s ease;
     flex-shrink: 0;
+    /* 重置 <button> 默认样式，保持与 <a> 对齐一致 */
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    line-height: 0;
+    appearance: none;
+    -webkit-appearance: none;
 }
 
 .header-icon svg {

@@ -314,8 +314,8 @@ with st.sidebar:
 #                        主内容 - Tabs
 # ═══════════════════════════════════════════════════════════════
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-    "🏠 首页", "📊 数据总览", "📋 记忆管理", "🔧 记忆操作",
+tab1, tab2, tab3, tab_archive, tab4, tab5, tab6, tab7 = st.tabs([
+    "🏠 首页", "📊 数据总览", "📋 记忆管理", "🗄️ 归档记忆", "🔧 记忆操作",
     "🖼️ 图片记忆", "🕸️ 知识图谱", "📥 知识库"
 ])
 
@@ -411,6 +411,7 @@ with tab2:
             with st.container(border=True):
                 st.write("知识图谱: " + ("已启用" if graph_stats else "未启用"))
                 st.write("图片记忆: 已启用")
+                st.write(f"归档记忆: {stats.get('archived_count', 0)}")
     else:
         st.error("无法连接服务")
 
@@ -440,7 +441,7 @@ with tab3:
         st.session_state.t3_page = 1
     
     # 获取数据
-    data = api_get("/list", {"limit": 500})
+    data = api_get("/list", {"limit": 0}, timeout=300)
     if data:
         memories = data.get('memories', [])
         memories.sort(key=lambda x: x.get('created_at') or '', reverse=True)
@@ -512,9 +513,11 @@ with tab3:
                     st.markdown(f"<div style='margin: 8px 0;'>{tags_html}</div>", unsafe_allow_html=True)
                 
                 # 显示基本信息和完整 ID
+                layer = mem.get('layer', 'LongTermMemory')
+                access_count = mem.get('access_count', 0)
                 st.markdown(f"""
                 <div style="font-size: 0.85em; color: #94a3b8;">
-                    重要度 {imp:.0%} | {time_str}<br/>
+                    重要度 {imp:.0%} | {time_str} | 层级 {layer} | 命中 {access_count} 次<br/>
                     <span style="color: #00d4ff; font-family: monospace; background: rgba(0,212,255,0.1); padding: 2px 6px; border-radius: 4px;">ID: {mem_id}</span>
                 </div>
                 """, unsafe_allow_html=True)
@@ -557,6 +560,41 @@ with tab3:
         st.error("获取数据失败")
 
 # ═══════════════════════════════════════════════════════════════
+#                        归档记忆
+# ═══════════════════════════════════════════════════════════════
+
+with tab_archive:
+    st.header("🗄️ 归档记忆")
+    st.caption("归档记忆默认不参与检索，但数据仍保留，可一键恢复。")
+    st.divider()
+
+    archived = api_get("/list", {"limit": 0, "status": "archived"}, timeout=300)
+    if archived:
+        archived_mems = archived.get('memories', [])
+        archived_mems.sort(key=lambda x: x.get('updated_at') or x.get('created_at') or '', reverse=True)
+        st.info(f"共 {len(archived_mems)} 条归档记忆")
+
+        for mem in archived_mems:
+            mem_id = mem.get('id', '')
+            mtype = mem.get('memory_type', 'general')
+            layer = mem.get('layer', 'LongTermMemory')
+            with st.container(border=True):
+                c1, c2 = st.columns([4, 1])
+                with c1:
+                    st.write(mem.get('content', ''))
+                    st.caption(f"ID: {mem_id} | 类型: {get_type_label(mtype)} | 层级: {layer} | 重要度: {mem.get('importance', 0.5):.0%}")
+                with c2:
+                    if st.button("♻️ 恢复", key=f"restore_{mem_id}"):
+                        status, res = api_post(f"/memory/{mem_id}/restore", timeout=10)
+                        if status == 200:
+                            st.toast("已恢复，重新参与检索")
+                            st.rerun()
+                        else:
+                            st.error(f"恢复失败: {res}")
+    else:
+        st.info("暂无归档记忆，或服务不可用。")
+
+# ═══════════════════════════════════════════════════════════════
 #                        Tab 4: 记忆操作
 # ═══════════════════════════════════════════════════════════════
 
@@ -575,7 +613,19 @@ with tab4:
             top_k = st.slider("结果数量", 3, 20, 5, key="t4_topk")
         with c2:
             use_graph = st.checkbox("启用图谱增强", value=True, key="t4_graph")
-        
+
+        layer_labels = {
+            "工作记忆": "WorkingMemory",
+            "长期记忆": "LongTermMemory",
+            "用户记忆": "UserMemory"
+        }
+        selected_layer_labels = st.multiselect(
+            "检索层级",
+            list(layer_labels.keys()),
+            default=list(layer_labels.keys()),
+            key="t4_layers"
+        )
+
         threshold = st.slider("相似度阈值", 0.3, 0.9, 0.5, 0.1, key="t4_threshold")
         
         if st.button("开始检索", type="primary", key="t4_search"):
@@ -585,7 +635,8 @@ with tab4:
                         "query": query, 
                         "top_k": top_k,
                         "use_graph": use_graph,
-                        "similarity_threshold": threshold
+                        "similarity_threshold": threshold,
+                        "layers": [layer_labels[label] for label in selected_layer_labels]
                     })
                     if status == 200:
                         mems = result.get('memories', [])
@@ -596,7 +647,7 @@ with tab4:
                                     st.write(f"**#{i+1}** {get_type_emoji(m.get('memory_type', 'general'))}")
                                     st.write(m.get('content', ''))
                                     sim = m.get('similarity', 0)
-                                    st.caption(f"相似度 {sim:.0%}")
+                                    st.caption(f"相似度 {sim:.0%} | 层级 {m.get('layer', 'LongTermMemory')} | 访问 {m.get('access_count', 0)} 次 | 最终分 {m.get('final_score', 0):.3f}")
                         else:
                             st.warning("未找到")
                     else:

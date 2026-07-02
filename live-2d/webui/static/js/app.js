@@ -1,6 +1,11 @@
 // My Neuro WebUI - 前端 JavaScript v3.3
 
 const serviceStates = {};
+const UNSAVED_CONFIG_MESSAGE = '当前配置有未保存的修改，请先保存配置。';
+const START_WITH_UNSAVED_MESSAGE = '当前配置有未保存的修改，启动桌宠前建议先保存配置。仍要继续启动吗？';
+const CONFIG_DIRTY_PANELS = new Set(['llm-config', 'voice-settings', 'ui-settings', 'dialog-config']);
+const configDirtyItems = new Set();
+let isConfigDirtyTrackingReady = false;
 let currentLogTab = 'system-log';
 let logPollingInterval = null;
 let lastPetLogCount = 0;  // 记录上次桌宠日志数量
@@ -789,11 +794,18 @@ function updateServiceStatus(serviceName, status) {
     }
 }
 
+function confirmStartLive2dWithCurrentConfig() {
+    return !hasUnsavedConfig() || confirm(START_WITH_UNSAVED_MESSAGE);
+}
+
 // Live2D 启动/关闭切换
 async function toggleLive2dService() {
     if (serviceStates['live2d'] === 'running') {
         await stopService('live2d');
     } else {
+        if (!confirmStartLive2dWithCurrentConfig()) {
+            return;
+        }
         await startService('live2d');
     }
 }
@@ -837,6 +849,9 @@ async function stopService(serviceName) {
 // 重启服务（仅 Live2D）
 async function restartService(serviceName) {
     try {
+        if (serviceName === 'live2d' && !confirmStartLive2dWithCurrentConfig()) {
+            return;
+        }
         addLog(t('services.restarting') + ' ' + serviceName + ' ' + t('services.service_suffix'), 'info', 'system');
         await stopService(serviceName);
         setTimeout(function() { startService(serviceName); }, 1500);
@@ -847,6 +862,10 @@ async function restartService(serviceName) {
 
 // 一键启动全部服务
 async function startAllServices() {
+    if (serviceStates['live2d'] !== 'running' && !confirmStartLive2dWithCurrentConfig()) {
+        return;
+    }
+
     addLog(t('services.start_all_begin'), 'info', 'system');
     const services = ['live2d', 'asr', 'tts', 'memos', 'rag', 'bert'];
     let successCount = 0;
@@ -912,7 +931,98 @@ async function stopAllServices() {
 }
 
 // 切换标签页
+function getDirtyKeyForConfigElement(element) {
+    if (!element || !element.closest) return null;
+    if (element.id === 'live2d-model-select') return null;
+
+    const pluginModal = element.closest('#pluginConfigModal');
+    if (pluginModal && pluginModal.style.display !== 'none') {
+        return 'plugin-config';
+    }
+
+    const panel = element.closest('.tab-content');
+    if (!panel || !CONFIG_DIRTY_PANELS.has(panel.id)) return null;
+    return panel.id;
+}
+
+function getConfigSaveButton(dirtyKey) {
+    if (dirtyKey === 'plugin-config') {
+        return document.getElementById('saveConfigBtn');
+    }
+    const panel = document.getElementById(dirtyKey);
+    return panel ? panel.querySelector('.config-save-button') : null;
+}
+
+function updateConfigDirtyIndicators() {
+    CONFIG_DIRTY_PANELS.forEach(panelId => {
+        const button = getConfigSaveButton(panelId);
+        const tabButton = document.querySelector(`.tab-button[onclick="switchTab('${panelId}')"]`);
+        const isDirty = configDirtyItems.has(panelId);
+
+        if (button) {
+            button.classList.toggle('config-unsaved', isDirty);
+            button.title = isDirty ? UNSAVED_CONFIG_MESSAGE : '';
+        }
+        if (tabButton) {
+            tabButton.classList.toggle('has-unsaved-config', isDirty);
+        }
+    });
+
+    const pluginButton = getConfigSaveButton('plugin-config');
+    if (pluginButton) {
+        const isPluginDirty = configDirtyItems.has('plugin-config');
+        pluginButton.classList.toggle('config-unsaved', isPluginDirty);
+        pluginButton.title = isPluginDirty ? UNSAVED_CONFIG_MESSAGE : '';
+    }
+}
+
+function markConfigDirty(dirtyKey) {
+    if (!dirtyKey) return;
+    configDirtyItems.add(dirtyKey);
+    updateConfigDirtyIndicators();
+}
+
+function clearConfigDirty(dirtyKey) {
+    configDirtyItems.delete(dirtyKey);
+    updateConfigDirtyIndicators();
+}
+
+function clearAllConfigDirty() {
+    configDirtyItems.clear();
+    updateConfigDirtyIndicators();
+}
+
+function hasUnsavedConfig() {
+    return configDirtyItems.size > 0;
+}
+
+function initConfigDirtyTracking() {
+    if (isConfigDirtyTrackingReady) return;
+    const markFromEvent = (event) => {
+        const element = event.target;
+        const tagName = element && element.tagName ? element.tagName.toLowerCase() : '';
+        if (!['input', 'textarea', 'select'].includes(tagName)) return;
+        if (element.type && ['button', 'submit', 'reset', 'file', 'hidden'].includes(element.type)) return;
+
+        markConfigDirty(getDirtyKeyForConfigElement(element));
+    };
+
+    document.addEventListener('input', markFromEvent, true);
+    document.addEventListener('change', markFromEvent, true);
+    isConfigDirtyTrackingReady = true;
+}
+
+function confirmLeaveDirtyConfig(dirtyKey) {
+    if (!configDirtyItems.has(dirtyKey)) return true;
+    return confirm(UNSAVED_CONFIG_MESSAGE);
+}
+
 function switchTab(tabName) {
+    const currentPanel = document.querySelector('.tab-content.active');
+    if (currentPanel && currentPanel.id !== tabName && !confirmLeaveDirtyConfig(currentPanel.id)) {
+        return;
+    }
+
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
     document.getElementById(tabName).classList.add('active');
@@ -929,7 +1039,7 @@ function switchTab(tabName) {
 // ============ 配置保存 ============
 
 // 保存配置的通用函数
-async function saveConfig(url, data, successMsg) {
+async function saveConfig(url, data, successMsg, dirtyKey = null) {
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -939,6 +1049,9 @@ async function saveConfig(url, data, successMsg) {
         const result = await response.json();
         if (response.ok && result.success) {
             addLog(successMsg, 'success', 'system');
+            if (dirtyKey) {
+                clearConfigDirty(dirtyKey);
+            }
         } else {
             addLog(t('common.save') + t('common.error') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
         }
@@ -966,6 +1079,7 @@ async function saveLLMConfig() {
         if (response.ok && result.success) {
             addLog(t('llm_config.save_success'), 'success', 'system');
             showSuccess(t('llm_config.save_success'));
+            clearConfigDirty('llm-config');
         } else {
             addLog(t('llm_config.save_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
             showError(t('llm_config.save_failed') + '：' + (result.error || t('common.unknown_error')));
@@ -1052,6 +1166,7 @@ async function saveCloudSettings() {
         if (response.ok && result.success) {
             addLog(t('cloud_config.save_success'), 'success', 'system');
             showSuccess(t('cloud_config.save_success'));
+            clearConfigDirty('voice-settings');
         } else {
             addLog(t('cloud_config.save_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
             showError(t('cloud_config.save_failed') + '：' + (result.error || t('common.unknown_error')));
@@ -1148,6 +1263,7 @@ function switchVoiceCloneTab(tab) {
 // 模型文件变量
 let selectedModelFile = null;
 let selectedAudioFile = null;
+let selectedGptModelFile = null;  // 可选：GPT 模型（.ckpt）
 
 // 处理模型文件选择
 function handleModelFileSelect(files) {
@@ -1165,6 +1281,16 @@ function handleAudioFileSelect(files) {
         selectedAudioFile = files[0];
         const statusEl = document.getElementById('audio-file-status');
         statusEl.textContent = t('voice_clone.selected') + selectedAudioFile.name;
+        statusEl.classList.add('has-file');
+    }
+}
+
+// 处理GPT模型文件选择（可选）
+function handleGptModelFileSelect(files) {
+    if (files && files.length > 0) {
+        selectedGptModelFile = files[0];
+        const statusEl = document.getElementById('gpt-model-file-status');
+        statusEl.textContent = t('voice_clone.selected') + selectedGptModelFile.name;
         statusEl.classList.add('has-file');
     }
 }
@@ -1220,6 +1346,30 @@ function initFileDragDrop() {
             }
         });
     }
+
+    // GPT模型文件拖拽（可选）
+    const gptModelDropArea = document.getElementById('gpt-model-drop-area');
+    if (gptModelDropArea) {
+        gptModelDropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            gptModelDropArea.classList.add('drag-over');
+        });
+
+        gptModelDropArea.addEventListener('dragleave', () => {
+            gptModelDropArea.classList.remove('drag-over');
+        });
+
+        gptModelDropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            gptModelDropArea.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+                handleGptModelFileSelect(files);
+                const input = document.getElementById('gpt-model-file-input');
+                input.files = files;
+            }
+        });
+    }
 }
 
 // 生成 TTS 的 bat 文件
@@ -1249,6 +1399,9 @@ async function generateTTSBat() {
         const formData = new FormData();
         formData.append('model_file', selectedModelFile);
         formData.append('audio_file', selectedAudioFile);
+        if (selectedGptModelFile) {
+            formData.append('gpt_model_file', selectedGptModelFile);
+        }
         formData.append('role_name', roleName);
         formData.append('language', language);
         formData.append('text', text);
@@ -1283,6 +1436,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         try { await window.i18nReady; } catch (e) { console.error('i18n init failed:', e); }
     }
     // 初始化保存按钮状态（防止页面跳动）
+    initConfigDirtyTracking();
     switchTab('dashboard');
 
     // 检查服务状态
@@ -1331,7 +1485,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     console.log(t('logs.init_complete'));
 
     // 页面卸载时停止所有轮询
-    window.addEventListener('beforeunload', () => {
+    window.addEventListener('beforeunload', (event) => {
+        if (hasUnsavedConfig()) {
+            event.preventDefault();
+            event.returnValue = '';
+            return;
+        }
         stopLogPolling();
         stopChatHistoryPolling();
     });
@@ -1410,8 +1569,12 @@ async function saveCurrentModel() {
 // 保存 UI 设置
 async function saveUISettings() {
     const settings = {
+        intro_text: document.getElementById('intro-text').value,
         show_chat_box: document.getElementById('show-chat-box').checked,
         show_model: !document.getElementById('hide-model').checked,  // 勾选表示隐藏，所以取反
+        subtitle_enabled: document.getElementById('subtitle-enabled').checked,
+        subtitle_user: document.getElementById('subtitle-user').value,
+        subtitle_ai: document.getElementById('subtitle-ai').value,
         subtitle_labels: {
             enabled: document.getElementById('subtitle-enabled').checked,
             user: document.getElementById('subtitle-user').value,
@@ -1428,6 +1591,7 @@ async function saveUISettings() {
         if (response.ok && result.success) {
             addLog(t('ui_settings.ui_save_success'), 'success', 'system');
             showSuccess(t('ui_settings.ui_save_success'));
+            clearConfigDirty('ui-settings');
         } else {
             addLog(t('ui_settings.ui_save_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
             showError(t('ui_settings.ui_save_failed') + '：' + (result.error || t('common.unknown_error')));
@@ -1463,6 +1627,7 @@ async function saveMoodChatSettings() {
 async function saveAdvancedSettings() {
     const settings = {
         auto_screenshot: document.getElementById('auto-screenshot').checked,
+        bert_enabled: document.getElementById('bert-enabled').checked,
         use_vision_model: document.getElementById('use-vision-model').checked,
         memory_enabled: document.getElementById('memory-enabled').checked,
         memos_auto_inject: document.getElementById('memos-auto-inject').checked,
@@ -2053,7 +2218,10 @@ function openPluginConfigModal(pluginPath, displayName) {
 }
 
 // 关闭插件配置模态框
-function closePluginConfigModal() {
+function closePluginConfigModal(force = false) {
+    if (!force && !confirmLeaveDirtyConfig('plugin-config')) {
+        return;
+    }
     // 恢复背景滚动
     document.body.style.overflow = '';
     document.documentElement.style.overflow = '';
@@ -2141,6 +2309,7 @@ async function loadPluginConfig(displayName) {
             
             // 渲染配置表单（使用键顺序）
             renderPluginConfigForm(result.config);
+            clearConfigDirty('plugin-config');
             
             // 检查 README 是否存在
             checkReadmeExists(displayName);
@@ -2261,6 +2430,7 @@ function resetPluginConfig() {
         resetFieldToDefault(key, field);
     }
     
+    markConfigDirty('plugin-config');
     addLog(t('plugins.reset_default'), 'info', 'system');
 }
 
@@ -2306,7 +2476,8 @@ async function savePluginConfig() {
         if (response.ok && result.success) {
             addLog(t('plugins.save_success'), 'success', 'system');
             showSuccess(t('plugins.save_success'));
-            closePluginConfigModal();
+            clearConfigDirty('plugin-config');
+            closePluginConfigModal(true);
             // 重新加载插件列表以更新状态
             loadPlugins();
         } else {
@@ -2444,6 +2615,7 @@ async function saveBasicSettings() {
     try {
         const config = {
             auto_screenshot: document.getElementById('auto-screenshot').checked,
+            bert_enabled: document.getElementById('bert-enabled').checked,
             use_vision_model: document.getElementById('use-vision-model').checked,
             show_chat_box: document.getElementById('show-chat-box').checked,
             show_model: !document.getElementById('hide-model').checked,  // 勾选表示隐藏，所以取反
@@ -2484,6 +2656,7 @@ async function loadBasicConfig() {
         if (response.ok) {
             const config = await response.json();
             _setChk('auto-screenshot', config.auto_screenshot === true);
+            _setChk('bert-enabled', config.bert_enabled === true);
             _setChk('use-vision-model', config.use_vision_model === true);
             _setChk('auto-close-services', config.auto_close_services === true);
             _setChk('show-chat-box', config.show_chat_box === true);
@@ -2527,6 +2700,7 @@ async function saveDialogSettings() {
         // 保存高级配置到 /api/settings/advanced
         const advancedConfig = {
             auto_screenshot: document.getElementById('auto-screenshot').checked,
+            bert_enabled: document.getElementById('bert-enabled').checked,
             use_vision_model: document.getElementById('use-vision-model').checked,
             show_chat_box: document.getElementById('show-chat-box').checked,
             show_model: !document.getElementById('hide-model').checked,
@@ -2551,6 +2725,8 @@ async function saveDialogSettings() {
         if (response1.ok && result1.success && response2.ok && result2.success) {
             addLog(t('dialog_config.save_success'), 'success', 'system');
             showSuccess(t('dialog_config.save_success'));
+            clearConfigDirty('dialog-config');
+            clearConfigDirty('ui-settings');
         } else {
             const errorMsg = (result1.error || result2.error || t('common.unknown_error'));
             addLog(t('dialog_config.save_failed') + '：' + errorMsg, 'error', 'system');
@@ -2766,20 +2942,90 @@ async function applyPrompt(title) {
 
 
 
+let pluginMarketUpdateCandidates = [];
+let pluginMarketItems = [];
+let pluginMarketRefreshSeq = 0;
+
+function escapeJsString(value) {
+    return String(value || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r');
+}
+
+function escapeAttribute(value) {
+    return escapeHtml(value).replace(/"/g, '&quot;');
+}
+
+function getSafeExternalHref(value) {
+    try {
+        const url = new URL(String(value || '').trim());
+        return (url.protocol === 'http:' || url.protocol === 'https:') ? url.href : '';
+    } catch (e) {
+        return '';
+    }
+}
+
+function formatCount(value) {
+    const count = Number(value) || 0;
+    if (count >= 1000000) {
+        return (count / 1000000).toFixed(count >= 10000000 ? 0 : 1).replace(/\.0$/, '') + 'M';
+    }
+    if (count >= 1000) {
+        return (count / 1000).toFixed(count >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'k';
+    }
+    return String(Math.max(0, count));
+}
+
+function updatePluginMarketToolbar() {
+    const toolbar = document.getElementById('plugin-market-update-toolbar');
+    const updateAllBtn = document.getElementById('plugin-market-update-all-btn');
+    const updateCount = document.getElementById('plugin-market-update-count');
+    if (!toolbar || !updateAllBtn || !updateCount) return;
+
+    const count = pluginMarketUpdateCandidates.length;
+    updateCount.textContent = count > 0
+        ? (typeof t === 'function' ? t('market.updates_available', { count }) : `发现 ${count} 个可更新插件`)
+        : (typeof t === 'function' ? t('market.no_updates') : '暂无可更新插件');
+    updateAllBtn.classList.toggle('is-hidden', count === 0);
+    toolbar.classList.remove('is-hidden');
+}
+
+function renderPluginMarketList(plugins) {
+    const listElement = document.getElementById('plugin-market-list');
+    if (!listElement) return;
+
+    if (!plugins || plugins.length === 0) {
+        listElement.innerHTML = '<div class="log-entry log-info">' + t('market.no_plugin') + '</div>';
+        return;
+    }
+
+    listElement.innerHTML = '';
+    plugins.forEach((plugin) => {
+        const card = createPluginMarketCard(plugin);
+        listElement.appendChild(card);
+    });
+}
+
 // 刷新插件广场
 async function refreshPluginMarket() {
     try {
+        const refreshSeq = ++pluginMarketRefreshSeq;
         const listElement = document.getElementById('plugin-market-list');
         listElement.innerHTML = '<div class="log-entry log-info">' + t('market.loading_plugin_list') + '</div>';
+        pluginMarketUpdateCandidates = [];
+        pluginMarketItems = [];
+        updatePluginMarketToolbar();
 
-        const response = await fetch('/api/market/plugins');
+        const response = await fetch('/api/market/plugins?check_updates=false');
         const data = await response.json();
 
         if (data.success && data.plugins && data.plugins.length > 0) {
-            listElement.innerHTML = '';
-            data.plugins.forEach((plugin) => {
-                const card = createPluginMarketCard(plugin);
-                listElement.appendChild(card);
+            pluginMarketItems = data.plugins;
+            renderPluginMarketList(pluginMarketItems);
+            refreshPluginMarketUpdates(refreshSeq).catch((error) => {
+                console.warn('插件更新检查失败:', error);
             });
         } else if (data.success) {
             listElement.innerHTML = '<div class="log-entry log-info">' + t('market.no_plugin') + '</div>';
@@ -2790,6 +3036,27 @@ async function refreshPluginMarket() {
         document.getElementById('plugin-market-list').innerHTML =
             '<div class="log-entry log-error">' + t('market.load_error') + '：' + error.message + '</div>';
     }
+}
+
+async function refreshPluginMarketUpdates(refreshSeq) {
+    const response = await fetch('/api/market/plugins/check-updates');
+    const data = await response.json();
+
+    if (refreshSeq !== pluginMarketRefreshSeq) return;
+
+    if (!data.success || !Array.isArray(data.plugins)) {
+        console.warn('插件更新检查失败:', data.error || 'unknown error');
+        return;
+    }
+
+    const updatesByName = new Map(data.plugins.map((plugin) => [plugin.name, plugin]));
+    pluginMarketItems = pluginMarketItems.map((plugin) => {
+        const updateInfo = updatesByName.get(plugin.name);
+        return updateInfo ? { ...plugin, ...updateInfo } : plugin;
+    });
+    pluginMarketUpdateCandidates = pluginMarketItems.filter((plugin) => plugin.installed && plugin.has_update);
+    updatePluginMarketToolbar();
+    renderPluginMarketList(pluginMarketItems);
 }
 
 // 创建插件广场卡片
@@ -2803,52 +3070,137 @@ function createPluginMarketCard(plugin) {
     const desc = plugin.description || plugin.desc || t('market.no_desc');
     const author = plugin.author || t('market.unknown_author');
     const repo = plugin.repo || '';
-    const downloadUrl = plugin.download_url || repo + '/archive/refs/heads/main.zip';
+    const downloadUrl = plugin.download_url || repo;
     const installed = plugin.installed || false;
     const installing = plugin.installing || false;
+    const localVersion = plugin.local_version || plugin.version || '';
+    const latestVersion = plugin.latest_version || plugin.version || '';
+    const hasUpdate = installed && plugin.has_update && latestVersion;
+    const downloads = Number(plugin.downloads) || 0;
+    const stars = Number(plugin.stars) || 0;
+    const starred = !!plugin.starred;
 
-    // 根据状态设置按钮文本和样式（installed 优先于 installing）
-    let btnText, btnDisabled, btnI18n;
-    if (installed) {
-        // 已安装状态优先
-        btnText = t('market.plugin_installed');
+    // 根据状态设置按钮文本和样式（hasUpdate / installed / installing 顺序判断）
+    let btnText, btnDisabled, btnI18n, buttonAction;
+    if (hasUpdate) {
+        btnText = t('market.plugin_update_to', { version: latestVersion });
+        btnDisabled = '';
+        btnI18n = 'market.plugin_update_to';
+        buttonAction = `updatePlugin('${escapeJsString(pluginName)}', '${escapeJsString(repo)}')`;
+    } else if (installed) {
+        btnText = localVersion
+            ? t('market.plugin_installed_version', { version: localVersion })
+            : t('market.plugin_installed');
         btnDisabled = 'disabled';
         btnI18n = 'market.plugin_installed';
+        buttonAction = '';
     } else if (installing) {
-        // 正在安装
-        btnText = t('market.plugin_installing');
+        btnText = plugin.status === 'updating'
+            ? t('market.plugin_updating')
+            : t('market.plugin_installing');
         btnDisabled = 'disabled';
         btnI18n = 'market.plugin_installing';
+        buttonAction = '';
     } else {
-        // 未安装
         btnText = t('market.plugin_install');
         btnDisabled = '';
         btnI18n = 'market.plugin_install';
+        buttonAction = `installPlugin('${escapeJsString(pluginName)}', '${escapeJsString(downloadUrl)}')`;
     }
 
+    const authorLine = escapeHtml(author);
+    const repoHref = getSafeExternalHref(repo);
+    const versionBlock = `<div class="market-card-versions">
+            ${localVersion ? `<span class="version-badge">${escapeHtml(t('market.version_current', { version: localVersion }))}</span>` : ''}
+            ${latestVersion ? `<span class="version-badge ${hasUpdate ? 'update-badge' : ''}">${escapeHtml(t('market.version_latest', { version: latestVersion }))}</span>` : ''}
+            ${plugin.update_error ? `<span class="version-badge muted-badge" title="${escapeAttribute(plugin.update_error)}">${escapeHtml(t('market.update_check_failed'))}</span>` : ''}
+           </div>`;
+    const statsBlock = `<div class="market-card-stats">
+            <span class="market-stat" title="${escapeAttribute(t('market.download_count_full', { count: downloads }))}">⬇ ${escapeHtml(t('market.download_count', { count: formatCount(downloads) }))}</span>
+            <button type="button"
+                class="star-btn ${starred ? 'starred' : ''}"
+                data-plugin-name="${escapeAttribute(pluginName)}"
+                data-stars="${stars}"
+                aria-pressed="${starred ? 'true' : 'false'}"
+                title="${escapeAttribute(starred ? t('market.star_remove') : t('market.star_add'))}"
+                onclick="togglePluginStar('${escapeJsString(pluginName)}', this)">★ <span class="star-count">${escapeHtml(formatCount(stars))}</span></button>
+           </div>`;
+
+    const metaBlock = repoHref
+        ? `<div class="market-card-meta">
+            <span class="market-card-author">${t('plugins.author')}${authorLine}</span>
+            <a class="market-card-source-link" href="${escapeAttribute(repoHref)}" target="_blank" rel="noopener noreferrer">📎 ${escapeHtml(t('market.view_source'))}</a>
+           </div>`
+        : `<p class="market-card-author">${t('plugins.author')}${authorLine}</p>`;
+
     const html = `<div class="market-card-header">
-        <h4 class="market-card-title">🧩 ${displayName}</h4>
-        <p class="market-card-author">${t('plugins.author')}${author}</p>
-        <p class="market-card-summary">${desc}</p>
-        <div class="install-progress" id="progress-${pluginName}" style="display: none;">
+        <h4 class="market-card-title">🧩 ${escapeHtml(displayName)}</h4>
+        ${metaBlock}
+        ${versionBlock}
+        ${statsBlock}
+        <p class="market-card-summary">${escapeHtml(desc)}</p>
+        <div class="install-progress" id="progress-${escapeAttribute(pluginName)}" style="display: none;">
             <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
             <span class="progress-text">${t('market.progress_ready')}</span>
         </div>
     </div>
-    <button onclick="installPlugin('${pluginName.replace(/'/g, "\\'")}', '${downloadUrl.replace(/'/g, "\\'")}')" 
-        class="btn-sm" style="margin-top: 10px;" ${btnDisabled} data-i18n="${btnI18n}">${btnText}</button>`;
+    <button ${buttonAction ? `onclick="${escapeAttribute(buttonAction)}"` : ''}
+        class="btn-sm market-action-btn" style="margin-top: 10px;" ${btnDisabled} data-i18n="${btnI18n}">${escapeHtml(btnText)}</button>`;
 
     card.innerHTML = html;
     return card;
 }
 
+async function togglePluginStar(pluginName, btnEl) {
+    if (!btnEl || btnEl.disabled) return;
+
+    btnEl.disabled = true;
+    try {
+        const response = await fetch('/api/market/plugins/star', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plugin_name: pluginName })
+        });
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            const errorKey = result.error === 'stats_disabled'
+                ? 'market.stats_disabled'
+                : 'market.star_failed';
+            showError(t(errorKey));
+            return;
+        }
+
+        const stars = Number(result.stars) || 0;
+        btnEl.dataset.stars = String(stars);
+        btnEl.classList.toggle('starred', !!result.starred);
+        btnEl.setAttribute('aria-pressed', result.starred ? 'true' : 'false');
+        btnEl.setAttribute('title', result.starred ? t('market.star_remove') : t('market.star_add'));
+
+        const countEl = btnEl.querySelector('.star-count');
+        if (countEl) {
+            countEl.textContent = formatCount(stars);
+        }
+
+        pluginMarketItems = pluginMarketItems.map((plugin) => {
+            if (plugin.name !== pluginName) return plugin;
+            return { ...plugin, stars, starred: !!result.starred };
+        });
+    } catch (error) {
+        showError(t('market.star_error') + '：' + error.message);
+    } finally {
+        btnEl.disabled = false;
+    }
+}
+
 // 安装插件
 async function installPlugin(pluginName, downloadUrl) {
     try {
+        pluginMarketRefreshSeq++;
         // 更新按钮状态
         const card = document.querySelector(`.market-card[data-plugin-name="${pluginName}"]`);
         if (card) {
-            const btn = card.querySelector('button');
+            const btn = card.querySelector('.market-action-btn');
             btn.disabled = true;
             btn.textContent = t('market.plugin_installing');
             btn.setAttribute('data-i18n', 'market.plugin_installing');
@@ -2864,7 +3216,7 @@ async function installPlugin(pluginName, downloadUrl) {
         const result = await fetch('/api/market/plugins/download', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ plugin_name: pluginName, download_url: downloadUrl })
+            body: JSON.stringify({ plugin_name: pluginName, repo: downloadUrl, download_url: downloadUrl })
         });
         const res = await result.json();
         
@@ -2886,7 +3238,7 @@ async function installPlugin(pluginName, downloadUrl) {
 function restoreInstallButton(pluginName, text) {
     const card = document.querySelector(`.market-card[data-plugin-name="${pluginName}"]`);
     if (card) {
-        const btn = card.querySelector('button');
+        const btn = card.querySelector('.market-action-btn');
         btn.disabled = false;
         btn.textContent = text;
         btn.setAttribute('data-i18n', 'market.plugin_install');
@@ -2946,6 +3298,84 @@ async function pollPluginInstalled(pluginName) {
     };
     
     poll();
+}
+
+// 更新单个插件
+async function updatePlugin(pluginName, repo) {
+    try {
+        pluginMarketRefreshSeq++;
+        const card = document.querySelector(`.market-card[data-plugin-name="${pluginName}"]`);
+        if (card) {
+            const btn = card.querySelector('.market-action-btn');
+            btn.disabled = true;
+            btn.textContent = t('market.plugin_updating');
+            btn.classList.add('btn-installing');
+
+            const progressDiv = document.getElementById(`progress-${pluginName}`);
+            const progressText = progressDiv ? progressDiv.querySelector('.progress-text') : null;
+            const progressFill = progressDiv ? progressDiv.querySelector('.progress-fill') : null;
+            if (progressDiv) progressDiv.style.display = 'block';
+            if (progressText) progressText.textContent = t('market.progress_updating');
+            if (progressFill) progressFill.style.width = '50%';
+        }
+
+        const response = await fetch('/api/market/plugins/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plugin_name: pluginName, repo })
+        });
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            showSuccess(t('market.update_succeeded', { name: pluginName }));
+            setTimeout(() => refreshPluginMarket(), 500);
+        } else {
+            showError(t('market.update_failed') + '：' + (result.error || t('common.unknown_error')));
+            restoreInstallButton(pluginName, t('market.plugin_install'));
+        }
+    } catch (error) {
+        showError(t('market.update_error') + '：' + error.message);
+        restoreInstallButton(pluginName, t('market.plugin_install'));
+    }
+}
+
+// 批量更新插件
+async function updateAllPlugins() {
+    if (!pluginMarketUpdateCandidates.length) {
+        showSuccess(t('market.no_updates'));
+        return;
+    }
+
+    pluginMarketRefreshSeq++;
+    const names = pluginMarketUpdateCandidates.map((plugin) => plugin.name);
+    const updateAllBtn = document.getElementById('plugin-market-update-all-btn');
+    const originalText = updateAllBtn ? updateAllBtn.textContent : '';
+    if (updateAllBtn) {
+        updateAllBtn.disabled = true;
+        updateAllBtn.textContent = t('market.update_all_in_progress');
+    }
+
+    try {
+        const response = await fetch('/api/market/plugins/update-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plugin_names: names })
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            showSuccess(result.message || t('market.update_all_succeeded'));
+        } else {
+            showError(result.message || result.error || t('market.update_all_partial_failed'));
+        }
+        setTimeout(() => refreshPluginMarket(), 500);
+    } catch (error) {
+        showError(t('market.update_all_error') + '：' + error.message);
+    } finally {
+        if (updateAllBtn) {
+            updateAllBtn.disabled = false;
+            updateAllBtn.textContent = originalText || t('market.update_all');
+        }
+    }
 }
 
 // ============ 初始化 ============

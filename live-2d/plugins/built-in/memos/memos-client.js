@@ -5,12 +5,13 @@ class MemosClient {
         this.enabled = pluginConfig.enabled !== false;
         this.apiUrl = pluginConfig.api_url || 'http://127.0.0.1:8003';
         this.autoInject = pluginConfig.auto_inject !== false;
-        this.injectTopK = pluginConfig.inject_top_k || 3;
-        this.similarityThreshold = pluginConfig.similarity_threshold || 0.6;
+        this.injectTopK = pluginConfig.inject_top_k ?? 3;
+        this.similarityThreshold = pluginConfig.similarity_threshold ?? 0.6;
         this.autoSave = pluginConfig.auto_save !== false;
-        this.saveInterval = pluginConfig.save_interval || 10;
+        this.saveInterval = pluginConfig.save_interval ?? 5;
         this.conversationBuffer = [];
         this.roundCount = 0;
+        this._saving = false;
     }
 
     async search(query, topK = null) {
@@ -55,16 +56,20 @@ class MemosClient {
 
         console.log(`[MemOS] 对话已缓存 (${this.roundCount}/${this.saveInterval} 轮)`);
 
-        if (this.roundCount >= this.saveInterval) {
+        if (this.roundCount >= this.saveInterval && !this._saving) {
+            this._saving = true;
             console.log(`[MemOS] 达到 ${this.saveInterval} 轮，开始保存记忆...`);
             try {
-                const result = await this.add(this.conversationBuffer);
+                const toSave = [...this.conversationBuffer];
                 this.conversationBuffer = [];
                 this.roundCount = 0;
+                const result = await this.add(toSave);
                 return { status: 'saved', result };
             } catch (error) {
                 console.error('MemOS 批量保存失败:', error.message);
                 return { status: 'error', message: error.message };
+            } finally {
+                this._saving = false;
             }
         }
 
@@ -87,23 +92,38 @@ class MemosClient {
         }
     }
 
+    /** 将 ISO/时间戳格式化为中文本地日期时间，供 AI 理解「记忆发生时间」 */
+    _formatMemoryTimeForPrompt(timestamp) {
+        if (!timestamp) return '';
+        try {
+            const d = new Date(timestamp);
+            if (isNaN(d.getTime())) {
+                return typeof timestamp === 'string' ? timestamp : String(timestamp);
+            }
+            return d.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            });
+        } catch (_) {
+            return typeof timestamp === 'string' ? timestamp : String(timestamp);
+        }
+    }
+
     formatMemoriesForPrompt(memories) {
         if (!memories || memories.length === 0) return '';
 
         return memories.map(mem => {
             const content = typeof mem === 'string' ? mem : mem.content;
-            const timestamp = mem.created_at || mem.timestamp;
-            const updatedAt = mem.updated_at;
+            const pl = mem && typeof mem.payload === 'object' && mem.payload ? mem.payload : null;
+            const timestamp = mem.created_at || mem.timestamp || (pl && (pl.created_at || pl.timestamp));
+            const updatedAt = mem.updated_at || (pl && pl.updated_at);
 
-            let timeStr = '';
-            if (timestamp) {
-                try {
-                    timeStr = new Date(timestamp).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
-                } catch (_) {
-                    timeStr = timestamp.substring(0, 10);
-                }
-            }
-
+            const timeStr = this._formatMemoryTimeForPrompt(timestamp);
             const updateMark = (updatedAt && updatedAt !== timestamp) ? '（已更新）' : '';
             return timeStr ? `- ${content} 【${timeStr}】${updateMark}` : `- ${content}`;
         }).join('\n');

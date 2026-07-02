@@ -49,7 +49,7 @@ class VRMModelSetup {
         scene.add(directionalLight);
 
         // 加载VRM模型
-        const modelPath = config.ui?.vrm_model_path || '3D/Fioka1.vrm';
+        const modelPath = config.ui?.vrm_model_path || '3D/Sample_A.vrm';
         console.log(`正在加载VRM模型: ${modelPath}`);
 
         let vrm;
@@ -249,7 +249,7 @@ class VRMModelSetup {
 
     // 从模型路径提取角色名
     static _getCharacterName(modelPath) {
-        // 从 "3D/Fioka1.vrm" 提取 "Fioka1"
+        // 从 "3D/Sample_A.vrm" 提取 "Sample_A"
         const match = modelPath.match(/3D\/([^\/]+?)\.vrm$/i);
         if (match) return match[1];
         // 默认名称

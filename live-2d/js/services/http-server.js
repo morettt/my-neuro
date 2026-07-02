@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { BrowserWindow } = require('electron');
 
 /**
@@ -208,16 +208,30 @@ class HttpServer {
 		
 		            const { ipcRenderer } = require('electron');
 		            const model = mc.model;
-		            const defaultX = window.innerWidth * 1.35;
-		            const defaultY = window.innerHeight * 0.8;
+		            const scaleFactor = window.canvasScaleFactor || 2;
+		            // 窗口只覆盖当前显示器，重置到当前窗口内的默认相对位置即可（不再区分单/双屏）。
+		            const relX = 0.65;
+		            const relY = 0.38;
 		            const scale = 0.65;
-                    // 复位到默认位置
-		            model.x = defaultX;
-		            model.y = defaultY;
-		            model.scale.set(scale);
-		            mc.updateInteractionArea();
+
+		            if (model.modelType === 'vrm') {
+		                model.viewRect = mc._savedToViewRect(relX, relY, scale);
+		                if (mc._clampViewRect) mc._clampViewRect();
+		            } else {
+		                const defaultX = relX * window.innerWidth * scaleFactor;
+		                const defaultY = relY * window.innerHeight * scaleFactor;
+		                model.x = defaultX;
+		                model.y = defaultY;
+		                if (model.scale?.set) model.scale.set(scale);
+		                if (mc.updateInteractionArea) mc.updateInteractionArea();
+		            }
 		
-		            ipcRenderer.send('save-model-position', { x: 1.35, y: 0.8, scale });
+		            ipcRenderer.send('save-model-position', { x: relX, y: relY, scale });
+
+		            // 同步复位字幕位置
+		            const uic = global.uiController;
+		            if (uic) uic.resetSubtitlePosition();
+
 		            return { success: true};
 		        })()
 		    `;
@@ -241,7 +255,7 @@ class HttpServer {
             if (model_type === 'vrm') {
                 // VRM模型切换：通过IPC触发
                 mainWindow.webContents.executeJavaScript(
-                    `require('electron').ipcRenderer.invoke('switch-vrm-model', '${model_name}')`
+                    `require('electron').ipcRenderer.invoke('switch-vrm-model', ${JSON.stringify(model_name)})`
                 ).then(() => {
                     res.json({ success: true, message: `VRM模型切换到 ${model_name}` });
                 }).catch(error => {
@@ -250,7 +264,7 @@ class HttpServer {
             } else {
                 // Live2D模型切换
                 mainWindow.webContents.executeJavaScript(
-                    `require('electron').ipcRenderer.invoke('switch-live2d-model', '${model_name}')`
+                    `require('electron').ipcRenderer.invoke('switch-live2d-model', ${JSON.stringify(model_name)})`
                 ).then(() => {
                     res.json({ success: true, message: `模型切换到 ${model_name}` });
                 }).catch(error => {
@@ -294,6 +308,30 @@ class HttpServer {
             pm.syncEnabledPlugins()
                 .then(() => res.json({ success: true, message: '插件列表已同步' }))
                 .catch(e => res.json({ success: false, message: e.message }));
+        });
+
+        // 字幕位置调整端点
+        this.emotionApp.post('/adjust-subtitle-position', async (req, res) => {
+            const mainWindow = BrowserWindow.getAllWindows()[0];
+            if (!mainWindow) {
+                return res.json({ success: false, message: '应用窗口未找到' });
+            }
+
+            const jsCode = `(() => {
+                const uic = global.uiController;
+                if (!uic?.enterSubtitleAdjustMode) return false;
+                uic.enterSubtitleAdjustMode();
+                return true;
+            })()`;
+
+            try {
+                const ok = await mainWindow.webContents.executeJavaScript(jsCode);
+                res.json(ok
+                    ? { success: true, message: '字幕调整模式已开启' }
+                    : { success: false, message: '字幕控制器未初始化' });
+            } catch (error) {
+                res.json({ success: false, message: error.toString() });
+            }
         });
 
         this.emotionApp.listen(3002, () => {

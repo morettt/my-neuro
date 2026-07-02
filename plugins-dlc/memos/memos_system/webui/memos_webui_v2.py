@@ -241,7 +241,7 @@ elif page == "📋 记忆库":
     st.markdown("### 📋 记忆库")
     
     try:
-        data = requests.get(f"{MEMOS_API_URL}/list", timeout=10).json()
+        data = requests.get(f"{MEMOS_API_URL}/list", params={"limit": 0}, timeout=300).json()
         memories = data.get('memories', [])
         
         if memories:

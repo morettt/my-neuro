@@ -6,7 +6,6 @@
     <title data-i18n="app.title">My Neuro - 控制中心</title>
     <link rel="icon" href="/live-2d/fake_neuro.ico" type="image/x-icon">
     <link rel="stylesheet" href="/static/css/style.css">
-    <script src="https://cdn.tailwindcss.com"></script>
     <script src="/static/js/libs/i18next.min.js"></script>
     <script src="/static/js/libs/i18nextHttpBackend.min.js"></script>
     <script src="/static/js/libs/i18nextBrowserLanguageDetector.min.js"></script>
@@ -41,6 +40,13 @@
                     <a href="https://github.com/morettt/my-neuro" target="_blank" rel="noopener noreferrer" class="header-icon" title="GitHub">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                        </svg>
+                    </a>
+                    <a href="javascript:void(0)" class="header-icon" id="checkUpdateBtn" data-i18n-title="releases.check_update" title="检查更新" onclick="window.openReleasesModal && window.openReleasesModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
                         </svg>
                     </a>
                 </div>
@@ -397,6 +403,14 @@
                             </div>
                             <div class="file-status" id="audio-file-status" data-i18n="voice_clone.audio_status">未上传参考音频（wav）</div>
                         </div>
+                        <div class="form-group">
+                            <label data-i18n="voice_clone.gpt_model_file">GPT 模型（ckpt，可选）</label>
+                            <div class="file-drop-area" id="gpt-model-drop-area" onclick="document.getElementById('gpt-model-file-input').click()">
+                                <input type="file" id="gpt-model-file-input" accept=".ckpt" style="display: none;" onchange="handleGptModelFileSelect(this.files)">
+                                <div class="file-drop-text" data-i18n="voice_clone.gpt_model_drop">选择 GPT 模型文件 或拖拽文件到此处</div>
+                            </div>
+                            <div class="file-status" id="gpt-model-file-status" data-i18n="voice_clone.gpt_model_status">未上传 GPT 模型（ckpt，可选）</div>
+                        </div>
                     </div>
                     
                     <div class="form-group">
@@ -461,6 +475,10 @@
                 <div class="market-header">
                     <button onclick="refreshPluginMarket()" class="btn-start" data-i18n="market.refresh_plugin">🔄 刷新插件列表</button>
                 </div>
+                <div id="plugin-market-update-toolbar" class="market-update-toolbar is-hidden">
+                    <span id="plugin-market-update-count" class="market-update-count" data-i18n="market.no_updates">暂无可更新插件</span>
+                    <button id="plugin-market-update-all-btn" onclick="updateAllPlugins()" class="btn-sm is-hidden" data-i18n="market.update_all">⬆ 全部更新</button>
+                </div>
                 <div class="market-list" id="plugin-market-list">
                     <div class="log-entry log-info" data-i18n="market.loading_plugin">点击刷新按钮加载插件列表...</div>
                 </div>
@@ -468,6 +486,7 @@
 
             <!-- MCP Tools -->
             <div id="mcp-tools-market-panel" class="market-panel">
+                <div class="log-entry log-info" data-i18n="market.mcp_runtime_notice">启用或下载 MCP 工具后，请在功能配置中启用 MCP 并重启桌宠，模型才会重新加载工具列表。</div>
                 <div class="tool-list" id="mcp-tools-list">
                     <div class="log-entry log-info" data-i18n="market.loading_mcp">加载 MCP 工具中...</div>
                 </div>
@@ -705,6 +724,10 @@
                     <label for="auto-screenshot" data-i18n="dialog_config.auto_screenshot">开启后，每次对话 AI 都会去识图（会增加延迟）</label>
                 </div>
                 <div class="checkbox-group">
+                    <input type="checkbox" id="bert-enabled">
+                    <label for="bert-enabled" data-i18n="dialog_config.bert_enabled">启用 BERT 智能截图判定</label>
+                </div>
+                <div class="checkbox-group">
                     <input type="checkbox" id="mcp-enabled">
                     <label for="mcp-enabled" data-i18n="dialog_config.mcp_enabled">启用 MCP 工具</label>
                 </div>
@@ -812,5 +835,6 @@
         window.i18nReady = initI18n();
     </script>
     <script src="static/js/app.js?v=20260322"></script>
+    <script src="static/js/releases.js?v=20260627"></script>
 </body>
 </html>

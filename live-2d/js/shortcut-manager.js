@@ -1,158 +1,252 @@
 const { globalShortcut, BrowserWindow, app } = require('electron');
 
-/**
- * 全局快捷键管理器
- * 统一管理应用的所有全局快捷键
- */
+let uiohookApi = null;
+try {
+    uiohookApi = require('uiohook-napi');
+} catch (error) {
+    console.warn('[PTT] uiohook-napi is unavailable; PTT will use window focus fallback only.', error.message);
+}
+
 class ShortcutManager {
-    constructor() {
+    constructor(config = {}) {
+        this.config = config || {};
         this.shortcuts = [];
+        this.pttKey = this._normalizeKey(this.config.asr?.ptt_key || 'v') || 'v';
+        this.pttKeyCode = null;
+        this.pttKeyDown = false;
+        this.pttHookStarted = false;
+        this.pttHandlers = null;
     }
 
-    /**
-     * 注册所有快捷键
-     */
     registerAll() {
-        // 应用控制类快捷键
         this._registerAppControls();
-
-        // TTS 打断快捷键
         this._registerTTSInterrupt();
-
-        // 窗口置顶快捷键
         this._registerWindowTopMost();
-
-        // 动作和音乐控制快捷键
         this._registerMotionAndMusicControls();
-
-        // 气泡框显示快捷键
         this._registerBubbleToggle();
+        this._registerGlobalPTT();
 
-        console.log(`已注册 ${this.shortcuts.length} 个全局快捷键！！！`);
+        console.log(`Registered ${this.shortcuts.length} global shortcuts.`);
     }
 
-    /**
-     * 注册应用控制快捷键
-     */
     _registerAppControls() {
         this._register('CommandOrControl+Q', () => {
             app.quit();
-        }, '退出应用');
+        }, 'Quit app');
     }
 
-    /**
-     * 注册 TTS 打断快捷键
-     */
     _registerTTSInterrupt() {
         this._register('CommandOrControl+G', () => {
-            const mainWindow = BrowserWindow.getAllWindows()[0];
-            if (mainWindow) {
-                mainWindow.webContents.send('interrupt-tts');
-            }
-        }, '打断 TTS 语音');
+            this._sendToMainWindow('interrupt-tts');
+        }, 'Interrupt TTS');
     }
 
-    /**
-     * 注册窗口置顶快捷键
-     */
     _registerWindowTopMost() {
         this._register('CommandOrControl+T', () => {
             const windows = BrowserWindow.getAllWindows();
             windows.forEach(win => {
                 win.setAlwaysOnTop(true, 'screen-saver');
             });
-        }, '强制窗口置顶');
+        }, 'Force window topmost');
     }
 
-    /**
-     * 注册动作和音乐控制快捷键
-     */
     _registerMotionAndMusicControls() {
-        // Ctrl+Shift+1 到 Ctrl+Shift+9
         for (let i = 1; i <= 9; i++) {
             if (i === 6) {
-                // Ctrl+Shift+6: 播放音乐
                 this._register(`CommandOrControl+Shift+${i}`, () => {
-                    const mainWindow = BrowserWindow.getAllWindows()[0];
-                    if (mainWindow) {
-                        mainWindow.webContents.send('trigger-music-play');
-                    }
-                }, '播放随机音乐');
+                    this._sendToMainWindow('trigger-music-play');
+                }, 'Play random music');
             } else if (i === 8) {
-                // Ctrl+Shift+8: 停止音乐 + 赌气动作
                 this._register(`CommandOrControl+Shift+${i}`, () => {
-                    const mainWindow = BrowserWindow.getAllWindows()[0];
-                    if (mainWindow) {
-                        mainWindow.webContents.send('trigger-music-stop-with-motion');
-                    }
-                }, '停止音乐并播放赌气动作');
+                    this._sendToMainWindow('trigger-music-stop-with-motion');
+                }, 'Stop music with motion');
             } else {
-                // 其他: 触发对应索引的动作
                 this._register(`CommandOrControl+Shift+${i}`, () => {
-                    const motionIndex = i - 1;
-                    const mainWindow = BrowserWindow.getAllWindows()[0];
-                    if (mainWindow) {
-                        mainWindow.webContents.send('trigger-motion-hotkey', motionIndex);
-                    }
-                }, `触发动作 ${i}`);
+                    this._sendToMainWindow('trigger-motion-hotkey', i - 1);
+                }, `Trigger motion ${i}`);
             }
         }
 
-        // Ctrl+Shift+0: 停止所有动作
         this._register('CommandOrControl+Shift+0', () => {
-            const mainWindow = BrowserWindow.getAllWindows()[0];
-            if (mainWindow) {
-                mainWindow.webContents.send('stop-all-motions');
-            }
-        }, '停止所有动作');
+            this._sendToMainWindow('stop-all-motions');
+        }, 'Stop all motions');
     }
 
-    /**
-     * 注册气泡框切换快捷键
-     */
     _registerBubbleToggle() {
         this._register('CommandOrControl+M', () => {
-            const mainWindow = BrowserWindow.getAllWindows()[0];
-            if (mainWindow) {
-                mainWindow.webContents.send('toggle-bubble');
-            }
-        }, '切换气泡框显示/隐藏');
+            this._sendToMainWindow('toggle-bubble');
+        }, 'Toggle bubble');
     }
 
-    /**
-     * 注册单个快捷键
-     * @param {string} accelerator 快捷键组合
-     * @param {Function} callback 回调函数
-     * @param {string} description 描述
-     */
+    _registerGlobalPTT() {
+        if (!uiohookApi) return;
+
+        const { uIOhook } = uiohookApi;
+        this.pttKeyCode = this._resolveUiohookKeyCode(this.pttKey);
+        if (this.pttKeyCode == null) {
+            console.warn(`[PTT] Unsupported ptt_key "${this.pttKey}". Global PTT is disabled.`);
+            return;
+        }
+
+        const isPTTEvent = (event) => event && event.keycode === this.pttKeyCode;
+        const onKeyDown = (event) => {
+            if (!isPTTEvent(event) || this.pttKeyDown) return;
+            this.pttKeyDown = true;
+            this._sendPTT('down');
+        };
+        const onKeyUp = (event) => {
+            if (!isPTTEvent(event)) return;
+            if (!this.pttKeyDown) {
+                this._sendPTT('up');
+                return;
+            }
+            this.pttKeyDown = false;
+            this._sendPTT('up');
+        };
+
+        try {
+            uIOhook.on('keydown', onKeyDown);
+            uIOhook.on('keyup', onKeyUp);
+            uIOhook.start();
+            this.pttHandlers = { onKeyDown, onKeyUp };
+            this.pttHookStarted = true;
+            console.log(`[PTT] Global hold-to-talk registered on ${this.pttKey.toUpperCase()}.`);
+        } catch (error) {
+            try {
+                uIOhook.off('keydown', onKeyDown);
+                uIOhook.off('keyup', onKeyUp);
+            } catch (_) {
+                // Ignore cleanup errors from a partially started hook.
+            }
+            console.warn('[PTT] Failed to start global PTT hook; window focus fallback remains available.', error);
+        }
+    }
+
+    _unregisterGlobalPTT() {
+        if (!uiohookApi) return;
+
+        const { uIOhook } = uiohookApi;
+        if (this.pttHandlers) {
+            try {
+                uIOhook.off('keydown', this.pttHandlers.onKeyDown);
+                uIOhook.off('keyup', this.pttHandlers.onKeyUp);
+            } catch (error) {
+                console.warn('[PTT] Failed to remove global PTT handlers.', error);
+            }
+            this.pttHandlers = null;
+        }
+
+        if (this.pttHookStarted) {
+            try {
+                uIOhook.stop();
+            } catch (error) {
+                console.warn('[PTT] Failed to stop global PTT hook.', error);
+            }
+        }
+
+        this.pttHookStarted = false;
+        this.pttKeyDown = false;
+    }
+
     _register(accelerator, callback, description = '') {
         try {
             const success = globalShortcut.register(accelerator, callback);
             if (success) {
                 this.shortcuts.push({ accelerator, description });
-                console.log(`✓ 已注册快捷键: ${accelerator}${description ? ` (${description})` : ''}`);
+                console.log(`Registered shortcut: ${accelerator}${description ? ` (${description})` : ''}`);
             } else {
-                console.warn(`✗ 快捷键注册失败: ${accelerator}`);
+                console.warn(`Failed to register shortcut: ${accelerator}`);
             }
         } catch (error) {
-            console.error(`注册快捷键 ${accelerator} 时出错:`, error);
+            console.error(`Error registering shortcut ${accelerator}:`, error);
         }
     }
 
-    /**
-     * 取消所有快捷键
-     */
     unregisterAll() {
+        this._unregisterGlobalPTT();
         globalShortcut.unregisterAll();
-        console.log('已取消所有全局快捷键');
         this.shortcuts = [];
+        console.log('Unregistered all global shortcuts.');
     }
 
-    /**
-     * 获取已注册的快捷键列表
-     */
     getRegisteredShortcuts() {
         return this.shortcuts;
+    }
+
+    _sendPTT(action) {
+        this._sendToMainWindow('ptt-global-key', {
+            action,
+            key: this.pttKey,
+            source: 'uiohook'
+        });
+    }
+
+    _sendToMainWindow(channel, ...args) {
+        const mainWindow = BrowserWindow.getAllWindows().find(win => !win.isDestroyed());
+        if (!mainWindow || mainWindow.webContents.isDestroyed()) return;
+        mainWindow.webContents.send(channel, ...args);
+    }
+
+    _normalizeKey(value) {
+        const raw = String(value || '').trim().toLowerCase();
+        const aliases = {
+            ' ': 'space',
+            spacebar: 'space',
+            return: 'enter',
+            esc: 'escape',
+            control: 'ctrl',
+            command: 'meta',
+            cmd: 'meta',
+            win: 'meta',
+            windows: 'meta',
+            option: 'alt',
+            left: 'arrowleft',
+            up: 'arrowup',
+            right: 'arrowright',
+            down: 'arrowdown'
+        };
+        return aliases[raw] || raw;
+    }
+
+    _resolveUiohookKeyCode(key) {
+        if (!uiohookApi) return null;
+
+        const { UiohookKey } = uiohookApi;
+        if (/^[a-z]$/.test(key)) return UiohookKey[key.toUpperCase()];
+        if (/^[0-9]$/.test(key)) return UiohookKey[key];
+        if (/^f([1-9]|1[0-9]|2[0-4])$/.test(key)) return UiohookKey[key.toUpperCase()];
+
+        const names = {
+            backspace: 'Backspace',
+            tab: 'Tab',
+            enter: 'Enter',
+            escape: 'Escape',
+            space: 'Space',
+            pageup: 'PageUp',
+            pagedown: 'PageDown',
+            end: 'End',
+            home: 'Home',
+            arrowleft: 'ArrowLeft',
+            arrowup: 'ArrowUp',
+            arrowright: 'ArrowRight',
+            arrowdown: 'ArrowDown',
+            insert: 'Insert',
+            delete: 'Delete',
+            ctrl: 'Ctrl',
+            alt: 'Alt',
+            altright: 'AltRight',
+            shift: 'Shift',
+            shiftright: 'ShiftRight',
+            meta: 'Meta'
+        };
+
+        if (/^numpad[0-9]$/.test(key)) {
+            const digit = key.slice('numpad'.length);
+            return UiohookKey[`Numpad${digit}`];
+        }
+
+        const name = names[key];
+        return name ? UiohookKey[name] : null;
     }
 }
 

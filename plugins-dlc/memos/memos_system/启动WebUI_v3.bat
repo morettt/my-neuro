@@ -1,5 +1,6 @@
 @echo off
 chcp 65001 >nul 2>nul
+call conda activate my-neuro 2>nul
 
 echo ================================================================
 echo   MEMOS WebUI v3.0 - Full Featured Memory Center

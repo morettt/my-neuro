@@ -1,6 +1,10 @@
 // ContextManager.js - 上下文管理模块
 const fs = require('fs');
 const path = require('path');
+const {
+    sanitizeToolMessageSequence,
+    trimMessagesPreservingToolRounds
+} = require('./tool-message-utils.js');
 
 class ContextManager {
     constructor(voiceChatInterface) {
@@ -29,6 +33,8 @@ class ContextManager {
     }
 
     // 裁剪消息
+    // 以「assistant+tool_calls 及其 tool 响应」为不可分割单元从后向前保留，
+    // 保证裁剪永远不会切断工具调用链（避免严格模式 API 报 400）
     trimMessages() {
         if (!this.enableContextLimit) {
             console.log('上下文限制已禁用，不裁剪消息');
@@ -40,7 +46,7 @@ class ContextManager {
 
         console.log(`裁剪前: 系统消息 ${systemMessages.length} 条, 非系统消息 ${nonSystemMessages.length} 条`);
 
-        const recentMessages = nonSystemMessages.slice(-this.maxContextMessages);
+        const recentMessages = trimMessagesPreservingToolRounds(nonSystemMessages, this.maxContextMessages);
         this.voiceChat.messages = [...systemMessages, ...recentMessages];
 
         console.log(`裁剪后: 消息总数 ${this.voiceChat.messages.length} 条, 非系统消息 ${recentMessages.length} 条`);
@@ -57,18 +63,16 @@ class ContextManager {
                 fs.mkdirSync(recordsDir, { recursive: true });
             }
 
-            // ⚠️ 核心修复：不要从 this.messages 中获取，而是直接对比 fullConversationHistory
-            // 因为 this.messages 可能被 trimMessages 裁剪过
-
-            // 获取当前会话的所有对话（不包括系统消息）
-            const currentSessionMessages = this.voiceChat.messages.filter(msg =>
-                msg.role === 'user' || msg.role === 'assistant'
+            // 保留 tool 消息和 tool_calls 完整结构（工具调用信息不丢失），
+            // 写入前先做序列清理，保证落盘的历史永远是 API 合法序列，
+            // 下次启动加载后不会再出现 "tool_calls must be followed by tool messages"
+            const currentSessionMessages = sanitizeToolMessageSequence(
+                this.voiceChat.messages.filter(msg =>
+                    msg.role === 'user' || msg.role === 'assistant' || msg.role === 'tool'
+                )
             );
 
-            // 🔧 修复逻辑：对比 fullConversationHistory，找出本次会话新增的消息
-            const existingLength = this.voiceChat.fullConversationHistory.length;
-
-            // 🆕 新逻辑：从当前内存消息中找出还没保存到 fullConversationHistory 的消息
+            // 对比 fullConversationHistory，找出本次会话新增的消息
             const newMessages = [];
             for (const msg of currentSessionMessages) {
                 // 检查这条消息是否已经在 fullConversationHistory 中
@@ -77,16 +81,13 @@ class ContextManager {
                         return false;
                     }
 
-                    // 如果 content 都是 null，还需要比较 tool_calls
-                    if (msg.content === null && historyMsg.content === null) {
-                        // 比较 tool_calls 是否相同
-                        const msgToolCalls = JSON.stringify(msg.tool_calls || []);
-                        const historyToolCalls = JSON.stringify(historyMsg.tool_calls || []);
-                        return msgToolCalls === historyToolCalls;
-                    }
-
-                    // 否则只比较 content
-                    return historyMsg.content === msg.content;
+                    // content、tool_call_id、tool_calls 全部一致才算同一条，
+                    // 避免相同内容的工具调用/响应被误判为重复而丢失
+                    const msgToolCalls = JSON.stringify(msg.tool_calls || []);
+                    const historyToolCalls = JSON.stringify(historyMsg.tool_calls || []);
+                    return historyMsg.content === msg.content &&
+                        historyMsg.tool_call_id === msg.tool_call_id &&
+                        msgToolCalls === historyToolCalls;
                 });
 
                 if (!isInHistory) {

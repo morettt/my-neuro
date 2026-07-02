@@ -221,6 +221,7 @@ def handle_ui_settings():
         subtitle_config = config.get('subtitle_labels', {})
         return jsonify({
             'show_chat_box': ui_config.get('show_chat_box', True),
+            'intro_text': ui_config.get('intro_text', '你好啊'),
             'show_model': ui_config.get('show_model', True),
             'model_scale': ui_config.get('model_scale', 2.3),
             'subtitle_user': subtitle_config.get('user', '用户'),
@@ -235,6 +236,7 @@ def handle_ui_settings():
             if 'subtitle_labels' not in config:
                 config['subtitle_labels'] = {}
             config['ui']['show_chat_box'] = data.get('show_chat_box', True)
+            config['ui']['intro_text'] = data.get('intro_text', config['ui'].get('intro_text', '你好啊'))
             config['ui']['show_model'] = data.get('show_model', True)
             config['ui']['model_scale'] = data.get('model_scale', 2.3)
             config['subtitle_labels']['user'] = data.get('subtitle_user', '用户')
@@ -297,6 +299,7 @@ def handle_advanced_settings():
         ui_config = config.get('ui', {})
         mcp_config = config.get('mcp', {})
         asr_config = config.get('asr', {})
+        bert_config = config.get('bert', {})
         
         return jsonify({
             'auto_screenshot': vision_config.get('auto_screenshot', False),
@@ -306,7 +309,8 @@ def handle_advanced_settings():
             'show_chat_box': ui_config.get('show_chat_box', True),
             'show_model': ui_config.get('show_model', True),
             'voice_barge_in': asr_config.get('voice_barge_in', True),
-            'mcp_enabled': mcp_config.get('enabled', True)
+            'mcp_enabled': mcp_config.get('enabled', True),
+            'bert_enabled': bert_config.get('enabled', False)
         })
     elif request.method == 'POST':
         try:
@@ -321,6 +325,8 @@ def handle_advanced_settings():
                 config['mcp'] = {}
             if 'asr' not in config:
                 config['asr'] = {}
+            if 'bert' not in config:
+                config['bert'] = {}
             
             config['vision']['auto_screenshot'] = data.get('auto_screenshot', False)
             config['vision']['use_vision_model'] = data.get('use_vision_model', False)
@@ -329,6 +335,7 @@ def handle_advanced_settings():
             config['ui']['show_model'] = data.get('show_model', True)
             config['asr']['voice_barge_in'] = data.get('voice_barge_in', True)
             config['mcp']['enabled'] = data.get('mcp_enabled', True)
+            config['bert']['enabled'] = data.get('bert_enabled', False)
             
             if 'vision_model' in data:
                 config['vision']['vision_model'] = data['vision_model']
@@ -455,16 +462,25 @@ def handle_current_model():
         
         main_js_path = PROJECT_ROOT / 'main.js'
         
+        config = load_config()
+        ui_config = config.get('ui', {})
+
         # GET 请求：读取当前模型
         if request.method == 'GET':
+            if ui_config.get('model_type') == 'vrm':
+                return jsonify({
+                    'success': True,
+                    'model': ui_config.get('vrm_model', ''),
+                    'model_type': 'vrm'
+                })
             if main_js_path.exists():
                 with open(main_js_path, 'r', encoding='utf-8') as f:
                     content = f.read()
                 match = re.search(r"const priorityFolders = \['([^']+)'", content)
                 if match:
                     current_model = match.group(1)
-                    return jsonify({'success': True, 'model': current_model})
-            return jsonify({'success': True, 'model': '肥牛'})
+                    return jsonify({'success': True, 'model': current_model, 'model_type': 'live2d'})
+            return jsonify({'success': True, 'model': '肥牛', 'model_type': 'live2d'})
         
         # POST 请求：设置模型
         data = request.get_json()
@@ -472,6 +488,15 @@ def handle_current_model():
         
         if not model_name:
             return jsonify({'success': False, 'error': '未提供模型名称'})
+
+        if 'ui' not in config:
+            config['ui'] = {}
+        config['ui']['model_type'] = 'live2d'
+        config['ui']['vrm_model'] = ''
+        config['ui']['vrm_model_path'] = ''
+        config['ui']['live2d_model'] = model_name
+        if not save_config(config):
+            return jsonify({'success': False, 'error': '保存配置失败'}), 500
         
         # 更新 main.js 的 priorityFolders
         if main_js_path.exists():

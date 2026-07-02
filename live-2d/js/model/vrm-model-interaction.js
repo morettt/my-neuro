@@ -6,6 +6,8 @@ const VRM_VIEWPORT_ASPECT = 1.5;   // 视口高宽比（height / width）
 const VRM_SCALE_FACTOR = 0.896;    // saved_scale * factor = viewport_width / innerWidth
 const VRM_PADDING_X = 0.104;       // 模型左边缘在视口中的水平偏移（占视口宽度比例）
 const VRM_PADDING_Y = 0.282;       // 模型顶部在视口中的垂直偏移（占视口高度比例）
+// 模型可见区域的垂直中心占视口高度的比例（上 VRM_PADDING_Y、下 0.96 之间的中点），用于跨屏中心判定
+const VRM_CENTER_Y_FRAC = (VRM_PADDING_Y + 0.96) / 2;
 
 // VRM模型交互控制器
 class VRMInteractionController {
@@ -282,7 +284,7 @@ class VRMInteractionController {
             }
         });
 
-        window.addEventListener('mouseup', (e) => {
+        window.addEventListener('mouseup', async (e) => {
             if (e.button === 0 && this.isDragging) {
                 this.isDragging = false;
 
@@ -298,8 +300,12 @@ class VRMInteractionController {
                     }
                 }
 
-                this._clampViewRect();
-                this.saveModelPosition();
+                // 松手时若“光标拖到了窗口边缘 + 模型越过该边”，整窗重定位到那一侧的显示器。
+                const switched = await this.checkAndSwitchDisplay(e.clientX, e.clientY);
+                if (!switched) {
+                    this._clampViewRect();
+                    this.saveModelPosition();
+                }
 
                 setTimeout(() => {
                     if (!model.containsPoint({ x: e.clientX, y: e.clientY })) {
@@ -387,6 +393,85 @@ class VRMInteractionController {
         });
     }
 
+    // ===== 跨屏：松手时若“光标拖到窗口边缘 + 模型越过该边”，整窗重定位到那一侧的显示器 =====
+    // 触发用“光标贴边(EDGE 内) 且 模型可见区也越过该边”双重确认：光标到边缘=明确要往那侧推出去，
+    // 松手在屏幕中间不会误触；光标永远能拖到边缘，故四向、任意抓取点都对称。
+    // VRM 在 client/CSS 像素下工作（渲染器 1:1，无 ×2）。cursorX/cursorY：松手时光标的窗口 CSS 坐标。
+    async checkAndSwitchDisplay(cursorX, cursorY) {
+        if (!window.electronScreen || !window.electronScreen.moveWindowToDisplay) return false;
+        if (!this.model || !this.model.viewRect) return false;
+        if (!Number.isFinite(cursorX) || !Number.isFinite(cursorY)) return false;
+
+        try {
+            const displays = await window.electronScreen.getAllDisplays();
+            if (!displays || displays.length <= 1) return false;
+            const currentDisplay = await window.electronScreen.getCurrentDisplay();
+            if (!currentDisplay) return false;
+
+            const vr = this.model.viewRect;
+            const W = window.innerWidth, H = window.innerHeight;
+            // 模型可见区域在当前窗口 client 像素下的边界
+            const vLeft = vr.x + VRM_PADDING_X * vr.width;
+            const vRight = vr.x + (1 - VRM_PADDING_X) * vr.width;
+            const vTop = vr.y + VRM_PADDING_Y * vr.height;
+            const vBottom = vr.y + 0.96 * vr.height;
+
+            // 光标贴到哪条边(EDGE 内) 且 模型也越过该边，就在那侧“边外一点”探测目标显示器；另一轴用光标位置。
+            const EDGE = 10;
+            const sX = currentDisplay.screenX, sY = currentDisplay.screenY;
+            const probes = [];
+            if (cursorX <= EDGE && vLeft < 0)       probes.push({ x: sX - 1,      y: sY + cursorY });
+            if (cursorX >= W - EDGE && vRight > W)   probes.push({ x: sX + W + 1,  y: sY + cursorY });
+            if (cursorY <= EDGE && vTop < 0)        probes.push({ x: sX + cursorX, y: sY - 1 });
+            if (cursorY >= H - EDGE && vBottom > H)  probes.push({ x: sX + cursorX, y: sY + H + 1 });
+
+            let targetDisplay = null, probe = null;
+            for (const p of probes) {
+                for (const d of displays) {
+                    if (d.id === currentDisplay.id) continue;
+                    if (p.x >= d.screenX && p.x < d.screenX + d.width &&
+                        p.y >= d.screenY && p.y < d.screenY + d.height) {
+                        targetDisplay = d; probe = p; break;
+                    }
+                }
+                if (targetDisplay) break;
+            }
+            if (!targetDisplay) return false;
+
+            console.log('[VRM] 光标拖到屏幕边缘，准备切换到屏幕:', targetDisplay.id);
+            const result = await window.electronScreen.moveWindowToDisplay(probe.x, probe.y);
+            if (result && result.success && !result.sameDisplay) {
+                if (result.scaleRatio && result.scaleRatio !== 1) {
+                    console.log('[VRM] 屏幕缩放比变化:', result.scaleRatio);
+                }
+
+                // 以探测点为视觉中心放到新窗口，再夹住可见模型完整落入目标屏（用目标屏 DIP 尺寸，免受 innerWidth 未稳定影响）。
+                const tw = targetDisplay.width, th = targetDisplay.height;
+                const halfVisW = (vRight - vLeft) / 2;
+                const halfVisH = (vBottom - vTop) / 2; // VRM_CENTER_Y_FRAC 取可见区上下中点，故上下对称
+                const margin = 16;
+                let cx = probe.x - targetDisplay.screenX;
+                let cy = probe.y - targetDisplay.screenY;
+                const loX = margin + halfVisW, hiX = tw - margin - halfVisW;
+                const loY = margin + halfVisH, hiY = th - margin - halfVisH;
+                cx = hiX >= loX ? Math.min(Math.max(cx, loX), hiX) : tw / 2;
+                cy = hiY >= loY ? Math.min(Math.max(cy, loY), hiY) : th / 2;
+
+                this.model.viewRect.x = cx - 0.5 * vr.width;
+                this.model.viewRect.y = cy - VRM_CENTER_Y_FRAC * vr.height;
+
+                // 保存：用目标显示器 DIP 尺寸作基准，避免依赖跨屏后尚未稳定的 innerWidth。
+                this.saveModelPosition(tw, th);
+                console.log('[VRM] 跨屏切换完成，viewRect:', this.model.viewRect);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('[VRM] 跨屏检测/切换出错:', error);
+            return false;
+        }
+    }
+
 
    // 设置嘴部动画
     setMouthOpenY(v) {
@@ -438,12 +523,12 @@ class VRMInteractionController {
     }
 
     // 保存VRM视口位置（Live2D兼容格式）
-    saveModelPosition() {
+    saveModelPosition(overrideWidth, overrideHeight) {
         if (!this.model || !this.config) return;
         const vr = this.model.viewRect;
         if (!vr || !this.config.ui?.model_position?.remember_position) return;
 
-        const saved = this._viewRectToSaved();
+        const saved = this._viewRectToSaved(overrideWidth, overrideHeight);
         this.config.ui.model_position.x = saved.x;
         this.config.ui.model_position.y = saved.y;
         this.config.ui.model_scale = saved.scale;
@@ -469,10 +554,11 @@ class VRMInteractionController {
     }
 
     // 将VRM视口矩形转换为Live2D兼容保存值
-    _viewRectToSaved() {
+    // overrideWidth/Height：跨屏切换时传入“目标显示器的 DIP 尺寸”，避免依赖尚未稳定的 innerWidth。
+    _viewRectToSaved(overrideWidth, overrideHeight) {
         const vr = this.model.viewRect;
-        const iW = window.innerWidth;
-        const iH = window.innerHeight;
+        const iW = overrideWidth || window.innerWidth;
+        const iH = overrideHeight || window.innerHeight;
         return {
             x: (vr.x + VRM_PADDING_X * vr.width) * 2 / iW,
             y: (vr.y + VRM_PADDING_Y * vr.height) * 2 / iH,

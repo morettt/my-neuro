@@ -50,18 +50,18 @@ class NetworkXGraphClient:
                 
                 # 加载节点
                 for node in data.get('nodes', []):
-                    node_id = node.pop('id')
-                    self.graph.add_node(node_id, **node)
+                    node_data = dict(node)
+                    node_id = node_data.pop('id')
+                    self._normalize_entity_attrs(node_data)
+                    self.graph.add_node(node_id, **node_data)
                 
                 # 加载边
                 for edge in data.get('edges', []):
-                    self.graph.add_edge(
-                        edge['source'],
-                        edge['target'],
-                        relation_type=edge.get('relation_type', 'related'),
-                        properties=edge.get('properties', {}),
-                        created_at=edge.get('created_at')
-                    )
+                    edge_attrs = dict(edge)
+                    source = edge_attrs.pop('source')
+                    target = edge_attrs.pop('target')
+                    self._normalize_relation_attrs(edge_attrs)
+                    self.graph.add_edge(source, target, **edge_attrs)
                 
                 logger.info(f"从文件加载图数据: {len(self.graph.nodes)} 节点, {len(self.graph.edges)} 边")
             except Exception as e:
@@ -106,6 +106,38 @@ class NetworkXGraphClient:
             logger.debug("图数据已保存")
         except Exception as e:
             logger.error(f"保存图数据失败: {e}")
+
+    def _normalize_entity_attrs(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        """Keep frequently queried entity fields at the node top level."""
+        properties = attrs.get('properties') or {}
+        if not isinstance(properties, dict):
+            properties = {}
+            attrs['properties'] = properties
+
+        source_memory_ids = attrs.get('source_memory_ids') or properties.get('source_memory_ids') or []
+        if isinstance(source_memory_ids, str):
+            source_memory_ids = [source_memory_ids]
+        attrs['source_memory_ids'] = list(dict.fromkeys(source_memory_ids))
+
+        for field in ('description', 'aliases', 'confidence'):
+            if field not in attrs and field in properties:
+                attrs[field] = properties.get(field)
+        attrs.setdefault('aliases', [])
+        attrs.setdefault('confidence', properties.get('confidence', 1.0))
+        return attrs
+
+    def _normalize_relation_attrs(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        """Keep relation metadata available both directly and in properties."""
+        properties = attrs.get('properties') or {}
+        if not isinstance(properties, dict):
+            properties = {}
+            attrs['properties'] = properties
+
+        attrs.setdefault('relation_type', attrs.get('type', 'related_to'))
+        for field in ('description', 'confidence', 'source_memory_id'):
+            if field not in attrs and field in properties:
+                attrs[field] = properties.get(field)
+        return attrs
     
     def is_available(self) -> bool:
         """检查是否可用"""
@@ -135,14 +167,18 @@ class NetworkXGraphClient:
             return False
         
         try:
+            node_attrs = {
+                'entity_type': entity_type,
+                'name': name,
+                'properties': properties or {},
+                'user_id': user_id,
+                'created_at': datetime.now().isoformat(),
+                'updated_at': datetime.now().isoformat()
+            }
+            self._normalize_entity_attrs(node_attrs)
             self.graph.add_node(
                 entity_id,
-                entity_type=entity_type,
-                name=name,
-                properties=properties or {},
-                user_id=user_id,
-                created_at=datetime.now().isoformat(),
-                updated_at=datetime.now().isoformat()
+                **node_attrs
             )
             self._save_graph()
             logger.debug(f"添加实体: {name} ({entity_type})")
@@ -331,11 +367,15 @@ class NetworkXGraphClient:
                 if source_attrs.get('user_id') != user_id or target_attrs.get('user_id') != user_id:
                     continue
             
+            relation_type = attrs.get('relation_type', 'related_to')
             relations.append({
                 'source_id': source,
                 'target_id': target,
-                'relation_type': attrs.get('relation_type', 'related_to'),
-                'properties': attrs.get('properties', {})
+                'relation_type': relation_type,
+                'type': relation_type,
+                'properties': attrs.get('properties', {}),
+                'source_memory_id': attrs.get('source_memory_id') or attrs.get('properties', {}).get('source_memory_id'),
+                'created_at': attrs.get('created_at')
             })
             
             if len(relations) >= limit:
@@ -370,12 +410,16 @@ class NetworkXGraphClient:
             return False
         
         try:
+            edge_attrs = {
+                'relation_type': relation_type,
+                'properties': properties or {},
+                'created_at': datetime.now().isoformat()
+            }
+            self._normalize_relation_attrs(edge_attrs)
             self.graph.add_edge(
                 source_id,
                 target_id,
-                relation_type=relation_type,
-                properties=properties or {},
-                created_at=datetime.now().isoformat()
+                **edge_attrs
             )
             self._save_graph()
             logger.debug(f"添加关系: {source_id} -[{relation_type}]-> {target_id}")
@@ -476,6 +520,7 @@ class NetworkXGraphClient:
         entities = []
         
         for node_id, attrs in self.graph.nodes(data=True):
+            self._normalize_entity_attrs(attrs)
             source_memory_ids = attrs.get('source_memory_ids', [])
             if memory_id in source_memory_ids:
                 entities.append({'id': node_id, **attrs})
@@ -657,15 +702,18 @@ class NetworkXGraphClient:
         
         # 从实体节点的 source_memory_ids 属性获取
         entity_data = self.graph.nodes[entity_id]
+        self._normalize_entity_attrs(entity_data)
         memory_ids = entity_data.get('source_memory_ids', [])
         
         # 也检查关系中的 source_memory_id
         for _, _, attrs in self.graph.edges(entity_id, data=True):
+            self._normalize_relation_attrs(attrs)
             mem_id = attrs.get('source_memory_id')
             if mem_id and mem_id not in memory_ids:
                 memory_ids.append(mem_id)
         
         for _, _, attrs in self.graph.in_edges(entity_id, data=True):
+            self._normalize_relation_attrs(attrs)
             mem_id = attrs.get('source_memory_id')
             if mem_id and mem_id not in memory_ids:
                 memory_ids.append(mem_id)
@@ -691,6 +739,7 @@ class NetworkXGraphClient:
         
         try:
             # 获取当前的 source_memory_ids
+            self._normalize_entity_attrs(self.graph.nodes[entity_id])
             current_ids = self.graph.nodes[entity_id].get('source_memory_ids', [])
             
             if memory_id not in current_ids:
@@ -803,6 +852,111 @@ class NetworkXGraphClient:
             relation_type=relation_type,
             properties=properties
         )
+
+    # ==================== Memory-node style compatibility ====================
+
+    def add_node(self, node_id: str, metadata: Optional[Dict[str, Any]] = None, **kwargs) -> bool:
+        """Add a generic graph node using the local entity schema."""
+        metadata = {**(metadata or {}), **kwargs}
+        return self.add_entity(
+            entity_id=node_id,
+            entity_type=metadata.get('entity_type') or metadata.get('type') or 'memory',
+            name=metadata.get('name') or metadata.get('content') or node_id,
+            properties=metadata,
+            user_id=metadata.get('user_id')
+        )
+
+    def update_node(self, node_id: str, metadata: Dict[str, Any]) -> bool:
+        return self.update_entity(node_id, properties=metadata, name=metadata.get('name'))
+
+    def delete_node(self, node_id: str) -> bool:
+        return self.delete_entity(node_id)
+
+    def get_node(self, node_id: str) -> Optional[Dict[str, Any]]:
+        return self.get_entity(node_id)
+
+    def get_nodes(self, user_id: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        return self.list_entities(user_id=user_id, limit=limit)
+
+    def add_edge(self, source_id: str, target_id: str, relation_type: str = 'related_to', metadata: Optional[Dict[str, Any]] = None) -> bool:
+        return self.add_relation(source_id, target_id, relation_type, metadata)
+
+    def delete_edge(self, source_id: str, target_id: str, relation_type: Optional[str] = None) -> bool:
+        return self.delete_relation(source_id, target_id, relation_type)
+
+    def edge_exists(self, source_id: str, target_id: str, relation_type: Optional[str] = None) -> bool:
+        if not self.is_available() or not self.graph.has_edge(source_id, target_id):
+            return False
+        if relation_type:
+            return self.graph.edges[source_id, target_id].get('relation_type') == relation_type
+        return True
+
+    def get_neighbors(self, node_id: str, max_depth: int = 1) -> List[Dict[str, Any]]:
+        return self.find_related_entities(node_id, max_depth=max_depth)
+
+    def get_path(self, source_id: str, target_id: str, max_length: int = 5) -> Optional[List[Dict[str, Any]]]:
+        return self.find_path(source_id, target_id, max_length=max_length)
+
+    def get_subgraph(self, node_ids: Optional[List[str]] = None, max_depth: int = 1) -> Dict[str, Any]:
+        if not self.is_available():
+            return {'nodes': [], 'edges': []}
+        selected = set(node_ids or [])
+        for node_id in list(selected):
+            for related in self.find_related_entities(node_id, max_depth=max_depth):
+                selected.add(related['id'])
+        nodes = [self.get_entity(node_id) for node_id in selected if self.get_entity(node_id)]
+        edges = []
+        for source, target, attrs in self.graph.edges(data=True):
+            if source in selected and target in selected:
+                relation_type = attrs.get('relation_type', 'related_to')
+                edges.append({
+                    'source_id': source,
+                    'target_id': target,
+                    'relation_type': relation_type,
+                    'type': relation_type,
+                    'properties': attrs.get('properties', {})
+                })
+        return {'nodes': nodes, 'edges': edges}
+
+    def search_by_embedding(self, *args, **kwargs) -> List[Dict[str, Any]]:
+        return []
+
+    def get_by_metadata(self, filters: Dict[str, Any], limit: int = 100) -> List[Dict[str, Any]]:
+        if not self.is_available():
+            return []
+        results = []
+        for node_id, attrs in self.graph.nodes(data=True):
+            if all(attrs.get(k) == v or attrs.get('properties', {}).get(k) == v for k, v in filters.items()):
+                results.append({'id': node_id, **attrs})
+                if len(results) >= limit:
+                    break
+        return results
+
+    def export_graph(self) -> Dict[str, Any]:
+        return {
+            'nodes': [{'id': node_id, **attrs} for node_id, attrs in self.graph.nodes(data=True)],
+            'edges': [{'source': source, 'target': target, **attrs} for source, target, attrs in self.graph.edges(data=True)]
+        }
+
+    def import_graph(self, data: Dict[str, Any], merge: bool = True) -> bool:
+        if not self.is_available():
+            return False
+        if not merge:
+            self.graph.clear()
+        for node in data.get('nodes', []):
+            node_data = dict(node)
+            node_id = node_data.pop('id')
+            self._normalize_entity_attrs(node_data)
+            self.graph.add_node(node_id, **node_data)
+        for edge in data.get('edges', []):
+            edge_data = dict(edge)
+            source = edge_data.pop('source')
+            target = edge_data.pop('target')
+            self._normalize_relation_attrs(edge_data)
+            if source in self.graph.nodes and target in self.graph.nodes:
+                self.graph.add_edge(source, target, **edge_data)
+        self._save_graph()
+        return True
     
     def link_memory_to_entity(
         self,

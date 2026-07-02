@@ -131,13 +131,13 @@ class BM25Searcher:
         if not BM25_AVAILABLE:
             return
         
-        # 避免重复添加
+        # 替换已有文档，保证反馈修正/合并后索引不陈旧
         if doc_id in self.doc_ids:
-            return
-        
-        # 添加到文档列表
-        self.documents.append({'id': doc_id, 'content': content})
-        self.doc_ids.append(doc_id)
+            index = self.doc_ids.index(doc_id)
+            self.documents[index] = {'id': doc_id, 'content': content}
+        else:
+            self.documents.append({'id': doc_id, 'content': content})
+            self.doc_ids.append(doc_id)
         
         # 重建索引（BM25Okapi 不支持增量更新，需要重建）
         if rebuild:
@@ -147,6 +147,20 @@ class BM25Searcher:
             ]
             self.bm25 = BM25Okapi(tokenized_docs)
             logger.debug(f"BM25 索引已更新，共 {len(self.documents)} 个文档")
+
+    def remove_document(self, doc_id: str, rebuild: bool = True):
+        """从索引中移除文档。"""
+        if not BM25_AVAILABLE or doc_id not in self.doc_ids:
+            return
+
+        index = self.doc_ids.index(doc_id)
+        self.doc_ids.pop(index)
+        self.documents.pop(index)
+
+        if rebuild:
+            tokenized_docs = [self.tokenizer(doc.get('content', '')) for doc in self.documents]
+            self.bm25 = BM25Okapi(tokenized_docs) if tokenized_docs else None
+            logger.debug(f"BM25 索引已移除文档，共 {len(self.documents)} 个文档")
     
     def add_documents_batch(
         self,
