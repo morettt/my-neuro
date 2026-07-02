@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>线上版本使用教程 · my-neuro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="docs.css">
+</head>
+<body>
+  <div class="bg-grid"></div>
+
+  <header class="site-header">
+    <a class="brand" href="index.html">
+      <div class="brand-icon">🐂</div>
+      <div>
+        <span class="brand-text">MY-NEURO DOCS</span>
+        <span class="brand-sub">线上版本使用教程</span>
+      </div>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html">首页</a>
+      <a href="guide-usage.html" class="active">使用教程</a>
+      <a href="guide-aliyun-tts.html">阿里云 TTS</a>
+      <a href="guide-plugins.html">插件</a>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-label">目录</div>
+      <nav class="toc">
+        <a href="#intro">这是什么</a>
+        <a href="#files">文件夹说明</a>
+        <a href="#quickstart">三步上手</a>
+        <a href="#step1" class="toc-h3">打开控制面板</a>
+        <a href="#api" class="toc-h3">配置 API</a>
+        <a href="#launch" class="toc-h3">启动肥牛</a>
+        <a href="#chat">怎么聊天</a>
+        <a href="#tabs">控制面板页签</a>
+        <a href="#plugins">插件</a>
+        <a href="#memory">记忆系统</a>
+        <a href="#faq">常见问题</a>
+        <a href="#flow">推荐流程</a>
+        <a href="#more">更多资料</a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <div class="hero">
+        <div class="hero-badge">📖 新手必读</div>
+        <h1>my-neuro 线上版本 · 使用教程</h1>
+        <div class="hero-meta">
+          <span>📦 线上安装包（WebUI 显示「云端」）</span>
+          <span>🏷️ v6.6</span>
+          <span>📅 2026-07-03</span>
+        </div>
+        <p class="hero-desc">一篇写给普通用户的说明书——不用懂代码，跟着做就能和桌面上的 AI 伙伴聊起来。</p>
+      </div>
+
+      <section id="intro">
+        <h2>这是什么？</h2>
+        <p><strong>my-neuro（肥牛）</strong> 是一个住在电脑桌面上的 <strong>AI 虚拟伙伴</strong>。你可以说话或打字跟它聊，它会做表情、出声回答，还能记住你说过的重要事情。</p>
+        <div class="card-grid">
+          <div class="card"><div class="card-icon">🎤</div><h3>语音聊天</h3><p>对着麦克风说话，它会听、想、答、念出来</p></div>
+          <div class="card"><div class="card-icon">⌨️</div><h3>打字聊天</h3><p>开启输入框后，键盘也能交流</p></div>
+          <div class="card"><div class="card-icon">🎭</div><h3>Live2D 角色</h3><p>看皮套做表情、做动作</p></div>
+          <div class="card"><div class="card-icon">🧠</div><h3>记忆 & 插件</h3><p>长期记忆、日记、直播等扩展能力</p></div>
+        </div>
+        <h3>线上版 vs 本地完整版</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>线上版本</th><th>本地完整版</th></tr></thead>
+            <tbody>
+              <tr><td><strong>语音合成</strong></td><td>走云端（阿里云等），<strong>不用显卡</strong></td><td>本地 GPT-SoVITS，需要显卡</td></tr>
+              <tr><td><strong>安装体积</strong></td><td>更小</td><td>更大（含 TTS 模型）</td></tr>
+              <tr><td><strong>适合谁</strong></td><td>普通电脑、想省事的人</td><td>有显卡、想完全离线的人</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-warn" style="margin-top:20px;">
+          <strong>⚠️ 已弃用，请勿使用：</strong>
+          <ul style="margin:8px 0 0;padding-left:20px;">
+            <li><strong>全云端肥牛</strong>（云端配置 → 启动全云端）— 服务已下线</li>
+            <li><strong>RAG 服务</strong> / <code>RAG.bat</code> — 已不再维护</li>
+          </ul>
+          <p style="margin:10px 0 0;">WebUI 里可能还能看到相关按钮，请忽略。长期记忆请用 <strong>MemOS 记忆系统</strong>。</p>
+        </div>
+      </section>
+
+      <section id="files">
+        <h2>文件夹里都有什么？</h2>
+        <p>解压后，日常只需要关心这些：</p>
+        <div class="code-block">
+          <span class="code-lang">目录</span>
+          <pre>my-neuro/
+├── live-2d/
+│   ├── 启动 WebUI 控制面板.bat  ← 【从这里开始】
+│   └── go.bat                  ← 启动桌宠
+├── 1.ASR.bat                   ← 语音识别（让你能说话）
+├── 2.TTS.bat                   ← 本地语音（线上版一般用不到）
+├── 4.MEMOS-API.bat             ← 记忆系统后端（开桌宠前必启）
+├── 5.MEMOS-WebUI.bat           ← 记忆管理网页
+├── 3.bert.bat                  ← 情感分析（可选）
+└── docs/                       ← 本教程网页</pre>
+        </div>
+        <div class="callout callout-tip"><strong>记住：</strong> 日常用 <strong>WebUI 控制面板</strong> 就够了。根目录的 <code>RAG.bat</code> 已弃用，请勿运行。</div>
+      </section>
+
+      <section id="quickstart">
+        <h2>第一次使用：三步走</h2>
+
+        <h3 id="step1">第 1 步：打开控制面板</h3>
+        <ol class="step-list">
+          <li>进入 <code>live-2d</code> 文件夹</li>
+          <li>双击 <strong>启动 WebUI 控制面板.bat</strong></li>
+          <li>浏览器打开后，看到 <strong>「My Neuro - 控制中心（云端）」</strong></li>
+        </ol>
+        <div class="callout callout-info">浏览器没自动打开？看黑色窗口里的地址，复制到浏览器即可。</div>
+
+        <h3 id="api">第 2 步：填好 API 密钥</h3>
+        <p>线上版需要配两样东西：<strong>大模型</strong>（负责聊天）和 <strong>阿里云 TTS</strong>（负责说话）。</p>
+
+        <div class="mode-card recommended" style="max-width:100%;">
+          <span class="tag-small">✨ 标准配置</span>
+          <h4>大模型 + 阿里云 TTS</h4>
+          <p><strong>① 大模型（负责聊天）</strong></p>
+          <ol>
+            <li>控制面板 → <strong>LLM 配置</strong> → 添加 API Key 和接口地址</li>
+            <li><strong>对话配置</strong> → 选择要用的对话模型</li>
+          </ol>
+          <p><strong>② 语音（负责说话）</strong></p>
+          <ol>
+            <li><strong>云端配置 → 阿里云 TTS</strong> → 勾选启用</li>
+            <li>填入 API Key、模型名（<code>cosyvoice-v3-flash</code>）、声音 ID</li>
+            <li>点右上角 <strong>保存</strong></li>
+          </ol>
+          <p>语音详细步骤见 <a href="guide-aliyun-tts.html">阿里云 TTS 部署教程</a>。</p>
+        </div>
+        <div class="callout callout-warn"><strong>注意：</strong> 同时只开一种 TTS。启用阿里云 TTS 后，请关闭「字节 TTS」和「云端 TTS（SiliconFlow）」，也不要勾选已弃用的「启动全云端」。</div>
+
+        <h3 id="launch">第 3 步：启动服务，见到肥牛</h3>
+        <p>回到 <strong>服务控制</strong> 页签，<strong>按顺序</strong>启动（缺一不可）：</p>
+        <ol class="step-list">
+          <li>点 <strong>ASR 语音识别 → 启动</strong>，等状态变绿</li>
+          <li>点 <strong>记忆系统 → 启动</strong>，等状态变绿（首次可能较慢，需等待 Embedding 模型加载）</li>
+          <li>点 <strong>Live2D 主服务 → 启动</strong></li>
+        </ol>
+        <div class="callout callout-danger">
+          <strong>重要：</strong> 线上版 <strong>必须先启动记忆系统（MemOS API）</strong>，桌宠才能正常运行。若按钮旁提示「等待 ASR / 记忆系统 端口响应」，说明前置服务尚未就绪，请继续等待或查看记忆日志。
+        </div>
+        <div class="callout callout-info">
+          <strong>关于「一键启动」：</strong> 会依次启动 ASR、TTS、记忆系统等。本地 <strong>TTS、RAG 报错可忽略</strong>，但 <strong>记忆系统必须成功启动</strong> 后再开桌宠。<br>
+          <strong>不要启动：</strong> 本地 TTS、RAG（已弃用）。<strong>记忆管理网页</strong>（打开 WebUI）按需使用，不是开桌宠的必需项。
+        </div>
+        <p>成功后，桌面上会出现 Live2D 角色——那就是肥牛 🐂</p>
+      </section>
+
+      <section id="chat">
+        <h2>怎么跟肥牛聊天？</h2>
+
+        <h3>语音聊天（默认）</h3>
+        <ol>
+          <li>确保 <strong>ASR 已启动</strong>（或使用百度流式 ASR）</li>
+          <li>直接对着麦克风说话</li>
+          <li>肥牛听到后会思考、回答，并用语音念出来</li>
+        </ol>
+        <p><strong>打断说话：</strong> 按 <span class="kbd">Ctrl</span> + <span class="kbd">G</span></p>
+        <p><strong>按键说话（PTT）：</strong> 在对话配置里勾选「启用 PTT」，默认按住 <span class="kbd">V</span> 说话，松开识别。</p>
+
+        <h3>打字聊天</h3>
+        <ol>
+          <li>控制面板 → <strong>对话配置</strong></li>
+          <li>勾选「文字输入框（可打字交互）」</li>
+          <li>保存并重启桌宠</li>
+          <li>桌宠界面会出现输入框</li>
+        </ol>
+
+        <h3>常用快捷键</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>快捷键</th><th>作用</th></tr></thead>
+            <tbody>
+              <tr><td><span class="kbd">Ctrl</span> + <span class="kbd">G</span></td><td>打断 AI 说话</td></tr>
+              <tr><td><span class="kbd">Ctrl</span> + <span class="kbd">T</span></td><td>窗口置顶</td></tr>
+              <tr><td><span class="kbd">Ctrl</span> + <span class="kbd">M</span></td><td>切换气泡显示</td></tr>
+              <tr><td><span class="kbd">Ctrl</span> + <span class="kbd">Q</span></td><td>退出程序</td></tr>
+              <tr><td>按住 <span class="kbd">V</span></td><td>按键说话（需开启 PTT）</td></tr>
+              <tr><td><span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">1~5</span></td><td>触发预设动作</td></tr>
+              <tr><td><span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">6</span></td><td>随机播放音乐</td></tr>
+              <tr><td><span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">0</span></td><td>停止所有动作</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="tabs">
+        <h2>控制面板各页签是干什么的？</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>页签</th><th>干什么用</th></tr></thead>
+            <tbody>
+              <tr><td><strong>服务控制</strong></td><td>启动/停止桌宠、ASR、记忆等；看日志</td></tr>
+              <tr><td><strong>基础配置</strong></td><td>视觉识图、工具开关</td></tr>
+              <tr><td><strong>对话配置</strong></td><td>选对话模型、开打字框、语音打断</td></tr>
+              <tr><td><strong>人格设置</strong></td><td>改 AI 性格、人设提示词</td></tr>
+              <tr><td><strong>LLM 配置</strong></td><td>管理 API 密钥和模型列表</td></tr>
+              <tr><td><strong>云端配置</strong></td><td>阿里云 TTS、百度 ASR 等（勿用已弃用的全云端肥牛）</td></tr>
+              <tr><td><strong>Live2D 设置</strong></td><td>皮套位置、大小、表情动作</td></tr>
+              <tr><td><strong>声音克隆</strong></td><td>本地 TTS 训练（线上版一般用不到）</td></tr>
+              <tr><td><strong>广场</strong></td><td>下载提示词、工具、插件资源</td></tr>
+              <tr><td><strong>插件管理</strong></td><td>开关各种扩展功能</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout callout-info">改完任何配置，记得点右上角 <strong>「保存」</strong>，必要时重启桌宠。</div>
+      </section>
+
+      <section id="plugins">
+        <h2>插件：给肥牛加技能</h2>
+        <p>本安装包预装 <strong>33 个插件</strong>，默认启用 <strong>7 个</strong>。</p>
+        <div class="callout callout-info">完整说明见 <a href="guide-plugins.html"><strong>插件使用教程</strong></a> — 含每个插件的配置项、工具列表和「怎么说」示例。</div>
+        <p>改完插件配置后，建议 <strong>重启桌宠</strong> 生效。</p>
+      </section>
+
+      <section id="memory">
+        <h2>记忆系统（启动桌宠的前置条件）</h2>
+        <p>线上版 <strong>必须启动 MemOS 记忆后端</strong>，桌宠才能正常运行。内置记忆插件默认开启，连接 <code>http://127.0.0.1:8003</code>。</p>
+
+        <h3>启动记忆后端（必做）</h3>
+        <ol class="step-list">
+          <li><strong>服务控制</strong> → 记忆系统 → <strong>启动</strong></li>
+          <li>等待状态变绿（首次加载 Embedding 模型，可能需要 1~3 分钟）</li>
+          <li>可查看 <strong>记忆日志</strong> 确认是否就绪</li>
+        </ol>
+        <div class="callout callout-tip">也可手动运行 <code>4.MEMOS-API.bat</code>，效果与 WebUI 启动相同。</div>
+
+        <h3>记忆管理网页（可选）</h3>
+        <p>需要查看、添加、搜索记忆时，在记忆后端已运行的前提下，点 <strong>打开 WebUI</strong> 或运行 <code>5.MEMOS-WebUI.bat</code>。这不是开桌宠的必需步骤。</p>
+      </section>
+
+      <section id="faq">
+        <h2>常见问题</h2>
+
+        <div class="faq-item open">
+          <button class="faq-q" type="button">桌宠启动了，但没有声音？<span class="arrow">▼</span></button>
+          <div class="faq-a">
+            <ul>
+              <li>检查云端配置 → 阿里云 TTS 是否启用且 Key 正确</li>
+              <li>确认字节 TTS、云端 TTS 没有同时开着</li>
+              <li>看服务控制里的 TTS 日志 / 桌宠日志</li>
+              <li>参考 <a href="guide-aliyun-tts.html">阿里云 TTS 教程</a></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-q" type="button">我说话它没反应？<span class="arrow">▼</span></button>
+          <div class="faq-a">
+            <ul>
+              <li>确认 ASR 语音识别已启动（状态变绿）</li>
+              <li>检查麦克风权限和是否被其他软件占用</li>
+              <li>或在云端配置中启用百度流式 ASR 作为替代</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-q" type="button">Live2D 启动不了 / 提示等待端口？<span class="arrow">▼</span></button>
+          <div class="faq-a">
+            <ul>
+              <li>确认 <strong>记忆系统</strong> 和 <strong>ASR</strong> 都已启动且状态变绿</li>
+              <li>首次启动记忆系统较慢，请查看 <strong>记忆日志</strong> 是否仍在加载</li>
+              <li>记忆后端默认地址 <code>http://127.0.0.1:8003</code>，不要被防火墙拦截</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-q" type="button">全云端肥牛 / RAG 还能用吗？<span class="arrow">▼</span></button>
+          <div class="faq-a">
+            <p><strong>不能。</strong> 这两项均已弃用：「启动全云端」服务已下线，<code>RAG.bat</code> 和 WebUI 里的 RAG 服务也不再维护。请改用 <strong>LLM API + 阿里云 TTS + ASR</strong>；需要长期记忆请用 <strong>MemOS 记忆系统</strong>。</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-q" type="button">一键启动时 TTS / RAG 报错？<span class="arrow">▼</span></button>
+          <div class="faq-a">
+            <p>线上版没有本地 TTS 模型，一键启动时 <strong>TTS、RAG 报错可忽略</strong>。但 <strong>记忆系统必须成功启动</strong>，且 <strong>阿里云 TTS</strong> 需配好、<strong>ASR</strong> 需运行，语音才能正常使用。</p>
+          </div>
+        </div>
+
+        <div class="faq-item">
+          <button class="faq-q" type="button">改了配置没生效？<span class="arrow">▼</span></button>
+          <div class="faq-a">
+            <ol>
+              <li>点右上角保存</li>
+              <li>重启 Live2D 主服务</li>
+              <li>还不行就一键停止再一键启动</li>
+            </ol>
+          </div>
+        </div>
+
+        <h3>电脑配置建议</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>项目</th><th>建议</th></tr></thead>
+            <tbody>
+              <tr><td>系统</td><td>Windows 10 / 11</td></tr>
+              <tr><td>内存</td><td>8 GB 以上（开 ASR 建议 16 GB）</td></tr>
+              <tr><td>显卡</td><td>线上版不强制（语音走云端）</td></tr>
+              <tr><td>网络</td><td>需要稳定联网</td></tr>
+              <tr><td>麦克风</td><td>语音聊天需要</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="flow">
+        <h2>推荐使用流程</h2>
+        <div class="flow">
+          <div class="flow-step">打开 WebUI 控制面板</div>
+          <div class="flow-arrow">↓</div>
+          <div class="flow-step">配好 LLM API + 阿里云 TTS</div>
+          <div class="flow-arrow">↓</div>
+          <div class="flow-step">启动 ASR 语音识别</div>
+          <div class="flow-arrow">↓</div>
+          <div class="flow-step">启动 记忆系统（MemOS，必做）</div>
+          <div class="flow-arrow">↓</div>
+          <div class="flow-step">启动 Live2D 主服务</div>
+          <div class="flow-arrow">↓</div>
+          <div class="flow-step">说话 / 打字聊天 🎉</div>
+        </div>
+
+        <div class="summary-box">
+          <h3>四句话记牢</h3>
+          <ol>
+            <li>用 <strong>WebUI 控制面板</strong> 管理一切</li>
+            <li>聊天靠 <strong>大模型 API</strong>，说话靠 <strong>云端 TTS</strong></li>
+            <li>先启动 <strong>ASR + 记忆系统</strong>，再启动桌宠</li>
+            <li>出问题先看 <strong>服务控制</strong> 里的日志</li>
+          </ol>
+        </div>
+      </section>
+
+      <section id="more">
+        <h2>进阶与更多资料</h2>
+        <ul class="link-list">
+          <li><a href="guide-plugins.html">🧩 插件使用教程（7 个默认启用插件）</a></li>
+          <li><a href="guide-aliyun-tts.html">🔊 阿里云 TTS 部署教程</a></li>
+          <li><a href="http://mynewbot.com/tutorials" target="_blank" rel="noopener">📚 官方视频/图文教程</a></li>
+          <li><a href="https://github.com/morettt/my-neuro" target="_blank" rel="noopener">💻 项目 GitHub</a></li>
+        </ul>
+      </section>
+    </main>
+  </div>
+
+  <footer class="site-footer">
+    <a href="index.html">← 返回教程首页</a> · my-neuro v6.6
+  </footer>
+
+  <script src="docs.js"></script>
+</body>
+</html>
