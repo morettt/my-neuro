@@ -75,6 +75,12 @@ class BM25Searcher:
         self.documents = documents
         self.doc_ids = [doc.get(id_field, str(i)) for i, doc in enumerate(documents)]
         
+        # 空语料时 BM25Okapi 会除零，直接置空索引
+        if not documents:
+            self.bm25 = None
+            logger.info("BM25 索引为空（0 个文档），跳过构建")
+            return
+        
         # 分词
         tokenized_docs = [
             self.tokenizer(doc.get(content_field, ''))
