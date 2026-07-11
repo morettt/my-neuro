@@ -5,13 +5,13 @@ import zipfile
 import shutil
 import json
 import time
+from pathlib import Path
 
-current_path = os.path.dirname(os.path.realpath(__file__))
-current_dir = os.getcwd()
+PROJECT_ROOT = Path(__file__).resolve().parent
 
 
 def now_version():
-    with open(r"live-2d\config.json", 'r', encoding="utf-8") as f:
+    with open(PROJECT_ROOT / "live-2d" / "config.json", 'r', encoding="utf-8") as f:
         return json.load(f)['version']
 
 
@@ -188,17 +188,8 @@ def extract_zip(zip_file, target_folder):
                             f.write(data)
                 except Exception as e:
                     # 如果编码转换失败，直接使用原始路径
-                    # 先提取到临时位置
-                    zip_ref.extract(file)
-
-                    # 如果解压成功，移动文件到目标文件夹
-                    if os.path.exists(file):
-                        target_path = os.path.join(target_folder, file)
-                        # 确保目标目录存在
-                        if os.path.dirname(target_path) and not os.path.exists(os.path.dirname(target_path)):
-                            os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                        # 移动文件
-                        shutil.move(file, target_path)
+                    # 直接提取到目标文件夹
+                    zip_ref.extract(file, target_folder)
 
                 # 计算解压百分比
                 percent = int((index + 1) * 100 / total_files)
@@ -243,6 +234,7 @@ def download_live2d_model_to_temp(target_folder):
         # 提取GitHub原始下载URL和文件名
         github_url = data['assets'][0]['browser_download_url']
         filename = data['assets'][0]['name']
+        download_path = PROJECT_ROOT / filename
 
     except Exception as e:
         print(f"获取下载链接失败: {e}")
@@ -261,7 +253,7 @@ def download_live2d_model_to_temp(target_folder):
     for source_name, url in download_sources:
         try:
             print(f"\n尝试使用 {source_name} 下载...")
-            downloaded_file = download_file(url, filename)
+            downloaded_file = download_file(url, download_path)
             print(f"✓ {source_name} 下载成功!")
             break  # 下载成功就跳出循环
         except Exception as e:
@@ -282,8 +274,8 @@ def download_live2d_model_to_temp(target_folder):
                 print("=" * 60 + "\n")
 
                 # 即使失败也不删除部分下载的文件
-                if os.path.exists(filename):
-                    print(f"⚠️ 保留部分下载的文件 {filename}，下次运行可继续下载")
+                if os.path.exists(download_path):
+                    print(f"⚠️ 保留部分下载的文件 {download_path}，下次运行可继续下载")
 
                 return False
 
@@ -302,12 +294,11 @@ def download_live2d_model_to_temp(target_folder):
 
 
 def backup_and_restore_memory():
-    folder_path = "live-2d"
-    temp_folder = "live-2d-temp"  # 临时文件夹
+    folder_path = PROJECT_ROOT / "live-2d"
+    temp_folder = PROJECT_ROOT / "live-2d-temp"  # 临时文件夹
     memory_file = os.path.join(folder_path, "AI记录室/记忆库.txt")
     memory_content = None  # 用来标记是否有备份内容
-    global current_path
-    backup_path = os.path.join(current_path, "memory_backup.txt")
+    backup_path = PROJECT_ROOT / "memory_backup.txt"
 
     # 尝试读取记忆库内容（如果存在的话）
     if os.path.exists(memory_file):
@@ -394,9 +385,8 @@ def backup_and_restore_memory():
         print("已停止更新")
 
 
-current_version = now_version()
-
 if __name__ == "__main__":
+    current_version = now_version()
     latest_version = get_latest_release()
     if "错误" in latest_version or "未找到" in latest_version:
         print(latest_version)
