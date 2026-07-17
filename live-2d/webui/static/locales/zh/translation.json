@@ -170,6 +170,7 @@
     "no_desc": "无描述",
     "install_failed": "安装失败",
     "install_error": "安装时出错",
+    "install_task_missing": "安装任务状态已丢失，请重试",
     "progress_ready": "准备中...",
     "progress_done": "✓ 安装完成",
     "progress_timeout": "安装超时，请重试",

@@ -10,12 +10,21 @@ import subprocess
 import time
 import os
 import json
+from pathlib import Path
 from flask import Blueprint, jsonify
 
-from .utils import PROJECT_ROOT, logger, service_processes, service_pids, is_service_running
+from .utils import PROJECT_ROOT, logger, service_processes, service_pids
+from .state_io import (
+    delete_resource_state,
+    read_resource_state,
+    resource_lock,
+    write_resource_state,
+)
 
 # Windows 下隐藏窗口的标志
 CREATE_NO_WINDOW = 0x08000000 if sys.platform.startswith('win') else 0
+MANAGED_SERVICES = ('live2d', 'asr', 'tts', 'bert', 'memos', 'rag')
+SERVICE_OPERATION_LOCK_TIMEOUT = 20.0
 
 # 创建服务控制蓝图
 service_bp = Blueprint('service', __name__)
@@ -25,12 +34,108 @@ import datetime
 START_TIME = datetime.datetime.now()
 
 
+def _service_resource(service):
+    return f'service:{PROJECT_ROOT.resolve()}:{service}'
+
+
+def _read_service_owner(service):
+    return read_resource_state(_service_resource(service))
+
+
+def _write_service_owner(service, proc):
+    write_resource_state(
+        _service_resource(service),
+        {
+            'service': service,
+            'service_pid': int(proc.pid),
+            'webui_pid': os.getpid(),
+            'updated_at': time.time(),
+        },
+    )
+
+
+def _clear_service_owner(service):
+    delete_resource_state(_service_resource(service))
+
+
+def _pid_is_running(pid):
+    try:
+        process_id = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if process_id <= 0:
+        return False
+
+    if sys.platform.startswith('win'):
+        import ctypes
+
+        process_query_limited_information = 0x1000
+        still_active = 259
+        handle = ctypes.windll.kernel32.OpenProcess(
+            process_query_limited_information,
+            False,
+            process_id,
+        )
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            return bool(
+                ctypes.windll.kernel32.GetExitCodeProcess(
+                    handle,
+                    ctypes.byref(exit_code),
+                )
+                and exit_code.value == still_active
+            )
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
+
+    try:
+        os.kill(process_id, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _get_service_state(service):
+    proc = service_processes.get(service)
+    locally_tracked = bool(proc and proc.poll() is None)
+    if proc and not locally_tracked:
+        service_processes.pop(service, None)
+
+    owner = _read_service_owner(service)
+    owner_pid = owner.get('service_pid') if isinstance(owner, dict) else None
+    shared_tracked = bool(owner_pid and _pid_is_running(owner_pid))
+    if owner and not shared_tracked:
+        _clear_service_owner(service)
+        owner_pid = None
+
+    running = locally_tracked or shared_tracked
+    service_pids[service] = running
+    return {
+        'running': running,
+        'locally_tracked': locally_tracked,
+        'shared_tracked': shared_tracked,
+        'owner_pid': owner_pid,
+    }
+
+
+def _batch_command(script_path):
+    if not sys.platform.startswith('win'):
+        return [str(script_path)]
+    command = os.environ.get('COMSPEC', 'cmd.exe')
+    return [command, '/d', '/c', 'call', str(script_path)]
+
+
 @service_bp.route('/api/status')
 def get_status():
     """获取所有服务的状态"""
     status = {}
-    for service in service_pids.keys():
-        status[service] = 'running' if service_pids.get(service, False) else 'stopped'
+    services = set(MANAGED_SERVICES) | set(service_pids) | set(service_processes)
+    for service in services:
+        status[service] = (
+            'running' if _get_service_state(service)['running'] else 'stopped'
+        )
     return jsonify(status)
 
 
@@ -64,11 +169,37 @@ def get_system_info():
 
 @service_bp.route('/api/start/<service>', methods=['POST'])
 def start_service(service):
+    try:
+        with resource_lock(
+            _service_resource(service),
+            timeout=SERVICE_OPERATION_LOCK_TIMEOUT,
+        ):
+            return _start_service_locked(service)
+    except TimeoutError:
+        return jsonify({
+            'success': False,
+            'error': '服务启动操作正由另一个 WebUI 执行，请稍后重试',
+        }), 409
+    except Exception as error:
+        logger.error(f'获取 {service} 服务启动锁失败：{error}')
+        return jsonify({
+            'success': False,
+            'error': f'服务启动锁失败：{error}',
+        }), 500
+
+
+def _start_service_locked(service):
     """启动指定服务"""
     try:
         # 检查服务是否已在运行
-        if is_service_running(service):
-            return jsonify({'success': False, 'error': '服务已在运行中'})
+        state = _get_service_state(service)
+        if state['running']:
+            return jsonify({
+                'success': False,
+                'already_running': True,
+                'pid': state.get('owner_pid'),
+                'error': '服务已在运行中',
+            })
 
         # 根据服务类型启动对应的脚本
         # live2d 使用特殊方式启动（不显示控制台），其他服务保持原样
@@ -121,6 +252,12 @@ def start_service(service):
             return jsonify({'success': False, 'error': f'未知服务：{service}'})
 
         config = script_map[service]
+        script_path = Path(config['script'])
+        if not script_path.is_file():
+            return jsonify({
+                'success': False,
+                'error': f'找不到启动脚本：{script_path}',
+            })
 
         # 对于 Live2D 服务，启动前清空日志文件
         if service == 'live2d' and config.get('log_file'):
@@ -137,8 +274,7 @@ def start_service(service):
             # Live2D 服务：不显示控制台窗口，直接运行 bat
             # 使用 shell=True 让 bat 文件能正确执行
             proc = subprocess.Popen(
-                config['script'],
-                shell=True,
+                _batch_command(script_path),
                 cwd=config['cwd'],
                 creationflags=CREATE_NO_WINDOW if sys.platform.startswith('win') else 0,
                 stdout=subprocess.PIPE,
@@ -150,17 +286,22 @@ def start_service(service):
             if proc.poll() is not None:
                 # 进程已退出，尝试用 cmd /c 方式启动
                 proc = subprocess.Popen(
-                    ['cmd', '/c', config['script']],
+                    _batch_command(script_path),
                     cwd=config['cwd'],
                     creationflags=CREATE_NO_WINDOW if sys.platform.startswith('win') else 0,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT
                 )
                 time.sleep(1)
+                if proc.poll() is not None:
+                    return jsonify({
+                        'success': False,
+                        'error': '服务启动脚本立即退出',
+                    })
         else:
             # 其他服务：保持原有方式（显示控制台窗口）
             proc = subprocess.Popen(
-                config['args'],
+                _batch_command(script_path),
                 cwd=config['cwd'],
                 creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform.startswith('win') else 0
             )
@@ -168,6 +309,16 @@ def start_service(service):
         service_processes[service] = proc
         # 记录服务已启动（即使进程对象可能立即结束）
         service_pids[service] = True
+        try:
+            _write_service_owner(service, proc)
+        except Exception:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+            service_processes.pop(service, None)
+            service_pids[service] = False
+            raise
         logger.warning(f'{service} 服务已启动 (PID: {proc.pid})')
 
         return jsonify({'success': True, 'pid': proc.pid})
@@ -179,7 +330,30 @@ def start_service(service):
 
 @service_bp.route('/api/stop/<service>', methods=['POST'])
 def stop_service(service):
+    try:
+        with resource_lock(
+            _service_resource(service),
+            timeout=SERVICE_OPERATION_LOCK_TIMEOUT,
+        ):
+            return _stop_service_locked(service)
+    except TimeoutError:
+        return jsonify({
+            'success': False,
+            'error': '服务停止操作正由另一个 WebUI 执行，请稍后重试',
+        }), 409
+    except Exception as error:
+        logger.error(f'获取 {service} 服务停止锁失败：{error}')
+        return jsonify({
+            'success': False,
+            'error': f'服务停止锁失败：{error}',
+        }), 500
+
+
+def _stop_service_locked(service):
     """停止指定服务"""
+    if service not in MANAGED_SERVICES:
+        return jsonify({'success': False, 'error': f'未知服务：{service}'}), 404
+
     try:
         # 使用 PowerShell 根据命令行参数查找 PID，然后用 taskkill /T 终止进程树
         if sys.platform.startswith('win'):
@@ -193,17 +367,28 @@ def stop_service(service):
                     pids = [str(proc.pid)]
                     logger.debug(f'使用记录的 PID: {proc.pid}')
 
+            if not pids:
+                owner = _read_service_owner(service)
+                owner_pid = (
+                    owner.get('service_pid')
+                    if isinstance(owner, dict)
+                    else None
+                )
+                if owner_pid and _pid_is_running(owner_pid):
+                    pids = [str(owner_pid)]
+                    logger.debug(f'使用共享 PID: {owner_pid}')
+
             # 如果没有找到记录的 PID，使用 PowerShell 查找
             if not pids:
                 # 构建 bat 文件名
-                if service == 'live2d':
-                    bat_name = 'go.bat'
-                elif service == 'memos':
-                    bat_name = 'start_memos.bat'
-                elif service == 'rag':
-                    bat_name = 'RAG.bat'
-                else:
-                    bat_name = f'{service}.bat'
+                bat_name = {
+                    'live2d': 'go.bat',
+                    'asr': '1.ASR.bat',
+                    'tts': '2.TTS.bat',
+                    'bert': '3.bert.bat',
+                    'memos': 'start_memos.bat',
+                    'rag': 'RAG.bat',
+                }.get(service, f'{service}.bat')
 
                 # 使用 PowerShell 查找包含 bat 文件名的进程 PID
                 ps_script = f"""
@@ -229,6 +414,7 @@ def stop_service(service):
                 service_pids[service] = False
                 if service in service_processes:
                     del service_processes[service]
+                _clear_service_owner(service)
                 return jsonify({'success': True, 'message': '服务已停止'})
 
             # 对每个 PID 使用 taskkill /T 终止进程树
@@ -259,28 +445,37 @@ def stop_service(service):
                         killed_count += 1
                         logger.debug(f'已终止进程树 PID: {pid} (返回码=0)')
 
-            # 清除服务标记（无论成功与否都重置按钮）
-            service_pids[service] = False
-            if service in service_processes:
-                del service_processes[service]
-
             if killed_count > 0:
+                service_pids[service] = False
+                service_processes.pop(service, None)
+                _clear_service_owner(service)
                 logger.info(f'{service} 服务已停止（终止了 {killed_count} 个进程树）')
                 return jsonify({'success': True, 'message': f'成功终止 {killed_count} 个进程'})
             elif failed_pids:
-                logger.warning(f'{service} 服务停止：所有进程终止失败，但已重置状态')
-                return jsonify({'success': True, 'warning': '进程可能已自行关闭'})
+                service_pids[service] = _get_service_state(service)['running']
+                logger.warning(f'{service} 服务停止：进程终止失败')
+                return jsonify({
+                    'success': False,
+                    'error': '进程终止失败',
+                }), 500
             else:
+                service_pids[service] = False
+                service_processes.pop(service, None)
+                _clear_service_owner(service)
                 return jsonify({'success': True, 'message': '服务已停止'})
         else:
             return jsonify({'success': False, 'error': '仅支持 Windows 系统'})
     except subprocess.TimeoutExpired:
         logger.error(f'停止 {service} 服务超时')
-        # 即使超时也清除标记
-        service_pids[service] = False
-        return jsonify({'success': True, 'warning': '停止命令已发送，但可能未完全终止'})
+        service_pids[service] = _get_service_state(service)['running']
+        return jsonify({
+            'success': False,
+            'error': '停止命令超时，服务状态已重新检查',
+        }), 504
     except Exception as e:
         logger.error(f'停止 {service} 服务失败：{str(e)}')
-        # 异常时也清除标记
-        service_pids[service] = False
-        return jsonify({'success': True, 'warning': f'停止服务时出错：{str(e)}'})
+        service_pids[service] = _get_service_state(service)['running']
+        return jsonify({
+            'success': False,
+            'error': f'停止服务时出错：{str(e)}',
+        }), 500

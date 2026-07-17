@@ -15,6 +15,7 @@ from .marketplace_updater import (
     check_framework_compatibility,
     check_updates_for_plugins,
 )
+from .state_io import atomic_write_json, resource_lock
 
 # 创建插件管理蓝图
 plugin_bp = Blueprint('plugin', __name__)
@@ -22,15 +23,41 @@ plugin_bp = Blueprint('plugin', __name__)
 PLUGIN_FRAMEWORK_VERSION = '1.0.0'
 
 
+def _read_enabled_plugins_file(enabled_path):
+    if not enabled_path.exists():
+        return []
+    with open(enabled_path, 'r', encoding='utf-8-sig') as f:
+        data = json.load(f)
+    plugins = data.get('plugins', []) if isinstance(data, dict) else []
+    if not isinstance(plugins, list):
+        raise ValueError('enabled_plugins.json plugins must be an array')
+    return plugins
+
+
+def _build_updated_plugin_config(original_config, config_data):
+    ordered_config = OrderedDict()
+    for key in original_config.keys():
+        original_item = original_config[key]
+        if isinstance(original_item, dict) and 'type' in original_item:
+            ordered_config[key] = OrderedDict(original_item)
+            if key in config_data:
+                ordered_config[key]['value'] = config_data[key]
+        elif key in config_data:
+            ordered_config[key] = config_data[key]
+        else:
+            ordered_config[key] = original_item
+
+    for key in config_data.keys():
+        if key not in ordered_config:
+            ordered_config[key] = config_data[key]
+    return ordered_config
+
+
 def load_enabled_plugins():
     """从 enabled_plugins.json 加载已启用的插件列表"""
     enabled_path = PROJECT_ROOT / 'plugins' / 'enabled_plugins.json'
-    if not enabled_path.exists():
-        return []
     try:
-        with open(enabled_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        return data.get('plugins', [])
+        return _read_enabled_plugins_file(enabled_path)
     except Exception as e:
         logger.error(f'加载 enabled_plugins.json 失败：{e}')
         return []
@@ -40,8 +67,8 @@ def save_enabled_plugins(enabled_list):
     """保存已启用的插件列表到 enabled_plugins.json"""
     enabled_path = PROJECT_ROOT / 'plugins' / 'enabled_plugins.json'
     try:
-        with open(enabled_path, 'w', encoding='utf-8') as f:
-            json.dump({'plugins': enabled_list}, f, ensure_ascii=False, indent=2)
+        with resource_lock(enabled_path):
+            atomic_write_json(enabled_path, {'plugins': enabled_list})
         return True
     except Exception as e:
         logger.error(f'保存 enabled_plugins.json 失败：{e}')
@@ -128,8 +155,6 @@ def toggle_plugin():
     
     使用 POST body 传递 plugin_path，避免 URL 中/的问题
     """
-    enabled_plugins = load_enabled_plugins()
-    
     data = request.get_json()
     if not data:
         return jsonify({'success': False, 'error': '无效的请求数据'}), 400
@@ -152,21 +177,26 @@ def toggle_plugin():
     if not plugin_dir.exists():
         return jsonify({'success': False, 'error': f'插件目录不存在：{plugin_path}'}), 404
     
-    # 切换状态
-    if plugin_path in enabled_plugins:
-        enabled_plugins.remove(plugin_path)
-        action = 'disabled'
-    else:
-        enabled_plugins.append(plugin_path)
-        action = 'enabled'
-    
-    if save_enabled_plugins(enabled_plugins):
+    enabled_path = PROJECT_ROOT / 'plugins' / 'enabled_plugins.json'
+    try:
+        with resource_lock(enabled_path):
+            enabled_plugins = _read_enabled_plugins_file(enabled_path)
+            if plugin_path in enabled_plugins:
+                enabled_plugins.remove(plugin_path)
+                action = 'disabled'
+            else:
+                enabled_plugins.append(plugin_path)
+                action = 'enabled'
+            atomic_write_json(enabled_path, {'plugins': enabled_plugins})
+
         return jsonify({
             'success': True,
             'action': action,
             'plugin_path': plugin_path
         })
-    return jsonify({'success': False, 'error': '保存失败'}), 500
+    except Exception as e:
+        logger.error(f'保存 enabled_plugins.json 失败：{e}')
+        return jsonify({'success': False, 'error': '保存失败'}), 500
 
 
 @plugin_bp.route('/api/plugins/open-config', methods=['POST'])
@@ -407,36 +437,14 @@ def save_plugin_config(plugin_name):
         if not config_file:
             return jsonify({'error': f'插件 {plugin_name} 没有配置文件'}), 404
         
-        # 读取原始配置文件以保持顺序和元数据
-        with open(config_file, 'r', encoding='utf-8') as f:
-            original_config = json.load(f, object_pairs_hook=OrderedDict)
-        
-        # 按照原始配置文件的键顺序重新排列新配置
-        ordered_config = OrderedDict()
-        for key in original_config.keys():
-            original_item = original_config[key]
-            
-            # 检查是否是带元数据的配置项（有 title, type 等字段）
-            if isinstance(original_item, dict) and 'type' in original_item:
-                # 这是带元数据的配置项，只更新 value 字段
-                ordered_config[key] = OrderedDict(original_item)
-                if key in config_data:
-                    ordered_config[key]['value'] = config_data[key]
-            else:
-                # 这是简单值配置，直接更新
-                if key in config_data:
-                    ordered_config[key] = config_data[key]
-                else:
-                    ordered_config[key] = original_item
-        
-        # 添加新配置中新增的键（如果有）
-        for key in config_data.keys():
-            if key not in ordered_config:
-                ordered_config[key] = config_data[key]
-        
-        # 保存新配置（保持原始顺序和 2 空格缩进）
-        with open(config_file, 'w', encoding='utf-8') as f:
-            json.dump(ordered_config, f, ensure_ascii=False, indent=2)
+        with resource_lock(config_file):
+            with open(config_file, 'r', encoding='utf-8') as f:
+                original_config = json.load(f, object_pairs_hook=OrderedDict)
+            ordered_config = _build_updated_plugin_config(
+                original_config,
+                config_data,
+            )
+            atomic_write_json(config_file, ordered_config)
         
         return jsonify({
             'success': True,

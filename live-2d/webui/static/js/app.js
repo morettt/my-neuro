@@ -8,8 +8,11 @@ const configDirtyItems = new Set();
 let isConfigDirtyTrackingReady = false;
 let currentLogTab = 'system-log';
 let logPollingInterval = null;
-let lastPetLogCount = 0;  // 记录上次桌宠日志数量
-let lastToolLogCount = 0; // 记录上次工具日志数量
+let runtimeLogOffset = null;
+let runtimeLogCursor = '';
+let runtimeLogRequestInFlight = false;
+const LOG_POLL_INTERVAL_MS = 1000;
+const MAX_RENDERED_LOG_ENTRIES = 500;
 
 // 对话历史状态
 let chatHistoryState = {
@@ -159,7 +162,12 @@ function addLog(message, level = 'info', logType = 'system') {
 function appendNewLogs(logType, newLogs) {
     const outputId = logType + '-log-output';
     const logOutput = document.getElementById(outputId);
-    
+    if (!logOutput) return;
+
+    const wasAtBottom = (
+        logOutput.scrollHeight - logOutput.clientHeight - logOutput.scrollTop < 50
+    );
+
     // 为每条新日志添加条目（不添加时间戳，直接使用日志文件中的时间）
     newLogs.forEach(log => {
         const level = log.includes('错误') || log.includes('失败') || log.includes('error') || log.includes('fail') || log.includes('❌') ? 'error' :
@@ -170,10 +178,13 @@ function appendNewLogs(logType, newLogs) {
         logEntry.textContent = log;  // 直接使用日志内容，不添加额外时间戳
         logOutput.appendChild(logEntry);
     });
-    
+
+    while (logOutput.children.length > MAX_RENDERED_LOG_ENTRIES) {
+        logOutput.firstElementChild?.remove();
+    }
+
     // 只有当用户已经在底部时才自动滚动到底部
-    const isAtBottom = logOutput.scrollHeight - logOutput.clientHeight - logOutput.scrollTop < 50;
-    if (isAtBottom) {
+    if (wasAtBottom) {
         logOutput.scrollTop = logOutput.scrollHeight;
     }
     
@@ -204,6 +215,8 @@ function switchLogTab(tabId) {
     } else {
         stopChatHistoryPolling();
     }
+
+    pollVisibleLogs();
 
     // 不再同步第二个面板，两个面板的选项卡独立操作，方便对照不同日志
 }
@@ -321,6 +334,7 @@ function switchLogTab2(tabId) {
     } else {
         stopChatHistoryPolling();
     }
+    pollVisibleLogs();
 }
 
 // 清空第二个面板的当前日志
@@ -666,62 +680,78 @@ function syncLogToPanel2() {
     // 右侧面板现在只显示历史对话，无需同步日志
 }
 
-// 加载日志（增量更新）
-async function loadLogs(logType) {
-    try {
-        const response = await fetch('/api/logs/' + logType);
-        if (response.ok) {
-            const data = await response.json();
-            if (data.logs && data.logs.length > 0) {
-                const outputId = logType + '-log-output';
-                const logOutput = document.getElementById(outputId);
-                
-                // 检查日志数量是否变化
-                const currentCount = logType === 'pet' ? lastPetLogCount : lastToolLogCount;
-                const newCount = data.logs.length;
-                
-                // 只有当日志数量增加时才添加新日志
-                if (newCount > currentCount) {
-                    const newLogs = data.logs.slice(currentCount);  // 只取新增的日志
-                    appendNewLogs(logType, newLogs);
-                    
-                    // 更新计数
-                    if (logType === 'pet') {
-                        lastPetLogCount = newCount;
-                    } else {
-                        lastToolLogCount = newCount;
-                    }
-                }
-                // 如果日志数量减少（文件被清空），重置并重新加载
-                else if (newCount < currentCount) {
-                    logOutput.innerHTML = '';
-                    if (logType === 'pet') {
-                        lastPetLogCount = 0;
-                    } else {
-                        lastToolLogCount = 0;
-                    }
-                    // 重新加载所有日志
-                    appendNewLogs(logType, data.logs);
-                    if (logType === 'pet') {
-                        lastPetLogCount = data.logs.length;
-                    } else {
-                        lastToolLogCount = data.logs.length;
-                    }
-                }
-            }
+function runtimeLogIsVisible() {
+    const dashboard = document.getElementById('dashboard');
+    if (document.hidden || !dashboard?.classList.contains('active')) {
+        return false;
+    }
+
+    return Array.from(document.querySelectorAll(
+        '#logPanelContainer1 .log-panel.active, '
+        + '#logPanelContainer2 .log-panel.active'
+    )).some(panel => {
+        const container = panel.closest('.log-panel-container');
+        if (!container || getComputedStyle(container).display === 'none') {
+            return false;
         }
+        return panel.id.startsWith('pet-log')
+            || panel.id.startsWith('tool-log');
+    });
+}
+
+
+async function loadRuntimeLogs() {
+    if (runtimeLogRequestInFlight) return;
+    runtimeLogRequestInFlight = true;
+    try {
+        const params = new URLSearchParams();
+        if (runtimeLogOffset !== null) {
+            params.set('offset', String(runtimeLogOffset));
+            params.set('cursor', runtimeLogCursor);
+        }
+        const suffix = params.toString() ? '?' + params.toString() : '';
+        const response = await fetch('/api/logs/runtime' + suffix);
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || '运行日志读取失败');
+        }
+
+        if (data.reset) {
+            document.getElementById('pet-log-output')?.replaceChildren();
+            document.getElementById('tool-log-output')?.replaceChildren();
+        }
+
+        const logs = data.logs || {};
+        if (Array.isArray(logs.pet) && logs.pet.length > 0) {
+            appendNewLogs('pet', logs.pet);
+        }
+        if (Array.isArray(logs.tool) && logs.tool.length > 0) {
+            appendNewLogs('tool', logs.tool);
+        }
+        runtimeLogOffset = Number.isFinite(Number(data.offset))
+            ? Number(data.offset)
+            : runtimeLogOffset;
+        runtimeLogCursor = data.cursor || runtimeLogCursor;
     } catch (error) {
-        console.error('Load logs failed:', error);
+        console.error('加载运行日志失败:', error);
+    } finally {
+        runtimeLogRequestInFlight = false;
     }
 }
 
+
+function pollVisibleLogs() {
+    if (runtimeLogIsVisible()) {
+        loadRuntimeLogs();
+    }
+}
+
+
 // 启动日志轮询
 function startLogPolling() {
-    // 每 500 毫秒轮询一次桌宠日志和工具日志
-    logPollingInterval = setInterval(() => {
-        loadLogs('pet');
-        loadLogs('tool');
-    }, 500);
+    stopLogPolling();
+    pollVisibleLogs();
+    logPollingInterval = setInterval(pollVisibleLogs, LOG_POLL_INTERVAL_MS);
 }
 
 // 停止日志轮询
@@ -816,8 +846,11 @@ async function startService(serviceName) {
         addLog(t('services.starting') + ' ' + serviceName + ' ' + t('services.service_suffix'), 'info', 'system');
         const response = await fetch('/api/start/' + serviceName, { method: 'POST' });
         const result = await response.json();
-        
-        if (response.ok && result.success) {
+
+        if (response.ok && result.already_running) {
+            updateServiceStatus(serviceName, 'running');
+            addLog(serviceName + ' ' + t('services.already_running'), 'info', 'system');
+        } else if (response.ok && result.success) {
             updateServiceStatus(serviceName, 'running');
             addLog(serviceName + ' ' + t('services.start_success'), 'success', 'system');
         } else {
@@ -878,9 +911,17 @@ async function startAllServices() {
                 const response = await fetch('/api/start/' + service, { method: 'POST' });
                 const result = await response.json();
 
-                if (response.ok && result.success) {
+                if (response.ok && (result.success || result.already_running)) {
                     updateServiceStatus(service, 'running');
-                    addLog(service + ' ' + t('services.start_success'), 'success', 'system');
+                    addLog(
+                        service + ' ' + (
+                            result.already_running
+                                ? t('services.already_running')
+                                : t('services.start_success')
+                        ),
+                        result.already_running ? 'info' : 'success',
+                        'system'
+                    );
                     successCount++;
                 } else {
                     addLog(service + ' ' + t('services.start_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
@@ -1031,6 +1072,10 @@ function switchTab(tabName) {
     const targetButton = document.querySelector(`.tab-button[onclick="switchTab('${tabName}')"]`);
     if (targetButton) {
         targetButton.classList.add('active');
+    }
+
+    if (tabName === 'dashboard') {
+        pollVisibleLogs();
     }
 
     // 保存按钮已移至各面板底部，此处不再需要动态控制
@@ -1475,10 +1520,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // 初始化文件拖拽
     initFileDragDrop();
-
-    // 重置日志计数器
-    lastPetLogCount = 0;
-    lastToolLogCount = 0;
 
     addLog(t('logs.webui_ready'), 'success', 'system');
 
@@ -2833,6 +2874,7 @@ async function resetModelPosition() {
 document.addEventListener('visibilitychange', function() {
     if (!document.hidden) {
         checkServiceStatus();
+        pollVisibleLogs();
     }
 });
 
@@ -3248,41 +3290,58 @@ function restoreInstallButton(pluginName, text) {
     if (progressDiv) progressDiv.style.display = 'none';
 }
 
-// 轮询检测插件是否已安装（检测目录存在）
+// 轮询持久任务状态，让后台安装错误能够直接显示。
 async function pollPluginInstalled(pluginName) {
-    const maxAttempts = 180;  // 最多轮询 180 次（约 3 分钟）
+    const maxAttempts = 180;
     let attempts = 0;
-    
+
     const poll = async () => {
         try {
-            // 直接检查插件目录是否存在
-            const response = await fetch(`/api/market/plugins/check-installed/${pluginName}`);
+            const response = await fetch(
+                `/api/market/plugins/install-status/${encodeURIComponent(pluginName)}`
+            );
             const data = await response.json();
-            
+
             const progressDiv = document.getElementById(`progress-${pluginName}`);
             const progressFill = progressDiv ? progressDiv.querySelector('.progress-fill') : null;
             const progressText = progressDiv ? progressDiv.querySelector('.progress-text') : null;
-            
-            if (data.installed) {
-                // 插件已安装，成功！
+
+            if (!response.ok || data.success === false) {
+                throw new Error(data.error || t('common.unknown_error'));
+            }
+
+            if (data.status === 'failed') {
+                const errorMessage = data.error || t('common.unknown_error');
+                showError(t('market.install_failed') + '：' + errorMessage);
+                restoreInstallButton(pluginName, t('market.plugin_install'));
+                return;
+            }
+
+            if (data.status === 'completed' || data.installed) {
                 if (progressFill) progressFill.style.width = '100%';
                 if (progressText) progressText.textContent = t('market.progress_done');
-                // 延迟刷新列表，让后端有时间清理任务状态
                 setTimeout(() => refreshPluginMarket(), 500);
                 return;
             }
-            
-            // 还未安装，进度条动画
+
+            if (!data.installing && !data.status) {
+                showError(t('market.install_task_missing'));
+                restoreInstallButton(pluginName, t('market.plugin_install'));
+                return;
+            }
+
             if (progressFill) {
-                const progress = (attempts % 50) * 2;  // 0-100 循环动画
+                const reported = Number(data.progress);
+                const progress = Number.isFinite(reported)
+                    ? Math.max(0, Math.min(100, reported))
+                    : (attempts % 50) * 2;
                 progressFill.style.width = progress + '%';
             }
-            
+
             attempts++;
             if (attempts < maxAttempts) {
-                setTimeout(poll, 1000);  // 每秒检查一次
+                setTimeout(poll, 1000);
             } else {
-                // 超时
                 if (progressText) progressText.textContent = t('market.progress_timeout');
                 restoreInstallButton(pluginName, t('market.plugin_install'));
             }
@@ -3292,11 +3351,12 @@ async function pollPluginInstalled(pluginName) {
             if (attempts < maxAttempts) {
                 setTimeout(poll, 1000);
             } else {
+                showError(t('market.install_failed') + '：' + error.message);
                 restoreInstallButton(pluginName, t('market.plugin_install'));
             }
         }
     };
-    
+
     poll();
 }
 

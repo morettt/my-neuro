@@ -170,6 +170,7 @@
     "no_desc": "No description",
     "install_failed": "Install failed",
     "install_error": "Error during installation",
+    "install_task_missing": "Install task state was lost. Please retry.",
     "progress_ready": "Preparing...",
     "progress_done": "✓ Install complete",
     "progress_timeout": "Install timeout, please retry",

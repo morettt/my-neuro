@@ -38,6 +38,36 @@ plugins/community/my-plugin/
 
 `repo` 是插件的 GitHub 地址，方便用户找到来源和提 issue。不填也行，但社区插件建议填上。
 
+### 更新时保留运行数据
+
+插件市场更新会自动保留 `plugin_config.json`、常见数据目录、数据库文件和
+典型的状态文件。插件使用自定义位置保存用户数据时，请在 `metadata.json`
+中声明相对路径：
+
+```json
+{
+  "name": "my-plugin",
+  "persistent_paths": [
+    "custom-state",
+    "user-settings.json"
+  ]
+}
+```
+
+也可以在插件根目录添加 `plugin_persistence.json`：
+
+```json
+{
+  "paths": [
+    "custom-state",
+    "user-settings.json"
+  ]
+}
+```
+
+路径必须位于插件目录内，不能使用绝对路径或 `..`。更新成功后，旧版本会
+保留在 `plugins/.plugin-update-backups/`，同一插件最多保留 3 份。
+
 **启用插件**，在 `plugins/enabled_plugins.json` 里加上插件路径：
 
 ```json

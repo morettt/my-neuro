@@ -35,6 +35,43 @@ GITHUB_REPO_RE = re.compile(
 )
 
 DEFAULT_TIMEOUT = 12
+PERSISTENCE_MANIFEST_NAME = "plugin_persistence.json"
+DEFAULT_PERSISTENT_PATHS = (
+    "plugin_config.json",
+    PERSISTENCE_MANIFEST_NAME,
+    "data",
+    "cache",
+    ".cache",
+    ".runtime",
+    "storage",
+    "state",
+    "logs",
+    "downloads",
+    "media",
+    "output",
+    "generated",
+)
+PERSISTENT_DATABASE_SUFFIXES = {".db", ".sqlite", ".sqlite3"}
+PERSISTENT_DATA_SUFFIXES = {".json", ".jsonl", ".txt", ".csv", ".yaml", ".yml"}
+PERSISTENT_FILE_TOKENS = {
+    "activity",
+    "archive",
+    "cache",
+    "config",
+    "context",
+    "data",
+    "database",
+    "diary",
+    "history",
+    "memory",
+    "profile",
+    "record",
+    "session",
+    "snapshot",
+    "state",
+    "store",
+}
+MAX_RETAINED_UPDATE_BACKUPS = 3
 
 
 def parse_github_repo(repo_url):
@@ -303,15 +340,143 @@ def install_requirements_if_present(plugin_dir):
     )
 
 
+def _normalize_persistent_path(value):
+    if not isinstance(value, str):
+        return None
+    text = value.strip().replace("\\", "/")
+    if not text:
+        return None
+    relative = Path(text)
+    if relative.is_absolute() or ".." in relative.parts or relative == Path("."):
+        raise ValueError(f"Invalid persistent plugin path: {value}")
+    return relative
+
+
+def _declared_persistent_paths(plugin_dir):
+    plugin_path = Path(plugin_dir)
+    declared = set()
+
+    metadata = get_local_metadata(plugin_path)
+    metadata_paths = (
+        metadata.get("persistent_paths", [])
+        if isinstance(metadata, dict)
+        else []
+    )
+    if metadata_paths and not isinstance(metadata_paths, list):
+        raise ValueError("metadata.json persistent_paths must be an array")
+
+    manifest_path = plugin_path / PERSISTENCE_MANIFEST_NAME
+    manifest_paths = []
+    if manifest_path.is_file():
+        with manifest_path.open("r", encoding="utf-8-sig") as file:
+            manifest = json.load(file)
+        if isinstance(manifest, list):
+            manifest_paths = manifest
+        elif isinstance(manifest, dict):
+            manifest_paths = manifest.get("paths", [])
+        else:
+            raise ValueError(
+                f"{PERSISTENCE_MANIFEST_NAME} must be an object or array"
+            )
+        if not isinstance(manifest_paths, list):
+            raise ValueError(
+                f"{PERSISTENCE_MANIFEST_NAME} paths must be an array"
+            )
+
+    for value in [*metadata_paths, *manifest_paths]:
+        normalized = _normalize_persistent_path(value)
+        if normalized is not None:
+            declared.add(normalized)
+    return declared
+
+
+def _discover_persistent_paths(old_plugin_dir, new_plugin_dir):
+    old_path = Path(old_plugin_dir)
+    paths = {Path(value) for value in DEFAULT_PERSISTENT_PATHS}
+    paths.update(_declared_persistent_paths(old_path))
+    paths.update(_declared_persistent_paths(new_plugin_dir))
+
+    for child in old_path.iterdir():
+        if not child.is_file() or child.is_symlink():
+            continue
+        suffix = child.suffix.lower()
+        stem_tokens = {
+            token
+            for token in re.split(r"[^a-z0-9]+", child.stem.lower())
+            if token
+        }
+        if (
+            suffix in PERSISTENT_DATABASE_SUFFIXES
+            or (
+                suffix in PERSISTENT_DATA_SUFFIXES
+                and stem_tokens.intersection(PERSISTENT_FILE_TOKENS)
+            )
+        ):
+            paths.add(Path(child.name))
+
+    return sorted(paths, key=lambda value: value.as_posix())
+
+
+def _copy_persistent_path(source_root, target_root, relative_path):
+    source = Path(source_root) / relative_path
+    target = Path(target_root) / relative_path
+    if not source.exists() or source.is_symlink():
+        return False
+    if (
+        relative_path == Path(PERSISTENCE_MANIFEST_NAME)
+        and target.exists()
+    ):
+        return False
+
+    if source.is_dir():
+        if target.exists() and not target.is_dir():
+            target.unlink()
+        shutil.copytree(source, target, dirs_exist_ok=True, symlinks=True)
+    elif source.is_file():
+        if target.exists() and target.is_dir():
+            shutil.rmtree(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+    else:
+        return False
+    return True
+
+
 def _unique_backup_path(plugin_dir, plugin_name):
     timestamp = time.strftime("%Y%m%d%H%M%S")
-    parent = Path(plugin_dir).parent
+    plugin_path = Path(plugin_dir)
+    category_dir = plugin_path.parent
+    backup_root = (
+        category_dir.parent
+        / ".plugin-update-backups"
+        / category_dir.name
+        / plugin_path.name
+    )
+    backup_root.mkdir(parents=True, exist_ok=True)
     for index in range(100):
         suffix = f"{timestamp}-{index}" if index else timestamp
-        backup_path = parent / f".{plugin_name}.backup-{suffix}"
+        backup_path = backup_root / f"backup-{suffix}"
         if not backup_path.exists():
             return backup_path
     raise RuntimeError("无法创建唯一备份目录")
+
+
+def _prune_old_backups(backup_path, keep=MAX_RETAINED_UPDATE_BACKUPS):
+    backup = Path(backup_path)
+    try:
+        candidates = sorted(
+            (
+                path
+                for path in backup.parent.iterdir()
+                if path.is_dir() and path.name.startswith("backup-")
+            ),
+            key=lambda path: path.stat().st_mtime_ns,
+            reverse=True,
+        )
+    except OSError:
+        return
+    for stale in candidates[max(1, keep):]:
+        shutil.rmtree(stale, ignore_errors=True)
 
 
 def update_plugin_safe(
@@ -321,39 +486,55 @@ def update_plugin_safe(
     archive_downloader=download_archive,
     requirements_installer=install_requirements_if_present,
 ):
-    """原子更新插件：失败时恢复旧目录，成功时保留 plugin_config.json。"""
+    """Stage an update, preserve plugin-owned state, and retain rollback data."""
     plugin_path = Path(plugin_dir)
     if not plugin_path.exists():
         raise FileNotFoundError(f"插件目录不存在：{plugin_path}")
 
-    backup_path = _unique_backup_path(plugin_path, plugin_name)
-    config_path = plugin_path / "plugin_config.json"
-    config_bytes = config_path.read_bytes() if config_path.exists() else None
-
-    archive_bytes = None
-    plugin_path.rename(backup_path)
+    backup_path = None
+    staged_path = Path(
+        tempfile.mkdtemp(
+            prefix=f".{plugin_path.name}.update-",
+            dir=str(plugin_path.parent),
+        )
+    )
+    old_directory_moved = False
     try:
         archive_bytes = archive_downloader(repo_url)
         if not archive_bytes:
             raise RuntimeError("下载到的插件压缩包为空")
 
-        extract_archive_strip_root(archive_bytes, plugin_path)
-        if config_bytes is not None:
-            (plugin_path / "plugin_config.json").write_bytes(config_bytes)
+        extract_archive_strip_root(archive_bytes, staged_path)
+        persistent_paths = _discover_persistent_paths(plugin_path, staged_path)
+        preserved_paths = [
+            relative.as_posix()
+            for relative in persistent_paths
+            if _copy_persistent_path(plugin_path, staged_path, relative)
+        ]
 
-        requirements_installer(plugin_path)
-        metadata = get_local_metadata(plugin_path)
-        shutil.rmtree(backup_path, ignore_errors=True)
+        requirements_installer(staged_path)
+        metadata = get_local_metadata(staged_path)
+
+        backup_path = _unique_backup_path(plugin_path, plugin_name)
+        plugin_path.rename(backup_path)
+        old_directory_moved = True
+        staged_path.rename(plugin_path)
+        old_directory_moved = False
+        _prune_old_backups(backup_path)
         return {
             "name": metadata.get("name", plugin_name),
             "version": metadata.get("version", ""),
             "plugin_dir": str(plugin_path),
+            "preserved_paths": preserved_paths,
+            "backup_path": str(backup_path),
         }
     except Exception:
-        shutil.rmtree(plugin_path, ignore_errors=True)
-        if backup_path.exists():
+        if old_directory_moved and backup_path is not None:
+            shutil.rmtree(plugin_path, ignore_errors=True)
             backup_path.rename(plugin_path)
         raise
+    finally:
+        shutil.rmtree(staged_path, ignore_errors=True)
 
 
 def install_plugin_from_archive(
