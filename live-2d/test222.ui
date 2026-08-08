@@ -1228,14 +1228,64 @@ QTabWidget#tabWidget_tools QTabBar {
               </widget>
              </item>
              <item row="2" column="1">
-              <widget class="QLineEdit" name="lineEdit_3">
-               <property name="font">
-                <font>
-                 <family>微软雅黑</family>
-                 <pointsize>10</pointsize>
-                </font>
+              <layout class="QHBoxLayout" name="horizontalLayout_llm_model">
+               <property name="spacing">
+                <number>8</number>
                </property>
-              </widget>
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item>
+                <widget class="QComboBox" name="comboBox_llm_model">
+                 <property name="font">
+                  <font>
+                   <family>微软雅黑</family>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="editable">
+                  <bool>true</bool>
+                 </property>
+                 <property name="insertPolicy">
+                  <enum>QComboBox::NoInsert</enum>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="pushButton_fetch_llm_models">
+                 <property name="minimumSize">
+                  <size>
+                   <width>110</width>
+                   <height>35</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>110</width>
+                   <height>16777215</height>
+                  </size>
+                 </property>
+                 <property name="font">
+                  <font>
+                   <family>微软雅黑</family>
+                   <pointsize>10</pointsize>
+                  </font>
+                 </property>
+                 <property name="text">
+                  <string>获取模型</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
              </item>
             </layout>
            </item>
