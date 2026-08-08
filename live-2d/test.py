@@ -530,6 +530,73 @@ class CustomTitleBar(QWidget):
             self.toggle_maximize()
 
 
+class LlmModelFetchWorker(QThread):
+    """在后台请求 OpenAI 兼容接口的模型列表，避免阻塞界面。"""
+    succeeded = pyqtSignal(list)
+    failed = pyqtSignal(str)
+
+    def __init__(self, api_url, api_key, parent=None):
+        super().__init__(parent)
+        self.api_url = api_url.strip()
+        self.api_key = api_key.strip()
+
+    @staticmethod
+    def models_url(api_url):
+        url = api_url.strip().rstrip('/')
+        if not url:
+            raise ValueError("请先填写 API URL")
+
+        # 同时接受服务根地址、/v1 地址和完整的聊天接口地址。
+        known_suffixes = (
+            '/chat/completions', '/completions', '/responses', '/models'
+        )
+        for suffix in known_suffixes:
+            if url.lower().endswith(suffix):
+                url = url[:-len(suffix)].rstrip('/')
+                break
+        return f"{url}/models"
+
+    def run(self):
+        try:
+            endpoint = self.models_url(self.api_url)
+            headers = {'Accept': 'application/json'}
+            if self.api_key:
+                headers['Authorization'] = f'Bearer {self.api_key}'
+
+            response = requests.get(endpoint, headers=headers, timeout=(8, 20))
+            response.raise_for_status()
+            payload = response.json()
+            items = payload.get('data', payload) if isinstance(payload, dict) else payload
+            if not isinstance(items, list):
+                raise ValueError("接口返回格式不受支持：未找到模型列表")
+
+            models = []
+            for item in items:
+                model_id = (item.get('id') or item.get('name')) if isinstance(item, dict) else item
+                if model_id:
+                    models.append(str(model_id))
+            models = sorted(set(models), key=str.lower)
+            if not models:
+                raise ValueError("接口返回成功，但模型列表为空")
+            self.succeeded.emit(models)
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else ''
+            detail = ''
+            if exc.response is not None:
+                try:
+                    body = exc.response.json()
+                    detail = body.get('error', {}).get('message', '') if isinstance(body, dict) else ''
+                except Exception:
+                    detail = ''
+            self.failed.emit(f"获取失败（HTTP {status}）{': ' + detail if detail else ''}")
+        except requests.RequestException as exc:
+            self.failed.emit(f"连接模型接口失败：{exc}")
+        except (ValueError, TypeError) as exc:
+            self.failed.emit(str(exc))
+        except Exception as exc:
+            self.failed.emit(f"获取模型失败：{exc}")
+
+
 class set_pyqt(QWidget):
     # 添加信号用于线程安全的日志更新
     log_signal = pyqtSignal(str)
@@ -554,6 +621,7 @@ class set_pyqt(QWidget):
         self._loading_config_ui = False
         self._config_dirty_widgets = []
         self._save_button_default_style = ''
+        self.llm_model_fetch_worker = None
 
         # 日志读取相关
         self.log_readers = {}
@@ -2827,7 +2895,7 @@ class set_pyqt(QWidget):
         self._config_dirty_widgets = [
             self.ui.lineEdit,
             self.ui.lineEdit_2,
-            self.ui.lineEdit_3,
+            self.ui.comboBox_llm_model,
             self.ui.textEdit_3,
             self.ui.doubleSpinBox_temperature,
             self.ui.checkBox_temperature_enabled,
@@ -2934,6 +3002,10 @@ class set_pyqt(QWidget):
         self.ui.pushButton_plugins.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(self._plugins_page_index))
         self.ui.pushButton_chat_history.clicked.connect(self.open_chat_history)  # 对话记录页面
         self.ui.saveConfigButton.clicked.connect(self.save_config)
+        self.ui.pushButton_fetch_llm_models.clicked.connect(self.fetch_llm_models)
+        self.ui.comboBox_llm_model.setInsertPolicy(QComboBox.NoInsert)
+        self.ui.comboBox_llm_model.completer().setCompletionMode(QCompleter.PopupCompletion)
+        self.ui.comboBox_llm_model.completer().setCaseSensitivity(Qt.CaseInsensitive)
         # 复位皮套位置按钮
         self.ui.pushButton_reset_model_position.clicked.connect(self.reset_model_position)
         # 调整字幕位置按钮
@@ -2986,6 +3058,49 @@ class set_pyqt(QWidget):
 
         # 初始化桌宠切换按钮样式（默认为"启动"状态）
         self.update_toggle_button_style(False)
+
+    def fetch_llm_models(self):
+        """根据当前 API URL 和 Key 获取可用的 LLM 模型。"""
+        if self.llm_model_fetch_worker and self.llm_model_fetch_worker.isRunning():
+            return
+
+        api_url = self.ui.lineEdit_2.text().strip()
+        api_key = self.ui.lineEdit.text().strip()
+        if not api_url:
+            self.toast.show_message("请先填写 API URL", 2500)
+            self.ui.lineEdit_2.setFocus()
+            return
+
+        button = self.ui.pushButton_fetch_llm_models
+        button.setEnabled(False)
+        button.setText("正在获取...")
+        self.llm_model_fetch_worker = LlmModelFetchWorker(api_url, api_key, self)
+        self.llm_model_fetch_worker.succeeded.connect(self.on_llm_models_fetched)
+        self.llm_model_fetch_worker.failed.connect(self.on_llm_models_fetch_failed)
+        self.llm_model_fetch_worker.finished.connect(self.on_llm_models_fetch_finished)
+        self.llm_model_fetch_worker.start()
+
+    def on_llm_models_fetched(self, models):
+        combo = self.ui.comboBox_llm_model
+        current_model = combo.currentText()
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItems(models)
+        # 只刷新候选项：保留用户原有模型，不擅自改选或清空。
+        combo.setCurrentIndex(-1)
+        combo.setEditText(current_model)
+        combo.blockSignals(False)
+        self.toast.show_message(f"已获取 {len(models)} 个模型", 2500)
+        combo.setFocus()
+        QTimer.singleShot(0, combo.showPopup)
+
+    def on_llm_models_fetch_failed(self, message):
+        self.toast.show_message(message, 4500)
+
+    def on_llm_models_fetch_finished(self):
+        button = self.ui.pushButton_fetch_llm_models
+        button.setEnabled(True)
+        button.setText("获取模型")
 
     def scan_voice_models(self):
         """扫描当前目录下的pth模型文件"""
@@ -3473,7 +3588,7 @@ class set_pyqt(QWidget):
         self._loading_config_ui = True
         self.ui.lineEdit.setText(self.config['llm']['api_key'])
         self.ui.lineEdit_2.setText(self.config['llm']['api_url'])
-        self.ui.lineEdit_3.setText(self.config['llm']['model'])
+        self.ui.comboBox_llm_model.setEditText(self.config['llm']['model'])
         self.ui.textEdit_3.setPlainText(self.config['llm']['system_prompt'])
         self.ui.doubleSpinBox_temperature.setValue(self.config['llm'].get('temperature', 1.0))
         self.ui.checkBox_temperature_enabled.setChecked(self.config['llm'].get('temperature_enabled', False))
@@ -4719,7 +4834,7 @@ class set_pyqt(QWidget):
         current_config['llm'] = {
             "api_key": self.ui.lineEdit.text(),
             "api_url": self.ui.lineEdit_2.text(),
-            "model": self.ui.lineEdit_3.text(),
+            "model": self.ui.comboBox_llm_model.currentText().strip(),
             "temperature_enabled": self.ui.checkBox_temperature_enabled.isChecked(),
             "temperature": self.ui.doubleSpinBox_temperature.value(),
             "system_prompt": self.ui.textEdit_3.toPlainText()
