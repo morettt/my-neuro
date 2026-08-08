@@ -104,6 +104,11 @@
       "y_dual": 0.38,
       "remember_position": true
     },
+"drag_optimization": {
+      "stop_motion_on_drag": true,
+      "lower_fps_on_drag": false,
+      "drag_fps": 15
+    },
     "screen_extend": {
       "extend": true,
       "left": false,
