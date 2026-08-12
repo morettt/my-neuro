@@ -33,7 +33,8 @@ class VoiceChatFacade {
         // ASR启用：本地ASR或百度流式ASR任一启用即可
         const localASREnabled = config.asr?.enabled !== false;
         const baiduASREnabled = config.cloud?.baidu_asr?.enabled === true;
-        this.asrEnabled = localASREnabled || baiduASREnabled;
+        const siliconflowASREnabled = config.cloud?.siliconflow_asr?.enabled === true;
+        this.asrEnabled = localASREnabled || baiduASREnabled || siliconflowASREnabled;
         this.voiceBargeInEnabled = config.asr?.voice_barge_in || false;
 
         // 截图相关属性

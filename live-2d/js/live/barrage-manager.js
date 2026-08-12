@@ -107,7 +107,8 @@ class BarrageManager {
                     // 恢复ASR录音
                     const localASREnabled = this.config.asr?.enabled !== false;
                     const baiduASREnabled = this.config.cloud?.baidu_asr?.enabled === true;
-                    const asrEnabled = localASREnabled || baiduASREnabled;
+                    const siliconflowASREnabled = this.config.cloud?.siliconflow_asr?.enabled === true;
+                    const asrEnabled = localASREnabled || baiduASREnabled || siliconflowASREnabled;
                     if (this.voiceChat?.asrProcessor && asrEnabled) {
                         this.voiceChat.asrProcessor.resumeRecording();
                     }

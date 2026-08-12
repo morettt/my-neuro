@@ -16,13 +16,16 @@ class ASRController {
         // 检查是否使用百度流式ASR
         this.useBaiduStreamingASR = config.cloud?.baidu_asr?.enabled === true;
 
+        this.useSiliconFlowASR = config.cloud?.siliconflow_asr?.enabled === true;
+
         // 检查ASR是否可用（本地ASR或百度流式ASR任一启用即可）
         const localASREnabled = config.asr?.enabled !== false;
-        this.asrEnabled = localASREnabled || this.useBaiduStreamingASR;
+        this.asrEnabled = localASREnabled || this.useBaiduStreamingASR || this.useSiliconFlowASR;
         this.voiceBargeInEnabled = config.asr?.voice_barge_in || false;
 
         console.log(`语音打断功能: ${this.voiceBargeInEnabled ? '已可用' : '已禁用'}`);
         console.log(`百度流式ASR: ${this.useBaiduStreamingASR ? '已启用' : '已禁用'}`);
+        console.log(`SiliconFlow ASR: ${this.useSiliconFlowASR ? '已启用' : '已禁用'}`);
 
         if (!this.asrEnabled) {
             console.log('ASR已禁用，跳过ASR处理器初始化');
@@ -119,8 +122,9 @@ class ASRController {
                 this.asrProcessor.resumeRecording();
             }
 
-            // 等 merge window 后再 flush，期间若 asrLocked 会自动推迟
-            this._mergeTimer = setTimeout(() => flush(showSubtitle), this._MERGE_WINDOW);
+            // PTT 松键已经明确表示一句话结束，无需再等待卡壳续说合并窗口。
+            const mergeDelay = this.asrProcessor?.pttModeEnabled ? 0 : this._MERGE_WINDOW;
+            this._mergeTimer = setTimeout(() => flush(showSubtitle), mergeDelay);
         });
     }
 
