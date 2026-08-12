@@ -189,8 +189,8 @@ class VoiceChatFacade {
 
     trimMessages() {
         this.contextManager.trimMessages();
-        // 同步messages引用
-        this.messages = this.conversationCore.getMessages();
+        // 把裁剪后的数组写回 conversationCore，而不是反过来用它覆盖裁剪结果
+        this.conversationCore.setMessages(this.messages);
     }
 
     saveConversationHistory() {

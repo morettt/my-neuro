@@ -71,6 +71,13 @@ class ConversationCore {
     }
 
     /**
+     * 用裁剪后的数组替换消息数组（保持本对象为唯一的消息来源）
+     */
+    setMessages(messages) {
+        this.messages = messages;
+    }
+
+    /**
      * 获取消息数组的副本（用于API调用）
      */
     getMessagesCopy() {
