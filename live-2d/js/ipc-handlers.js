@@ -49,7 +49,8 @@ class IPCHandlers {
 
             const localASREnabled = this.config.asr?.enabled !== false;
             const baiduASREnabled = this.config.cloud?.baidu_asr?.enabled === true;
-            const asrEnabled = localASREnabled || baiduASREnabled;
+            const siliconflowASREnabled = this.config.cloud?.siliconflow_asr?.enabled === true;
+            const asrEnabled = localASREnabled || baiduASREnabled || siliconflowASREnabled;
             if (this.voiceChat && this.voiceChat.asrProcessor && asrEnabled) {
                 setTimeout(() => {
                     this.voiceChat.resumeRecording();

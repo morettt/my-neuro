@@ -11,7 +11,8 @@ class TTSFactory {
         // ASR启用：本地ASR或百度流式ASR任一启用即可
         const localASREnabled = config.asr?.enabled !== false;
         const baiduASREnabled = config.cloud?.baidu_asr?.enabled === true;
-        const asrEnabled = localASREnabled || baiduASREnabled;
+        const siliconflowASREnabled = config.cloud?.siliconflow_asr?.enabled === true;
+        const asrEnabled = localASREnabled || baiduASREnabled || siliconflowASREnabled;
 
         if (ttsEnabled) {
             return new EnhancedTextProcessor(

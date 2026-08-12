@@ -92,6 +92,9 @@ class ASRProcessor {
 
         this.ws.onopen = async () => {
             console.log('VAD WebSocket已连接');
+            if (this.config.cloud?.siliconflow_asr?.enabled === true) {
+                logToTerminal('info', '【SiliconFlow ASR】本地 VAD 已连接，等待说话');
+            }
             this.retryCount = 0;
         };
 
@@ -124,6 +127,9 @@ class ASRProcessor {
 
         this.ws.onerror = (error) => {
             console.error('WebSocket错误:', error);
+            if (this.config.cloud?.siliconflow_asr?.enabled === true) {
+                logToTerminal('error', `【SiliconFlow ASR】无法连接本地 VAD：${this.vadUrl}，请先启动 ASR 服务`);
+            }
         };
     }
 
@@ -291,7 +297,10 @@ class ASRProcessor {
         this.hasInterruptedThisSession = false;
 
         const recordingEndIndex = this.continuousBuffer.length;
-        const actualStartIndex = Math.max(0, this.recordingStartIndex - this.PRE_RECORD_SAMPLES);
+        // PTT 由按键精确划定录音起点，不应混入按下 V 之前的 1 秒环境音。
+        const actualStartIndex = this.pttModeEnabled
+            ? this.recordingStartIndex
+            : Math.max(0, this.recordingStartIndex - this.PRE_RECORD_SAMPLES);
         const recordedSamples = this.continuousBuffer.slice(actualStartIndex, recordingEndIndex);
 
         if (recordedSamples.length > this.SAMPLE_RATE * 0.5) {
@@ -350,6 +359,11 @@ class ASRProcessor {
     }
 
     async processRecording(audioBlob) {
+        const siliconflowConfig = this.config.cloud?.siliconflow_asr || {};
+        if (siliconflowConfig.enabled === true) {
+            return this.processSiliconFlowRecording(audioBlob);
+        }
+
         const formData = new FormData();
         formData.append('file', audioBlob, 'recording.wav');
 
@@ -428,6 +442,31 @@ class ASRProcessor {
             this.asrLocked = false;
             // 状态管理已通过事件系统自动处理
             return null;
+        }
+    }
+
+    async processSiliconFlowRecording(audioBlob) {
+        try {
+            const { ipcRenderer } = require('electron');
+            logToTerminal('info', '【SiliconFlow ASR】录音结束，正在提交识别');
+            const audioBytes = await audioBlob.arrayBuffer();
+            const result = await ipcRenderer.invoke('siliconflow-asr-transcribe', audioBytes);
+            if (!result?.success) {
+                throw new Error(result?.error || '识别请求失败');
+            }
+            const recognizedText = (result.text || '').trim();
+            if (!recognizedText) {
+                throw new Error('接口未返回识别文本');
+            }
+            console.log('用户说:', recognizedText);
+            if (this.onSpeechRecognized) this.onSpeechRecognized(recognizedText);
+            return recognizedText;
+        } catch (error) {
+            logToTerminal('error', `【SiliconFlow ASR】识别失败: ${error.message}`);
+            console.error('SiliconFlow ASR 失败:', error);
+            return null;
+        } finally {
+            this.asrLocked = false;
         }
     }
 

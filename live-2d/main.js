@@ -5,6 +5,7 @@ const { HttpServer } = require('./js/services/http-server')
 const { ModelPathUpdater } = require('./js/model/model-path-updater')
 const { ShortcutManager } = require('./js/shortcut-manager')
 const screenshot = require('screenshot-desktop');
+const { logToTerminal } = require('./js/api-utils');
 
 // 添加配置文件路径
 const configPath = path.join(app.getAppPath(), 'config.json');
@@ -381,6 +382,48 @@ ipcMain.handle('take-screenshot', async (event) => {
     } catch (error) {
         console.error('截图错误:', error)
         throw error;
+    }
+})
+
+// SiliconFlow ASR 通过主进程请求，避免渲染进程跨域限制并保护 API Key。
+ipcMain.handle('siliconflow-asr-transcribe', async (event, audioBytes) => {
+    try {
+        const configData = loadConfigData();
+        const asrConfig = configData.cloud?.siliconflow_asr || {};
+        if (asrConfig.enabled !== true) {
+            throw new Error('SiliconFlow ASR 未启用');
+        }
+        if (!asrConfig.key) {
+            throw new Error('SiliconFlow ASR API Key 为空');
+        }
+
+        const audioSize = audioBytes?.byteLength || audioBytes?.length || 0;
+        logToTerminal('info', `【SiliconFlow ASR】开始上传录音（${audioSize} bytes，模型: ${asrConfig.model || 'TeleAI/TeleSpeechASR'}）`);
+
+        const formData = new FormData();
+        formData.append('file', new Blob([audioBytes], { type: 'audio/wav' }), 'recording.wav');
+        formData.append('model', asrConfig.model || 'TeleAI/TeleSpeechASR');
+
+        const response = await fetch(
+            asrConfig.api || 'https://api.siliconflow.cn/v1/audio/transcriptions',
+            {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${asrConfig.key}` },
+                body: formData,
+            }
+        );
+        const bodyText = await response.text();
+        let result;
+        try { result = JSON.parse(bodyText); } catch (_) { result = { error: bodyText }; }
+        if (!response.ok) {
+            const detail = result?.message || result?.error?.message || result?.error || bodyText;
+            throw new Error(`HTTP ${response.status}: ${detail || '识别请求失败'}`);
+        }
+        logToTerminal('info', `【SiliconFlow ASR】识别成功${result.text ? `：${result.text}` : '，但返回文本为空'}`);
+        return { success: true, text: result.text || '' };
+    } catch (error) {
+        logToTerminal('error', `【SiliconFlow ASR】请求失败：${error.message}`);
+        return { success: false, error: error.message };
     }
 })
 

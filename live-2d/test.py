@@ -715,6 +715,10 @@ class set_pyqt(QWidget):
         # 加载原始UI文件
         self.ui = uic.loadUi('test222.ui')
 
+        # 云端配置：补充 SiliconFlow ASR 子标签
+        self.setup_cloud_tts_provider_tab()
+        self.setup_siliconflow_asr_tab()
+
         # self.ui.label_model_status.setText("未上传模型文件 (.pth)")
         # self.ui.label_audio_status.setText("未上传参考音频 (.wav)")
         # self.ui.label_bat_status.setText("状态：请上传文件并生成配置")
@@ -811,6 +815,208 @@ class set_pyqt(QWidget):
 
         # 延迟捕获基准字体（等待所有控件渲染完毕）
         QTimer.singleShot(300, self._capture_base_fonts)
+
+    def setup_cloud_tts_provider_tab(self):
+        """把阿里云与字节 TTS 合并为单一平台选择器。"""
+        tab_widget = self.ui.tabWidget_cloud_config
+        tab = self.ui.tab_cloud_aliyun_tts
+        volcengine_tab = self.ui.tab_cloud_volcengine_tts
+        siliconflow_tab = self.ui.tab_cloud_tts
+
+        tab_index = tab_widget.indexOf(tab)
+        tab_widget.setTabText(tab_index, "云端 TTS")
+        volcengine_index = tab_widget.indexOf(volcengine_tab)
+        if volcengine_index >= 0:
+            tab_widget.removeTab(volcengine_index)
+        siliconflow_index = tab_widget.indexOf(siliconflow_tab)
+        if siliconflow_index >= 0:
+            tab_widget.removeTab(siliconflow_index)
+
+        layout = tab.layout()
+        while layout.count():
+            layout.takeAt(0)
+
+        for obsolete_name in (
+            'label_aliyun_tts_title', 'label_aliyun_tts_api_key',
+            'label_aliyun_tts_model', 'label_aliyun_tts_voice',
+            'label_volcengine_tts_title', 'label_volcengine_tts_appid',
+            'label_volcengine_tts_access_token', 'label_volcengine_tts_voice_type'
+        ):
+            obsolete_widget = getattr(self.ui, obsolete_name, None)
+            if obsolete_widget:
+                obsolete_widget.hide()
+
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+
+        title = QLabel("🔊 云端 TTS 配置")
+        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        layout.addWidget(title)
+
+        platform_row = QHBoxLayout()
+        platform_row.addWidget(QLabel("TTS 平台："))
+        self.ui.comboBox_cloud_tts_provider = QComboBox()
+        self.ui.comboBox_cloud_tts_provider.addItem("阿里云 TTS", "aliyun")
+        self.ui.comboBox_cloud_tts_provider.addItem("字节 TTS", "volcengine")
+        self.ui.comboBox_cloud_tts_provider.addItem("SiliconFlow TTS", "siliconflow")
+        platform_row.addWidget(self.ui.comboBox_cloud_tts_provider, 1)
+        layout.addLayout(platform_row)
+
+        self.ui.checkBox_cloud_tts_provider_enabled = QCheckBox("启用云端 TTS")
+        layout.addWidget(self.ui.checkBox_cloud_tts_provider_enabled)
+
+        self.ui.stackedWidget_cloud_tts_provider = QStackedWidget()
+
+        aliyun_page = QWidget()
+        aliyun_form = QFormLayout(aliyun_page)
+        aliyun_form.setHorizontalSpacing(18)
+        aliyun_form.setVerticalSpacing(12)
+        aliyun_form.addRow("API Key：", self.ui.lineEdit_aliyun_tts_api_key)
+        aliyun_form.addRow("模型：", self.ui.lineEdit_aliyun_tts_model)
+        aliyun_form.addRow("音色：", self.ui.lineEdit_aliyun_tts_voice)
+        self.ui.stackedWidget_cloud_tts_provider.addWidget(aliyun_page)
+
+        volcengine_page = QWidget()
+        volcengine_form = QFormLayout(volcengine_page)
+        volcengine_form.setHorizontalSpacing(18)
+        volcengine_form.setVerticalSpacing(12)
+        volcengine_form.addRow("APP ID：", self.ui.lineEdit_volcengine_tts_appid)
+        volcengine_form.addRow("Access Token：", self.ui.lineEdit_volcengine_tts_access_token)
+        volcengine_form.addRow("音色类型：", self.ui.lineEdit_volcengine_tts_voice_type)
+        self.ui.stackedWidget_cloud_tts_provider.addWidget(volcengine_page)
+
+        siliconflow_page = QWidget()
+        siliconflow_form = QFormLayout(siliconflow_page)
+        siliconflow_form.setHorizontalSpacing(18)
+        siliconflow_form.setVerticalSpacing(12)
+        siliconflow_form.addRow("API Key：", self.ui.lineEdit_cloud_api_key)
+        siliconflow_form.addRow("音色：", self.ui.lineEdit_cloud_tts_voice)
+        self.ui.stackedWidget_cloud_tts_provider.addWidget(siliconflow_page)
+
+        layout.addWidget(self.ui.stackedWidget_cloud_tts_provider)
+        layout.addStretch()
+
+        self.ui.checkBox_aliyun_tts_enabled.hide()
+        self.ui.checkBox_volcengine_tts_enabled.hide()
+        self.ui.checkBox_cloud_tts_enabled.hide()
+        self.ui.comboBox_cloud_tts_provider.currentIndexChanged.connect(
+            self.on_cloud_tts_provider_changed)
+        self.ui.checkBox_cloud_tts_provider_enabled.toggled.connect(
+            self.on_cloud_tts_provider_enabled_changed)
+        self.on_cloud_tts_provider_changed(0)
+
+    def on_cloud_tts_provider_changed(self, index):
+        """切换 TTS 平台表单；总开关开启时直接改用新平台。"""
+        self.ui.stackedWidget_cloud_tts_provider.setCurrentIndex(index)
+        if (self.ui.checkBox_cloud_tts_provider_enabled.isChecked()
+                and not self._loading_config_ui):
+            self.on_cloud_tts_provider_enabled_changed(True)
+
+    def on_cloud_tts_provider_enabled_changed(self, enabled):
+        """启用所选 TTS 平台，并自动关闭另一个平台。"""
+        index = self.ui.comboBox_cloud_tts_provider.currentIndex()
+        self.ui.checkBox_aliyun_tts_enabled.setChecked(enabled and index == 0)
+        self.ui.checkBox_volcengine_tts_enabled.setChecked(enabled and index == 1)
+        self.ui.checkBox_cloud_tts_enabled.setChecked(enabled and index == 2)
+
+    def setup_siliconflow_asr_tab(self):
+        """创建单一平台选择器，按所选平台切换对应的 ASR 配置表单。"""
+        tab = self.ui.tab_cloud_asr
+        old_layout = tab.layout()
+        tab_index = self.ui.tabWidget_cloud_config.indexOf(tab)
+        self.ui.tabWidget_cloud_config.setTabText(tab_index, "云端 ASR")
+
+        # 保留 Designer 中已有的百度输入框，清空旧布局后重新组织页面。
+        while old_layout.count():
+            old_layout.takeAt(0)
+
+        for obsolete_name in (
+            'label_cloud_asr_title', 'label_cloud_asr_url',
+            'label_cloud_asr_appid', 'label_cloud_asr_appkey',
+            'label_cloud_asr_dev_pid'
+        ):
+            obsolete_widget = getattr(self.ui, obsolete_name, None)
+            if obsolete_widget:
+                obsolete_widget.hide()
+
+        layout = old_layout
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+
+        title = QLabel("🎤 云端 ASR 配置")
+        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        layout.addWidget(title)
+
+        platform_row = QHBoxLayout()
+        platform_row.addWidget(QLabel("ASR 平台："))
+        self.ui.comboBox_cloud_asr_provider = QComboBox()
+        self.ui.comboBox_cloud_asr_provider.addItem("百度流式 ASR", "baidu")
+        self.ui.comboBox_cloud_asr_provider.addItem("SiliconFlow ASR", "siliconflow")
+        platform_row.addWidget(self.ui.comboBox_cloud_asr_provider, 1)
+        layout.addLayout(platform_row)
+
+        self.ui.checkBox_cloud_asr_provider_enabled = QCheckBox("启用云端 ASR")
+        layout.addWidget(self.ui.checkBox_cloud_asr_provider_enabled)
+
+        self.ui.stackedWidget_cloud_asr_provider = QStackedWidget()
+
+        baidu_page = QWidget()
+        baidu_form = QFormLayout(baidu_page)
+        baidu_form.setHorizontalSpacing(18)
+        baidu_form.setVerticalSpacing(12)
+        baidu_form.addRow("WebSocket URL：", self.ui.lineEdit_cloud_asr_url)
+        baidu_form.addRow("APP ID：", self.ui.lineEdit_cloud_asr_appid)
+        baidu_form.addRow("APP KEY：", self.ui.lineEdit_cloud_asr_appkey)
+        baidu_form.addRow("DEV PID：", self.ui.lineEdit_cloud_asr_dev_pid)
+        self.ui.stackedWidget_cloud_asr_provider.addWidget(baidu_page)
+
+        siliconflow_page = QWidget()
+        form = QFormLayout(siliconflow_page)
+        form.setHorizontalSpacing(18)
+        form.setVerticalSpacing(12)
+
+        self.ui.lineEdit_siliconflow_asr_api = QLineEdit()
+        self.ui.lineEdit_siliconflow_asr_api.setPlaceholderText(
+            "https://api.siliconflow.cn/v1/audio/transcriptions"
+        )
+        form.addRow("API 地址：", self.ui.lineEdit_siliconflow_asr_api)
+
+        self.ui.lineEdit_siliconflow_asr_key = QLineEdit()
+        self.ui.lineEdit_siliconflow_asr_key.setEchoMode(QLineEdit.Password)
+        self.ui.lineEdit_siliconflow_asr_key.setPlaceholderText("sk-...")
+        form.addRow("API Key：", self.ui.lineEdit_siliconflow_asr_key)
+
+        self.ui.lineEdit_siliconflow_asr_model = QLineEdit()
+        self.ui.lineEdit_siliconflow_asr_model.setPlaceholderText("TeleAI/TeleSpeechASR")
+        form.addRow("模型：", self.ui.lineEdit_siliconflow_asr_model)
+
+        self.ui.stackedWidget_cloud_asr_provider.addWidget(siliconflow_page)
+        layout.addWidget(self.ui.stackedWidget_cloud_asr_provider)
+        layout.addStretch()
+
+        # 旧开关仍作为配置存储控件使用，但不再直接展示。
+        self.ui.checkBox_cloud_asr_enabled.hide()
+        self.ui.checkBox_siliconflow_asr_enabled = QCheckBox()
+        self.ui.checkBox_siliconflow_asr_enabled.hide()
+
+        self.ui.comboBox_cloud_asr_provider.currentIndexChanged.connect(
+            self.on_cloud_asr_provider_changed)
+        self.ui.checkBox_cloud_asr_provider_enabled.toggled.connect(
+            self.on_cloud_asr_provider_enabled_changed)
+        self.on_cloud_asr_provider_changed(0)
+
+    def on_cloud_asr_provider_changed(self, index):
+        """切换 ASR 平台表单；总开关开启时直接改用新平台。"""
+        self.ui.stackedWidget_cloud_asr_provider.setCurrentIndex(index)
+        if (self.ui.checkBox_cloud_asr_provider_enabled.isChecked()
+                and not self._loading_config_ui):
+            self.on_cloud_asr_provider_enabled_changed(True)
+
+    def on_cloud_asr_provider_enabled_changed(self, enabled):
+        """启用所选平台；启用时自动关闭另一个平台。"""
+        index = self.ui.comboBox_cloud_asr_provider.currentIndex()
+        self.ui.checkBox_cloud_asr_enabled.setChecked(enabled and index == 0)
+        self.ui.checkBox_siliconflow_asr_enabled.setChecked(enabled and index == 1)
 
     def closeEvent(self, event):
         """处理窗口关闭事件"""
@@ -2940,11 +3146,19 @@ class set_pyqt(QWidget):
             self.ui.lineEdit_volcengine_tts_appid,
             self.ui.lineEdit_volcengine_tts_access_token,
             self.ui.lineEdit_volcengine_tts_voice_type,
+            self.ui.comboBox_cloud_tts_provider,
+            self.ui.checkBox_cloud_tts_provider_enabled,
             self.ui.checkBox_cloud_asr_enabled,
             self.ui.lineEdit_cloud_asr_url,
             self.ui.lineEdit_cloud_asr_appid,
             self.ui.lineEdit_cloud_asr_appkey,
             self.ui.lineEdit_cloud_asr_dev_pid,
+            self.ui.checkBox_siliconflow_asr_enabled,
+            self.ui.lineEdit_siliconflow_asr_api,
+            self.ui.lineEdit_siliconflow_asr_key,
+            self.ui.lineEdit_siliconflow_asr_model,
+            self.ui.comboBox_cloud_asr_provider,
+            self.ui.checkBox_cloud_asr_provider_enabled,
             self.ui.checkBox_gateway_enabled,
             self.ui.lineEdit_gateway_base_url,
             self.ui.lineEdit_gateway_api_key,
@@ -3224,12 +3438,18 @@ class set_pyqt(QWidget):
             print("正在启动ASR终端.....")
 
             # 根据config中的百度流式ASR配置选择对应的bat文件
-            is_cloud_asr = self.config.get('cloud', {}).get('baidu_asr', {}).get('enabled', False)
+            cloud_config = self.config.get('cloud', {})
+            use_baidu_asr = cloud_config.get('baidu_asr', {}).get('enabled', False)
+            use_siliconflow_asr = cloud_config.get('siliconflow_asr', {}).get('enabled', False)
             base_path = get_base_path()
 
-            if is_cloud_asr:  # 云端ASR
+            if use_baidu_asr:  # 百度流式ASR不需要本地识别服务
                 bat_file = os.path.join(base_path, "VAD.bat")
-                asr_type_name = "云端ASR（仅VAD）"
+                asr_type_name = "百度流式ASR（仅VAD）"
+            elif use_siliconflow_asr:
+                # SiliconFlow 负责转写；现有 1.ASR.bat 同时提供端口1000的VAD。
+                bat_file = os.path.join(base_path, "1.ASR.bat")
+                asr_type_name = "SiliconFlow ASR（本地VAD）"
             else:  # 本地ASR
                 bat_file = os.path.join(base_path, "1.ASR.bat")
                 asr_type_name = "本地ASR"
@@ -3672,6 +3892,24 @@ class set_pyqt(QWidget):
         self.ui.lineEdit_volcengine_tts_appid.setText(volcengine_tts.get('appid', ''))
         self.ui.lineEdit_volcengine_tts_access_token.setText(volcengine_tts.get('access_token', ''))
         self.ui.lineEdit_volcengine_tts_voice_type.setText(volcengine_tts.get('voice_type', 'saturn_zh_female_keainvsheng_tob'))
+        # 与实际运行优先级一致：字节 > 阿里云 > SiliconFlow。
+        if volcengine_tts.get('enabled', False):
+            tts_provider_index = 1
+        elif aliyun_tts.get('enabled', False):
+            tts_provider_index = 0
+        elif cloud_tts.get('enabled', False):
+            tts_provider_index = 2
+        else:
+            tts_provider_index = 0
+        self.ui.comboBox_cloud_tts_provider.setCurrentIndex(tts_provider_index)
+        self.on_cloud_tts_provider_changed(tts_provider_index)
+        self.ui.checkBox_cloud_tts_provider_enabled.blockSignals(True)
+        self.ui.checkBox_cloud_tts_provider_enabled.setChecked(
+            volcengine_tts.get('enabled', False)
+            or aliyun_tts.get('enabled', False)
+            or cloud_tts.get('enabled', False)
+        )
+        self.ui.checkBox_cloud_tts_provider_enabled.blockSignals(False)
 
         # 百度流式ASR配置
         baidu_asr = cloud_config.get('baidu_asr', {})
@@ -3680,6 +3918,24 @@ class set_pyqt(QWidget):
         self.ui.lineEdit_cloud_asr_appid.setText(str(baidu_asr.get('appid', '')))
         self.ui.lineEdit_cloud_asr_appkey.setText(baidu_asr.get('appkey', ''))
         self.ui.lineEdit_cloud_asr_dev_pid.setText(str(baidu_asr.get('dev_pid', 15372)))
+
+        # SiliconFlow ASR 配置
+        siliconflow_asr = cloud_config.get('siliconflow_asr', {})
+        self.ui.checkBox_siliconflow_asr_enabled.setChecked(siliconflow_asr.get('enabled', False))
+        self.ui.lineEdit_siliconflow_asr_api.setText(siliconflow_asr.get(
+            'api', 'https://api.siliconflow.cn/v1/audio/transcriptions'))
+        self.ui.lineEdit_siliconflow_asr_key.setText(siliconflow_asr.get('key', ''))
+        self.ui.lineEdit_siliconflow_asr_model.setText(siliconflow_asr.get(
+            'model', 'TeleAI/TeleSpeechASR'))
+        # 自动显示当前启用的平台；都未启用时默认显示百度。
+        provider_index = 1 if siliconflow_asr.get('enabled', False) else 0
+        self.ui.comboBox_cloud_asr_provider.setCurrentIndex(provider_index)
+        self.on_cloud_asr_provider_changed(provider_index)
+        self.ui.checkBox_cloud_asr_provider_enabled.blockSignals(True)
+        self.ui.checkBox_cloud_asr_provider_enabled.setChecked(
+            baidu_asr.get('enabled', False) or siliconflow_asr.get('enabled', False)
+        )
+        self.ui.checkBox_cloud_asr_provider_enabled.blockSignals(False)
 
         # 云端肥牛配置（API Gateway）
         api_gateway = self.config.get('api_gateway', {})
@@ -4926,6 +5182,20 @@ class set_pyqt(QWidget):
         current_config['cloud']['baidu_asr']['appkey'] = self.ui.lineEdit_cloud_asr_appkey.text()
         dev_pid_text = self.ui.lineEdit_cloud_asr_dev_pid.text()
         current_config['cloud']['baidu_asr']['dev_pid'] = int(dev_pid_text) if dev_pid_text.isdigit() else 15372
+
+        # 保存 SiliconFlow ASR 配置
+        if 'siliconflow_asr' not in current_config['cloud']:
+            current_config['cloud']['siliconflow_asr'] = {}
+        current_config['cloud']['siliconflow_asr']['enabled'] = self.ui.checkBox_siliconflow_asr_enabled.isChecked()
+        current_config['cloud']['siliconflow_asr']['api'] = (
+            self.ui.lineEdit_siliconflow_asr_api.text().strip()
+            or 'https://api.siliconflow.cn/v1/audio/transcriptions'
+        )
+        current_config['cloud']['siliconflow_asr']['key'] = self.ui.lineEdit_siliconflow_asr_key.text().strip()
+        current_config['cloud']['siliconflow_asr']['model'] = (
+            self.ui.lineEdit_siliconflow_asr_model.text().strip()
+            or 'TeleAI/TeleSpeechASR'
+        )
 
         # 保存云端肥牛配置（API Gateway）
         if 'api_gateway' not in current_config:
