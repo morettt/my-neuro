@@ -14,6 +14,8 @@ class ModelInteractionController {
         this.dragOffset = { x: 0, y: 0 };
         this.chatDragOffset = { x: 0, y: 0 };
         this.config = null;
+        this._bounceAnim = null; // 回弹动画句柄（进行中才有值，用于打断）
+        this.bounceEnabled = true; // 回弹开关（默认开启，config.ui.model_position.bounce_back 控制）
     }
 
     // 初始化模型和应用
@@ -21,6 +23,10 @@ class ModelInteractionController {
         this.model = model;
         this.app = app;
         this.config = config;
+        // 读取回弹开关（默认开启）
+        if (config && config.ui && config.ui.model_position) {
+            this.bounceEnabled = config.ui.model_position.bounce_back !== false;
+        }
         this.updateInteractionArea();
         this.setupInteractivity();
     }
@@ -92,11 +98,13 @@ class ModelInteractionController {
                 this.isDragging = true;
                 this.dragOffset.x = point.x - this.model.x;
                 this.dragOffset.y = point.y - this.model.y;
+                // 开始拖动时取消进行中的回弹动画，避免和用户新拖动互相拉扯
+                this._cancelBounce();
                 ipcRenderer.send('set-ignore-mouse-events', {
                     ignore: false
                 });
             }
-            
+
         });
 
         // 鼠标移动事件
@@ -118,9 +126,8 @@ class ModelInteractionController {
                 // 松手时若“光标拖到了窗口边缘 + 模型越过该边”，则整窗重定位到那一侧的显示器。
                 const switched = await this.checkAndSwitchDisplay(e.clientX, e.clientY);
                 if (!switched) {
-                    // 未切屏：若模型中心越出当前窗口（目标屏不存在），吸回窗口内，避免模型“走丢”。
-                    this._clampModelToWindow();
-                    this.saveModelPosition();
+                    // 未切屏：说明该方向没有相邻显示器（或单屏），此时若模型越出窗口，平滑回弹到窗口内，避免“漏头”卡住。
+                    this._bounceModelIntoWindow();
                 }
                 setTimeout(() => {
                     if (!this.model.containsPoint(this.app.renderer.plugins.interaction.mouse.global)) {
@@ -378,6 +385,106 @@ class ModelInteractionController {
             this.model.x += clampedX - cx;
             this.model.y += clampedY - cy;
             this.updateInteractionArea();
+        }
+    }
+
+    // ===== 回弹：以「碰撞箱（可抓取区域 interactionX/Y/Width/Height）」为判断依据 =====
+    // 当碰撞箱在窗口内的可见部分 < 15% 时触发（即模型被拖到几乎抓不到了）。
+    // 回弹目标用「碰撞箱」而非「模型整体」——位移精确匹配抓取区出屏量，避免左右回弹距离被放大。
+    // 受 bounceEnabled 开关控制（config.ui.model_position.bounce_back，默认开启）。
+    _bounceModelIntoWindow() {
+        if (!this.model) return;
+        if (!this.bounceEnabled) {
+            // 回弹关闭：不吸附，但位置落盘行为保持不变（屏幕内拖动仍正常保存）
+            this.saveModelPosition();
+            return;
+        }
+        const sf = window.canvasScaleFactor || 2;
+        const W = window.innerWidth * sf;
+        const H = window.innerHeight * sf;
+        const margin = 16 * sf;
+
+        // 碰撞箱 = 交互区域（用户能点中并拖动模型的范围）
+        const boxLeft = this.interactionX;
+        const boxRight = this.interactionX + this.interactionWidth;
+        const boxTop = this.interactionY;
+        const boxBottom = this.interactionY + this.interactionHeight;
+        const boxW = this.interactionWidth;
+        const boxH = this.interactionHeight;
+
+        // 碰撞箱在窗口内的可见部分
+        const visW = Math.max(0, Math.min(boxRight, W) - Math.max(boxLeft, 0));
+        const visH = Math.max(0, Math.min(boxBottom, H) - Math.max(boxTop, 0));
+
+        // 触发阈值：碰撞箱可见部分低于 15%（下限 8px），即抓取区 85% 出屏时回弹。
+        const minVisX = Math.max(8 * sf, boxW * 0.15);
+        const minVisY = Math.max(8 * sf, boxH * 0.15);
+        const needX = visW < minVisX;
+        const needY = visH < minVisY;
+
+        if (!needX && !needY) {
+            this.saveModelPosition();
+            return;
+        }
+
+        // 回弹目标：用碰撞箱（而非模型整体），把碰撞箱完整夹回 [margin, W-margin]×[margin, H-margin]。
+        let targetLeft = boxLeft;
+        let targetTop = boxTop;
+        if (needX) {
+            if (boxW >= W - margin * 2) targetLeft = (W - boxW) / 2;
+            else if (boxLeft < margin) targetLeft = margin;
+            else if (boxRight > W - margin) targetLeft = W - margin - boxW;
+        }
+        if (needY) {
+            if (boxH >= H - margin * 2) targetTop = (H - boxH) / 2;
+            else if (boxTop < margin) targetTop = margin;
+            else if (boxBottom > H - margin) targetTop = H - margin - boxH;
+        }
+
+        const dx = targetLeft - boxLeft;
+        const dy = targetTop - boxTop;
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+            this.saveModelPosition();
+            return;
+        }
+
+        this._animateBounce(dx, dy);
+    }
+
+    // 平滑回弹动画（easeInOutCubic + 轻微 overshoot），期间用户再次按下会由 _cancelBounce 打断。
+    _animateBounce(dx, dy) {
+        this._cancelBounce();
+        const startX = this.model.x;
+        const startY = this.model.y;
+        const duration = 340;
+        const start = performance.now();
+        const step = (now) => {
+            if (!this.model) return;
+            if (this.isDragging) { this._cancelBounce(); return; }
+            const t = Math.min(1, (now - start) / duration);
+            // easeInOutCubic：起止都缓，中段快，配合 overshoot 更顺滑
+            const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            // 仅在中段加入轻微 overshoot（峰值 ~1.04），抵消 easeInOut 的“突然停止感”
+            const overshoot = Math.sin(Math.PI * t) * 0.04;
+            const s = e + overshoot;
+            this.model.x = startX + dx * s;
+            this.model.y = startY + dy * s;
+            this.updateInteractionArea();
+            if (t < 1) {
+                this._bounceAnim = requestAnimationFrame(step);
+            } else {
+                this._bounceAnim = null;
+                this.saveModelPosition();
+            }
+        };
+        this._bounceAnim = requestAnimationFrame(step);
+    }
+
+    // 取消进行中的回弹动画。
+    _cancelBounce() {
+        if (this._bounceAnim != null) {
+            cancelAnimationFrame(this._bounceAnim);
+            this._bounceAnim = null;
         }
     }
 

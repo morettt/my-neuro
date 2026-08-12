@@ -17,6 +17,8 @@ class VRMInteractionController {
         this.isDragging = false;
         this.dragOffset = { x: 0, y: 0 };
         this.config = null;
+        this._bounceAnim = null; // 回弹动画句柄（进行中才有值，用于打断）
+        this.bounceEnabled = true; // 回弹开关（默认开启，config.ui.model_position.bounce_back 控制）
     }
 
     // 初始化
@@ -24,6 +26,10 @@ class VRMInteractionController {
         this.model = model;
         this.app = app;
         this.config = config;
+        // 读取回弹开关（默认开启）
+        if (config && config.ui && config.ui.model_position) {
+            this.bounceEnabled = config.ui.model_position.bounce_back !== false;
+        }
         this._setupVRMInteractivity();
         this._setupControlPanel();
         this._setupScrollZoom();
@@ -271,6 +277,8 @@ class VRMInteractionController {
                     const vr = model.viewRect;
                     this.dragOffset.x = e.clientX - vr.x;
                     this.dragOffset.y = e.clientY - vr.y;
+                    // 开始拖动时取消进行中的回弹动画，避免和用户新拖动互相拉扯
+                    this._cancelBounce();
                     ipcRenderer.send('set-ignore-mouse-events', { ignore: false });
                 }
             } else if (e.button === 2) {
@@ -303,8 +311,7 @@ class VRMInteractionController {
                 // 松手时若“光标拖到了窗口边缘 + 模型越过该边”，整窗重定位到那一侧的显示器。
                 const switched = await this.checkAndSwitchDisplay(e.clientX, e.clientY);
                 if (!switched) {
-                    this._clampViewRect();
-                    this.saveModelPosition();
+                    this._bounceViewRectIntoWindow();
                 }
 
                 setTimeout(() => {
@@ -582,6 +589,106 @@ class VRMInteractionController {
         if (modelLeft > iW - margin) vr.x -= modelLeft - (iW - margin);
         if (modelBottom < margin) vr.y += margin - modelBottom;
         if (modelTop > iH - margin) vr.y -= modelTop - (iH - margin);
+    }
+
+    // ===== 回弹：以「碰撞箱（getScreenHitBox，骨骼投影的真实可抓取范围）」为判断依据 =====
+    // 当碰撞箱在窗口内的可见部分 < 15% 时触发（即模型被拖到几乎抓不到了）。
+    // 回弹目标用「碰撞箱」而非「模型整体」——位移精确匹配抓取区出屏量，避免左右回弹距离被放大。
+    // 受 bounceEnabled 开关控制（config.ui.model_position.bounce_back，默认开启）。
+    _bounceViewRectIntoWindow() {
+        if (!this.model || !this.model.viewRect) return;
+        if (!this.bounceEnabled) {
+            // 回弹关闭：不吸附，但位置落盘行为保持不变（屏幕内拖动仍正常保存）
+            this.saveModelPosition();
+            return;
+        }
+        const iW = window.innerWidth;
+        const iH = window.innerHeight;
+        const margin = 16;
+
+        // 碰撞箱 = 真实屏幕碰撞盒（可抓取范围），降级到 viewRect。
+        const hb = this.model.getScreenHitBox ? this.model.getScreenHitBox() : null;
+        const boxLeft = hb ? hb.x : this.model.viewRect.x;
+        const boxTop = hb ? hb.y : this.model.viewRect.y;
+        const boxW = hb ? hb.width : this.model.viewRect.width;
+        const boxH = hb ? hb.height : this.model.viewRect.height;
+        const boxRight = boxLeft + boxW;
+        const boxBottom = boxTop + boxH;
+
+        // 碰撞箱在窗口内的可见部分
+        const visW = Math.max(0, Math.min(boxRight, iW) - Math.max(boxLeft, 0));
+        const visH = Math.max(0, Math.min(boxBottom, iH) - Math.max(boxTop, 0));
+
+        // 触发阈值：碰撞箱可见部分低于 15%（下限 8px）。
+        const minVisX = Math.max(8, boxW * 0.15);
+        const minVisY = Math.max(8, boxH * 0.15);
+        const needX = visW < minVisX;
+        const needY = visH < minVisY;
+
+        if (!needX && !needY) {
+            this.saveModelPosition();
+            return;
+        }
+
+        // 回弹目标：用碰撞箱（而非模型整体），把碰撞箱完整夹回 [margin, iW-margin]×[margin, iH-margin]。
+        let targetLeft = boxLeft;
+        let targetTop = boxTop;
+        if (needX) {
+            if (boxW >= iW - margin * 2) targetLeft = (iW - boxW) / 2;
+            else if (boxLeft < margin) targetLeft = margin;
+            else if (boxRight > iW - margin) targetLeft = iW - margin - boxW;
+        }
+        if (needY) {
+            if (boxH >= iH - margin * 2) targetTop = (iH - boxH) / 2;
+            else if (boxTop < margin) targetTop = margin;
+            else if (boxBottom > iH - margin) targetTop = iH - margin - boxH;
+        }
+
+        // 由碰撞箱位移反推 viewRect.x / viewRect.y 的位移（碰撞箱与 viewRect 同步平移）。
+        const dx = targetLeft - boxLeft;
+        const dy = targetTop - boxTop;
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+            this.saveModelPosition();
+            return;
+        }
+
+        this._animateBounce(dx, dy);
+    }
+
+    // 平滑回弹动画（easeInOutCubic + 轻微 overshoot），期间用户再次按下会由 _cancelBounce 打断。
+    _animateBounce(dx, dy) {
+        this._cancelBounce();
+        const startX = this.model.viewRect.x;
+        const startY = this.model.viewRect.y;
+        const duration = 340;
+        const start = performance.now();
+        const step = (now) => {
+            if (!this.model || !this.model.viewRect) return;
+            if (this.isDragging) { this._cancelBounce(); return; }
+            const t = Math.min(1, (now - start) / duration);
+            // easeInOutCubic：起止都缓，中段快，配合 overshoot 更顺滑
+            const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            // 仅在中段加入轻微 overshoot（峰值 ~1.04），抵消 easeInOut 的“突然停止感”
+            const overshoot = Math.sin(Math.PI * t) * 0.04;
+            const s = e + overshoot;
+            this.model.viewRect.x = startX + dx * s;
+            this.model.viewRect.y = startY + dy * s;
+            if (t < 1) {
+                this._bounceAnim = requestAnimationFrame(step);
+            } else {
+                this._bounceAnim = null;
+                this.saveModelPosition();
+            }
+        };
+        this._bounceAnim = requestAnimationFrame(step);
+    }
+
+    // 取消进行中的回弹动画。
+    _cancelBounce() {
+        if (this._bounceAnim != null) {
+            cancelAnimationFrame(this._bounceAnim);
+            this._bounceAnim = null;
+        }
     }
 }
 
