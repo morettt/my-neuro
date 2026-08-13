@@ -102,7 +102,8 @@
       "y": 0.2473080231342701,
       "x_dual": 0.825,
       "y_dual": 0.38,
-      "remember_position": true
+      "remember_position": true,
+      "bounce_back": true
     },
     "screen_extend": {
       "extend": true,
