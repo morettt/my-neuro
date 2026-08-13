@@ -103,11 +103,7 @@
       "x_dual": 0.825,
       "y_dual": 0.38,
       "remember_position": true,
-      "bounce_back": true,
-      "display": {
-        "screenX": 0,
-        "screenY": 0
-      }
+      "bounce_back": true
     },
     "screen_extend": {
       "extend": true,

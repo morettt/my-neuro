@@ -395,7 +395,8 @@ class ModelInteractionController {
     _bounceModelIntoWindow() {
         if (!this.model) return;
         if (!this.bounceEnabled) {
-            // 回弹关闭：不吸附，但位置落盘行为保持不变（屏幕内拖动仍正常保存）
+            // 回弹关闭：不做动画，但仍走旧夹紧，避免模型拖出窗口后当前会话抓不回来
+            this._clampModelToWindow();
             this.saveModelPosition();
             return;
         }
