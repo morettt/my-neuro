@@ -112,6 +112,7 @@ Thanks to the following sponsors for their financial support:
 - [jonnytri53](https://github.com/jonnytri53) — Thank you for your support! $50 USD donated to this project.
 - [蒜头头头](https://space.bilibili.com/92419729) — Thank you for your generous support! ¥1000 CNY donated.
 - [东方月辰DFYC](https://space.bilibili.com/670385648) — Thank you for your support! ¥100/month from August to October, totaling ¥300 CNY.
+- [度华容](https://space.bilibili.com/2055950662) — Thank you for your support! ¥200 CNY donated.
 - [大米若叶](https://space.bilibili.com/3546392377166058) — Thank you for your support! ¥68 CNY donated.
 - [StrongerFatTiger](https://space.bilibili.com/28869393) — Thank you for your support! ¥100 CNY donated.
 
