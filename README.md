@@ -103,7 +103,7 @@ my-neuro的目标是打造专属个人的 AI 角色,打造出逼近真人的AI�
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=morettt/my-neuro&type=Date&t=20251015)](https://www.star-history.com/#morettt/my-neuro&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=morettt/my-neuro&type=Date&t=20251015)](https://star-history.dera.page/#morettt/my-neuro&Date)
 
 ## 致谢
 
