@@ -1,0 +1,9 @@
+{
+  "upstream": "https://github.com/Project-N-E-K-O/N.E.K.O",
+  "tag": "v0.8.3",
+  "commit": "eab8da4b521e419d2c36280e7b6fafd08291b640",
+  "verified_date": "2026-08-16",
+  "sdk_version_expected": "0.1.0",
+  "python_requires": "==3.11.*",
+  "notes": "锁定稳定 tag 而非 nightly。变更需按兼容计划第 0.3 节走变更控制。"
+}

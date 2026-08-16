@@ -1,0 +1,10 @@
+{
+  "name": "neko-compat-hub",
+  "displayName": "N.E.K.O Compatibility Hub",
+  "version": "1.0.0",
+  "author": "my-neuro",
+  "description": "本机无头桥接 N.E.K.O 插件运行时。肥牛保留人物、主对话和 TTS；N.E.K.O 只作为后台能力容器。启用后会在 127.0.0.1 启动一个不带鉴权的上游插件服务，请仅在信任本机环境时打开。",
+  "framework_version": ">=1.0.0",
+  "main": "index.js",
+  "lang": "js"
+}

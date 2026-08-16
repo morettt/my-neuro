@@ -1,0 +1,244 @@
+{
+  "enabled": {
+    "title": "启用 Hub",
+    "description": "关闭时不启动 N.E.K.O Runtime、不暴露任何 neko__ 工具。启用本插件会在本机 127.0.0.1 上启动一个不带鉴权的 N.E.K.O 插件服务；运行期间本机其它程序理论上也可以调用它。请仅在你信任本机环境时启用，并在不使用时关闭本插件。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "runtime_checkout_path": {
+    "title": "N.E.K.O Runtime 目录",
+    "description": "N.E.K.O 源码 checkout 或 Steam 安装目录。留空时 Hub 保持惰性，不会启动 Runtime。此路径仅保存在本机，不属于插件源码。",
+    "type": "string",
+    "default": "",
+    "value": ""
+  },
+  "runtime_python_path": {
+    "title": "Python 3.11 路径（仅源码 checkout）",
+    "description": "源码 checkout 可选指定 Python 3.11。留空时按本机常规路径探测。",
+    "type": "string",
+    "default": "",
+    "value": ""
+  },
+  "runtime_port": {
+    "title": "Runtime 端口",
+    "description": "Hub 指定给上游插件服务的端口。若被占用，Hub 会自行向后顺延并回写这里，然后用 /health 确认实际端口。不要假设一定是 48916。",
+    "type": "int",
+    "default": 48916,
+    "value": 48916
+  },
+  "runtime_start_timeout_seconds": {
+    "title": "启动超时（秒）",
+    "description": "启动后等待 GET /health 通过的上限。Steam 包装版建议至少 120 秒。",
+    "type": "int",
+    "default": 60,
+    "value": 60
+  },
+  "pack_app_launcher": {
+    "title": "应用启动器",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__app_launcher__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 打开软件、开机自启等副作用条目仍被拦住。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_bilibili_danmaku": {
+    "title": "B站弹幕监听",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__bilibili_danmaku__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 房间号、Cookie 仍在 N.E.K.O 自己的设置里。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_bilibili_dm": {
+    "title": "B站私信",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__bilibili_dm__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 发私信类条目是 B0，勾选不会放行发送。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_claude_companion": {
+    "title": "Claude 伙伴陪伴",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__claude_companion__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 独立 LLM / Key 相关条目若被分成 C5 则仍不可见。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_galgame_plugin": {
+    "title": "Galgame游玩助手",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__galgame_plugin__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 键鼠、点击等副作用条目仍被拦住。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_game_agent_minecraft": {
+    "title": "Minecraft 游戏插件",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__game_agent_minecraft__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 建造、攻击等自动游玩副作用条目仍被拦住。WS 端口在 N.E.K.O 设置里。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_lifekit": {
+    "title": "生活助手",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__lifekit__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_mcp_adapter": {
+    "title": "MCP Adapter（勾了也不会暴露）",
+    "description": "本格只为目录完整。勾选无效，Hub 会忽略。该插件是 C5/adapter，永远不会暴露给主 LLM。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_memo_reminder": {
+    "title": "备忘提醒",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__memo_reminder__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 写提醒若被判 B0 则仍不可见。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_mijia": {
+    "title": "米家智能家居",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__mijia__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 账号在 N.E.K.O；控制类可能是 B0，勾选不会放行。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_music_pusher": {
+    "title": "汐音阁",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__music_pusher__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 推歌或改配置若被判 B0 则仍不可见。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_neko_live": {
+    "title": "NEKO Live",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__neko_live__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 直播推流相关。账号与房间仍在 N.E.K.O 设置里。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_neko_warthunder": {
+    "title": "战雷猫娘副驾驶",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__neko_warthunder__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 战雷遥测端口在 N.E.K.O；操作类是 B0，勾选不会放行。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_proactive_controller": {
+    "title": "主动搭话控制器",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__proactive_controller__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 改主动搭话频率/模式的条目仍按 C2/B0 分级，只放行 C2。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_qq_auto_reply": {
+    "title": "QQ集成",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__qq_auto_reply__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 发消息等副作用条目仍被拦住。登录态在 N.E.K.O。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_sts2_autoplay": {
+    "title": "杀戮尖塔 2 游戏插件",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__sts2_autoplay__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 自动游玩、操作等副作用条目仍被拦住。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_study_companion": {
+    "title": "Study Companion",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__study_companion__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 学习面板工具较多，仍只放行 C2。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_web_search": {
+    "title": "网络搜索（肥牛已有搜索，不建议勾）",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__web_search__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 肥牛已有搜索工具。这是 N.E.K.O 的网络搜索夹具，不建议勾选。勾选后才把该插件的 C2 工具交给主 LLM。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "pack_wechat_integration": {
+    "title": "微信集成",
+    "description": "勾选后，肥牛主 LLM 会看到该 Steam 插件下所有分级为 C2 的工具（neko__wechat_integration__<entry_id>）。不会因本勾选放行 B0/C3/C4/C5。账号、Cookie、房间号、游戏端口仍在 N.E.K.O 自己的设置里，不在肥牛里。默认关闭。 发消息等副作用条目仍被拦住。登录态在 N.E.K.O。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "approved_entries": {
+    "title": "已授权条目（进阶）",
+    "description": "进阶名单：每行一条 plugin_id:entry_id，与上方 Steam 套装勾选做并集。空行和 # 开头为注释。plugin_id:* 只放行该插件下判定为 C2 的条目，不会因通配放行 B0/C3/C4/C5。第三方或 Steam 以后新增、还没有勾选框的插件，只能写在这里。",
+    "type": "text",
+    "default": "",
+    "value": ""
+  },
+  "force_allow_entries": {
+    "title": "强制授权（仅解除 B0 误判）",
+    "description": "每行必须写全 plugin_id:entry_id，不支持 *。只能把 B0 提升为可授权，不能跳过 C0（版本不匹配），也不能放行 C3/C4/C5。每次生效都会写日志。",
+    "type": "text",
+    "default": "",
+    "value": ""
+  },
+  "run_poll_interval_ms": {
+    "title": "Run 轮询间隔（毫秒）",
+    "description": "GET /runs/{run_id} 的轮询间隔。",
+    "type": "int",
+    "default": 500,
+    "value": 500
+  },
+  "run_total_timeout_seconds": {
+    "title": "单次调用总超时（秒）",
+    "description": "含轮询与取 export。必须小于上游默认 300 秒，以便 Hub 先超时并主动 cancel。",
+    "type": "int",
+    "default": 120,
+    "value": 120
+  },
+  "max_concurrent_runs": {
+    "title": "最大并发 run 数",
+    "description": "防止把无鉴权的上游 Runtime 压垮。",
+    "type": "int",
+    "default": 2,
+    "value": 2
+  },
+  "expose_fixture_tools": {
+    "title": "暴露测试夹具工具",
+    "description": "web_search 只用于验证协议闭环，不是交付功能（肥牛已有搜索工具）。验收后请保持关闭。",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "log_level": {
+    "title": "日志级别",
+    "description": "debug 会记录更多诊断信息，仍会对凭据字段脱敏。",
+    "type": "select",
+    "options": [
+      {
+        "value": "error",
+        "label": "error"
+      },
+      {
+        "value": "warn",
+        "label": "warn"
+      },
+      {
+        "value": "info",
+        "label": "info"
+      },
+      {
+        "value": "debug",
+        "label": "debug"
+      }
+    ],
+    "default": "info",
+    "value": "info"
+  },
+  "last_report_summary": {
+    "title": "最近兼容报告摘要",
+    "description": "Runtime 自动生成的兼容性摘要。公开默认值为空，不应写入密钥或个人路径。",
+    "type": "text",
+    "default": "",
+    "value": ""
+  }
+}
