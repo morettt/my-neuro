@@ -99,7 +99,7 @@ My goal is to have all of the above ideas realized by the end of this year.
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=morettt/my-neuro&type=Date&t=20251015)](https://www.star-history.com/#morettt/my-neuro&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=morettt/my-neuro&type=Date&t=20251015)](https://star-history.dera.page/#morettt/my-neuro&Date)
 
 ---
 
