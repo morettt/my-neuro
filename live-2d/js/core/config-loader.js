@@ -5,7 +5,9 @@ const os = require('os');
 class ConfigLoader {
     constructor() {
         this.config = null;
-        this.configPath = path.join(__dirname, '..', '..', 'config.json');
+        this.configPath = process.env.MY_NEURO_CONFIG_PATH
+            ? path.resolve(process.env.MY_NEURO_CONFIG_PATH)
+            : path.join(__dirname, '..', '..', 'config.json');
         this.defaultConfigPath = path.join(__dirname, '..', '..', 'default_config.json');
     }
 

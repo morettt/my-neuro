@@ -5,7 +5,9 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "start-server": "node server.js"
+    "start-server": "node server.js",
+    "test:avatar:switch": "node scripts/test-avatar-switch-transaction.js",
+    "test:avatar:voice": "node scripts/test-avatar-voice-chat-binding.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.1",

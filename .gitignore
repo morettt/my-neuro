@@ -66,3 +66,6 @@ live-2d/plugins/**/.runtime/
 live-2d/plugins/.stats_client_id
 live-2d/plugins/community/agent-dream/dream_logs/
 live-2d/plugins/community/agent-dream/dream_state.json
+
+# Avatar runtime preferences generated on the local machine
+live-2d/model-preferences.json

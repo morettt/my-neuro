@@ -2,14 +2,38 @@ const { app, BrowserWindow, ipcMain, screen, globalShortcut, desktopCapturer, di
 const path = require('path')
 const fs = require('fs')
 const { HttpServer } = require('./js/services/http-server')
-const { ModelPathUpdater } = require('./js/model/model-path-updater')
+const {
+    scanLive2DModels,
+    resolveLive2DModel,
+    scanVRMModels
+} = require('./js/avatar/model-registry')
+const { saveModelPrefs } = require('./js/avatar/preferences-store')
+const {
+    AvatarSwitchTransaction,
+    normalizeAvatarType
+} = require('./js/avatar/avatar-switch-transaction')
 const { ShortcutManager } = require('./js/shortcut-manager')
 const screenshot = require('screenshot-desktop');
 const { logToTerminal } = require('./js/api-utils');
 
-// 添加配置文件路径
-const configPath = path.join(app.getAppPath(), 'config.json');
+// 添加配置文件路径；隔离测试可通过环境变量指向临时副本。
+const configPath = process.env.MY_NEURO_CONFIG_PATH
+    ? path.resolve(process.env.MY_NEURO_CONFIG_PATH)
+    : path.join(app.getAppPath(), 'config.json');
 let shortcutManager = null;
+let rendererRequestCounter = 0;
+const pendingRendererRequests = new Map();
+let avatarSwitchTransaction = null;
+const SUPPORTED_AVATAR_TYPES = new Set(['live2d', 'vrm']);
+const AVATAR_RESULT_PHASES = new Set([
+    'ready',
+    'busy',
+    'failed',
+    'rolled-back',
+    'reload-required',
+    'reload-scheduled',
+    'rollback-reload-scheduled'
+]);
 
 function loadConfigData() {
     return JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -19,38 +43,220 @@ function saveConfigData(configData) {
     fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
 }
 
-function setLive2DConfig(modelName) {
+function updateUiConfig(patch) {
     const configData = loadConfigData();
     if (!configData.ui) configData.ui = {};
-    configData.ui.model_type = 'live2d';
-    configData.ui.vrm_model = '';
-    configData.ui.vrm_model_path = '';
-    if (modelName) {
-        configData.ui.live2d_model = modelName;
+    Object.assign(configData.ui, patch);
+    saveConfigData(configData);
+    return configData;
+}
+
+function nextRendererRequestId(prefix) {
+    rendererRequestCounter += 1;
+    return `${prefix}-${Date.now()}-${rendererRequestCounter}`;
+}
+
+function waitForRendererRequest(requestId, senderId, timeoutMs = 30000) {
+    return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+            pendingRendererRequests.delete(requestId);
+            resolve({
+                success: false,
+                phase: 'failed',
+                timedOut: true,
+                reloadRequired: true,
+                message: `渲染进程未在 ${timeoutMs}ms 内确认操作`
+            });
+        }, timeoutMs);
+        pendingRendererRequests.set(requestId, { resolve, timer, senderId });
+    });
+}
+
+function cancelRendererRequest(requestId) {
+    const pending = pendingRendererRequests.get(requestId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingRendererRequests.delete(requestId);
+    pending.resolve({
+        success: false,
+        phase: 'failed',
+        message: '渲染请求已取消'
+    });
+}
+
+function completeRendererRequest(event, payload) {
+    const requestId = String(payload?.requestId || '');
+    const pending = pendingRendererRequests.get(requestId);
+    if (!pending) {
+        return { success: false, message: '找不到待确认的渲染请求' };
     }
+    if (pending.senderId != null && event.sender?.id !== pending.senderId) {
+        return { success: false, message: '渲染请求来源不匹配' };
+    }
+
+    clearTimeout(pending.timer);
+    pendingRendererRequests.delete(requestId);
+    pending.resolve({
+        success: payload?.success === true,
+        phase: AVATAR_RESULT_PHASES.has(payload?.phase) ? payload.phase : undefined,
+        message: typeof payload?.message === 'string'
+            ? payload.message
+            : (payload?.success === true ? '操作成功' : '操作失败'),
+        restored: payload?.restored === true,
+        reloadRequired: payload?.reloadRequired === true,
+        timedOut: payload?.timedOut === true,
+        targetType: normalizeAvatarType(payload?.targetType),
+        activeType: Object.prototype.hasOwnProperty.call(payload || {}, 'activeType')
+            ? normalizeAvatarType(payload.activeType)
+            : undefined
+    });
+    return { success: true };
+}
+
+function getRendererWindow(event) {
+    const sender = event?.sender;
+    if (!sender || sender.isDestroyed?.()) {
+        throw new Error('渲染窗口不可用');
+    }
+    const win = BrowserWindow.fromWebContents(sender);
+    if (!win || win.isDestroyed() || win.webContents.isDestroyed()) {
+        throw new Error('渲染窗口不可用');
+    }
+    return win;
+}
+
+async function requestRendererConfirmation(event, channel, payload, prefix, timeoutMs = 30000) {
+    const requestId = nextRendererRequestId(prefix);
+    const pending = waitForRendererRequest(requestId, event?.sender?.id, timeoutMs);
+    try {
+        const win = getRendererWindow(event);
+        win.webContents.send(channel, { ...payload, requestId });
+        return await pending;
+    } catch (error) {
+        cancelRendererRequest(requestId);
+        throw error;
+    } finally {
+        cancelRendererRequest(requestId);
+    }
+}
+
+function sendUiConfigPatch(win, patch) {
+    if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
+    win.webContents.send('avatar-config-updated', { ui: patch });
+}
+
+function scheduleWindowReload(win, reason) {
+    if (!win || win.isDestroyed() || win.webContents.isDestroyed()) {
+        throw new Error('渲染窗口不可用，无法安排重载');
+    }
+    setImmediate(() => {
+        if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
+        console.log(`[Avatar] 安排窗口重载: ${reason || '状态同步'}`);
+        win.webContents.reload();
+    });
+}
+
+function resolveAvatarModelSelection(type, requestedName) {
+    const scanners = {
+        live2d: scanLive2DModels,
+        vrm: scanVRMModels
+    };
+    const scan = scanners[type];
+    const all = scan ? scan() : [];
+    const requested = String(requestedName || '').trim();
+    const entry = all.find(model => model.modelPath === requested)
+        || all.find(model => model.name === requested)
+        || (type === 'vrm'
+            ? all.find(model => path.basename(model.modelPath) === requested)
+            : null);
+
+    return {
+        entry: entry || null,
+        all,
+        configValue: entry
+            ? (type === 'vrm' ? entry.modelPath : entry.name)
+            : null
+    };
+}
+
+function avatarModelCount(type) {
+    if (!SUPPORTED_AVATAR_TYPES.has(type)) return 0;
+    if (type === 'live2d') return scanLive2DModels().length;
+    if (type === 'vrm') return scanVRMModels().length;
+    return 0;
+}
+
+function hasAvatarModel(type) {
+    return avatarModelCount(type) > 0;
+}
+
+function normalizeConfiguredAvatarType(configData) {
+    if (!configData || typeof configData !== 'object') return null;
+    if (!configData.ui || typeof configData.ui !== 'object') configData.ui = {};
+
+    const requested = normalizeAvatarType(configData.ui.model_type) || 'live2d';
+    const usable = SUPPORTED_AVATAR_TYPES.has(requested) && hasAvatarModel(requested)
+        ? requested
+        : ['live2d', 'vrm'].find(hasAvatarModel);
+    if (!usable || usable === requested) return usable;
+
+    configData.ui.model_type = usable;
     saveConfigData(configData);
+    console.warn(`[Avatar] ${requested} 当前没有可用 driver 或模型，已回退到 ${usable}`);
+    return usable;
 }
 
-function setVRMConfig(vrmFileName) {
-    const configData = loadConfigData();
-    if (!configData.ui) configData.ui = {};
-    configData.ui.model_type = 'vrm';
-    configData.ui.vrm_model = vrmFileName;
-    configData.ui.vrm_model_path = `3D/${vrmFileName}`;
-    saveConfigData(configData);
+function getAvatarSwitchTransaction() {
+    if (avatarSwitchTransaction) return avatarSwitchTransaction;
+    avatarSwitchTransaction = new AvatarSwitchTransaction({
+        readModelType() {
+            return loadConfigData().ui?.model_type || 'live2d';
+        },
+        updateModelType(type) {
+            updateUiConfig({ model_type: type });
+        },
+        hasAvatarModel(type) {
+            return hasAvatarModel(type);
+        },
+        requestRendererSwitch(type, context) {
+            return requestRendererConfirmation(
+                context.event,
+                'avatar-switch-type',
+                { type },
+                'avatar-type-switch'
+            );
+        },
+        publishModelType(type, context) {
+            sendUiConfigPatch(context.win, { model_type: type });
+        },
+        scheduleReload({ context, reason }) {
+            scheduleWindowReload(context.win, reason);
+        },
+        log(level, message) {
+            console[level === 'error' ? 'error' : 'log'](`[Avatar] ${message}`);
+        }
+    });
+    return avatarSwitchTransaction;
 }
 
-function reloadSenderWindow(event) {
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (win) win.reload();
+function finalizeRendererFailure(win, result, reason) {
+    if (result?.success !== true && result?.reloadRequired === true) {
+        try {
+            scheduleWindowReload(win, reason || result.message);
+            return {
+                ...result,
+                phase: 'reload-scheduled'
+            };
+        } catch (error) {
+            return {
+                ...result,
+                phase: 'failed',
+                message: `${result.message || '渲染操作失败'}；安排恢复重载失败: ${error.message}`
+            };
+        }
+    }
+    return result;
 }
-
-function serializePriorityFolders(folders) {
-    return `[${folders.map(folder => JSON.stringify(folder)).join(', ')}]`;
-}
-
-// Live2D模型优先级配置（Python程序会修改这个列表来切换模型）
-const priorityFolders = ['肥牛', 'Hiyouri', 'Default', 'Main'];
 
 
 function ensureTopMost(win) {
@@ -228,6 +434,9 @@ function createWindow () {
     win.on('blur', () => {
         ensureTopMost(win)
     })
+    win.on('closed', () => {
+        avatarSwitchTransaction?.clearWindow(win.id);
+    })
     setInterval(() => {
         ensureTopMost(win)
     }, 1000)
@@ -248,13 +457,7 @@ app.whenReady().then(() => {
         console.log('读取配置失败，使用默认Live2D模式');
     }
 
-    // 仅在Live2D模式下更新模型路径
-    if (modelType === 'live2d') {
-        const modelPathUpdater = new ModelPathUpdater(app.getAppPath(), priorityFolders);
-        modelPathUpdater.update();
-    } else {
-        console.log('VRM模式，跳过Live2D模型路径更新');
-    }
+    normalizeConfiguredAvatarType(configData);
 
     const mainWindow = createWindow();
 
@@ -278,6 +481,8 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
+    avatarSwitchTransaction?.dispose();
+    avatarSwitchTransaction = null;
     if (shortcutManager) {
         shortcutManager.unregisterAll();
         shortcutManager = null;
@@ -427,80 +632,121 @@ ipcMain.handle('siliconflow-asr-transcribe', async (event, audioBytes) => {
     }
 })
 
-// 添加IPC处理器，允许从渲染进程手动更新模型
+// 列出已扫描到的 Live2D 模型（供 WebUI、快捷面板和兼容接口使用）。
+ipcMain.handle('get-live2d-models', async () => {
+    try {
+        return { success: true, models: scanLive2DModels() };
+    } catch (error) {
+        return { success: false, message: error.message, models: [] };
+    }
+});
+
+// 渲染进程完成热切换后，通过 requestId 确认主进程正在等待的请求。
+ipcMain.handle('live2d-switch-model-result', (event, payload) => {
+    return completeRendererRequest(event, payload);
+});
+
+ipcMain.handle('avatar-switch-type-result', (event, payload) => {
+    return completeRendererRequest(event, payload);
+});
+
+ipcMain.handle('avatar-reload-model-result', (event, payload) => {
+    return completeRendererRequest(event, payload);
+});
+
+// 每次窗口启动并完成 Avatar 初始化后回报 ready，用于结束跨渲染引擎切换事务。
+ipcMain.handle('avatar-runtime-ready', async (event, payload) => {
+    try {
+        const win = getRendererWindow(event);
+        const result = await getAvatarSwitchTransaction().handleRuntimeReady({
+            windowId: win.id,
+            success: payload?.success === true,
+            activeType: payload?.activeType,
+            message: typeof payload?.message === 'string' ? payload.message : ''
+        });
+        console.log(
+            `[Avatar] runtime ready: phase=${result.phase}, active=${result.activeType || 'none'}`
+        );
+        return result;
+    } catch (error) {
+        console.error('处理 Avatar runtime ready 失败:', error);
+        return { success: false, phase: 'failed', message: error.message };
+    }
+});
+
+// 重新扫描并热重载当前 Live2D 模型（保留旧接口名，不再改写源码、不再直接 reload 窗口）。
 ipcMain.handle('update-live2d-model', async (event) => {
     try {
-        // 调用更新模型的函数
-        const modelPathUpdater = new ModelPathUpdater(app.getAppPath(), priorityFolders);
-        modelPathUpdater.update();
+        let preferred = null;
+        try {
+            preferred = loadConfigData().ui?.live2d_model || null;
+        } catch (_) {}
 
-        // 通知渲染进程需要重新加载以应用新模型
-        const win = BrowserWindow.fromWebContents(event.sender)
-        win.reload()
+        const { modelPath, entry, all } = resolveLive2DModel(preferred);
+        if (!modelPath || !entry) {
+            return { success: false, message: '2D 目录下没有找到任何模型' };
+        }
 
-        return { success: true, message: '模型已更新，页面将重新加载' }
+        const win = getRendererWindow(event);
+        const result = await requestRendererConfirmation(
+            event,
+            'live2d-switch-model',
+            { modelName: entry.name, modelPath },
+            'live2d-refresh'
+        );
+        if (!result.success) {
+            return finalizeRendererFailure(win, result, 'Live2D 模型恢复需要窗口重载');
+        }
+        return {
+            success: true,
+            phase: 'ready',
+            targetType: 'live2d',
+            activeType: 'live2d',
+            message: `已重新扫描（共 ${all.length} 个模型），已加载 ${entry.name}`
+        };
     } catch (error) {
-        console.error('手动更新模型时出错:', error)
-        return { success: false, message: `更新失败: ${error.message}` }
+        console.error('手动更新模型时出错:', error);
+        return { success: false, message: `更新失败: ${error.message}` };
     }
-})
+});
 
-// 添加切换Live2D模型的IPC处理器
+// 切换 Live2D 模型：先让渲染进程成功加载，再持久化选择。
 ipcMain.handle('switch-live2d-model', async (event, modelName) => {
     try {
         console.log(`切换模型到: ${modelName}`);
-
-        setLive2DConfig(modelName);
-
-        // 更新priorityFolders，将选中的模型放在第一位
-        const index = priorityFolders.indexOf(modelName);
-        if (index > 0) {
-            // 如果模型已存在，移到第一位
-            priorityFolders.splice(index, 1);
-            priorityFolders.unshift(modelName);
-        } else if (index === -1) {
-            // 如果模型不在列表中，添加到第一位
-            priorityFolders.unshift(modelName);
-        }
-        // 如果已经在第一位(index === 0)，不需要操作
-
-        console.log(`更新后的优先级列表: ${priorityFolders.join(', ')}`);
-
-        // 保存priorityFolders到main.js文件
-        try {
-            const mainJsPath = path.join(app.getAppPath(), 'main.js');
-            let mainJsContent = fs.readFileSync(mainJsPath, 'utf8');
-
-            // 构建新的priorityFolders数组字符串
-            const newPriorityString = serializePriorityFolders(priorityFolders);
-
-            // 替换main.js中的priorityFolders定义
-            mainJsContent = mainJsContent.replace(
-                /const priorityFolders = \[.*?\];/,
-                `const priorityFolders = ${newPriorityString};`
-            );
-
-            // 写回文件
-            fs.writeFileSync(mainJsPath, mainJsContent, 'utf8');
-            console.log('已保存模型优先级到main.js');
-        } catch (saveError) {
-            console.error('保存优先级到main.js失败:', saveError);
-            // 不影响继续执行
+        const { entry, all } = resolveAvatarModelSelection('live2d', modelName);
+        if (!entry) {
+            return {
+                success: false,
+                message: `未找到模型 "${modelName}"（2D 目录下共 ${all.length} 个模型）`
+            };
         }
 
-        // 调用更新模型的函数
-        const modelPathUpdater = new ModelPathUpdater(app.getAppPath(), priorityFolders);
-        modelPathUpdater.update();
+        const win = getRendererWindow(event);
+        const result = await requestRendererConfirmation(
+            event,
+            'live2d-switch-model',
+            { modelName: entry.name, modelPath: entry.modelPath },
+            'live2d-switch'
+        );
+        if (!result.success) {
+            return finalizeRendererFailure(win, result, 'Live2D 模型恢复需要窗口重载');
+        }
 
-        // 通知渲染进程需要重新加载以应用新模型
-        reloadSenderWindow(event)
-
-        return { success: true, message: `模型已切换到 ${modelName}，页面将重新加载` }
+        updateUiConfig({ live2d_model: entry.name });
+        sendUiConfigPatch(win, { live2d_model: entry.name });
+        return {
+            success: true,
+            phase: 'ready',
+            targetType: 'live2d',
+            activeType: 'live2d',
+            message: `模型已切换到 ${entry.name}`
+        };
     } catch (error) {
-        console.error('切换模型时出错:', error)
-        return { success: false, message: `切换失败: ${error.message}` }
+        console.error('切换模型时出错:', error);
+        return { success: false, message: `切换失败: ${error.message}` };
     }
-})
+});
 
 
 // 添加获取窗口实际尺寸的IPC处理器
@@ -641,6 +887,7 @@ ipcMain.handle('move-window-to-display', async (event, screenX, screenY) => {
 // 添加保存模型位置的IPC处理器
 ipcMain.on('save-model-position', (event, position) => {
     try {
+        const nextPosition = position && typeof position === 'object' ? position : {};
         // 读取当前配置
         const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
@@ -657,9 +904,9 @@ ipcMain.on('save-model-position', (event, position) => {
         }
 
         // 跨屏方案：位置按“当前显示器内的相对位置（0~1）”保存，不再区分单/双屏 x_dual/y_dual。
-        configData.ui.model_position.x = position.x;
-        configData.ui.model_position.y = position.y;
-        configData.ui.model_scale = position.scale;
+        configData.ui.model_position.x = nextPosition.x;
+        configData.ui.model_position.y = nextPosition.y;
+        configData.ui.model_scale = nextPosition.scale;
 
         // 记录当前窗口所在显示器的屏幕原点，供下次启动把窗口落回同一块屏（findStartupDisplay 使用）。
         const win = BrowserWindow.fromWebContents(event.sender);
@@ -673,25 +920,214 @@ ipcMain.on('save-model-position', (event, position) => {
         // 保存到文件
         fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
 
+        // v2：如果渲染端提供模型名，同时保存该模型自己的位置/缩放偏好。
+        if (nextPosition.modelName) {
+            saveModelPrefs('live2d', nextPosition.modelName, {
+                position: {
+                    x: nextPosition.x,
+                    y: nextPosition.y
+                },
+                scale: nextPosition.scale
+            });
+        }
+
     } catch (error) {
         console.error('保存模型位置失败:', error);
     }
-})
+});
 
-// 切换到VRM模型的IPC处理器
+// 形态切换：主进程负责配置提交、渲染侧确认、窗口重载和失败回滚。
+ipcMain.handle('avatar:switch-type', async (event, type) => {
+    try {
+        const win = getRendererWindow(event);
+        return await getAvatarSwitchTransaction().switchType(type, {
+            event,
+            win,
+            windowId: win.id
+        });
+    } catch (error) {
+        console.error('形态切换失败:', error);
+        return { success: false, phase: 'failed', message: `形态切换失败: ${error.message}` };
+    }
+});
+
+// 设置指定形态的模型：先确认当前渲染侧已应用，再持久化选择。
+ipcMain.handle('avatar:set-model', async (event, payload) => {
+    try {
+        const type = String(payload?.type || '').trim().toLowerCase();
+        if (!SUPPORTED_AVATAR_TYPES.has(type)) {
+            return { success: false, message: `当前 PR 未接入形态: ${type || '未指定'}` };
+        }
+
+        const requestedName = String(payload?.model_name || payload?.name || '');
+        if (!requestedName.trim()) {
+            return { success: false, message: '未提供模型' };
+        }
+
+        const selection = resolveAvatarModelSelection(type, requestedName);
+        if (!selection.entry) {
+            return {
+                success: false,
+                message: `未找到 ${type} 模型 "${requestedName}"（当前共 ${selection.all.length} 个）`
+            };
+        }
+
+        const configPatch = type === 'vrm'
+            ? {
+                vrm_model: selection.entry.name,
+                vrm_model_path: selection.entry.modelPath
+            }
+            : { live2d_model: selection.entry.name };
+        const configData = loadConfigData();
+        const activeType = normalizeAvatarType(configData.ui?.model_type) || 'live2d';
+        const win = getRendererWindow(event);
+
+        if (activeType === type) {
+            let result;
+            if (type === 'live2d') {
+                result = await requestRendererConfirmation(
+                    event,
+                    'live2d-switch-model',
+                    {
+                        modelName: selection.entry.name,
+                        modelPath: selection.entry.modelPath
+                    },
+                    'live2d-set-model'
+                );
+            } else {
+                result = await requestRendererConfirmation(
+                    event,
+                    'avatar-reload-model',
+                    {
+                        type,
+                        configKey: 'vrm_model_path',
+                        configValue: selection.entry.modelPath
+                    },
+                    'avatar-reload-model'
+                );
+            }
+            if (!result.success) {
+                return finalizeRendererFailure(
+                    win,
+                    result,
+                    `${type} 模型恢复需要窗口重载`
+                );
+            }
+        }
+
+        updateUiConfig(configPatch);
+        sendUiConfigPatch(win, configPatch);
+        if (activeType === type) {
+            return {
+                success: true,
+                phase: 'ready',
+                targetType: type,
+                activeType: type,
+                message: `已应用模型：${selection.entry.name}`
+            };
+        }
+        return {
+            success: true,
+            phase: 'ready',
+            targetType: type,
+            activeType,
+            message: `已保存模型选择：${selection.entry.name}（切换到 ${type} 形态时生效）`
+        };
+    } catch (error) {
+        console.error('设置形态模型失败:', error);
+        return { success: false, message: `设置失败: ${error.message}` };
+    }
+});
+
+// 形态模型列表：本 PR 只暴露已经接入的 Live2D 和 VRM。
+ipcMain.handle('avatar:get-models', async (event, type) => {
+    try {
+        const normalized = String(type || 'live2d').trim().toLowerCase();
+        const scanners = {
+            live2d: scanLive2DModels,
+            vrm: scanVRMModels
+        };
+        const scan = scanners[normalized];
+        if (!scan) {
+            return {
+                success: false,
+                message: `当前 PR 未接入形态: ${type}`,
+                models: []
+            };
+        }
+        return { success: true, models: scan() };
+    } catch (error) {
+        return { success: false, message: error.message, models: [] };
+    }
+});
+
+// 切换到 VRM 模型：保留旧 IPC 名称，同时接入统一切换事务。
 ipcMain.handle('switch-vrm-model', async (event, vrmFileName) => {
     try {
         console.log(`切换VRM模型到: ${vrmFileName}`);
 
-        // 更新config.json
-        setVRMConfig(vrmFileName);
+        const selection = resolveAvatarModelSelection('vrm', vrmFileName);
+        if (!selection.entry) {
+            return {
+                success: false,
+                message: `未找到 VRM 模型 "${vrmFileName}"（当前共 ${selection.all.length} 个）`
+            };
+        }
 
-        // 重新加载窗口
-        reloadSenderWindow(event);
+        const configData = loadConfigData();
+        const activeType = normalizeAvatarType(configData.ui?.model_type) || 'live2d';
+        const win = getRendererWindow(event);
+        const modelPatch = {
+            vrm_model: selection.entry.name,
+            vrm_model_path: selection.entry.modelPath
+        };
 
-        return { success: true, message: `VRM模型已切换到 ${vrmFileName}，页面将重新加载` };
+        if (activeType === 'vrm') {
+            const reloadResult = await requestRendererConfirmation(
+                event,
+                'avatar-reload-model',
+                {
+                    type: 'vrm',
+                    configKey: 'vrm_model_path',
+                    configValue: selection.entry.modelPath
+                },
+                'legacy-vrm-reload'
+            );
+            if (!reloadResult.success) {
+                return finalizeRendererFailure(
+                    win,
+                    reloadResult,
+                    'VRM 模型恢复需要窗口重载'
+                );
+            }
+            updateUiConfig(modelPatch);
+            sendUiConfigPatch(win, modelPatch);
+            return {
+                success: true,
+                phase: 'ready',
+                targetType: 'vrm',
+                activeType: 'vrm',
+                message: `VRM 模型已切换到 ${selection.entry.name}`
+            };
+        }
+
+        // 先保存 VRM 选择，但不提前改 model_type，让事务仍能读取真实旧形态。
+        updateUiConfig(modelPatch);
+        sendUiConfigPatch(win, modelPatch);
+        const switchResult = await getAvatarSwitchTransaction().switchType('vrm', {
+            event,
+            win,
+            windowId: win.id
+        });
+
+        return {
+            ...switchResult,
+            message: switchResult.success
+                ? `${switchResult.message}；VRM 模型：${selection.entry.name}`
+                : switchResult.message
+        };
     } catch (error) {
         console.error('切换VRM模型时出错:', error);
         return { success: false, message: `切换失败: ${error.message}` };
     }
-})
+});

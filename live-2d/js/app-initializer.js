@@ -3,8 +3,8 @@ const { MCPManager } = require('./ai/mcp-manager.js');
 const { VoiceChatFacade } = require('./ai/conversation/VoiceChatFacade.js');
 const { UIController } = require('./ui/ui-controller.js');
 const { TTSFactory } = require('./voice/tts-factory.js');
-const { ModelSetup } = require('./model/model-setup.js');
-const { VRMModelSetup } = require('./model/vrm-model-setup.js');
+const { avatarFacade } = require('./avatar/avatar-facade.js');
+const { registerBuiltinDrivers } = require('./avatar/drivers.js');
 const { BarrageManager } = require('./live/barrage-manager.js');
 // LiveStreamModule → plugins/built-in/bilibili-live
 // AutoChatModule   → plugins/built-in/auto-chat
@@ -235,52 +235,28 @@ class AppInitializer {
         }
     }
 
-    // 第五阶段: 加载模型（Live2D或VRM）
+    // 第五阶段: 通过统一 Avatar facade 加载皮套
     async initializeModel() {
         const modelType = this.config.ui?.model_type || 'live2d';
         console.log(`模型类型: ${modelType}`);
 
-        let result;
-        if (modelType === 'vrm') {
-            // 使用VRM模型
-            logToTerminal('info', '正在加载VRM 3D模型...');
-            result = await VRMModelSetup.initialize(
-                this.modelController,
-                this.config,
-                this.ttsEnabled,
-                this.asrEnabled,
-                this.ttsProcessor,
-                this.voiceChat
-            );
-        } else {
-            // 默认使用Live2D模型
-            result = await ModelSetup.initialize(
-                this.modelController,
-                this.config,
-                this.ttsEnabled,
-                this.asrEnabled,
-                this.ttsProcessor,
-                this.voiceChat
-            );
-        }
+        registerBuiltinDrivers();
+        const result = await avatarFacade.init(modelType, {
+            modelController: this.modelController,
+            config: this.config,
+            ttsEnabled: this.ttsEnabled,
+            asrEnabled: this.asrEnabled,
+            ttsProcessor: this.ttsProcessor,
+            voiceChat: this.voiceChat
+        });
 
         this.model = result.model;
         this.emotionMapper = result.emotionMapper;
         this.musicPlayer = result.musicPlayer;
 
-        // VRM模式：替换modelController并更新TTS唇形回调
-        if (result.vrmController) {
-            this.modelController = result.vrmController;
-            global.modelController = result.vrmController;
-            if (this.ttsProcessor?.playbackEngine) {
-                this.ttsProcessor.playbackEngine.onAudioDataCallback =
-                    (value) => result.vrmController.setMouthOpenY(value);
-            }
-        } else {
-            global.modelController = this.modelController;
-        }
-
-        global.currentModel = this.model;
+        this.modelController = avatarFacade.getController() || this.modelController;
+        global.modelController = this.modelController;
+        global.currentModel = avatarFacade.getModel() || this.model;
         global.pixiApp = result.app;
     }
 
