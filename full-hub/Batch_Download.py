@@ -181,7 +181,7 @@ def _clear_modelscope_lock(model_id):
     print(f"警告: 锁文件无法删除，下载可能仍会卡住: {lock_path}", flush=True)
 
 
-def download_model_direct(model_id, local_dir):
+def download_model_direct(model_id, local_dir, revision=None):
     """直接用Python API下载modelscope模型，不依赖CLI命令"""
     from modelscope.hub.snapshot_download import snapshot_download
     _clear_modelscope_lock(model_id)
@@ -190,7 +190,10 @@ def download_model_direct(model_id, local_dir):
     os.makedirs(local_dir, exist_ok=True)
     for attempt in range(MAX_RETRY):
         try:
-            snapshot_download(model_id, local_dir=local_dir)
+            download_kwargs = {"local_dir": local_dir}
+            if revision:
+                download_kwargs["revision"] = revision
+            snapshot_download(model_id, **download_kwargs)
             print(f"下载完成: {model_id}", flush=True)
             return True
         except Exception as e:
@@ -376,7 +379,8 @@ def download_asr():
     if not all(os.path.exists(f) for f in punc_key_files):
         ok = download_model_direct(
             "iic/punc_ct-transformer_cn-en-common-vocab471067-large",
-            punc_model_dir) and ok
+            punc_model_dir,
+            revision="v2.0.4") and ok
 
     if ok:
         print("ASR模型下载完成！")
