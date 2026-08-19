@@ -273,6 +273,77 @@ class HttpServer {
             }
         });
 
+        // 皮套形态切换接口（供 WebUI 调用）：桥接到 Electron 主进程的统一切换事务
+        // 主进程侧的 avatar-switch-transaction 已处理跨渲染引擎的整窗重载与回滚
+        this.emotionApp.post('/switch-avatar-type', (req, res) => {
+            const { type } = req.body || {};
+            const mainWindow = BrowserWindow.getAllWindows()[0];
+
+            if (!mainWindow) {
+                return res.json({ success: false, message: '应用窗口未找到' });
+            }
+            if (!type) {
+                return res.json({ success: false, message: '缺少 type 参数' });
+            }
+
+            mainWindow.webContents.executeJavaScript(
+                `require('electron').ipcRenderer.invoke('avatar:switch-type', ${JSON.stringify(type)})`
+            ).then(result => {
+                res.json(result && typeof result === 'object'
+                    ? result
+                    : { success: !!result, message: `形态切换到 ${type}` });
+            }).catch(error => {
+                res.json({ success: false, message: error.toString() });
+            });
+        });
+
+        // 指定形态下的模型选择接口（供 WebUI 调用）：热应用并持久化
+        this.emotionApp.post('/set-avatar-model', (req, res) => {
+            const { type, model_name } = req.body || {};
+            const mainWindow = BrowserWindow.getAllWindows()[0];
+
+            if (!mainWindow) {
+                return res.json({ success: false, message: '应用窗口未找到' });
+            }
+            if (!type || !model_name) {
+                return res.json({ success: false, message: '缺少 type 或 model_name 参数' });
+            }
+
+            mainWindow.webContents.executeJavaScript(
+                `require('electron').ipcRenderer.invoke('avatar:set-model', { type: ${JSON.stringify(type)}, model_name: ${JSON.stringify(model_name)} })`
+            ).then(result => {
+                res.json(result && typeof result === 'object'
+                    ? result
+                    : { success: !!result, message: `已应用模型：${model_name}` });
+            }).catch(error => {
+                res.json({ success: false, message: error.toString() });
+            });
+        });
+
+        // 复位字幕位置接口（供 WebUI 调用）：桌宠在线时实时复位并清除已保存的位置
+        this.emotionApp.post('/reset-subtitle-position', async (req, res) => {
+            const mainWindow = BrowserWindow.getAllWindows()[0];
+            if (!mainWindow) {
+                return res.json({ success: false, message: '应用窗口未找到' });
+            }
+
+            const jsCode = `(() => {
+                const uic = global.uiController;
+                if (!uic?.resetSubtitlePosition) return { success: false, message: '字幕控制器未初始化' };
+                uic.resetSubtitlePosition();
+                return { success: true, message: '字幕位置已复位' };
+            })()`;
+
+            try {
+                const result = await mainWindow.webContents.executeJavaScript(jsCode);
+                res.json(result && typeof result === 'object'
+                    ? result
+                    : { success: !!result });
+            } catch (error) {
+                res.json({ success: false, message: error.toString() });
+            }
+        });
+
         // VMC控制端点
         this._setupVMCEndpoint();
 
