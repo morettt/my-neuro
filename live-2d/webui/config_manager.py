@@ -38,6 +38,24 @@ def save_config(config):
         return False
 
 
+# 动作与表情模式（avatar v2 运行时消费；与 js/avatar/motion-mode.js 的三档取值对齐）
+VALID_AVATAR_MOTION_MODES = ('blend', 'legacy', 'director')
+# 动作风格预设（仅 director 档消费；与 js/avatar/live2d/motion-style-presets.js 对齐）
+VALID_CHOREO_MOTION_STYLES = ('natural', 'lively', 'calm', 'shy')
+
+
+def normalize_avatar_motion_mode(value):
+    """归一化动作模式：非法/空值回退到 blend（与前端运行时 motion-mode.js 行为一致）"""
+    mode = str(value or '').strip().lower()
+    return mode if mode in VALID_AVATAR_MOTION_MODES else 'blend'
+
+
+def normalize_choreo_motion_style(value):
+    """归一化动作风格预设：非法值视为"不使用预设"（空串）"""
+    style = str(value or '').strip().lower()
+    return style if style in VALID_CHOREO_MOTION_STYLES else ''
+
+
 # ============ LLM 配置 ============
 
 @config_bp.route('/api/config/llm', methods=['GET', 'POST'])
@@ -226,7 +244,10 @@ def handle_ui_settings():
             'model_scale': ui_config.get('model_scale', 2.3),
             'subtitle_user': subtitle_config.get('user', '用户'),
             'subtitle_ai': subtitle_config.get('ai', 'AI'),
-            'subtitle_enabled': subtitle_config.get('enabled', False)
+            'subtitle_enabled': subtitle_config.get('enabled', False),
+            # 动作与表情模式 + 动作风格预设（avatar v2；风格预设存于 motion_director.style）
+            'avatar_motion_mode': normalize_avatar_motion_mode(ui_config.get('avatar_motion_mode', 'blend')),
+            'motion_style': normalize_choreo_motion_style((config.get('motion_director') or {}).get('style', ''))
         })
     elif request.method == 'POST':
         try:
@@ -242,6 +263,18 @@ def handle_ui_settings():
             config['subtitle_labels']['user'] = data.get('subtitle_user', '用户')
             config['subtitle_labels']['ai'] = data.get('subtitle_ai', 'AI')
             config['subtitle_labels']['enabled'] = data.get('subtitle_enabled', False)
+            # 动作与表情模式：写 config.ui.avatar_motion_mode（运行时三档门控）
+            config['ui']['avatar_motion_mode'] = normalize_avatar_motion_mode(
+                data.get('avatar_motion_mode', config['ui'].get('avatar_motion_mode', 'blend')))
+            # 动作风格预设：写进 motion_director.style（仅 director 档消费）；未选预设时移除该键
+            if 'motion_style' in data:
+                if not isinstance(config.get('motion_director'), dict):
+                    config['motion_director'] = {}
+                style = normalize_choreo_motion_style(data.get('motion_style', ''))
+                if style:
+                    config['motion_director']['style'] = style
+                else:
+                    config['motion_director'].pop('style', None)
             if save_config(config):
                 return jsonify({'success': True})
             return jsonify({'error': '保存失败'}), 500

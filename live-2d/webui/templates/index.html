@@ -577,8 +577,31 @@
                         </div>
                     </div>
                 </div>
+                <div class="section">
+                    <h4 data-i18n="ui_settings.motion_mode_title">动作与表情模式</h4>
+                    <div class="form-group">
+                        <label for="avatar-motion-mode" data-i18n="ui_settings.motion_mode_label">选择运行模式</label>
+                        <select id="avatar-motion-mode">
+                            <option value="blend" data-i18n="ui_settings.motion_mode_blend">自动表情 + AI 编舞（推荐）</option>
+                            <option value="legacy" data-i18n="ui_settings.motion_mode_legacy">自动表情 + 传统动作</option>
+                            <option value="director" data-i18n="ui_settings.motion_mode_director">仅 AI 编舞</option>
+                        </select>
+                    </div>
+                    <div class="form-note" data-i18n="ui_settings.motion_mode_hint">自动表情会现场组合脸部变化；传统动作使用已有动作文件；AI 编舞使用新版动作系统。保存后重启桌宠生效。</div>
+                    <div class="form-group" style="margin-top: 12px;">
+                        <label for="choreo-motion-style" data-i18n="ui_settings.choreo_style_label">动作风格预设（仅『仅 AI 编舞』模式生效）</label>
+                        <select id="choreo-motion-style">
+                            <option value="" data-i18n="ui_settings.choreo_style_none">不使用预设（沿用手动参数）</option>
+                            <option value="natural">natural · 自然</option>
+                            <option value="lively">lively · 活泼</option>
+                            <option value="calm">calm · 沉静</option>
+                            <option value="shy">shy · 害羞</option>
+                        </select>
+                    </div>
+                    <div class="form-note" data-i18n="ui_settings.choreo_style_hint">预设一次性调好 VAD 性格基线、离散待机动作频率、视线稳定度与动作幅度；其它两个模式不受影响。</div>
+                </div>
             </div>
-            
+
             <!-- 动作管理面板 -->
             <div id="motion-sub-panel" class="ui-sub-panel">
                 <div class="section">

@@ -287,7 +287,16 @@
     "subtitle_adjust_success": "已进入字幕调整模式，请到桌宠窗口拖动调整",
     "subtitle_adjust_failed": "进入字幕调整模式失败",
     "subtitle_reset_success": "字幕位置已复位",
-    "subtitle_reset_failed": "复位字幕位置失败"
+    "subtitle_reset_failed": "复位字幕位置失败",
+    "motion_mode_title": "动作与表情模式",
+    "motion_mode_label": "选择运行模式",
+    "motion_mode_blend": "自动表情 + AI 编舞（推荐）",
+    "motion_mode_legacy": "自动表情 + 传统动作",
+    "motion_mode_director": "仅 AI 编舞",
+    "motion_mode_hint": "自动表情会现场组合脸部变化；传统动作使用已有动作文件；AI 编舞使用新版动作系统。保存后重启桌宠生效。",
+    "choreo_style_label": "动作风格预设（仅『仅 AI 编舞』模式生效）",
+    "choreo_style_none": "不使用预设（沿用手动参数）",
+    "choreo_style_hint": "预设一次性调好 VAD 性格基线、离散待机动作频率、视线稳定度与动作幅度；其它两个模式不受影响。"
   },
   "dialog_config": {
     "max_messages": "最大消息数:",

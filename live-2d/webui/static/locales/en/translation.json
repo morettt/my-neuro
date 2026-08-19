@@ -287,7 +287,16 @@
     "subtitle_adjust_success": "Entered subtitle adjust mode, drag in the pet window",
     "subtitle_adjust_failed": "Failed to enter subtitle adjust mode",
     "subtitle_reset_success": "Subtitle position reset",
-    "subtitle_reset_failed": "Failed to reset subtitle position"
+    "subtitle_reset_failed": "Failed to reset subtitle position",
+    "motion_mode_title": "Motion & Expression Mode",
+    "motion_mode_label": "Runtime mode",
+    "motion_mode_blend": "Auto expression + AI choreography (recommended)",
+    "motion_mode_legacy": "Auto expression + classic motions",
+    "motion_mode_director": "AI choreography only",
+    "motion_mode_hint": "Auto expression composes facial changes live; classic motions use existing motion files; AI choreography uses the new motion system. Restart the pet to take effect after saving.",
+    "choreo_style_label": "Motion style preset (only in \"AI choreography only\" mode)",
+    "choreo_style_none": "No preset (keep manual parameters)",
+    "choreo_style_hint": "A preset tunes the VAD personality baseline, discrete idle frequency, gaze stability and motion amplitude at once; the other two modes are unaffected."
   },
   "dialog_config": {
     "max_messages": "Max Messages:",

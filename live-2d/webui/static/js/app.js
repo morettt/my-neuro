@@ -1584,6 +1584,8 @@ async function saveUISettings() {
         subtitle_user: document.getElementById('subtitle-user').value,
         subtitle_ai: document.getElementById('subtitle-ai').value,
         model_scale: parseFloat(document.getElementById('model-scale').value) || 2.3,
+        avatar_motion_mode: document.getElementById('avatar-motion-mode') ? document.getElementById('avatar-motion-mode').value : 'blend',
+        motion_style: document.getElementById('choreo-motion-style') ? document.getElementById('choreo-motion-style').value : '',
         subtitle_labels: {
             enabled: document.getElementById('subtitle-enabled').checked,
             user: document.getElementById('subtitle-user').value,
@@ -2744,6 +2746,10 @@ async function loadUISettings() {
 
             // 模型缩放比例
             _setVal('model-scale', data.model_scale || 2.3);
+
+            // 动作与表情模式 + 动作风格预设
+            _setVal('avatar-motion-mode', data.avatar_motion_mode || 'blend');
+            _setVal('choreo-motion-style', data.motion_style || '');
             
             console.log('UI settings loaded successfully');
         } else {
