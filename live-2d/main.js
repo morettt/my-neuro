@@ -408,7 +408,7 @@ function createWindow () {
             zoomFactor: 1.0,
             enableWebSQL: true
         },
-        resizable: true,
+        resizable: false,
         movable: true,
         skipTaskbar: true,
         maximizable: false,

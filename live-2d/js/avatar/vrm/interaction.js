@@ -8,6 +8,7 @@ const VRM_VIEWPORT_ASPECT = 1.5;
 const VRM_SCALE_FACTOR = 0.896;
 const VRM_PADDING_X = 0.104;
 const VRM_PADDING_Y = 0.282;
+const VRM_CENTER_Y_FRAC = (VRM_PADDING_Y + 0.96) / 2; // 可见区纵向中心在 viewRect 高度上的比例
 
 class VRMInteractionController {
     constructor() {
@@ -18,13 +19,20 @@ class VRMInteractionController {
         this.dragOffset = { x: 0, y: 0 };
         this.config = null;
         this._listeners = [];
+        this._bounceAnim = null;   // 回弹动画句柄（进行中才有值，用于打断）
+        this.bounceEnabled = true; // 回弹开关（默认开启，config.ui.model_position.bounce_back 控制）
     }
 
     init(model, manager, config = null) {
+        // 防御：重绑/形态恢复时取消可能仍在进行的回弹动画，
+        // 避免旧模型的动画帧继续按过期 startX/dx 改写新模型位置
+        this._cancelBounce();
         this.model = model;
         this.manager = manager;
         this.canvas = manager.canvas;
         this.config = config;
+        // 回弹开关（默认开启）
+        this.bounceEnabled = config?.ui?.model_position?.bounce_back !== false;
         this._teardown();
         this._setupVRMInteractivity();
         this._setupControlPanel();
@@ -47,6 +55,7 @@ class VRMInteractionController {
 
     destroy() {
         this._teardown();
+        this._cancelBounce();
         // 隐藏 VRM 控制面板
         const panel = document.getElementById('model-controls');
         if (panel) panel.style.display = 'none';
@@ -246,6 +255,8 @@ class VRMInteractionController {
                     const vr = model.viewRect;
                     this.dragOffset.x = e.clientX - vr.x;
                     this.dragOffset.y = e.clientY - vr.y;
+                    // 开始拖动时取消进行中的回弹动画，避免和用户新拖动互相拉扯
+                    this._cancelBounce();
                     ipcRenderer.send('set-ignore-mouse-events', { ignore: false });
                 }
             } else if (e.button === 2) {
@@ -258,7 +269,7 @@ class VRMInteractionController {
             }
         });
 
-        this._on(window, 'mouseup', (e) => {
+        this._on(window, 'mouseup', async (e) => {
             if (e.button === 0 && this.isDragging) {
                 this.isDragging = false;
 
@@ -271,8 +282,12 @@ class VRMInteractionController {
                     }
                 }
 
-                this._clampViewRect();
-                this.saveModelPosition();
+                // 松手时若“光标拖到了窗口边缘 + 模型越过该边”，整窗重定位到那一侧的显示器；
+                // 未切屏时若模型越出窗口，平滑回弹到窗口内（两个分支内部各自负责保存位置）。
+                const switched = await this.checkAndSwitchDisplay(e.clientX, e.clientY);
+                if (!switched) {
+                    this._bounceViewRectIntoWindow();
+                }
                 setTimeout(() => {
                     if (this.model && !model.containsPoint({ x: e.clientX, y: e.clientY })) {
                         ipcRenderer.send('set-ignore-mouse-events', { ignore: true, options: { forward: true } });
@@ -372,12 +387,13 @@ class VRMInteractionController {
         this._clampViewRect();
     }
 
-    saveModelPosition() {
+    // overrideWidth/Height：跨屏切换时传入“目标显示器的 DIP 尺寸”，避免依赖尚未稳定的 innerWidth。
+    saveModelPosition(overrideWidth, overrideHeight) {
         if (!this.model || !this.config) return;
         const vr = this.model.viewRect;
         if (!vr || !this.config.ui?.model_position?.remember_position) return;
 
-        const saved = this._viewRectToSaved();
+        const saved = this._viewRectToSaved(overrideWidth, overrideHeight);
         this.config.ui.model_position.x = saved.x;
         this.config.ui.model_position.y = saved.y;
         this.config.ui.model_scale = saved.scale;
@@ -409,15 +425,196 @@ class VRMInteractionController {
         };
     }
 
-    _viewRectToSaved() {
+    // overrideWidth/Height：跨屏切换时传入“目标显示器的 DIP 尺寸”作基准。
+    _viewRectToSaved(overrideWidth, overrideHeight) {
         const vr = this.model.viewRect;
-        const iW = window.innerWidth;
-        const iH = window.innerHeight;
+        const iW = overrideWidth || window.innerWidth;
+        const iH = overrideHeight || window.innerHeight;
         return {
             x: (vr.x + VRM_PADDING_X * vr.width) * 2 / iW,
             y: (vr.y + VRM_PADDING_Y * vr.height) * 2 / iH,
             scale: vr.width / (VRM_SCALE_FACTOR * iW)
         };
+    }
+
+    // ===== 跨屏：松手时若“光标拖到窗口边缘 + 模型越过该边”，整窗重定位到那一侧的显示器 =====
+    // 触发用“光标贴边(EDGE 内) 且 模型可见区也越过该边”双重确认：光标到边缘=明确要往那侧推出去，
+    // 松手在屏幕中间不会误触；光标永远能拖到边缘，故四向、任意抓取点都对称。
+    // VRM 在 client/CSS 像素下工作（渲染器 1:1）。cursorX/cursorY：松手时光标的窗口 CSS 坐标。
+    async checkAndSwitchDisplay(cursorX, cursorY) {
+        if (!window.electronScreen || !window.electronScreen.moveWindowToDisplay) return false;
+        if (!this.model || !this.model.viewRect) return false;
+        if (!Number.isFinite(cursorX) || !Number.isFinite(cursorY)) return false;
+
+        try {
+            const displays = await window.electronScreen.getAllDisplays();
+            if (!displays || displays.length <= 1) return false;
+            const currentDisplay = await window.electronScreen.getCurrentDisplay();
+            if (!currentDisplay) return false;
+
+            const vr = this.model.viewRect;
+            const W = window.innerWidth, H = window.innerHeight;
+            // 模型可见区域在当前窗口 client 像素下的边界
+            const vLeft = vr.x + VRM_PADDING_X * vr.width;
+            const vRight = vr.x + (1 - VRM_PADDING_X) * vr.width;
+            const vTop = vr.y + VRM_PADDING_Y * vr.height;
+            const vBottom = vr.y + 0.96 * vr.height;
+
+            // 光标贴到哪条边(EDGE 内) 且 模型也越过该边，就在那侧“边外一点”探测目标显示器；另一轴用光标位置。
+            const EDGE = 10;
+            const sX = currentDisplay.screenX, sY = currentDisplay.screenY;
+            const probes = [];
+            if (cursorX <= EDGE && vLeft < 0)       probes.push({ x: sX - 1,      y: sY + cursorY });
+            if (cursorX >= W - EDGE && vRight > W)   probes.push({ x: sX + W + 1,  y: sY + cursorY });
+            if (cursorY <= EDGE && vTop < 0)        probes.push({ x: sX + cursorX, y: sY - 1 });
+            if (cursorY >= H - EDGE && vBottom > H)  probes.push({ x: sX + cursorX, y: sY + H + 1 });
+
+            let targetDisplay = null, probe = null;
+            for (const p of probes) {
+                for (const d of displays) {
+                    if (d.id === currentDisplay.id) continue;
+                    if (p.x >= d.screenX && p.x < d.screenX + d.width &&
+                        p.y >= d.screenY && p.y < d.screenY + d.height) {
+                        targetDisplay = d; probe = p; break;
+                    }
+                }
+                if (targetDisplay) break;
+            }
+            if (!targetDisplay) return false;
+
+            console.log('[VRM] 光标拖到屏幕边缘，准备切换到屏幕:', targetDisplay.id);
+            const result = await window.electronScreen.moveWindowToDisplay(probe.x, probe.y);
+            if (result && result.success && !result.sameDisplay) {
+                if (result.scaleRatio && result.scaleRatio !== 1) {
+                    console.log('[VRM] 屏幕缩放比变化:', result.scaleRatio);
+                }
+
+                // 以探测点为视觉中心放到新窗口，再夹住可见模型完整落入目标屏（用目标屏 DIP 尺寸，免受 innerWidth 未稳定影响）。
+                const tw = targetDisplay.width, th = targetDisplay.height;
+                const halfVisW = (vRight - vLeft) / 2;
+                const halfVisH = (vBottom - vTop) / 2; // VRM_CENTER_Y_FRAC 取可见区上下中点，故上下对称
+                const margin = 16;
+                let cx = probe.x - targetDisplay.screenX;
+                let cy = probe.y - targetDisplay.screenY;
+                const loX = margin + halfVisW, hiX = tw - margin - halfVisW;
+                const loY = margin + halfVisH, hiY = th - margin - halfVisH;
+                cx = hiX >= loX ? Math.min(Math.max(cx, loX), hiX) : tw / 2;
+                cy = hiY >= loY ? Math.min(Math.max(cy, loY), hiY) : th / 2;
+
+                this.model.viewRect.x = cx - 0.5 * vr.width;
+                this.model.viewRect.y = cy - VRM_CENTER_Y_FRAC * vr.height;
+
+                // 保存：用目标显示器 DIP 尺寸作基准，避免依赖跨屏后尚未稳定的 innerWidth。
+                this.saveModelPosition(tw, th);
+                console.log('[VRM] 跨屏切换完成，viewRect:', this.model.viewRect);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('[VRM] 跨屏检测/切换出错:', error);
+            return false;
+        }
+    }
+
+    // ===== 回弹：以「碰撞箱（getScreenHitBox，骨骼投影的真实可抓取范围）」为判断依据 =====
+    // 当碰撞箱在窗口内的可见部分 < 15% 时触发（即模型被拖到几乎抓不到了）。
+    // 回弹目标用「碰撞箱」而非「模型整体」——位移精确匹配抓取区出屏量，避免左右回弹距离被放大。
+    // 受 bounceEnabled 开关控制（config.ui.model_position.bounce_back，默认开启）。
+    _bounceViewRectIntoWindow() {
+        if (!this.model || !this.model.viewRect) return;
+        if (!this.bounceEnabled) {
+            // 回弹关闭：不做动画，但仍走夹紧，避免模型拖出窗口后当前会话抓不回来
+            this._clampViewRect();
+            this.saveModelPosition();
+            return;
+        }
+        const iW = window.innerWidth;
+        const iH = window.innerHeight;
+        const margin = 16;
+
+        // 碰撞箱 = 真实屏幕碰撞盒（可抓取范围），降级到 viewRect。
+        const hb = this.model.getScreenHitBox ? this.model.getScreenHitBox() : null;
+        const boxLeft = hb ? hb.x : this.model.viewRect.x;
+        const boxTop = hb ? hb.y : this.model.viewRect.y;
+        const boxW = hb ? hb.width : this.model.viewRect.width;
+        const boxH = hb ? hb.height : this.model.viewRect.height;
+        const boxRight = boxLeft + boxW;
+        const boxBottom = boxTop + boxH;
+
+        // 碰撞箱在窗口内的可见部分
+        const visW = Math.max(0, Math.min(boxRight, iW) - Math.max(boxLeft, 0));
+        const visH = Math.max(0, Math.min(boxBottom, iH) - Math.max(boxTop, 0));
+
+        // 触发阈值：碰撞箱可见部分低于 15%（下限 8px）。
+        const minVisX = Math.max(8, boxW * 0.15);
+        const minVisY = Math.max(8, boxH * 0.15);
+        const needX = visW < minVisX;
+        const needY = visH < minVisY;
+
+        if (!needX && !needY) {
+            this.saveModelPosition();
+            return;
+        }
+
+        // 回弹目标：把碰撞箱完整夹回 [margin, iW-margin]×[margin, iH-margin]。
+        let targetLeft = boxLeft;
+        let targetTop = boxTop;
+        if (needX) {
+            if (boxW >= iW - margin * 2) targetLeft = (iW - boxW) / 2;
+            else if (boxLeft < margin) targetLeft = margin;
+            else if (boxRight > iW - margin) targetLeft = iW - margin - boxW;
+        }
+        if (needY) {
+            if (boxH >= iH - margin * 2) targetTop = (iH - boxH) / 2;
+            else if (boxTop < margin) targetTop = margin;
+            else if (boxBottom > iH - margin) targetTop = iH - margin - boxH;
+        }
+
+        // 由碰撞箱位移反推 viewRect.x / viewRect.y 的位移（碰撞箱与 viewRect 同步平移）。
+        const dx = targetLeft - boxLeft;
+        const dy = targetTop - boxTop;
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+            this.saveModelPosition();
+            return;
+        }
+
+        this._animateBounce(dx, dy);
+    }
+
+    // 平滑回弹动画（easeInOutCubic + 轻微 overshoot），期间用户再次按下会由 _cancelBounce 打断。
+    _animateBounce(dx, dy) {
+        this._cancelBounce();
+        const startX = this.model.viewRect.x;
+        const startY = this.model.viewRect.y;
+        const duration = 340;
+        const start = performance.now();
+        const step = (now) => {
+            if (!this.model || !this.model.viewRect) return;
+            if (this.isDragging) { this._cancelBounce(); return; }
+            const t = Math.min(1, (now - start) / duration);
+            // easeInOutCubic：起止都缓，中段快，配合 overshoot 更顺滑
+            const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            // 仅在中段加入轻微 overshoot（峰值 ~1.04），抵消 easeInOut 的“突然停止感”
+            const overshoot = Math.sin(Math.PI * t) * 0.04;
+            const s = e + overshoot;
+            this.model.viewRect.x = startX + dx * s;
+            this.model.viewRect.y = startY + dy * s;
+            if (t < 1) {
+                this._bounceAnim = requestAnimationFrame(step);
+            } else {
+                this._bounceAnim = null;
+                this.saveModelPosition();
+            }
+        };
+        this._bounceAnim = requestAnimationFrame(step);
+    }
+
+    // 取消进行中的回弹动画。
+    _cancelBounce() {
+        if (this._bounceAnim != null) {
+            cancelAnimationFrame(this._bounceAnim);
+            this._bounceAnim = null;
+        }
     }
 
     _clampViewRect() {

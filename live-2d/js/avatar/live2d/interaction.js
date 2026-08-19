@@ -11,6 +11,8 @@
 //   saveModelPosition()               - 持久化位置/缩放（存储用 legacy 语义）
 //   resetModelPosition()              - 复位（供 HTTP /reset-model-position）
 //   isPointOverInteractive(x, y)      - 供 ui-controller 鼠标穿透判定（client 坐标）
+//   checkAndSwitchDisplay(x, y)       - 松手跨屏判定（光标贴边 + 模型越界 → 整窗重定位）
+//   _bounceModelIntoWindow()          - 模型几乎出屏时平滑回弹（bounce_back 开关控制）
 const { ipcRenderer } = require('electron');
 const { LEGACY_SCALE_RATIO } = require('./core.js');
 let _logToTerminal;
@@ -39,16 +41,24 @@ class Live2DInteractionController {
         this._scaleMin = 0.005;
         this._scaleMax = 4;
         this._saveTimer = null;
+        this._bounceAnim = null;   // 回弹动画句柄（进行中才有值，用于打断）
+        this.bounceEnabled = true; // 回弹开关（默认开启，config.ui.model_position.bounce_back 控制）
         this._listeners = [];   // [{target, type, handler, options}]
         // 口型参数 setter（Phase 4 由 lipsync 模块注入；默认直接写常见参数 ID）
         this._mouthSetter = null;
     }
 
     init(model, app, config = null, extras = {}) {
+        // 防御：重绑/形态恢复时取消可能仍在进行的回弹动画，
+        // 避免旧模型的动画帧继续按过期 startX/dx 改写新模型位置
+        this._cancelBounce();
         this.model = model;
         this.app = app;
         this.config = config;
         this.stage = extras.stage || this.stage;
+
+        // 回弹开关（默认开启）
+        this.bounceEnabled = config?.ui?.model_position?.bounce_back !== false;
 
         // 缩放钳制范围基于初始应用缩放推导
         const s = model?.scale?.x || 0.1;
@@ -121,28 +131,28 @@ class Live2DInteractionController {
             this.dragOffset.x = e.clientX - this.model.x;
             this.dragOffset.y = e.clientY - this.model.y;
             this._pressStart = { x: e.clientX, y: e.clientY, t: performance.now() };
+            // 开始拖动时取消进行中的回弹动画，避免和用户新拖动互相拉扯
+            this._cancelBounce();
             this._setPassthrough(false);
             this._notifyActivity();
         });
 
         this._on(window, 'pointermove', (e) => {
             if (!this.isDragging || !this.model) return;
-            let newX = e.clientX - this.dragOffset.x;
-            let newY = e.clientY - this.dragOffset.y;
+            const newX = e.clientX - this.dragOffset.x;
+            const newY = e.clientY - this.dragOffset.y;
 
-            // 多屏限制（与旧实现一致）：左扩展模式下限制 x >= 0
-            const extend = this.config?.ui?.screen_extend;
-            if (extend?.extend && extend?.left && newX < 0) newX = 0;
-
+            // 拖动期间模型自由跟随光标，允许超出当前窗口边缘（会被窗口裁切）；
+            // 跨屏判定推迟到松手时的 checkAndSwitchDisplay，不在拖动中限制范围。
+            // （旧 screen_extend 巨窗方案已废弃，主进程不再读取该配置，相应钳制一并移除。）
             this.model.position.set(newX, newY);
             this.updateInteractionArea();
             this._notifyActivity();
         });
 
-        this._on(window, 'pointerup', (e) => {
+        this._on(window, 'pointerup', async (e) => {
             if (!this.isDragging) return;
             this.isDragging = false;
-            this.saveModelPosition();
 
             // 点击判定：位移小且时间短 -> 触发 Tap 动作（旧实现因拖拽误触被整段禁用，
             // 这里用位移阈值解决误触问题后恢复该交互）
@@ -154,6 +164,13 @@ class Live2DInteractionController {
                 if (moved < 6 && elapsed < 350) {
                     this._onModelTap();
                 }
+            }
+
+            // 松手时若“光标拖到了窗口边缘 + 模型越过该边”，整窗重定位到那一侧的显示器；
+            // 未切屏时若模型越出窗口，平滑回弹到窗口内（两个分支内部各自负责保存位置）。
+            const switched = await this.checkAndSwitchDisplay(e.clientX, e.clientY);
+            if (!switched) {
+                this._bounceModelIntoWindow();
             }
 
             // 松手后若指针不在交互区上则恢复穿透
@@ -275,6 +292,203 @@ class Live2DInteractionController {
         } catch (_) {}
     }
 
+    // ============ 跨屏 / 回弹（v2 坐标系：舞台坐标 = CSS 像素，无需缩放换算） ============
+
+    // 松手时若“光标拖到窗口边缘 + 模型越过该边”，整窗重定位到那一侧的显示器。
+    // 触发用“光标贴边(EDGE 内) 且 模型可见区也越过该边”双重确认：光标到边缘=明确要往那侧推出去，
+    // 松手在屏幕中间不会误触；光标永远能拖到边缘，故四向、任意抓取点都对称。
+    async checkAndSwitchDisplay(cursorX, cursorY) {
+        if (!window.electronScreen || !window.electronScreen.moveWindowToDisplay) return false;
+        if (!this.model) return false;
+        if (!Number.isFinite(cursorX) || !Number.isFinite(cursorY)) return false;
+
+        try {
+            const displays = await window.electronScreen.getAllDisplays();
+            if (!displays || displays.length <= 1) return false;
+            const currentDisplay = await window.electronScreen.getCurrentDisplay();
+            if (!currentDisplay) return false;
+
+            const W = window.innerWidth, H = window.innerHeight;
+            // 模型可见区域在当前窗口 CSS 像素下的边界（v2：getBounds 即 CSS 坐标）
+            const b = this.model.getBounds();
+            const vLeft = b.left, vRight = b.right, vTop = b.top, vBottom = b.bottom;
+
+            // 光标贴到哪条边(EDGE 内) 且 模型也越过该边，就在那侧“边外一点”探测目标显示器；另一轴用光标位置。
+            const EDGE = 10;
+            const sX = currentDisplay.screenX, sY = currentDisplay.screenY;
+            const probes = [];
+            if (cursorX <= EDGE && vLeft < 0)       probes.push({ x: sX - 1,      y: sY + cursorY });
+            if (cursorX >= W - EDGE && vRight > W)   probes.push({ x: sX + W + 1,  y: sY + cursorY });
+            if (cursorY <= EDGE && vTop < 0)        probes.push({ x: sX + cursorX, y: sY - 1 });
+            if (cursorY >= H - EDGE && vBottom > H)  probes.push({ x: sX + cursorX, y: sY + H + 1 });
+
+            let targetDisplay = null, probe = null;
+            for (const p of probes) {
+                for (const d of displays) {
+                    if (d.id === currentDisplay.id) continue;
+                    if (p.x >= d.screenX && p.x < d.screenX + d.width &&
+                        p.y >= d.screenY && p.y < d.screenY + d.height) {
+                        targetDisplay = d; probe = p; break;
+                    }
+                }
+                if (targetDisplay) break;
+            }
+            if (!targetDisplay) return false;
+
+            console.log('[Live2D] 光标拖到屏幕边缘，准备切换到屏幕:', targetDisplay.id);
+
+            const result = await window.electronScreen.moveWindowToDisplay(probe.x, probe.y);
+            if (result && result.success && !result.sameDisplay) {
+                if (result.scaleRatio && result.scaleRatio !== 1) {
+                    console.log('[Live2D] 屏幕缩放比变化:', result.scaleRatio);
+                }
+
+                // 以探测点为视觉中心，夹住可见模型完整落入目标屏（目标屏 DIP 尺寸），用 delta 落位。
+                const tw = targetDisplay.width, th = targetDisplay.height;
+                const halfVisW = (vRight - vLeft) / 2;
+                const halfVisH = (vBottom - vTop) / 2;
+                const margin = 16;
+                let cx = probe.x - targetDisplay.screenX;
+                let cy = probe.y - targetDisplay.screenY;
+                const loX = margin + halfVisW, hiX = tw - margin - halfVisW;
+                const loY = margin + halfVisH, hiY = th - margin - halfVisH;
+                cx = hiX >= loX ? Math.min(Math.max(cx, loX), hiX) : tw / 2;
+                cy = hiY >= loY ? Math.min(Math.max(cy, loY), hiY) : th / 2;
+
+                const b2 = this.model.getBounds();
+                const curCenterX = (b2.left + b2.right) / 2;
+                const curCenterY = (b2.top + b2.bottom) / 2;
+                this.model.x += cx - curCenterX;
+                this.model.y += cy - curCenterY;
+                this.updateInteractionArea();
+
+                // 保存：用“目标显示器的 DIP 尺寸”算相对位置，避免依赖跨屏后尚未稳定的 innerWidth。
+                this.saveModelPosition(tw, th);
+                console.log('[Live2D] 跨屏切换完成，模型新位置:', this.model.x, this.model.y);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('[Live2D] 跨屏检测/切换出错:', error);
+            return false;
+        }
+    }
+
+    // 若模型中心越出当前窗口，吸回窗口内（保持中心位于窗口范围内）。
+    _clampModelToWindow() {
+        if (!this.model) return;
+        const b = this.model.getBounds();
+        const cx = (b.left + b.right) / 2;
+        const cy = (b.top + b.bottom) / 2;
+        const clampedX = Math.min(Math.max(cx, 0), window.innerWidth);
+        const clampedY = Math.min(Math.max(cy, 0), window.innerHeight);
+        if (clampedX !== cx || clampedY !== cy) {
+            this.model.x += clampedX - cx;
+            this.model.y += clampedY - cy;
+            this.updateInteractionArea();
+        }
+    }
+
+    // ===== 回弹：以「碰撞箱（可抓取区域 interactionX/Y/Width/Height）」为判断依据 =====
+    // 当碰撞箱在窗口内的可见部分 < 15% 时触发（即模型被拖到几乎抓不到了）。
+    // 回弹目标用「碰撞箱」而非「模型整体」——位移精确匹配抓取区出屏量，避免左右回弹距离被放大。
+    // 受 bounceEnabled 开关控制（config.ui.model_position.bounce_back，默认开启）。
+    _bounceModelIntoWindow() {
+        if (!this.model) return;
+        if (!this.bounceEnabled) {
+            // 回弹关闭：不做动画，但仍走夹紧，避免模型拖出窗口后当前会话抓不回来
+            this._clampModelToWindow();
+            this.saveModelPosition();
+            return;
+        }
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+        const margin = 16;
+
+        // 碰撞箱 = 交互区域（用户能点中并拖动模型的范围）
+        const boxLeft = this.interactionX;
+        const boxTop = this.interactionY;
+        const boxW = this.interactionWidth;
+        const boxH = this.interactionHeight;
+        const boxRight = boxLeft + boxW;
+        const boxBottom = boxTop + boxH;
+
+        // 碰撞箱在窗口内的可见部分
+        const visW = Math.max(0, Math.min(boxRight, W) - Math.max(boxLeft, 0));
+        const visH = Math.max(0, Math.min(boxBottom, H) - Math.max(boxTop, 0));
+
+        // 触发阈值：碰撞箱可见部分低于 15%（下限 8px），即抓取区 85% 出屏时回弹。
+        const minVisX = Math.max(8, boxW * 0.15);
+        const minVisY = Math.max(8, boxH * 0.15);
+        const needX = visW < minVisX;
+        const needY = visH < minVisY;
+
+        if (!needX && !needY) {
+            this.saveModelPosition();
+            return;
+        }
+
+        // 回弹目标：把碰撞箱完整夹回 [margin, W-margin]×[margin, H-margin]。
+        let targetLeft = boxLeft;
+        let targetTop = boxTop;
+        if (needX) {
+            if (boxW >= W - margin * 2) targetLeft = (W - boxW) / 2;
+            else if (boxLeft < margin) targetLeft = margin;
+            else if (boxRight > W - margin) targetLeft = W - margin - boxW;
+        }
+        if (needY) {
+            if (boxH >= H - margin * 2) targetTop = (H - boxH) / 2;
+            else if (boxTop < margin) targetTop = margin;
+            else if (boxBottom > H - margin) targetTop = H - margin - boxH;
+        }
+
+        const dx = targetLeft - boxLeft;
+        const dy = targetTop - boxTop;
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+            this.saveModelPosition();
+            return;
+        }
+
+        this._animateBounce(dx, dy);
+    }
+
+    // 平滑回弹动画（easeInOutCubic + 轻微 overshoot），期间用户再次按下会由 _cancelBounce 打断。
+    _animateBounce(dx, dy) {
+        this._cancelBounce();
+        const startX = this.model.x;
+        const startY = this.model.y;
+        const duration = 340;
+        const start = performance.now();
+        const step = (now) => {
+            if (!this.model) return;
+            if (this.isDragging) { this._cancelBounce(); return; }
+            const t = Math.min(1, (now - start) / duration);
+            // easeInOutCubic：起止都缓，中段快，配合 overshoot 更顺滑
+            const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            // 仅在中段加入轻微 overshoot（峰值 ~1.04），抵消 easeInOut 的“突然停止感”
+            const overshoot = Math.sin(Math.PI * t) * 0.04;
+            const s = e + overshoot;
+            this.model.x = startX + dx * s;
+            this.model.y = startY + dy * s;
+            this.updateInteractionArea();
+            if (t < 1) {
+                this._bounceAnim = requestAnimationFrame(step);
+            } else {
+                this._bounceAnim = null;
+                this.saveModelPosition();
+            }
+        };
+        this._bounceAnim = requestAnimationFrame(step);
+    }
+
+    // 取消进行中的回弹动画。
+    _cancelBounce() {
+        if (this._bounceAnim != null) {
+            cancelAnimationFrame(this._bounceAnim);
+            this._bounceAnim = null;
+        }
+    }
+
     // ============ 口型 ============
 
     // Phase 4 的 lipsync 模块通过此方法接管口型写入
@@ -303,6 +517,8 @@ class Live2DInteractionController {
     // 兼容旧接口：变换已由 model-loader 应用，这里只刷新交互区
     setupInitialModelProperties() {
         this.updateInteractionArea();
+        // 防御：若配置里存了越界的相对位置（例如旧版跨屏 bug 导致的负值），启动时吸回当前窗口内。
+        this._clampModelToWindow();
     }
 
     _scheduleSave() {
@@ -313,12 +529,13 @@ class Live2DInteractionController {
         }, DRAG_SAVE_DEBOUNCE_MS);
     }
 
-    saveModelPosition() {
+    // overrideWidth/Height：跨屏切换时传入“目标显示器的 DIP 尺寸”，避免依赖尚未稳定的 innerWidth。
+    saveModelPosition(overrideWidth, overrideHeight) {
         if (!this.model || !this.config) return;
         if (!this.config.ui?.model_position?.remember_position) return;
 
-        const stageW = window.innerWidth || 1;
-        const stageH = window.innerHeight || 1;
+        const stageW = overrideWidth || window.innerWidth || 1;
+        const stageH = overrideHeight || window.innerHeight || 1;
         const relativeX = this.model.x / stageW;
         const relativeY = this.model.y / stageH;
         const isDualRight = window.innerWidth > window.screen.width * 1.2 && this.config?.ui?.screen_extend?.right;
@@ -381,6 +598,8 @@ class Live2DInteractionController {
 
     // 模型热切换时重绑定
     rebind(model) {
+        // 取消可能仍在进行的回弹动画，避免按旧模型的 startX/dx 改写新模型位置
+        this._cancelBounce();
         this.model = model;
         const s = model?.scale?.x || 0.1;
         this._scaleMin = s * 0.15;
@@ -390,6 +609,7 @@ class Live2DInteractionController {
 
     destroy() {
         this._teardownListeners();
+        this._cancelBounce();
         if (this._saveTimer) {
             clearTimeout(this._saveTimer);
             this._saveTimer = null;
