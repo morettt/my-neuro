@@ -43,7 +43,8 @@ ipcRenderer.on('display-changed', (event, info) => {
             const h = window.innerHeight;
             window.actualWindowWidth = w;
             window.actualWindowHeight = h;
-            const canvas = document.getElementById('canvas');
+            const canvas = global.avatarFacade?.getActiveCanvas?.()
+                || document.getElementById('canvas');
             if (canvas) {
                 canvas.style.width = w + 'px';
                 canvas.style.height = h + 'px';

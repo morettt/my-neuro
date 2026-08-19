@@ -48,9 +48,17 @@ class UIController {
                 if (el && el.closest && el.closest(INTERACTIVE_UI)) overUI = true;
             }
 
-            const overModel = global.currentModel.containsPoint(
-                global.pixiApp.renderer.plugins.interaction.mouse.global
-            );
+            const facade = global.avatarFacade || window.avatar;
+            const controller = facade?.getController?.() || global.modelController;
+            const model = facade?.getModel?.() || global.currentModel;
+            let overModel = false;
+            if (controller && typeof controller.isPointOverInteractive === 'function') {
+                overModel = controller.isPointOverInteractive(e.clientX, e.clientY);
+            } else if (model && typeof model.containsPoint === 'function') {
+                try {
+                    overModel = !!model.containsPoint({ x: e.clientX, y: e.clientY });
+                } catch (_) {}
+            }
 
             ipcRenderer.send('set-ignore-mouse-events', {
                 ignore: !overModel && !overUI,
@@ -216,32 +224,47 @@ class UIController {
         }
     }
 
+    _getActiveAvatarState() {
+        const facade = global.avatarFacade || window.avatar;
+        return {
+            type: facade?.getActiveType?.() || global.currentModel?.modelType || 'live2d',
+            model: facade?.getModel?.() || global.currentModel,
+            canvas: facade?.getActiveCanvas?.() || document.getElementById('canvas')
+        };
+    }
+
+    _getModelScreenPosition() {
+        const { type, model, canvas } = this._getActiveAvatarState();
+        if (!model || typeof model.toGlobal !== 'function') return null;
+
+        const point = model.toGlobal({ x: 0, y: 0 });
+        const modelX = Number(point?.x);
+        const modelY = Number(point?.y);
+        if (!Number.isFinite(modelX) || !Number.isFinite(modelY)) return null;
+
+        if (type === 'live2d' && canvas) {
+            const canvasRect = canvas.getBoundingClientRect();
+            const canvasWidth = Number(canvas.width) || canvasRect.width || 1;
+            const canvasHeight = Number(canvas.height) || canvasRect.height || 1;
+            return {
+                x: canvasRect.left + modelX * (canvasRect.width / canvasWidth),
+                y: canvasRect.top + modelY * (canvasRect.height / canvasHeight)
+            };
+        }
+
+        return { x: modelX, y: modelY };
+    }
+
     // 更新气泡框位置，使其跟随模型
     updateBubblePosition() {
         const bubbleContainer = document.getElementById('bubble-container');
         const toolBubblesContainer = document.getElementById('tool-bubbles-container');
 
         try {
-            // 检查模型和PIXI应用是否存在
-            if (!global.currentModel || !global.pixiApp) {
-                return;
-            }
-
-            // 获取canvas元素的屏幕位置和尺寸
-            const canvas = document.getElementById('canvas');
-            const canvasRect = canvas.getBoundingClientRect();
-
-            // 使用 toGlobal 方法将模型的本地坐标转换为全局坐标
-            const modelLocalPos = { x: 0, y: 0 };
-            const modelGlobalPos = global.currentModel.toGlobal(modelLocalPos);
-
-            // PIXI Canvas 的内部尺寸和显示尺寸的缩放比例
-            const scaleX = canvasRect.width / canvas.width;
-            const scaleY = canvasRect.height / canvas.height;
-
-            // 将 PIXI 内部坐标转换为屏幕坐标
-            const screenX = canvasRect.left + modelGlobalPos.x * scaleX;
-            const screenY = canvasRect.top + modelGlobalPos.y * scaleY;
+            const position = this._getModelScreenPosition();
+            if (!position) return;
+            const screenX = position.x;
+            const screenY = position.y;
 
             // 检查值是否有效
             if (screenX === undefined || screenY === undefined || isNaN(screenX) || isNaN(screenY)) {

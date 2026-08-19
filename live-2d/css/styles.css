@@ -7,12 +7,22 @@ body {
     -webkit-user-select: none;
 }
 
-#canvas {
+.avatar-container {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.avatar-container canvas {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+}
+
+#canvas {
     image-rendering: auto; 
     image-rendering: crisp-edges;
     image-rendering: pixelated;
