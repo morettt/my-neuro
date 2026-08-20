@@ -6,6 +6,19 @@ class ContextCompressor {
         this.voiceChat = voiceChatInterface;
         this.config = config;
 
+        // LLM 连接参数：优先通讯录解析，回退旧三格（压缩链路不应只依赖 config.llm.api_key）
+        let resolved = null;
+        try {
+            const { llmProviderManager } = require('../core/llm-provider.js');
+            resolved = llmProviderManager.resolveProviderOrFallback(
+                (config.llm && config.llm.provider_id) || null,
+                (config.llm && config.llm.model_id) || null
+            );
+        } catch (e) { /* 回退旧三格 */ }
+        this._llmApiUrl = (resolved && resolved.api_url) || config.llm.api_url;
+        this._llmApiKey = (resolved && resolved.api_key) || config.llm.api_key;
+        this._llmModel = (resolved && resolved.model) || config.llm.model;
+
         // 压缩配置
         this.compressionConfig = config.context?.compression || {};
         this.enabled = this.compressionConfig.enabled || false;
@@ -190,14 +203,14 @@ ${conversationText}
             console.log('🤖 调用LLM进行上下文压缩...');
 
             // 调用LLM API
-            const response = await fetch(`${this.config.llm.api_url}/chat/completions`, {
+            const response = await fetch(`${this._llmApiUrl}/chat/completions`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.config.llm.api_key}`
+                    'Authorization': `Bearer ${this._llmApiKey}`
                 },
                 body: JSON.stringify({
-                    model: this.config.llm.model,
+                    model: this._llmModel,
                     messages: [{
                         role: 'user',
                         content: compressPrompt

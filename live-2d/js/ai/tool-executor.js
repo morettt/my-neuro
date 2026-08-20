@@ -1,6 +1,14 @@
 // tool-executor.js - 统一的工具调用执行器
 const { logToTerminal, logToolAction } = require('../api-utils.js');
 
+// 遥测：可选依赖，加载/写盘失败必须吞掉，不能影响工具执行
+let _emitTelemetry = null;
+try { _emitTelemetry = require('../core/telemetry.js').emitTelemetry; } catch (e) { _emitTelemetry = null; }
+function safeEmitTelemetry(payload) {
+    if (!_emitTelemetry) return;
+    try { _emitTelemetry(payload); } catch (e) { /* 静默 */ }
+}
+
 /**
  * 统一的工具调用执行器
  * 负责协调MCP工具和本地Function Call工具的调用
@@ -28,6 +36,13 @@ class ToolExecutor {
 
         for (const toolCall of toolCalls) {
             const functionName = toolCall.function.name;
+            const toolStartTs = Date.now();
+            safeEmitTelemetry({
+                cat: 'tool',
+                type: 'tool.start',
+                title: `调用工具: ${functionName}`,
+                source: 'main'
+            });
             let toolResult = null;
 
             // 解析参数
@@ -107,6 +122,19 @@ class ToolExecutor {
                 });
                 logToolAction('error', `工具 ${functionName} 未找到或执行失败`);
             }
+
+            // 工具结束遥测（含耗时与成败）
+            const toolDurationMs = Date.now() - toolStartTs;
+            const toolSecs = (toolDurationMs / 1000).toFixed(1);
+            const toolFailed = !toolResult;
+            safeEmitTelemetry({
+                cat: 'tool',
+                type: toolFailed ? 'tool.error' : 'tool.end',
+                title: toolFailed ? `工具 ${functionName} 失败 (${toolSecs}s)` : `工具 ${functionName} 完成 (${toolSecs}s)`,
+                level: toolFailed ? 'error' : 'info',
+                metrics: { duration_ms: toolDurationMs },
+                source: 'main'
+            });
         }
 
         if (!hasToolExecuted) {

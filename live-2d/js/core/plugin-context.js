@@ -4,6 +4,8 @@
 const fs = require('fs');
 const path = require('path');
 const { eventBus } = require('./event-bus.js');
+const { llmProviderManager } = require('./llm-provider.js');
+const { createRequestDeadline } = require('./request-deadline.js');
 
 class PluginStorage {
     constructor(pluginName) {
@@ -101,23 +103,119 @@ class PluginContext {
      * @param {object} options - { model, temperature, ... }
      * @returns {Promise<string>}
      */
-    async callLLM(prompt, options = {}) {
-        const voiceChat = global.voiceChat;
-        if (!voiceChat) throw new Error('LLM not available');
+    // 解析 LLM 提供商（通讯录）；供插件查询当前/指定 provider 的连接与模型级参数
+    resolveLLM(providerId, modelId = null) {
+        return llmProviderManager.resolveProviderOrFallback(
+            providerId || null,
+            modelId || null
+        );
+    }
 
-        const response = await fetch(`${voiceChat.API_URL}/chat/completions`, {
+    /**
+     * 插件自己调用 LLM（独立请求，不进入对话历史）
+     * @param {string} prompt
+     * @param {object} options - { provider_id, model/model_id, timeout_ms, temperature, ... }
+     *   provider_id: 指定提供商；留空则跟随当前全局对话模型
+     *   api_url/api_key: 仅旧插件兼容；provider_id 为空时用作连接，不进请求体
+     *   timeout_ms: 可选请求超时
+     */
+    async callLLM(prompt, options = {}) {
+        // 剔除内部路由字段，避免连接信息和控制参数泄漏进请求体
+        const {
+            provider_id: providerId,
+            model_id: modelId,
+            api_url: legacyApiUrl,
+            api_key: legacyApiKey,
+            timeout_ms: requestedTimeoutMs,
+            signal: parentSignal,
+            ...requestOptions
+        } = options;
+        const requestedModel = requestOptions.model || modelId || null;
+
+        let apiUrl = '';
+        let apiKey = '';
+        let model = '';
+        let resolvedProvider = null;
+
+        // 优先使用插件显式指定的提供商
+        if (providerId) {
+            const provider = this.resolveLLM(providerId, requestedModel);
+            if (provider) {
+                resolvedProvider = provider;
+                apiUrl = provider.api_url;
+                apiKey = provider.api_key;
+                model = provider.model;
+            }
+        }
+
+        // provider 留空时兼容旧插件字段；这些字段只决定连接，不进入请求体
+        if (!apiUrl && legacyApiUrl) {
+            apiUrl = legacyApiUrl;
+            apiKey = legacyApiKey || '';
+            model = requestedModel || '';
+        }
+
+        // 旧字段也为空时，回退到当前全局对话模型
+        if (!apiUrl) {
+            const voiceChat = global.voiceChat;
+            if (llmProviderManager.isInitialized && llmProviderManager.isInitialized()) {
+                resolvedProvider = this.resolveLLM(null, requestedModel);
+            }
+            if (voiceChat && voiceChat.API_URL) {
+                apiUrl = voiceChat.API_URL;
+                apiKey = voiceChat.API_KEY || '';
+                model = requestedModel || voiceChat.MODEL || (resolvedProvider && resolvedProvider.model) || '';
+            } else if (resolvedProvider) {
+                apiUrl = resolvedProvider.api_url;
+                apiKey = resolvedProvider.api_key;
+                model = resolvedProvider.model;
+            } else {
+                throw new Error('LLM not available');
+            }
+        }
+
+        const requestBody = {
+            messages: [{ role: 'user', content: prompt }],
+            stream: false,
+            ...requestOptions,
+            model
+        };
+        // 模型级参数合并：仅在调用方未显式提供时，用 provider 解析出的模型参数
+        if (
+            !Object.prototype.hasOwnProperty.call(requestOptions, 'temperature') &&
+            resolvedProvider && resolvedProvider.temperature_enabled === true
+        ) {
+            requestBody.temperature = resolvedProvider.temperature ?? 1.0;
+        }
+        if (
+            !Object.prototype.hasOwnProperty.call(requestOptions, 'reasoning_effort') &&
+            resolvedProvider && resolvedProvider.reasoning_enabled === true &&
+            resolvedProvider.reasoning_effort
+        ) {
+            requestBody.reasoning_effort = resolvedProvider.reasoning_effort;
+        }
+
+        const timeoutMs = Number(requestedTimeoutMs);
+        const deadline = Number.isFinite(timeoutMs) && timeoutMs > 0
+            ? createRequestDeadline(timeoutMs, {
+                parentSignal,
+                code: 'PLUGIN_LLM_TIMEOUT',
+                message: `Plugin LLM request timed out after ${Math.round(timeoutMs)}ms`
+            })
+            : null;
+        const requestSignal = (deadline && deadline.signal) || parentSignal || undefined;
+        const endpoint = /\/chat\/completions\/?$/i.test(apiUrl)
+            ? apiUrl.replace(/\/+$/, '')
+            : `${apiUrl.replace(/\/+$/, '')}/chat/completions`;
+
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${voiceChat.API_KEY}`
+                'Authorization': `Bearer ${apiKey}`
             },
-            body: JSON.stringify({
-                model: options.model || voiceChat.MODEL,
-                messages: [{ role: 'user', content: prompt }],
-                stream: false,
-                temperature: options.temperature || 1.0,
-                ...options
-            })
+            body: JSON.stringify(requestBody),
+            signal: requestSignal
         });
 
         if (!response.ok) throw new Error(`LLM API error: ${response.status}`);

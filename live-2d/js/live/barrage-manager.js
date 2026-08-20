@@ -13,7 +13,18 @@ class BarrageManager {
         this.priorityQueue = [];    // 优先队列（保留，暂未使用）
         this.isProcessing = false;
         this.interruptFlag = false; // 打断标志
-        this.llmClient = new LLMClient(config);
+        // 优先走通讯录解析（此时 provider 已由 config-loader 初始化）；空 key 回退旧三格
+        let resolvedBarrage = null;
+        try {
+            const { llmProviderManager } = require('../core/llm-provider.js');
+            resolvedBarrage = llmProviderManager.resolveProviderOrFallback(
+                (config.llm && config.llm.provider_id) || null,
+                (config.llm && config.llm.model_id) || null
+            );
+        } catch (e) { /* 回退 */ }
+        this.llmClient = resolvedBarrage
+            ? LLMClient.fromProviderConfig(resolvedBarrage, (config.llm && config.llm.retry) || {})
+            : new LLMClient(config);
 
         // 依赖的外部服务
         this.voiceChat = null;

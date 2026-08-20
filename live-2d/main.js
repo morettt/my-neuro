@@ -20,6 +20,9 @@ const { logToTerminal } = require('./js/api-utils');
 const configPath = process.env.MY_NEURO_CONFIG_PATH
     ? path.resolve(process.env.MY_NEURO_CONFIG_PATH)
     : path.join(app.getAppPath(), 'config.json');
+// LLM 通讯录所在目录（与 config.json 同目录）
+const configBaseDir = path.dirname(configPath);
+const { persistProviderStore } = require('./js/core/llm-provider-store');
 let shortcutManager = null;
 let rendererRequestCounter = 0;
 const pendingRendererRequests = new Map();
@@ -521,8 +524,20 @@ ipcMain.handle('save-config', async (event, configData) => {
             fs.copyFileSync(configPath, backupPath);
         }
 
-        // 保存新配置
-        fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), 'utf8');
+        // 保存新配置（先经通讯录处理：迁移/注入 llm_providers，写回磁盘前剔除内存态键）
+        let preparedConfig = configData;
+        try {
+            preparedConfig = JSON.parse(JSON.stringify(configData));
+            persistProviderStore(configBaseDir, null, preparedConfig);
+            delete preparedConfig.llm_providers;
+        } catch (providerError) {
+            console.warn('通讯录处理失败（按原样保存 config）:', providerError.message);
+            preparedConfig = configData;
+            if (preparedConfig && preparedConfig.llm_providers) {
+                try { delete preparedConfig.llm_providers; } catch (e) { /* ignore */ }
+            }
+        }
+        fs.writeFileSync(configPath, JSON.stringify(preparedConfig, null, 2), 'utf8');
 
         // 通知用户需要重启应用
         const result = await dialog.showMessageBox({
