@@ -2,16 +2,24 @@
 setlocal
 cd /d "%~dp0"
 
-set "PY=%~dp0..\env\python.exe"
+set "PY=%~dp0env\python.exe"
 if not exist "%PY%" (
     echo [ERROR] env\python.exe not found:
     echo   %PY%
-    echo Copy the env folder next to live-2d, then try again.
+    echo Copy the env folder to this repo root, then try again.
     echo.
     pause
     exit /b 1
 )
 
+if not exist "%~dp0live-2d" (
+    echo [ERROR] live-2d folder not found next to this script.
+    echo.
+    pause
+    exit /b 1
+)
+
+cd /d "%~dp0live-2d"
 echo Starting WebUI...
 echo Python: %PY%
 echo.
