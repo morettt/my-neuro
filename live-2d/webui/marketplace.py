@@ -12,6 +12,7 @@ import subprocess
 import sys
 import threading
 import shutil
+import time
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -24,7 +25,14 @@ from .marketplace_updater import (
     check_updates_for_plugins,
     get_local_metadata,
     install_plugin_from_archive,
+    pip_install_requirements_cmd,
     update_plugin_safe,
+)
+from .state_io import (
+    delete_resource_state,
+    read_resource_state,
+    resource_lock,
+    write_resource_state,
 )
 
 # 尝试导入 requests 库，如果不可用则使用 urllib
@@ -40,6 +48,10 @@ market_bp = Blueprint('market', __name__)
 
 # 存储正在进行的安装任务
 installing_tasks = {}
+_installing_tasks_lock = threading.RLock()
+INSTALL_TASK_RETENTION_SECONDS = 10 * 60
+INSTALL_TASK_ACTIVE_STALE_SECONDS = 15 * 60
+TERMINAL_INSTALL_STATUSES = {'completed', 'failed'}
 
 PLUGIN_UPDATE_CONCURRENCY = 3
 
@@ -48,6 +60,99 @@ PLUGIN_HUB_RAW_URL = (
     'https://raw.githubusercontent.com/morettt/my-neuro/main/'
     'live-2d/plugins/plugin-house/plugin_hub.json'
 )
+
+
+def _task_is_active(task):
+    return bool(task) and task.get('status') not in TERMINAL_INSTALL_STATUSES
+
+
+def _install_task_resource(plugin_name):
+    return f'plugin-task:{PROJECT_ROOT.resolve()}:{plugin_name}'
+
+
+def _task_is_expired(task, now):
+    if not task:
+        return False
+    if task.get('status') in TERMINAL_INSTALL_STATUSES:
+        return (
+            now - task.get('finished_at', now)
+            >= INSTALL_TASK_RETENTION_SECONDS
+        )
+    return (
+        now - task.get('updated_at', task.get('created_at', now))
+        >= INSTALL_TASK_ACTIVE_STALE_SECONDS
+    )
+
+
+def _get_install_task(plugin_name):
+    now = time.time()
+    resource = _install_task_resource(plugin_name)
+    with resource_lock(resource):
+        shared_task = read_resource_state(resource)
+        with _installing_tasks_lock:
+            local_task = installing_tasks.get(plugin_name)
+            task = shared_task or local_task
+            if _task_is_expired(task, now):
+                installing_tasks.pop(plugin_name, None)
+                delete_resource_state(resource)
+                return None
+            if shared_task:
+                installing_tasks[plugin_name] = dict(shared_task)
+            return dict(task) if task else None
+
+
+def _reserve_install_task(plugin_name, status, progress, operation):
+    now = time.time()
+    resource = _install_task_resource(plugin_name)
+    with resource_lock(resource):
+        shared_task = read_resource_state(resource)
+        with _installing_tasks_lock:
+            existing = shared_task or installing_tasks.get(plugin_name)
+        if _task_is_active(existing) and not _task_is_expired(existing, now):
+            return False
+
+        task = {
+            'status': status,
+            'progress': progress,
+            'operation': operation,
+            'created_at': now,
+            'updated_at': now,
+            'error': '',
+            'webui_pid': os.getpid(),
+        }
+        write_resource_state(resource, task)
+        with _installing_tasks_lock:
+            installing_tasks[plugin_name] = dict(task)
+        return True
+
+
+def _update_install_task(plugin_name, **changes):
+    now = time.time()
+    resource = _install_task_resource(plugin_name)
+    with resource_lock(resource):
+        shared_task = read_resource_state(resource)
+        with _installing_tasks_lock:
+            local_task = installing_tasks.get(plugin_name)
+        task = dict(
+            shared_task
+            or local_task
+            or {
+                'status': 'queued',
+                'progress': 0,
+                'operation': 'install',
+                'created_at': now,
+                'error': '',
+                'webui_pid': os.getpid(),
+            }
+        )
+        task.update(changes)
+        task['updated_at'] = now
+        if task.get('status') in TERMINAL_INSTALL_STATUSES:
+            task['finished_at'] = now
+        write_resource_state(resource, task)
+        with _installing_tasks_lock:
+            installing_tasks[plugin_name] = dict(task)
+        return dict(task)
 
 
 def load_plugin_hub_catalog():
@@ -94,6 +199,7 @@ def _build_market_plugin_items(check_updates=True):
     for key, value in plugins_data.items():
         plugin_dir = _get_market_plugin_dir(key)
         is_installed = plugin_dir.exists() and any(plugin_dir.iterdir())
+        task = _get_install_task(key)
         local_metadata = get_local_metadata(plugin_dir) if is_installed else {}
         repo_url = value.get('repo', '') or local_metadata.get('repo', '')
         local_version = local_metadata.get('version', '')
@@ -113,9 +219,10 @@ def _build_market_plugin_items(check_updates=True):
             'has_update': False,
             'update_error': '',
             'installed': is_installed,
-            'installing': key in installing_tasks,
-            'status': installing_tasks.get(key, {}).get('status', ''),
-            'progress': installing_tasks.get(key, {}).get('progress', 0),
+            'installing': _task_is_active(task),
+            'status': task.get('status', '') if task else '',
+            'progress': task.get('progress', 0) if task else 0,
+            'install_error': task.get('error', '') if task else '',
         })
 
     if check_updates and plugins:
@@ -155,13 +262,16 @@ def _find_market_plugin(plugin_name):
 
 def _install_requirements_with_task_status(plugin_name):
     def _installer(plugin_dir):
-        req_path = Path(plugin_dir) / 'requirements.txt'
-        if not req_path.exists():
+        cmd = pip_install_requirements_cmd(plugin_dir)
+        if not cmd:
             return
-        installing_tasks[plugin_name]['status'] = 'installing_deps'
-        installing_tasks[plugin_name]['progress'] = 75
+        _update_install_task(
+            plugin_name,
+            status='installing_deps',
+            progress=75,
+        )
         result = subprocess.run(
-            [sys.executable, '-m', 'pip', 'install', '-r', str(req_path)],
+            cmd,
             capture_output=True,
             text=True,
             timeout=300
@@ -247,10 +357,6 @@ def download_plugin():
         if not plugin_name or not plugin_url:
             return jsonify({'success': False, 'error': '缺少参数'}), 400
 
-        # 检查是否正在安装中
-        if plugin_name in installing_tasks:
-            return jsonify({'success': False, 'error': '该插件正在安装中'}), 400
-
         # 检查是否已安装
         community_path = PROJECT_ROOT / 'plugins' / 'community'
         plugin_dir = community_path / plugin_name
@@ -260,13 +366,30 @@ def download_plugin():
         # 只创建父目录。插件目录由安装成功后原子落盘，避免失败留下空壳。
         community_path.mkdir(parents=True, exist_ok=True)
 
+        if not _reserve_install_task(
+            plugin_name,
+            status='queued',
+            progress=0,
+            operation='install',
+        ):
+            return jsonify({'success': False, 'error': '该插件正在安装中'}), 409
+
         # 启动后台线程进行下载和安装
         thread = threading.Thread(
             target=_install_plugin_worker,
             args=(plugin_name, plugin_url, plugin_dir),
             daemon=True
         )
-        thread.start()
+        try:
+            thread.start()
+        except Exception as exc:
+            _update_install_task(
+                plugin_name,
+                status='failed',
+                progress=0,
+                error=str(exc),
+            )
+            raise
 
         return jsonify({
             'success': True,
@@ -279,44 +402,40 @@ def download_plugin():
 def _install_plugin_worker(plugin_name, plugin_url, plugin_dir):
     """后台安装插件的工作线程"""
     try:
-        installing_tasks[plugin_name] = {'status': 'downloading', 'progress': 0}
+        _update_install_task(
+            plugin_name,
+            status='downloading',
+            progress=0,
+            operation='install',
+            error='',
+        )
         logger.info(f'开始下载插件：{plugin_name}')
 
         # 下载、解压、依赖安装都在辅助模块中完成；它会自动处理 main/master/default_branch。
-        installing_tasks[plugin_name]['progress'] = 20
-        installing_tasks[plugin_name]['status'] = 'extracting'
-        installing_tasks[plugin_name]['progress'] = 50
+        _update_install_task(plugin_name, status='downloading', progress=20)
+        _update_install_task(plugin_name, status='extracting', progress=50)
         install_plugin_from_archive(
             plugin_dir,
             plugin_url,
             requirements_installer=_install_requirements_with_task_status(plugin_name),
         )
 
-        installing_tasks[plugin_name]['status'] = 'completed'
-        installing_tasks[plugin_name]['progress'] = 100
+        _update_install_task(
+            plugin_name,
+            status='completed',
+            progress=100,
+            error='',
+        )
         marketplace_stats.increment_download(plugin_name)
         logger.info(f'插件安装完成：{plugin_name}')
-        
-        # 清理任务记录（让刷新列表时能正确显示已安装状态）
-        import time
-        time.sleep(0.3)  # 短暂等待，确保文件写入完成
-        if plugin_name in installing_tasks:
-            del installing_tasks[plugin_name]
 
     except Exception as e:
         logger.error(f'插件安装失败：{plugin_name}, {str(e)}')
-        installing_tasks[plugin_name]['status'] = 'failed'
-        installing_tasks[plugin_name]['error'] = str(e)
-        
-        # 失败时也清理任务记录
-        import time
-        time.sleep(0.3)
-        if plugin_name in installing_tasks:
-            del installing_tasks[plugin_name]
-    
-    finally:
-        # 确保任务被清理
-        pass
+        _update_install_task(
+            plugin_name,
+            status='failed',
+            error=str(e),
+        )
 
 
 @market_bp.route('/api/market/plugins/update', methods=['POST'])
@@ -329,7 +448,7 @@ def update_market_plugin():
 
         if not plugin_name:
             return jsonify({'success': False, 'error': '缺少 plugin_name 参数'}), 400
-        if plugin_name in installing_tasks:
+        if _task_is_active(_get_install_task(plugin_name)):
             return jsonify({'success': False, 'error': '该插件正在安装或更新中'}), 400
 
         plugin_info = _find_market_plugin(plugin_name)
@@ -341,27 +460,39 @@ def update_market_plugin():
         if not plugin_dir.exists() or not any(plugin_dir.iterdir()):
             return jsonify({'success': False, 'error': '插件尚未安装'}), 404
 
-        installing_tasks[plugin_name] = {'status': 'updating', 'progress': 10}
+        if not _reserve_install_task(
+            plugin_name,
+            status='updating',
+            progress=10,
+            operation='update',
+        ):
+            return jsonify({'success': False, 'error': '该插件正在安装或更新中'}), 409
         result = update_plugin_safe(
             plugin_dir,
             plugin_name,
             repo_url,
             requirements_installer=_install_requirements_with_task_status(plugin_name),
         )
-        installing_tasks[plugin_name]['status'] = 'completed'
-        installing_tasks[plugin_name]['progress'] = 100
+        _update_install_task(
+            plugin_name,
+            status='completed',
+            progress=100,
+            error='',
+        )
         return jsonify({'success': True, 'message': '插件更新完成', 'result': result})
     except Exception as e:
         logger.error(f'插件更新失败：{str(e)}', exc_info=True)
-        if 'plugin_name' in locals() and plugin_name in installing_tasks:
-            installing_tasks[plugin_name]['status'] = 'failed'
-            installing_tasks[plugin_name]['error'] = str(e)
+        if (
+            'plugin_name' in locals()
+            and plugin_name
+            and _get_install_task(plugin_name)
+        ):
+            _update_install_task(
+                plugin_name,
+                status='failed',
+                error=str(e),
+            )
         return jsonify({'success': False, 'error': str(e)}), 500
-    finally:
-        if 'plugin_name' in locals() and plugin_name in installing_tasks:
-            import time
-            time.sleep(0.3)
-            installing_tasks.pop(plugin_name, None)
 
 
 @market_bp.route('/api/market/plugins/update-all', methods=['POST'])
@@ -387,22 +518,31 @@ def update_all_market_plugins():
             repo_url = plugin.get('repo', '')
             if not repo_url:
                 return {'name': name, 'success': False, 'error': '插件未配置 repo'}
+            if not _reserve_install_task(
+                name,
+                status='updating',
+                progress=10,
+                operation='update',
+            ):
+                return {'name': name, 'success': False, 'error': '插件正在安装或更新中'}
             try:
-                installing_tasks[name] = {'status': 'updating', 'progress': 10}
                 result = update_plugin_safe(
                     _get_market_plugin_dir(name),
                     name,
                     repo_url,
                     requirements_installer=_install_requirements_with_task_status(name),
                 )
-                installing_tasks[name]['status'] = 'completed'
-                installing_tasks[name]['progress'] = 100
+                _update_install_task(
+                    name,
+                    status='completed',
+                    progress=100,
+                    error='',
+                )
                 return {'name': name, 'success': True, 'result': result}
             except Exception as exc:
                 logger.error(f'批量更新插件失败 {name}: {exc}', exc_info=True)
+                _update_install_task(name, status='failed', error=str(exc))
                 return {'name': name, 'success': False, 'error': str(exc)}
-            finally:
-                installing_tasks.pop(name, None)
 
         results = []
         workers = min(PLUGIN_UPDATE_CONCURRENCY, len(plugin_names))
@@ -452,12 +592,19 @@ def check_market_plugin_updates():
 @market_bp.route('/api/market/plugins/install-status/<plugin_name>', methods=['GET'])
 def get_install_status(plugin_name):
     """获取插件安装状态"""
-    if plugin_name in installing_tasks:
-        task = installing_tasks[plugin_name]
+    task = _get_install_task(plugin_name)
+    if task:
+        status = task.get('status', 'unknown')
+        terminal = status in TERMINAL_INSTALL_STATUSES
+        community_path = PROJECT_ROOT / 'plugins' / 'community'
+        plugin_dir = community_path / plugin_name
+        is_installed = plugin_dir.exists() and any(plugin_dir.iterdir())
         return jsonify({
             'success': True,
-            'installing': True,
-            'status': task.get('status', 'unknown'),
+            'installing': not terminal,
+            'terminal': terminal,
+            'installed': is_installed,
+            'status': status,
             'progress': task.get('progress', 0),
             'error': task.get('error', '')
         })

@@ -8,16 +8,124 @@ WebUI 模块化重构 - 日志与监控模块
 import json
 import datetime
 import urllib.request
-from collections import deque
 from flask import Blueprint, request, jsonify
 
-from .utils import PROJECT_ROOT, DATA_ROOT, logger
+from .utils import PROJECT_ROOT, SERVICE_LOG_SERVICES, logger
 
 # 创建日志监控蓝图
 log_bp = Blueprint('log', __name__)
 
+RUNTIME_INITIAL_LINES = 200
+TAIL_READ_LIMIT_BYTES = 512 * 1024
+INCREMENTAL_READ_LIMIT_BYTES = 256 * 1024
+
+
+def _read_last_lines(path, max_lines, max_bytes=TAIL_READ_LIMIT_BYTES):
+    with open(path, 'rb') as stream:
+        stream.seek(0, 2)
+        position = stream.tell()
+        chunks = []
+        bytes_read = 0
+        newline_count = 0
+
+        while position > 0 and bytes_read < max_bytes and newline_count <= max_lines:
+            chunk_size = min(64 * 1024, position, max_bytes - bytes_read)
+            position -= chunk_size
+            stream.seek(position)
+            chunk = stream.read(chunk_size)
+            chunks.append(chunk)
+            bytes_read += len(chunk)
+            newline_count += chunk.count(b'\n')
+
+    data = b''.join(reversed(chunks))
+    if position > 0:
+        first_newline = data.find(b'\n')
+        if first_newline >= 0:
+            data = data[first_newline + 1:]
+    return data.decode('utf-8', errors='ignore').splitlines()[-max_lines:]
+
+
+def _read_lines_from_offset(path, offset, max_bytes=INCREMENTAL_READ_LIMIT_BYTES):
+    with open(path, 'rb') as stream:
+        stream.seek(offset)
+        data = stream.read(max_bytes + 1)
+
+    if len(data) > max_bytes:
+        bounded = data[:max_bytes]
+        last_newline = bounded.rfind(b'\n')
+        consumed = last_newline + 1 if last_newline >= 0 else max_bytes
+        data = bounded[:consumed]
+    else:
+        consumed = len(data)
+
+    return (
+        data.decode('utf-8', errors='ignore').splitlines(),
+        offset + consumed,
+    )
+
+
+def _runtime_cursor(stat_result):
+    return f'{stat_result.st_dev}:{stat_result.st_ino}'
+
+
+def _categorize_runtime_lines(lines):
+    result = {'pet': [], 'tool': []}
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        category = 'tool' if '[TOOL]' in line else 'pet'
+        result[category].append(line)
+    return result
+
 
 # ============ 日志 API ============
+
+@log_bp.route('/api/logs/runtime')
+def get_runtime_logs():
+    """Return one bounded initial tail or the bytes appended after a cursor."""
+    log_file = PROJECT_ROOT / 'runtime.log'
+    if not log_file.exists():
+        return jsonify({
+            'logs': {'pet': [], 'tool': []},
+            'offset': 0,
+            'cursor': '',
+            'reset': True,
+        })
+
+    try:
+        stat_result = log_file.stat()
+        cursor = _runtime_cursor(stat_result)
+        requested_cursor = request.args.get('cursor', '')
+        requested_offset = request.args.get('offset', type=int)
+        reset = (
+            requested_offset is None
+            or requested_offset < 0
+            or requested_offset > stat_result.st_size
+            or requested_cursor != cursor
+        )
+
+        if reset:
+            lines = _read_last_lines(log_file, RUNTIME_INITIAL_LINES)
+            next_offset = stat_result.st_size
+        else:
+            lines, next_offset = _read_lines_from_offset(
+                log_file,
+                requested_offset,
+            )
+
+        return jsonify({
+            'logs': _categorize_runtime_lines(lines),
+            'offset': next_offset,
+            'cursor': cursor,
+            'reset': reset,
+        })
+    except Exception as e:
+        return jsonify({
+            'logs': {'pet': [], 'tool': []},
+            'error': str(e),
+        }), 500
+
 
 @log_bp.route('/api/logs/<log_type>')
 def get_logs(log_type):
@@ -27,23 +135,8 @@ def get_logs(log_type):
         if not log_file.exists():
             return jsonify({'logs': [], 'error': '日志文件不存在'})
 
-        try:
-            with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                last_lines = deque(f, maxlen=100)
-
-                logs = []
-                for line in last_lines:
-                    line = line.strip()
-                    if line:
-                        is_tool_log = '[TOOL]' in line
-                        if log_type == 'tool' and is_tool_log:
-                            logs.append(line)
-                        elif log_type == 'pet' and not is_tool_log:
-                            logs.append(line)
-
-                return jsonify({'logs': logs})
-        except Exception as e:
-            return jsonify({'logs': [], 'error': str(e)})
+        categories = _categorize_runtime_lines(_read_last_lines(log_file, 100))
+        return jsonify({'logs': categories.get(log_type, [])})
     except Exception as e:
         return jsonify({'logs': [], 'error': str(e)})
 
@@ -56,25 +149,47 @@ def tail_logs(log_type):
         if not log_file.exists():
             return jsonify({'logs': [], 'error': '日志文件不存在'})
 
-        try:
-            with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                last_lines = deque(f, maxlen=10)
-
-                logs = []
-                for line in last_lines:
-                    line = line.strip()
-                    if line:
-                        is_tool_log = '[TOOL]' in line
-                        if log_type == 'tool' and is_tool_log:
-                            logs.append(line)
-                        elif log_type == 'pet' and not is_tool_log:
-                            logs.append(line)
-
-                return jsonify({'logs': logs})
-        except Exception as e:
-            return jsonify({'logs': [], 'error': str(e)})
+        categories = _categorize_runtime_lines(_read_last_lines(log_file, 10))
+        return jsonify({'logs': categories.get(log_type, [])})
     except Exception as e:
         return jsonify({'logs': [], 'error': str(e)})
+
+
+@log_bp.route('/api/logs/service/<service>')
+def get_service_logs(service):
+    """获取 ASR/TTS/记忆系统内嵌服务日志。"""
+    if service not in SERVICE_LOG_SERVICES:
+        return jsonify({'logs': [], 'error': f'未知服务日志：{service}'}), 404
+
+    try:
+        log_file = PROJECT_ROOT.parent / 'logs' / f'{service}.log'
+        if not log_file.exists():
+            return jsonify({'logs': []})
+
+        logs = [
+            line.rstrip()
+            for line in _read_last_lines(log_file, 200)
+            if line.strip()
+        ]
+        return jsonify({'logs': logs})
+    except Exception as e:
+        return jsonify({'logs': [], 'error': str(e)})
+
+
+@log_bp.route('/api/logs/service/<service>/clear', methods=['POST'])
+def clear_service_logs(service):
+    """清空 ASR/TTS/记忆系统内嵌服务日志。"""
+    if service not in SERVICE_LOG_SERVICES:
+        return jsonify({'success': False, 'error': f'未知服务日志：{service}'}), 404
+
+    try:
+        log_file = PROJECT_ROOT.parent / 'logs' / f'{service}.log'
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_file, 'w', encoding='utf-8') as f:
+            f.write('')
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 
 # ============ Live2D 动作管理 API ============
@@ -270,6 +385,18 @@ pause
 
 # ============ 对话历史 API ============
 
+def _resolve_chat_history_file():
+    """对话历史文件双候选：本地布局 live-2d/AI记录室 优先，线上布局 <root>/AI记录室 兜底。"""
+    candidates = [
+        PROJECT_ROOT / 'AI记录室' / '对话历史.jsonl',
+        PROJECT_ROOT.parent / 'AI记录室' / '对话历史.jsonl',
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return candidates[0]
+
+
 @log_bp.route('/api/chat-history')
 def get_chat_history():
     """获取对话历史记录（支持分页）"""
@@ -277,9 +404,9 @@ def get_chat_history():
         # 获取分页参数
         page = request.args.get('page', 1, type=int)
         page_size = request.args.get('page_size', 50, type=int)
-        
+
         # 对话历史文件路径
-        history_file = DATA_ROOT / 'AI记录室' / '对话历史.jsonl'
+        history_file = _resolve_chat_history_file()
         
         if not history_file.exists():
             return jsonify({'messages': [], 'has_more': False, 'has_prev': False, 'total': 0})
@@ -301,7 +428,14 @@ def get_chat_history():
         # 第一页返回最早的对话，最后一页返回最新的对话
         start = (page - 1) * page_size
         end = start + page_size
-        page_messages = messages[start:end]
+        page_messages = []
+        for index, message in enumerate(messages[start:end], start=start):
+            if isinstance(message, dict):
+                message_with_index = dict(message)
+                message_with_index['_history_index'] = index
+                page_messages.append(message_with_index)
+            else:
+                page_messages.append(message)
 
         return jsonify({
             'messages': page_messages,
@@ -317,7 +451,7 @@ def get_chat_history():
 def clear_chat_history():
     """清空对话历史记录"""
     try:
-        history_file = DATA_ROOT / 'AI记录室' / '对话历史.jsonl'
+        history_file = _resolve_chat_history_file()
         
         if history_file.exists():
             # 清空文件内容

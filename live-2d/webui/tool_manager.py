@@ -3,10 +3,12 @@
 """
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
 from flask import Blueprint, request, jsonify
+from .state_io import atomic_write_json, resource_lock
 
 # 设置项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent.absolute()
@@ -112,9 +114,6 @@ def get_external_mcp_tools():
         logger.error(f'读取外部 MCP 工具失败：{e}')
         return tools
 
-
-import os
-
 @tool_bp.route('/api/tools/list')
 def list_tools():
     """列出可用工具（已废弃，保留用于兼容）"""
@@ -189,27 +188,26 @@ def toggle_tool():
             if not mcp_config_path.exists():
                 return jsonify({'success': False, 'error': 'MCP 配置文件不存在'}), 404
 
-            with open(mcp_config_path, 'r', encoding='utf-8') as f:
-                mcp_config = json.load(f)
+            with resource_lock(mcp_config_path):
+                with open(mcp_config_path, 'r', encoding='utf-8') as f:
+                    mcp_config = json.load(f)
 
-            # 查找实际名称对应的配置键（可能是 name 或 name_disabled）
-            disabled_key = tool_name + '_disabled'
-            is_disabled = disabled_key in mcp_config
-            config_key = disabled_key if is_disabled else tool_name
+                # 查找实际名称对应的配置键（可能是 name 或 name_disabled）
+                disabled_key = tool_name + '_disabled'
+                is_disabled = disabled_key in mcp_config
 
-            if is_disabled:
-                # 当前是禁用状态，启用它
-                tool_config = mcp_config.pop(disabled_key)
-                mcp_config[tool_name] = tool_config
-                action = 'enabled'
-            else:
-                # 当前是启用状态，禁用它
-                tool_config = mcp_config.pop(tool_name)
-                mcp_config[disabled_key] = tool_config
-                action = 'disabled'
+                if is_disabled:
+                    # 当前是禁用状态，启用它
+                    tool_config = mcp_config.pop(disabled_key)
+                    mcp_config[tool_name] = tool_config
+                    action = 'enabled'
+                else:
+                    # 当前是启用状态，禁用它
+                    tool_config = mcp_config.pop(tool_name)
+                    mcp_config[disabled_key] = tool_config
+                    action = 'disabled'
 
-            with open(mcp_config_path, 'w', encoding='utf-8') as f:
-                json.dump(mcp_config, f, indent=2, ensure_ascii=False)
+                atomic_write_json(mcp_config_path, mcp_config)
 
             return jsonify({
                 'success': True,
