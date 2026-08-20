@@ -1,0 +1,1099 @@
+/* ============================================================
+   My Neuro WebUI — 主题令牌与主题专属装饰
+   - :root / html[data-theme="galgame"] = galgame（默认，粉白·经典视觉小说风）
+   - html[data-theme="cyber"]           = cyber（经典赛博朋克，完整保留）
+   style.css 中的组件样式只引用这里的变量，做到主题无关。
+   ============================================================ */
+
+/* ============ galgame 主题（默认，粉白·经典视觉小说风） ============ */
+:root,
+html[data-theme="galgame"] {
+    --bg-primary: #fff6f8;
+    --bg-secondary: #ffedf2;
+    --surface: rgba(255, 255, 255, 0.6);
+    --surface-hover: rgba(231, 84, 128, 0.08);
+    --surface-active: rgba(231, 84, 128, 0.14);
+    --border: rgba(231, 84, 128, 0.22);
+    --border-hover: rgba(231, 84, 128, 0.55);
+    --text-primary: #4d323d;
+    --text-secondary: rgba(77, 50, 61, 0.72);
+    --text-muted: rgba(77, 50, 61, 0.45);
+    --accent: #e75480;
+    --accent-light: #ff9eb8;
+    --accent-glow: rgba(231, 84, 128, 0.28);
+    --green: #2ba471;
+    --green-glow: rgba(43, 164, 113, 0.18);
+    --red: #e5484d;
+    --red-glow: rgba(229, 72, 77, 0.16);
+    --blue: #4a86e8;
+    --blue-glow: rgba(74, 134, 232, 0.16);
+    --yellow: #d9a400;
+    --orange: #ef8b3a;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-xl: 22px;
+    --shadow-sm: 0 1px 3px rgba(231, 84, 128, 0.1);
+    --shadow-md: 0 4px 14px rgba(231, 84, 128, 0.12);
+    --shadow-lg: 0 10px 30px rgba(231, 84, 128, 0.16);
+    --shadow-glow: 0 0 22px var(--accent-glow);
+    --transition: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    --transition-slow: 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+    --font-heading: "Hiragino Maru Gothic ProN", "Yu Gothic UI", -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-body: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-mono: Consolas, "JetBrains Mono", "Courier New", monospace;
+
+    /* 浅色表面层级（白色半透阶梯） */
+    --bg-solid-1: rgba(255, 255, 255, 0.78);
+    --bg-solid-2: rgba(255, 255, 255, 0.68);
+    --bg-solid-3: rgba(255, 255, 255, 0.58);
+    --bg-solid-4: rgba(255, 255, 255, 0.48);
+    --bg-solid-5: rgba(255, 255, 255, 0.38);
+    --bg-log: #fffafb;
+    --bg-modal: #fff7fa;
+    --bg-toast: #fffafc;
+    --border-log: var(--border);
+    --border-modal: rgba(231, 84, 128, 0.35);
+    --border-toast: rgba(231, 84, 128, 0.3);
+
+    /* 造型：无切角，全圆角（偏大，胶囊化） */
+    --clip-logo: none;         --br-logo: 14px;
+    --clip-tab: none;          --br-tab: 999px;
+    --clip-infopanel: none;    --br-infopanel: 18px;
+    --clip-card: none;         --br-card: 18px;
+    --clip-btn: none;          --br-btn: 999px;
+    --clip-btn6: none;         --br-btn6: 999px;
+    --clip-logtab: none;       --br-logtab: 10px 10px 0 0;
+    --clip-log: none;          --br-log: 12px;
+    --clip-resizer: none;      --br-resizer: 8px;
+    --clip-field: none;        --br-field: 10px;
+    --clip-box: none;          --br-box: 12px;
+    --clip-subtab: none;       --br-subtab: 10px 10px 0 0;
+    --clip-modal: none;        --br-modal: 20px;
+
+    /* 特效：柔粉光晕，无扫描线 */
+    --fx-corner: none;
+    --fx-shine: none;
+    --fx-scan: none;
+    --tt-heading: none;
+    --ls-heading: 0.02em;
+    --glow-h1: 0 3px 14px rgba(231, 84, 128, 0.35);
+    --text-glow-accent: 0 0 8px rgba(231, 84, 128, 0.3);
+    --text-glow-green: 0 0 8px var(--green-glow);
+    --text-glow-red: 0 0 8px var(--red-glow);
+    --text-glow-blue: 0 0 8px var(--blue-glow);
+    --text-glow-log: none;
+    --text-glow-log-accent: 0 0 6px rgba(231, 84, 128, 0.3);
+    --text-glow-log-green: 0 0 6px var(--green-glow);
+    --text-glow-log-red: 0 0 6px var(--red-glow);
+    --text-glow-log-yellow: 0 0 6px rgba(217, 164, 0, 0.35);
+    --focus-shadow: 0 0 0 2px rgba(231, 84, 128, 0.25);
+    --shadow-status-running: 0 0 6px var(--green-glow);
+    --shadow-status-stopped: none;
+    --shadow-status-waiting: 0 0 6px rgba(239, 139, 58, 0.3);
+    --shadow-modal: 0 16px 48px rgba(231, 84, 128, 0.22);
+    --shadow-toast: 0 8px 24px rgba(231, 84, 128, 0.18);
+    --shadow-toast-hover: 0 10px 28px rgba(231, 84, 128, 0.26);
+    --status-rotate: none;
+    --status-br: 50%;
+    --pulse-anim: statusPulseSoft 1.5s ease-in-out infinite;
+    --btn-bg: rgba(255, 255, 255, 0.55);
+    --btn-border: rgba(231, 84, 128, 0.3);
+    --btn-color: var(--text-primary);
+    --btn-hover-bg: rgba(231, 84, 128, 0.1);
+
+    /* 华丽升级版:多色渐变辅助色 + 弹性曲线 */
+    --accent-2: #a78bfa;                       /* 薰衣草紫 */
+    --accent-2-light: #c4b5fd;
+    --accent-2-glow: rgba(167, 139, 250, 0.28);
+    --cream: #fff8e7;                          /* 奶油色 */
+    --grad-accent: linear-gradient(135deg, #ff8fab 0%, #e75480 55%, #a78bfa 115%);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);  /* 果冻回弹 */
+}
+
+/* galgame 下隐藏赛博背景装饰（默认即隐藏，cyber 作用域再打开） */
+.cyber-grid-bg,
+.cyber-scanline {
+    display: none;
+}
+
+@keyframes statusPulseSoft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+}
+
+/* ============ cyber 主题（经典赛博朋克） ============ */
+html[data-theme="cyber"] {
+    --bg-primary: #050814;
+    --bg-secondary: #0a0f1f;
+    --surface: rgba(10, 15, 31, 0.7);
+    --surface-hover: rgba(0, 240, 255, 0.05);
+    --surface-active: rgba(0, 240, 255, 0.1);
+    --border: rgba(0, 240, 255, 0.15);
+    --border-hover: rgba(0, 240, 255, 0.4);
+    --text-primary: #e0f2fe;
+    --text-secondary: rgba(224, 242, 254, 0.7);
+    --text-muted: rgba(224, 242, 254, 0.4);
+    --accent: #00f0ff;
+    --accent-light: #7df5ff;
+    --accent-glow: rgba(0, 240, 255, 0.4);
+    --green: #00ff9d;
+    --green-glow: rgba(0, 255, 157, 0.3);
+    --red: #ff0055;
+    --red-glow: rgba(255, 0, 85, 0.3);
+    --blue: #0088ff;
+    --blue-glow: rgba(0, 136, 255, 0.3);
+    --yellow: #ffd700;
+    --orange: #f59e0b;
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --shadow-sm: 0 0 10px rgba(0, 240, 255, 0.1);
+    --shadow-md: 0 0 20px rgba(0, 240, 255, 0.15);
+    --shadow-lg: 0 0 30px rgba(0, 240, 255, 0.2);
+    --shadow-glow: 0 0 20px var(--accent-glow);
+    --transition: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    --transition-slow: 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+    --font-heading: 'Orbitron', 'Rajdhani', sans-serif;
+    --font-body: 'Rajdhani', 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+
+    --bg-solid-1: rgba(0, 0, 0, 0.4);
+    --bg-solid-2: rgba(0, 0, 0, 0.3);
+    --bg-solid-3: rgba(0, 0, 0, 0.25);
+    --bg-solid-4: rgba(0, 0, 0, 0.2);
+    --bg-solid-5: rgba(0, 0, 0, 0.15);
+    --bg-log: #02040a;
+    --bg-modal: rgba(10, 15, 31, 0.95);
+    --bg-toast: rgba(10, 15, 31, 0.9);
+    --border-log: var(--accent);
+    --border-modal: var(--accent);
+    --border-toast: var(--accent);
+
+    /* 造型：切角，无圆角 */
+    --clip-logo: polygon(20% 0%, 100% 0, 100% 80%, 80% 100%, 0 100%, 0% 20%);  --br-logo: 12px;
+    --clip-tab: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);  --br-tab: 0;
+    --clip-infopanel: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));  --br-infopanel: 0;
+    --clip-card: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));  --br-card: 0;
+    --clip-btn: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);  --br-btn: 0;
+    --clip-btn6: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);  --br-btn6: 0;
+    --clip-logtab: polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px);  --br-logtab: 0;
+    --clip-log: polygon(0 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%);  --br-log: 0;
+    --clip-resizer: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);  --br-resizer: 0;
+    --clip-field: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));  --br-field: 0;
+    --clip-box: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));  --br-box: 0;
+    --clip-subtab: polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px);  --br-subtab: 0;
+    --clip-modal: polygon(0 0, calc(100% - 30px) 0, 100% 30px, 100% 100%, 30px 100%, 0 calc(100% - 30px));  --br-modal: 0;
+
+    /* 特效：全部开启 */
+    --fx-corner: block;
+    --fx-shine: block;
+    --fx-scan: block;
+    --tt-heading: uppercase;
+    --ls-heading: 0.05em;
+    --glow-h1: 0 0 10px var(--accent-glow), 0 0 20px var(--accent-glow);
+    --text-glow-accent: 0 0 8px var(--accent-glow);
+    --text-glow-green: 0 0 8px var(--green-glow);
+    --text-glow-red: 0 0 8px var(--red-glow);
+    --text-glow-blue: 0 0 8px var(--blue-glow);
+    --text-glow-log: 0 0 5px rgba(255, 255, 255, 0.3);
+    --text-glow-log-accent: 0 0 8px rgba(0, 240, 255, 0.5);
+    --text-glow-log-green: 0 0 8px rgba(0, 255, 157, 0.5);
+    --text-glow-log-red: 0 0 8px rgba(255, 0, 85, 0.5);
+    --text-glow-log-yellow: 0 0 8px rgba(255, 215, 0, 0.5);
+    --focus-shadow: inset 0 0 10px rgba(0, 240, 255, 0.2);
+    --shadow-status-running: 0 0 10px var(--green), 0 0 20px var(--green-glow);
+    --shadow-status-stopped: 0 0 8px var(--red-glow);
+    --shadow-status-waiting: 0 0 10px var(--orange), 0 0 20px rgba(245, 158, 11, 0.45);
+    --shadow-modal: 0 0 50px rgba(0, 240, 255, 0.2), inset 0 0 20px rgba(0, 240, 255, 0.1);
+    --shadow-toast: 0 0 20px rgba(0, 240, 255, 0.2);
+    --shadow-toast-hover: 0 0 30px rgba(0, 240, 255, 0.4);
+    --status-rotate: rotate(45deg);
+    --status-br: 0;
+    --pulse-anim: statusPulse 1.5s ease-in-out infinite;
+    --btn-bg: transparent;
+    --btn-border: var(--accent);
+    --btn-color: var(--accent);
+    --btn-hover-bg: rgba(0, 240, 255, 0.15);
+}
+
+/* ---- cyber 专属背景装饰（从 style.css 平移，neuro 不渲染） ---- */
+html[data-theme="cyber"] .cyber-grid-bg {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background:
+        linear-gradient(rgba(0, 240, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 240, 255, 0.05) 1px, transparent 1px);
+    background-size: 50px 50px;
+    background-position: center center;
+    z-index: 0;
+    pointer-events: none;
+    transform: perspective(500px) rotateX(60deg) scale(2.5) translateY(-100px);
+    transform-origin: top;
+    animation: gridMove 20s linear infinite;
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1), transparent);
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,1), transparent);
+}
+
+@keyframes gridMove {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 50px; }
+}
+
+html[data-theme="cyber"] .cyber-scanline {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(to bottom,
+        transparent 50%,
+        rgba(0, 240, 255, 0.02) 51%,
+        transparent 51%
+    );
+    background-size: 100% 4px;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.3;
+}
+
+html[data-theme="cyber"] body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(circle at 50% 0%, rgba(0, 240, 255, 0.15) 0%, transparent 40%),
+        radial-gradient(circle at 100% 100%, rgba(0, 255, 157, 0.1) 0%, transparent 40%),
+        radial-gradient(circle at 0% 100%, rgba(255, 0, 85, 0.1) 0%, transparent 40%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ============ cyber 动画增补(霓虹全开) ============ */
+
+/* 标题:故障闪烁 + 循环色相偏移(全息感) */
+html[data-theme="cyber"] h1 {
+    animation: cyberGlitch 4.5s infinite steps(1), cyberHueShift 9s linear infinite;
+}
+@keyframes cyberGlitch {
+    0%, 88%, 100% { transform: translate(0); text-shadow: var(--glow-h1); }
+    89%  { transform: translate(-2px, 1px); text-shadow: -3px 0 rgba(255,0,85,.85), 3px 0 rgba(0,240,255,.85); }
+    90%  { transform: translate(2px, -1px); text-shadow: 3px 0 rgba(255,0,85,.85), -3px 0 rgba(0,240,255,.85); }
+    91%  { transform: translate(-1px, 0);  text-shadow: -2px 0 rgba(255,0,85,.6), 2px 0 rgba(0,240,255,.6); }
+    92%  { transform: translate(0); text-shadow: var(--glow-h1); }
+}
+@keyframes cyberHueShift {
+    0%, 100% { filter: hue-rotate(0deg); }
+    50%      { filter: hue-rotate(18deg); }
+}
+
+/* 头部 Logo:待机上下浮动 + 霓虹呼吸 */
+html[data-theme="cyber"] .header-logo {
+    animation: cyberFloat 3.8s ease-in-out infinite, cyberLogoBreath 3.8s ease-in-out infinite;
+}
+html[data-theme="cyber"] .header-logo:hover {
+    animation-play-state: paused, paused;
+}
+@keyframes cyberFloat {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-6px); }
+}
+@keyframes cyberLogoBreath {
+    0%, 100% { box-shadow: 0 0 15px var(--accent-glow), inset 0 0 10px var(--accent-glow); }
+    50%      { box-shadow: 0 0 28px rgba(0, 240, 255, 0.6), inset 0 0 16px rgba(0, 240, 255, 0.35); }
+}
+
+/* h1 底部装饰线:能量脉冲扫过 */
+html[data-theme="cyber"] h1::after {
+    animation: cyberH1Pulse 2.6s ease-in-out infinite;
+}
+@keyframes cyberH1Pulse {
+    0%, 100% { opacity: 0.5; box-shadow: 0 0 4px var(--accent-glow); }
+    50%      { opacity: 1;   box-shadow: 0 0 14px var(--accent); }
+}
+
+/* 卡片:错落入场 + 霓虹边框流动 */
+html[data-theme="cyber"] .card {
+    animation: cyberCardIn 0.55s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+html[data-theme="cyber"] .card:nth-child(1) { animation-delay: 0.04s; }
+html[data-theme="cyber"] .card:nth-child(2) { animation-delay: 0.11s; }
+html[data-theme="cyber"] .card:nth-child(3) { animation-delay: 0.18s; }
+html[data-theme="cyber"] .card:nth-child(4) { animation-delay: 0.25s; }
+html[data-theme="cyber"] .card:nth-child(5) { animation-delay: 0.32s; }
+html[data-theme="cyber"] .card:nth-child(6) { animation-delay: 0.39s; }
+@keyframes cyberCardIn {
+    from { opacity: 0; transform: translateY(20px); filter: brightness(1.6); }
+    to   { opacity: 1; transform: translateY(0);    filter: brightness(1); }
+}
+
+/* 状态灯:声呐式扩散环(切角菱形感) */
+html[data-theme="cyber"] .status { position: relative; }
+html[data-theme="cyber"] .status.running::after,
+html[data-theme="cyber"] .status.waiting::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    border: 1.5px solid var(--green);
+    transform: rotate(45deg);
+    animation: cyberSonar 1.6s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+    pointer-events: none;
+}
+html[data-theme="cyber"] .status.waiting::after { border-color: var(--orange); }
+@keyframes cyberSonar {
+    0%   { transform: rotate(45deg) scale(0.6); opacity: 1; }
+    100% { transform: rotate(45deg) scale(2.1); opacity: 0; }
+}
+
+/* Tab 选中:霓虹下划光条扫入 */
+html[data-theme="cyber"] .tab-button.active {
+    overflow: hidden;
+}
+html[data-theme="cyber"] .tab-button.active::after {
+    content: '';
+    position: absolute;
+    left: 12%; right: 12%; bottom: 4px;
+    height: 2px;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent), 0 0 16px var(--accent-glow);
+    animation: cyberTabBar 0.4s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+@keyframes cyberTabBar {
+    from { transform: scaleX(0); opacity: 0; }
+    to   { transform: scaleX(1); opacity: 1; }
+}
+
+/* 系统信息栏:青色高光条滚动 */
+html[data-theme="cyber"] .system-info-bar {
+    position: relative;
+    overflow: hidden;
+}
+html[data-theme="cyber"] .system-info-bar::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: -22%;
+    width: 18%;
+    background: linear-gradient(100deg, transparent, rgba(0, 240, 255, 0.12), transparent);
+    animation: cyberBarSweep 5s linear infinite;
+    pointer-events: none;
+}
+@keyframes cyberBarSweep {
+    0%   { left: -22%; }
+    60%, 100% { left: 108%; }
+}
+
+/* 日志行:带辉光淡入 */
+html[data-theme="cyber"] .log-entry {
+    animation: cyberLogIn 0.3s ease both;
+}
+@keyframes cyberLogIn {
+    from { opacity: 0; transform: translateX(-8px); filter: brightness(1.8); }
+    to   { opacity: 1; transform: translateX(0);    filter: brightness(1); }
+}
+
+/* 页签内容/日志面板切换:上浮淡入 */
+html[data-theme="cyber"] .tab-content.active { animation: cyberFadeUp 0.4s ease both; }
+html[data-theme="cyber"] .log-panel.active   { animation: cyberFadeIn 0.3s ease both; }
+@keyframes cyberFadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes cyberFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* 模态框:更快的弹性进入 */
+html[data-theme="cyber"] .modal-content {
+    animation: cyberModalIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+@keyframes cyberModalIn {
+    from { opacity: 0; transform: translate(-50%, calc(-50% + 22px)) scale(0.92); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* 减少动态:cyber 也尊重 */
+@media (prefers-reduced-motion: reduce) {
+    html[data-theme="cyber"] h1,
+    html[data-theme="cyber"] h1::after,
+    html[data-theme="cyber"] .header-logo,
+    html[data-theme="cyber"] .card,
+    html[data-theme="cyber"] .status.running::after,
+    html[data-theme="cyber"] .status.waiting::after,
+    html[data-theme="cyber"] .tab-button.active::after,
+    html[data-theme="cyber"] .system-info-bar::after,
+    html[data-theme="cyber"] .log-entry {
+        animation: none !important;
+    }
+}
+
+
+/* ============================================================
+   galgame 主题专属装饰（粉白·经典视觉小说风）
+   仅 html[data-theme="galgame"] 作用域；cyber 不受影响。
+   ============================================================ */
+
+/* 浅色原生控件（select/滚动条等），只作用于 galgame */
+html[data-theme="galgame"] { color-scheme: light; }
+
+/* ---- 背景：樱粉柔光 + 斜向糖纹 ---- */
+html[data-theme="galgame"] body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(circle at 12% -10%, rgba(255, 158, 184, 0.22) 0%, transparent 45%),
+        radial-gradient(circle at 95% 110%, rgba(255, 214, 226, 0.3) 0%, transparent 50%),
+        repeating-linear-gradient(-45deg,
+            rgba(231, 84, 128, 0.028) 0px, rgba(231, 84, 128, 0.028) 2px,
+            transparent 2px, transparent 24px);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ---- 主标题：玫瑰渐变字（清掉文字阴影防光晕穿帮） ---- */
+html[data-theme="galgame"] h1 {
+    background: linear-gradient(135deg, #ff9eb8 0%, #e75480 55%, #c93a66 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    text-shadow: none;
+}
+
+/* ---- 副标题：星星点缀 ---- */
+html[data-theme="galgame"] .subtitle::before { content: '✦  '; color: var(--accent-light); }
+html[data-theme="galgame"] .subtitle::after { content: '  ✦'; color: var(--accent-light); }
+
+/* ---- 卡片：白底对话框 + 名牌标题 + 角饰爱心 ---- */
+html[data-theme="galgame"] .card {
+    background: rgba(255, 255, 255, 0.72);
+    border: 2px solid rgba(231, 84, 128, 0.25);
+    box-shadow: 0 6px 20px rgba(231, 84, 128, 0.12), inset 0 0 30px rgba(255, 214, 226, 0.25);
+    padding-top: 34px;
+}
+
+html[data-theme="galgame"] .card h3 {
+    position: absolute;
+    top: -13px;
+    left: 18px;
+    margin: 0;
+    padding: 5px 16px;
+    background: linear-gradient(135deg, #ff8fab, #e75480);
+    color: #fff;
+    font-size: 13px;
+    border-radius: 999px;
+    box-shadow: 0 4px 12px rgba(231, 84, 128, 0.35);
+}
+
+html[data-theme="galgame"] .card::after {
+    content: '♥';
+    position: absolute;
+    right: 14px;
+    top: 10px;
+    color: rgba(231, 84, 128, 0.3);
+    font-size: 15px;
+}
+
+/* ---- Tab：选中态玫瑰渐变（覆盖深色底时代的黑字） ---- */
+html[data-theme="galgame"] .tab-button.active {
+    background: linear-gradient(135deg, #ff8fab, #e75480);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 4px 14px rgba(231, 84, 128, 0.35);
+}
+html[data-theme="galgame"] .tab-button.active svg { stroke: #fff; }
+html[data-theme="galgame"] .tab-button.active:hover {
+    background: linear-gradient(135deg, #ffa9c0, #ee6a93);
+}
+
+/* ---- 滚动条与文本选中色 ---- */
+html[data-theme="galgame"] ::-webkit-scrollbar-thumb { background: rgba(231, 84, 128, 0.3); }
+html[data-theme="galgame"] ::-webkit-scrollbar-thumb:hover { background: rgba(231, 84, 128, 0.5); }
+html[data-theme="galgame"] ::selection { background: rgba(255, 158, 184, 0.45); }
+
+/* ---- Toast / 模态框：白底粉边对话框 ---- */
+html[data-theme="galgame"] .toast { border-width: 2px; }
+html[data-theme="galgame"] .modal-content { border-width: 2px; }
+
+/* ---- 禁用按钮:深色时代的半透白文字在浅底上不可见,换梅棕系 ---- */
+html[data-theme="galgame"] button:disabled {
+    background: rgba(255, 255, 255, 0.5);
+    border-color: rgba(77, 50, 61, 0.22);
+    color: rgba(77, 50, 61, 0.5);
+    cursor: not-allowed;
+    box-shadow: none;
+    text-shadow: none;
+    transform: none;
+}
+html[data-theme="galgame"] button:disabled::after { display: none; }
+
+/* ---- 日志/子页签选中态:白字粉紫渐变(覆盖 style.css 的黑字) ---- */
+html[data-theme="galgame"] .log-tab.active,
+html[data-theme="galgame"] .sub-tab-button.active {
+    background: var(--grad-accent);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+/* ---- 插件管理:赛博硬编码蓝紫绿渐变 → 统一玫瑰/薰衣草胶囊 ---- */
+html[data-theme="galgame"] .btn-plugin-toggle {
+    background: linear-gradient(135deg, #ff8fab, #e75480);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 3px 10px var(--accent-glow);
+}
+html[data-theme="galgame"] .btn-plugin-toggle:hover {
+    background: linear-gradient(135deg, #ffa9c0, #ee6a93);
+    box-shadow: 0 5px 14px rgba(231, 84, 128, 0.4);
+}
+html[data-theme="galgame"] .btn-open-config {
+    background: linear-gradient(135deg, var(--accent-2-light), var(--accent-2));
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 3px 10px var(--accent-2-glow);
+}
+html[data-theme="galgame"] .btn-open-config:hover {
+    background: linear-gradient(135deg, #d1c5fc, #b39df7);
+    box-shadow: 0 5px 14px rgba(167, 139, 250, 0.4);
+}
+html[data-theme="galgame"] .btn-open-panel {
+    background: rgba(255, 255, 255, 0.6);
+    color: var(--accent);
+    border: 1.5px solid var(--accent);
+}
+html[data-theme="galgame"] .btn-open-panel:hover {
+    background: rgba(231, 84, 128, 0.1);
+    color: var(--accent);
+    box-shadow: 0 4px 12px var(--accent-glow);
+}
+html[data-theme="galgame"] .btn-plugin-toggle:disabled,
+html[data-theme="galgame"] .btn-open-config:disabled,
+html[data-theme="galgame"] .btn-open-panel:disabled {
+    background: rgba(255, 255, 255, 0.5);
+    color: rgba(77, 50, 61, 0.5);
+    border: 1px solid rgba(77, 50, 61, 0.22);
+    box-shadow: none;
+}
+
+/* ============ galgame 动画增补(第二弹) ============ */
+
+/* 头部 Logo:待机缓慢上下浮动 + 呼吸光晕 */
+html[data-theme="galgame"] .header-logo {
+    animation: galFloat 4.5s ease-in-out infinite, galLogoBreath 4.5s ease-in-out infinite;
+}
+html[data-theme="galgame"] .header-logo:hover {
+    animation-play-state: paused, paused;
+    box-shadow: 0 0 26px rgba(231, 84, 128, 0.5), inset 0 0 14px rgba(231, 84, 128, 0.25);
+    transform: scale(1.08) rotate(-3deg);
+}
+@keyframes galFloat {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-6px); }
+}
+@keyframes galLogoBreath {
+    0%, 100% { box-shadow: 0 0 15px var(--accent-glow), inset 0 0 10px var(--accent-glow); }
+    50%      { box-shadow: 0 0 24px rgba(231, 84, 128, 0.45), inset 0 0 14px rgba(255, 158, 184, 0.35); }
+}
+
+/* h1 底部装饰线:柔和呼吸 */
+html[data-theme="galgame"] h1::after {
+    animation: galH1Line 3.5s ease-in-out infinite;
+}
+@keyframes galH1Line {
+    0%, 100% { opacity: 0.55; }
+    50%      { opacity: 1; }
+}
+
+/* 系统信息栏:滚动跑马灯高光条 */
+html[data-theme="galgame"] .system-info-bar {
+    position: relative;
+    overflow: hidden;
+}
+html[data-theme="galgame"] .system-info-bar::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: -25%;
+    width: 22%;
+    background: linear-gradient(100deg, transparent, rgba(255, 158, 184, 0.14), transparent);
+    animation: galBarShine 6s ease-in-out infinite;
+    pointer-events: none;
+}
+@keyframes galBarShine {
+    0%   { left: -25%; }
+    55%, 100% { left: 105%; }
+}
+
+/* 状态灯:待机(灰色)也缓慢呼吸 */
+html[data-theme="galgame"] .status {
+    animation: galStatusIdle 2.6s ease-in-out infinite;
+}
+@keyframes galStatusIdle {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.55; }
+}
+
+/* 表单聚焦:输入框轻微放大 */
+html[data-theme="galgame"] input:focus,
+html[data-theme="galgame"] select:focus,
+html[data-theme="galgame"] textarea:focus {
+    transform: scale(1.012);
+    transition: transform 0.25s var(--ease-spring), box-shadow var(--transition), border-color var(--transition);
+}
+
+/* 配置页区块标题:入场从左滑入 + 下划线展开(仅载入/切页时播一次) */
+html[data-theme="galgame"] .tab-content.active h3,
+html[data-theme="galgame"] .tab-content.active h4 {
+    animation: galHeadIn 0.45s ease both;
+}
+@keyframes galHeadIn {
+    from { opacity: 0; transform: translateX(-12px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ---- 保存配置 / 语义按钮:深绿深黄等赛博残留 → 粉白协调系 ---- */
+/* 已保存:白底绿字描边(不再是深绿实底) */
+html[data-theme="galgame"] .config-save-button {
+    background: rgba(255, 255, 255, 0.6);
+    color: var(--green);
+    border: 1.5px solid var(--green);
+    border-radius: 999px;
+    box-shadow: 0 2px 8px var(--green-glow);
+}
+html[data-theme="galgame"] .config-save-button:hover {
+    background: rgba(43, 164, 113, 0.08);
+    box-shadow: 0 4px 14px var(--green-glow);
+}
+/* 有未保存修改:白底橙黄字描边(不再是深黄实底) */
+html[data-theme="galgame"] .config-save-button.config-unsaved,
+html[data-theme="galgame"] .btn-primary.config-unsaved {
+    background: rgba(255, 255, 255, 0.6);
+    color: var(--orange);
+    border: 1.5px solid var(--orange);
+}
+html[data-theme="galgame"] .config-save-button.config-unsaved:hover,
+html[data-theme="galgame"] .btn-primary.config-unsaved:hover {
+    background: rgba(239, 139, 58, 0.1);
+}
+@keyframes galUnsavedPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 139, 58, 0.35); }
+    50%      { box-shadow: 0 0 0 5px rgba(239, 139, 58, 0); }
+}
+
+/* 警告按钮(重置/复位):柔和杏橙渐变 */
+html[data-theme="galgame"] .btn-warning {
+    background: linear-gradient(135deg, #ffb37a, #ef8b3a);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 3px 10px rgba(239, 139, 58, 0.3);
+}
+html[data-theme="galgame"] .btn-warning:hover {
+    background: linear-gradient(135deg, #ffc496, #f59e58);
+    box-shadow: 0 5px 14px rgba(239, 139, 58, 0.4);
+}
+
+/* 信息按钮(调整位置等):薰衣草紫,与主题辅助色一致 */
+html[data-theme="galgame"] .btn-info {
+    background: linear-gradient(135deg, var(--accent-2-light), var(--accent-2));
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 3px 10px var(--accent-2-glow);
+}
+html[data-theme="galgame"] .btn-info:hover {
+    background: linear-gradient(135deg, #d1c5fc, #b39df7);
+    box-shadow: 0 5px 14px rgba(167, 139, 250, 0.4);
+}
+
+/* 青色按钮(配置说明):柔和樱粉青 → 改为浅粉描边 */
+html[data-theme="galgame"] .btn-cyan {
+    background: rgba(255, 255, 255, 0.6);
+    color: var(--accent);
+    border: 1.5px solid var(--accent);
+    box-shadow: none;
+}
+html[data-theme="galgame"] .btn-cyan:hover {
+    background: rgba(231, 84, 128, 0.08);
+    box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+/* 主按钮(确认等):粉紫渐变,白字 */
+html[data-theme="galgame"] .btn-primary {
+    background: var(--grad-accent);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 3px 10px var(--accent-glow);
+}
+
+/* 广场安装中/已安装状态 */
+html[data-theme="galgame"] .btn-installing {
+    background: linear-gradient(135deg, #ffb37a, #ef8b3a) !important;
+    color: #fff;
+}
+html[data-theme="galgame"] .btn-installed {
+    background: rgba(255, 255, 255, 0.6) !important;
+    color: var(--green);
+    border: 1.5px solid var(--green);
+}
+
+/* ---- 历史对话:修内嵌 <style> 的深色底配色,浅底下可读 ---- */
+/* 对话正文(内嵌样式是浅灰 #e0e0e0,粉白底上几乎隐形) */
+html[data-theme="galgame"] .chat-content { color: var(--text-primary); }
+/* 长文折叠的底部渐隐遮罩:内嵌是深色遮罩,改白 */
+html[data-theme="galgame"] .chat-content.chat-content-collapsed::after {
+    background: linear-gradient(transparent, var(--bg-log));
+}
+/* 展开/收起小按钮:霓虹青 → 玫瑰粉 */
+html[data-theme="galgame"] .chat-content-toggle { color: var(--accent); }
+html[data-theme="galgame"] .chat-content-toggle:hover { color: #c93a66; }
+/* 发送者标签柔化 */
+html[data-theme="galgame"] .chat-sender.user { color: var(--blue); }
+html[data-theme="galgame"] .chat-sender.assistant { color: var(--orange); }
+/* 加载更多:蓝紫渐变 → 粉紫渐变 */
+html[data-theme="galgame"] .chat-load-more button {
+    background: var(--grad-accent);
+    color: #fff;
+    box-shadow: 0 3px 10px var(--accent-glow);
+}
+html[data-theme="galgame"] .chat-load-more button:disabled {
+    background: rgba(255, 255, 255, 0.5);
+    color: rgba(77, 50, 61, 0.5);
+    border: 1px solid rgba(77, 50, 61, 0.22);
+    box-shadow: none;
+}
+/* 工具调用:薰衣草紫标题、参数块改浅底深字 */
+html[data-theme="galgame"] .chat-tool-calls {
+    background: rgba(167, 139, 250, 0.08);
+    border-left-color: var(--accent-2);
+}
+html[data-theme="galgame"] .chat-tool-name { color: var(--accent-2); }
+html[data-theme="galgame"] .chat-tool-args {
+    background: rgba(255, 255, 255, 0.7);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+
+
+/* ============================================================
+   galgame 华丽动画装饰段（v1.2）
+   全部 html[data-theme="galgame"] 作用域，cyber 零渲染零开销。
+   常驻动画仅:背景呼吸、花瓣、状态灯、星星闪烁;其余为一次性入场或交互触发。
+   ============================================================ */
+
+/* ---- 1. 背景:樱粉/薰衣草/奶油三团柔光缓慢呼吸漂移 ---- */
+html[data-theme="galgame"] body::before {
+    background:
+        radial-gradient(circle at 12% -10%, rgba(255, 158, 184, 0.26) 0%, transparent 45%),
+        radial-gradient(circle at 88% 15%, rgba(196, 181, 253, 0.20) 0%, transparent 42%),
+        radial-gradient(circle at 50% 115%, rgba(255, 236, 200, 0.35) 0%, transparent 48%),
+        radial-gradient(circle at 95% 110%, rgba(255, 214, 226, 0.3) 0%, transparent 50%),
+        repeating-linear-gradient(-45deg,
+            rgba(231, 84, 128, 0.028) 0px, rgba(231, 84, 128, 0.028) 2px,
+            transparent 2px, transparent 24px);
+    background-size: 150% 150%, 150% 150%, 150% 150%, 150% 150%, auto;
+    animation: galBgDrift 40s ease-in-out infinite alternate;
+}
+
+@keyframes galBgDrift {
+    0%   { background-position: 0% 0%, 100% 0%, 50% 100%, 100% 100%, 0 0; }
+    50%  { background-position: 30% 15%, 70% 20%, 40% 90%, 100% 100%, 0 0; }
+    100% { background-position: 10% 25%, 90% 5%, 60% 100%, 100% 100%, 0 0; }
+}
+
+/* ---- 2. 樱花花瓣层(JS 生成 .sakura-layer > i.sakura) ---- */
+html[data-theme="galgame"] .sakura-layer {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+}
+
+html[data-theme="galgame"] .sakura {
+    position: absolute;
+    top: -4vh;
+    left: var(--sak-left, 50%);
+    width: var(--sak-size, 14px);
+    height: var(--sak-size, 14px);
+    background: linear-gradient(135deg, #ffd6e2 0%, #ff9eb8 70%, #ff8fab 100%);
+    /* 经典花瓣形:两角圆润两角微尖 */
+    border-radius: 100% 4px 100% 4px;
+    opacity: var(--sak-opacity, 0.8);
+    box-shadow: 0 0 4px rgba(255, 158, 184, 0.35);
+    animation:
+        sakuraFall var(--sak-duration, 12s) linear var(--sak-delay, 0s) infinite,
+        sakuraSway var(--sak-sway-duration, 3s) ease-in-out var(--sak-delay, 0s) infinite alternate;
+    will-change: transform;
+}
+
+@keyframes sakuraFall {
+    0%   { transform: translate3d(0, -4vh, 0) rotate(0deg); }
+    90%  { opacity: var(--sak-opacity, 0.8); }
+    100% { transform: translate3d(var(--sak-drift, 60px), 104vh, 0) rotate(560deg); opacity: 0; }
+}
+
+@keyframes sakuraSway {
+    from { margin-left: 0; }
+    to   { margin-left: var(--sak-sway, 36px); }
+}
+
+/* ---- 3. 标题流光:渐变加宽后缓慢扫过 ---- */
+html[data-theme="galgame"] h1 {
+    background: linear-gradient(120deg,
+        #e75480 0%, #ff9eb8 22%, #a78bfa 42%, #c4b5fd 50%, #a78bfa 58%, #ff9eb8 78%, #e75480 100%);
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    text-shadow: none;
+    animation: galTitleShine 6s linear infinite;
+}
+
+@keyframes galTitleShine {
+    0%   { background-position: 110% 0; }
+    100% { background-position: -110% 0; }
+}
+
+/* ---- 4. 副标题星星闪烁(两颗错开相位) ---- */
+html[data-theme="galgame"] .subtitle::before,
+html[data-theme="galgame"] .subtitle::after {
+    display: inline-block;
+    animation: galTwinkle 2.6s ease-in-out infinite;
+}
+html[data-theme="galgame"] .subtitle::after { animation-delay: 1.3s; }
+
+@keyframes galTwinkle {
+    0%, 100% { opacity: 0.45; transform: scale(0.85); }
+    50%      { opacity: 1;    transform: scale(1.18); }
+}
+
+/* ---- 5. Tab:选中态光条 + hover 上浮 ---- */
+html[data-theme="galgame"] .tab-button {
+    transition: transform var(--transition), box-shadow var(--transition),
+                background var(--transition), color var(--transition), border-color var(--transition);
+}
+html[data-theme="galgame"] .tab-button:hover {
+    transform: translateY(-2px);
+}
+html[data-theme="galgame"] .tab-button.active {
+    background: var(--grad-accent);
+    overflow: hidden;
+}
+html[data-theme="galgame"] .tab-button.active::after {
+    content: '';
+    position: absolute;
+    left: 18%; right: 18%; bottom: 5px;
+    height: 2px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+    animation: galTabBarIn 0.35s var(--ease-spring) both;
+}
+@keyframes galTabBarIn {
+    from { transform: scaleX(0); opacity: 0; }
+    to   { transform: scaleX(1); opacity: 1; }
+}
+
+/* ---- 6. 卡片:错落入场 + 名牌落下 + hover 抬升 ---- */
+html[data-theme="galgame"] .card {
+    animation: galCardIn 0.6s var(--ease-spring) both;
+    transition: transform var(--transition), box-shadow var(--transition-slow),
+                border-color var(--transition);
+}
+html[data-theme="galgame"] .card:nth-child(1) { animation-delay: 0.05s; }
+html[data-theme="galgame"] .card:nth-child(2) { animation-delay: 0.13s; }
+html[data-theme="galgame"] .card:nth-child(3) { animation-delay: 0.21s; }
+html[data-theme="galgame"] .card:nth-child(4) { animation-delay: 0.29s; }
+html[data-theme="galgame"] .card:nth-child(5) { animation-delay: 0.37s; }
+html[data-theme="galgame"] .card:nth-child(6) { animation-delay: 0.45s; }
+
+@keyframes galCardIn {
+    from { opacity: 0; transform: translateY(26px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+html[data-theme="galgame"] .card:hover {
+    transform: translateY(-4px);
+    border-color: var(--border-hover);
+    box-shadow: 0 14px 34px rgba(231, 84, 128, 0.2),
+                inset 0 0 30px rgba(255, 214, 226, 0.25);
+}
+
+/* 卡片描边流光:复用 ::before(cyber 角饰在 galgame 下本就隐藏) */
+html[data-theme="galgame"] .card::before {
+    display: block;
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    padding: 2px;
+    background: conic-gradient(from var(--gal-ring-angle, 0deg),
+        transparent 0%, rgba(255, 158, 184, 0.75) 8%, rgba(167, 139, 250, 0.65) 16%,
+        transparent 26%, transparent 100%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    animation: galRingSpin 14s linear infinite;
+    pointer-events: none;
+    opacity: 0.8;
+}
+
+@property --gal-ring-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+}
+@keyframes galRingSpin {
+    to { --gal-ring-angle: 360deg; }
+}
+
+/* 不支持 @property 动画的浏览器退化为淡入淡出呼吸,不会卡死 */
+@supports not (background: conic-gradient(from var(--gal-ring-angle), red, blue)) {
+    html[data-theme="galgame"] .card::before { animation: galRingFade 4s ease-in-out infinite alternate; }
+}
+@keyframes galRingFade {
+    from { opacity: 0.3; }
+    to   { opacity: 0.85; }
+}
+
+/* 名牌落下:略晚于卡片入场 */
+html[data-theme="galgame"] .card h3 {
+    background: var(--grad-accent);
+    animation: galNameplateDrop 0.5s var(--ease-spring) 0.35s both;
+}
+@keyframes galNameplateDrop {
+    from { opacity: 0; transform: translateY(-10px) scale(0.9); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---- 7. 按钮:果冻回弹 + hover 微光扫过 + 点击下沉 ---- */
+html[data-theme="galgame"] .btn-start,
+html[data-theme="galgame"] .btn-stop,
+html[data-theme="galgame"] .btn-restart,
+html[data-theme="galgame"] .btn-collapse-header,
+html[data-theme="galgame"] .split-log-button,
+html[data-theme="galgame"] .clear-log-button {
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.25s var(--ease-spring),
+                box-shadow var(--transition), filter var(--transition),
+                background var(--transition), border-color var(--transition);
+}
+html[data-theme="galgame"] .btn-start:hover,
+html[data-theme="galgame"] .btn-stop:hover,
+html[data-theme="galgame"] .btn-restart:hover,
+html[data-theme="galgame"] .btn-collapse-header:hover,
+html[data-theme="galgame"] .split-log-button:hover,
+html[data-theme="galgame"] .clear-log-button:hover {
+    transform: translateY(-2px) scale(1.03);
+}
+html[data-theme="galgame"] .btn-start:active,
+html[data-theme="galgame"] .btn-stop:active,
+html[data-theme="galgame"] .btn-restart:active,
+html[data-theme="galgame"] .btn-collapse-header:active,
+html[data-theme="galgame"] .split-log-button:active,
+html[data-theme="galgame"] .clear-log-button:active {
+    transform: scale(0.96);
+}
+
+/* 微光扫过:只在 hover 瞬间触发一次 */
+html[data-theme="galgame"] .btn-start::after,
+html[data-theme="galgame"] .btn-stop::after,
+html[data-theme="galgame"] .btn-restart::after {
+    content: '';
+    position: absolute;
+    top: -20%; bottom: -20%;
+    left: -40%;
+    width: 32%;
+    background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    transform: translateX(-140%) skewX(-18deg);
+    pointer-events: none;
+}
+html[data-theme="galgame"] .btn-start:hover::after,
+html[data-theme="galgame"] .btn-stop:hover::after,
+html[data-theme="galgame"] .btn-restart:hover::after {
+    animation: galBtnSweep 0.7s ease-out;
+}
+@keyframes galBtnSweep {
+    from { transform: translateX(-140%) skewX(-18deg); }
+    to   { transform: translateX(460%) skewX(-18deg); }
+}
+
+/* ---- 8. 状态灯:声呐式扩散光环(运行中) ---- */
+html[data-theme="galgame"] .status { position: relative; }
+html[data-theme="galgame"] .status.running::after,
+html[data-theme="galgame"] .status.waiting::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid var(--green);
+    animation: galSonar 1.8s ease-out infinite;
+    pointer-events: none;
+}
+html[data-theme="galgame"] .status.waiting::after { border-color: var(--orange); }
+
+@keyframes galSonar {
+    0%   { transform: scale(0.7); opacity: 0.9; }
+    70%  { transform: scale(1.9); opacity: 0; }
+    100% { transform: scale(1.9); opacity: 0; }
+}
+
+/* ---- 9. 日志行淡入(动态插入的新行自动生效) + 日志 Tab 切换 ---- */
+html[data-theme="galgame"] .log-entry { animation: galLogIn 0.3s ease both; }
+@keyframes galLogIn {
+    from { opacity: 0; transform: translateX(-6px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+html[data-theme="galgame"] .log-panel.active { animation: galFadeIn 0.35s ease both; }
+html[data-theme="galgame"] .tab-content.active { animation: galFadeSlideUp 0.45s ease both; }
+
+@keyframes galFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes galFadeSlideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- 10. 模态框 / Toast:弹性入场 ---- */
+html[data-theme="galgame"] .modal-content {
+    animation: galModalIn 0.45s var(--ease-spring) both;
+}
+@keyframes galModalIn {
+    from { opacity: 0; transform: translate(-50%, calc(-50% + 28px)) scale(0.94); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+html[data-theme="galgame"] .toast {
+    animation: galToastIn 0.4s var(--ease-spring) both;
+}
+@keyframes galToastIn {
+    from { opacity: 0; transform: translateX(36px) scale(0.95); }
+    to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+/* ---- 11. 无障碍:尊重系统「减少动态」设置 ---- */
+@media (prefers-reduced-motion: reduce) {
+    html[data-theme="galgame"] body::before,
+    html[data-theme="galgame"] h1,
+    html[data-theme="galgame"] .subtitle::before,
+    html[data-theme="galgame"] .subtitle::after,
+    html[data-theme="galgame"] .card,
+    html[data-theme="galgame"] .card h3,
+    html[data-theme="galgame"] .card::before,
+    html[data-theme="galgame"] .status.running::after,
+    html[data-theme="galgame"] .status.waiting::after,
+    html[data-theme="galgame"] .tab-button.active::after,
+    html[data-theme="galgame"] .log-entry,
+    html[data-theme="galgame"] .sakura {
+        animation: none !important;
+    }
+    html[data-theme="galgame"] .sakura-layer { display: none; }
+}
