@@ -933,7 +933,6 @@ async function stopAllServices() {
 // 切换标签页
 function getDirtyKeyForConfigElement(element) {
     if (!element || !element.closest) return null;
-    if (element.id === 'live2d-model-select') return null;
 
     const pluginModal = element.closest('#pluginConfigModal');
     if (pluginModal && pluginModal.style.display !== 'none') {
@@ -942,6 +941,14 @@ function getDirtyKeyForConfigElement(element) {
 
     const panel = element.closest('.tab-content');
     if (!panel || !CONFIG_DIRTY_PANELS.has(panel.id)) return null;
+    // 以下控件有独立的应用/保存按钮，不参与面板底部的“保存配置”脏标记
+    if (panel.id === 'ui-settings') {
+        const independentIds = new Set([
+            'avatar-type-select', 'avatar-model-select',
+            'live2d-idle-group-select', 'live2d-idle-expression-select'
+        ]);
+        if (independentIds.has(element.id)) return null;
+    }
     return panel.id;
 }
 
@@ -1463,8 +1470,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     // 右侧面板默认显示历史对话，页面加载时主动拉取
     loadLastPageOfChatHistory();
 
-    // 加载模型列表（使用 refreshModelList 函数）
-    refreshModelList();
+    // 加载皮套形态与待机配置（进入“UI 设置”子选项卡时也会刷新）
+    loadAvatarStatus();
+    loadIdleConfig();
 
 
     // 加载工具列表
@@ -1575,6 +1583,9 @@ async function saveUISettings() {
         subtitle_enabled: document.getElementById('subtitle-enabled').checked,
         subtitle_user: document.getElementById('subtitle-user').value,
         subtitle_ai: document.getElementById('subtitle-ai').value,
+        model_scale: parseFloat(document.getElementById('model-scale').value) || 2.3,
+        avatar_motion_mode: document.getElementById('avatar-motion-mode') ? document.getElementById('avatar-motion-mode').value : 'blend',
+        motion_style: document.getElementById('choreo-motion-style') ? document.getElementById('choreo-motion-style').value : '',
         subtitle_labels: {
             enabled: document.getElementById('subtitle-enabled').checked,
             user: document.getElementById('subtitle-user').value,
@@ -1822,68 +1833,6 @@ async function toggleTool(event, toolName, toolType) {
         }
     } catch (error) {
         addLog(t('tools.toggle_error') + '：' + error.message, 'error', 'system');
-    }
-}
-
-// 刷新模型列表
-async function refreshModelList() {
-    try {
-        const response = await fetch('/api/models/list');
-
-        if (response.ok) {
-            const data = await response.json();
-            const models = data.models || [];
-            const modelSelect = document.getElementById('live2d-model-select');
-
-            if (!modelSelect) {
-                return;
-            }
-
-            modelSelect.innerHTML = '';
-
-            models.forEach(model => {
-                const option = document.createElement('option');
-                option.value = model;
-                option.textContent = model;
-                modelSelect.appendChild(option);
-            });
-
-            const currentResponse = await fetch('/api/settings/current-model');
-            if (currentResponse.ok) {
-                const currentData = await currentResponse.json();
-                if (currentData.success && currentData.model) {
-                    modelSelect.value = currentData.model;
-                }
-            }
-        }
-    } catch (error) {
-        console.error('获取模型列表时出错:', error);
-    }
-}
-
-// 保存 Live2D 模型
-async function saveLive2DModel() {
-    try {
-        const modelName = document.getElementById('live2d-model-select').value;
-
-        const response = await fetch('/api/settings/current-model', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: modelName })
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.success) {
-            addLog(t('ui_settings.model_switch_success') + modelName, 'success', 'system');
-            await loadExpressionConfig();
-            await loadAllMotions();
-            addLog('Motion & expression config reloaded', 'info', 'system');
-        } else {
-            addLog(t('ui_settings.model_switch_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
-        }
-    } catch (error) {
-        addLog(t('ui_settings.model_switch_failed') + '：' + error.message, 'error', 'system');
     }
 }
 
@@ -2794,6 +2743,13 @@ async function loadUISettings() {
             // 强制设置值，即使为空字符串
             _setVal('subtitle-user', subtitleLabels.user || '');
             _setVal('subtitle-ai', subtitleLabels.ai || '');
+
+            // 模型缩放比例
+            _setVal('model-scale', data.model_scale || 2.3);
+
+            // 动作与表情模式 + 动作风格预设
+            _setVal('avatar-motion-mode', data.avatar_motion_mode || 'blend');
+            _setVal('choreo-motion-style', data.motion_style || '');
             
             console.log('UI settings loaded successfully');
         } else {
@@ -2826,6 +2782,266 @@ async function resetModelPosition() {
     } catch (error) {
         addLog(t('ui_settings.model_reset_failed') + '：' + error.message, 'error', 'system');
         showError(t('ui_settings.model_reset_failed') + '：' + error.message);
+    }
+}
+
+// ============ 皮套形态管理（avatar v2） ============
+
+const AVATAR_TYPE_LABELS = { live2d: 'Live2D', vrm: 'VRM' };
+let avatarStatusCache = null;
+
+// 读取当前形态/各形态已选模型/桌宠在线状态，并刷新 UI
+async function loadAvatarStatus() {
+    const typeSelect = document.getElementById('avatar-type-select');
+    if (!typeSelect) return;
+    try {
+        const response = await fetch('/api/avatar/status');
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.success) return;
+        avatarStatusCache = data;
+
+        const modelType = data.model_type || 'live2d';
+        if (AVATAR_TYPE_LABELS[modelType]) {
+            typeSelect.value = modelType;
+        }
+
+        const currentLabel = document.getElementById('avatar-type-current');
+        if (currentLabel) {
+            currentLabel.textContent = t('ui_settings.avatar_type_current_prefix') + (AVATAR_TYPE_LABELS[modelType] || modelType);
+        }
+        const petStatus = document.getElementById('avatar-pet-status');
+        if (petStatus) {
+            petStatus.textContent = data.pet_running ? t('ui_settings.pet_running') : t('ui_settings.pet_not_running');
+        }
+
+        await loadAvatarModels(typeSelect.value);
+    } catch (error) {
+        console.error('获取皮套状态失败:', error);
+    }
+}
+
+// 加载指定形态的模型列表并预选当前选择
+async function loadAvatarModels(type) {
+    const modelSelect = document.getElementById('avatar-model-select');
+    if (!modelSelect) return;
+    modelSelect.innerHTML = '<option value="">' + t('common.loading') + '</option>';
+    try {
+        const response = await fetch(`/api/avatar/models/${encodeURIComponent(type)}`);
+        const data = await response.json();
+        const models = (data && data.models) || [];
+
+        modelSelect.innerHTML = '';
+        if (models.length === 0) {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = t('ui_settings.no_avatar_models');
+            modelSelect.appendChild(option);
+            return;
+        }
+        models.forEach(m => {
+            const option = document.createElement('option');
+            option.value = m.value;
+            option.textContent = m.name + (m.value !== m.name ? `（${m.value}）` : '');
+            modelSelect.appendChild(option);
+        });
+
+        // 预选：该形态当前已保存的选择
+        const selected = avatarStatusCache?.selections?.[type];
+        if (selected && [...modelSelect.options].some(o => o.value === selected)) {
+            modelSelect.value = selected;
+        }
+    } catch (error) {
+        console.error('获取形态模型列表失败:', error);
+        modelSelect.innerHTML = '<option value="">' + t('ui_settings.load_failed') + '</option>';
+    }
+}
+
+// 形态下拉变化时联动模型列表（不立即应用）
+function onAvatarTypeSelectChange() {
+    const typeSelect = document.getElementById('avatar-type-select');
+    if (typeSelect) loadAvatarModels(typeSelect.value);
+}
+
+// 应用形态切换（跨引擎切换会重载桌宠窗口，约 20 秒）
+async function applyAvatarType() {
+    const typeSelect = document.getElementById('avatar-type-select');
+    if (!typeSelect) return;
+    const type = typeSelect.value;
+    try {
+        const response = await fetch('/api/avatar/type/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type })
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            addLog(result.message || (t('ui_settings.avatar_type_switch_success') + (AVATAR_TYPE_LABELS[type] || type)), 'success', 'system');
+            showSuccess(result.message || (t('ui_settings.avatar_type_switch_success') + (AVATAR_TYPE_LABELS[type] || type)));
+            // 跨引擎切换会重载桌宠窗口，延迟刷新状态
+            setTimeout(loadAvatarStatus, result.hot ? 4000 : 500);
+        } else {
+            addLog(t('ui_settings.avatar_type_switch_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
+            showError(t('ui_settings.avatar_type_switch_failed') + '：' + (result.error || t('common.unknown_error')));
+        }
+    } catch (error) {
+        addLog(t('ui_settings.avatar_type_switch_failed') + '：' + error.message, 'error', 'system');
+        showError(t('ui_settings.avatar_type_switch_failed') + '：' + error.message);
+    }
+}
+
+// 应用当前形态的模型选择
+async function applyAvatarModel() {
+    const typeSelect = document.getElementById('avatar-type-select');
+    const modelSelect = document.getElementById('avatar-model-select');
+    if (!typeSelect || !modelSelect) return;
+    const type = typeSelect.value;
+    const model = modelSelect.value;
+    if (!model) {
+        addLog(t('ui_settings.avatar_model_required'), 'warning', 'system');
+        showWarning(t('ui_settings.avatar_model_required'));
+        return;
+    }
+    try {
+        const response = await fetch('/api/avatar/model/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, model })
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            addLog(result.message || (t('ui_settings.avatar_model_apply_success') + model), 'success', 'system');
+            showSuccess(result.message || (t('ui_settings.avatar_model_apply_success') + model));
+            if (type === 'live2d') {
+                // Live2D 换模型后刷新动作/表情/待机配置
+                try { await loadExpressionConfig(); } catch (e) {}
+                try { await loadAllMotions(); } catch (e) {}
+                try { await loadIdleConfig(); } catch (e) {}
+            }
+            setTimeout(loadAvatarStatus, 1500);
+        } else {
+            addLog(t('ui_settings.avatar_model_apply_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
+            showError(t('ui_settings.avatar_model_apply_failed') + '：' + (result.error || t('common.unknown_error')));
+        }
+    } catch (error) {
+        addLog(t('ui_settings.avatar_model_apply_failed') + '：' + error.message, 'error', 'system');
+        showError(t('ui_settings.avatar_model_apply_failed') + '：' + error.message);
+    }
+}
+
+// ============ 待机动作组/待机表情设置 ============
+
+// 加载待机配置（当前 Live2D 模型的动作组/表情列表 + 已保存的待机选择）
+async function loadIdleConfig() {
+    const groupSelect = document.getElementById('live2d-idle-group-select');
+    const expressionSelect = document.getElementById('live2d-idle-expression-select');
+    if (!groupSelect || !expressionSelect) return;
+    try {
+        const response = await fetch('/api/live2d/idle/config');
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data.success) return;
+
+        groupSelect.innerHTML = '';
+        const noneOption = document.createElement('option');
+        noneOption.value = '';
+        noneOption.textContent = t('ui_settings.idle_group_none');
+        groupSelect.appendChild(noneOption);
+        Object.keys(data.motion_groups || {}).forEach(group => {
+            const option = document.createElement('option');
+            option.value = group;
+            option.textContent = group;
+            groupSelect.appendChild(option);
+        });
+        groupSelect.value = (data.idle && data.idle.group) || '';
+
+        expressionSelect.innerHTML = '';
+        const noneExpr = document.createElement('option');
+        noneExpr.value = '';
+        noneExpr.textContent = t('ui_settings.idle_expression_none');
+        expressionSelect.appendChild(noneExpr);
+        (data.expressions || []).forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.file || '';
+            option.textContent = item.name || item.file || '';
+            expressionSelect.appendChild(option);
+        });
+        expressionSelect.value = (data.idle && data.idle.expression) || '';
+    } catch (error) {
+        console.error('加载待机配置失败:', error);
+    }
+}
+
+// 保存待机动作组 + 待机表情
+async function saveIdleMotionGroup() {
+    const groupSelect = document.getElementById('live2d-idle-group-select');
+    const expressionSelect = document.getElementById('live2d-idle-expression-select');
+    if (!groupSelect || !expressionSelect) return;
+    try {
+        const response = await fetch('/api/live2d/idle/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ group: groupSelect.value || '', expression: expressionSelect.value || '' })
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            addLog(t('ui_settings.idle_save_success'), 'success', 'system');
+            showSuccess(t('ui_settings.idle_save_success'));
+        } else {
+            addLog(t('ui_settings.idle_save_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
+            showError(t('ui_settings.idle_save_failed') + '：' + (result.error || t('common.unknown_error')));
+        }
+    } catch (error) {
+        addLog(t('ui_settings.idle_save_failed') + '：' + error.message, 'error', 'system');
+        showError(t('ui_settings.idle_save_failed') + '：' + error.message);
+    }
+}
+
+// ============ 字幕位置调整/复位 ============
+
+// 调整字幕位置（桌宠窗口进入拖动/缩放模式，需桌宠在线）
+async function adjustSubtitlePosition() {
+    try {
+        const response = await fetch('/api/live2d/subtitle/adjust-position', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            addLog(t('ui_settings.subtitle_adjust_success'), 'success', 'system');
+            showSuccess(result.message || t('ui_settings.subtitle_adjust_success'));
+        } else {
+            addLog(t('ui_settings.subtitle_adjust_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
+            showError(t('ui_settings.subtitle_adjust_failed') + '：' + (result.error || t('common.unknown_error')));
+        }
+    } catch (error) {
+        addLog(t('ui_settings.subtitle_adjust_failed') + '：' + error.message, 'error', 'system');
+        showError(t('ui_settings.subtitle_adjust_failed') + '：' + error.message);
+    }
+}
+
+// 复位字幕位置
+async function resetSubtitlePosition() {
+    try {
+        const response = await fetch('/api/live2d/subtitle/reset-position', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            addLog(t('ui_settings.subtitle_reset_success'), 'success', 'system');
+            showSuccess(result.message || t('ui_settings.subtitle_reset_success'));
+        } else {
+            addLog(t('ui_settings.subtitle_reset_failed') + '：' + (result.error || t('common.unknown_error')), 'error', 'system');
+            showError(t('ui_settings.subtitle_reset_failed') + '：' + (result.error || t('common.unknown_error')));
+        }
+    } catch (error) {
+        addLog(t('ui_settings.subtitle_reset_failed') + '：' + error.message, 'error', 'system');
+        showError(t('ui_settings.subtitle_reset_failed') + '：' + error.message);
     }
 }
 
@@ -3408,8 +3624,9 @@ function switchUISubTab(tab) {
 
     // 根据选项卡加载内容
     if (tab === 'ui') {
-        // 切换到 UI 设置时加载模型列表
-        refreshModelList();
+        // 切换到 UI 设置时加载皮套形态和待机配置
+        loadAvatarStatus();
+        loadIdleConfig();
     } else if (tab === 'expression') {
         // 切换到表情选项卡时加载表情配置
         loadExpressionConfig();

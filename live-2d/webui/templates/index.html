@@ -505,13 +505,42 @@
             <!-- UI 设置面板 -->
             <div id="ui-sub-panel" class="ui-sub-panel active">
                 <div class="section">
+                    <h4><span data-i18n="ui_settings.avatar_title">皮套形态与模型</span> <span id="avatar-pet-status" class="pet-status-tag"></span></h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="avatar-type-select" data-i18n="ui_settings.avatar_type">皮套形态：</label>
+                            <select id="avatar-type-select" onchange="onAvatarTypeSelectChange()">
+                                <option value="live2d">Live2D</option>
+                                <option value="vrm">VRM</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row" style="align-items: center;">
+                        <button onclick="applyAvatarType()" class="btn-start" data-i18n="ui_settings.avatar_type_apply">应用形态</button>
+                        <span id="avatar-type-current" class="avatar-current" data-i18n="ui_settings.avatar_type_current">当前形态：-</span>
+                    </div>
+                    <div class="form-note" data-i18n="ui_settings.avatar_switch_hint">提示：Live2D 与 VRM 之间切换时桌宠窗口会自动重载（约 20 秒），请稍候。</div>
                     <div class="form-group">
-                        <label for="live2d-model-select" data-i18n="ui_settings.select_model">选择模型：</label>
-                        <select id="live2d-model-select" style="width: 100%; padding: 10px; border-radius: 8px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.3); color: white;">
+                        <label for="avatar-model-select" data-i18n="ui_settings.avatar_model">该形态下的模型：</label>
+                        <select id="avatar-model-select">
                         </select>
                     </div>
-                    <button onclick="saveLive2DModel()" class="btn-start btn-apply mt-2.5" data-i18n="ui_settings.apply_model">应用模型</button>
-                    <button onclick="resetModelPosition()" class="btn-start btn-reset-model mt-2.5" data-i18n="ui_settings.reset_position">复位皮套位置</button>
+                    <button onclick="applyAvatarModel()" class="btn-start btn-apply" data-i18n="ui_settings.avatar_model_apply">应用模型</button>
+                    <button onclick="resetModelPosition()" class="btn-start btn-reset-model" data-i18n="ui_settings.reset_position">复位皮套位置</button>
+                </div>
+                <div class="section">
+                    <h4 data-i18n="ui_settings.idle_title">待机设置（Live2D）</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="live2d-idle-group-select" data-i18n="ui_settings.idle_group">待机动作组：</label>
+                            <select id="live2d-idle-group-select"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="live2d-idle-expression-select" data-i18n="ui_settings.idle_expression">待机表情：</label>
+                            <select id="live2d-idle-expression-select"></select>
+                        </div>
+                    </div>
+                    <button onclick="saveIdleMotionGroup()" class="btn-start" data-i18n="ui_settings.idle_save">保存待机</button>
                 </div>
                 <div class="section">
                     <div class="form-group">
@@ -528,6 +557,15 @@
                         <input type="checkbox" id="hide-model">
                         <label for="hide-model" data-i18n="ui_settings.hide_model">隐藏皮套</label>
                     </div>
+                    <div class="form-group">
+                        <label for="model-scale" data-i18n="ui_settings.model_scale">模型缩放比例：</label>
+                        <input type="number" id="model-scale" min="0.1" max="5" step="0.1" placeholder="2.3">
+                    </div>
+                    <div class="form-row">
+                        <button onclick="adjustSubtitlePosition()" class="btn-info" data-i18n="ui_settings.subtitle_adjust">调整字幕位置</button>
+                        <button onclick="resetSubtitlePosition()" class="btn-start btn-reset-model" data-i18n="ui_settings.subtitle_reset">复位字幕位置</button>
+                    </div>
+                    <div class="form-note" data-i18n="ui_settings.subtitle_adjust_hint">提示：调整字幕位置需要桌宠正在运行，点击后请到桌宠窗口拖动调整。</div>
                     <div class="form-row">
                         <div class="form-group">
                             <label for="subtitle-user" data-i18n="ui_settings.subtitle_user">用户标签</label>
@@ -539,8 +577,31 @@
                         </div>
                     </div>
                 </div>
+                <div class="section">
+                    <h4 data-i18n="ui_settings.motion_mode_title">动作与表情模式</h4>
+                    <div class="form-group">
+                        <label for="avatar-motion-mode" data-i18n="ui_settings.motion_mode_label">选择运行模式</label>
+                        <select id="avatar-motion-mode">
+                            <option value="blend" data-i18n="ui_settings.motion_mode_blend">自动表情 + AI 编舞（推荐）</option>
+                            <option value="legacy" data-i18n="ui_settings.motion_mode_legacy">自动表情 + 传统动作</option>
+                            <option value="director" data-i18n="ui_settings.motion_mode_director">仅 AI 编舞</option>
+                        </select>
+                    </div>
+                    <div class="form-note" data-i18n="ui_settings.motion_mode_hint">自动表情会现场组合脸部变化；传统动作使用已有动作文件；AI 编舞使用新版动作系统。保存后重启桌宠生效。</div>
+                    <div class="form-group" style="margin-top: 12px;">
+                        <label for="choreo-motion-style" data-i18n="ui_settings.choreo_style_label">动作风格预设（仅『仅 AI 编舞』模式生效）</label>
+                        <select id="choreo-motion-style">
+                            <option value="" data-i18n="ui_settings.choreo_style_none">不使用预设（沿用手动参数）</option>
+                            <option value="natural">natural · 自然</option>
+                            <option value="lively">lively · 活泼</option>
+                            <option value="calm">calm · 沉静</option>
+                            <option value="shy">shy · 害羞</option>
+                        </select>
+                    </div>
+                    <div class="form-note" data-i18n="ui_settings.choreo_style_hint">预设一次性调好 VAD 性格基线、离散待机动作频率、视线稳定度与动作幅度；其它两个模式不受影响。</div>
+                </div>
             </div>
-            
+
             <!-- 动作管理面板 -->
             <div id="motion-sub-panel" class="ui-sub-panel">
                 <div class="section">
