@@ -24,6 +24,8 @@ import webbrowser
 import requests
 from pathlib import Path
 
+from .qq_group import QqGroupButton
+
 
 class CustomTitleBar(QWidget):
     """自定义标题栏"""
@@ -96,6 +98,10 @@ class CustomTitleBar(QWidget):
            }
        """
 
+        # QQ群按钮（点击弹出群二维码）
+        self.qq_btn = QqGroupButton(self)
+        self.qq_btn.setStyleSheet(button_style)
+
         # 最小化按钮
         self.min_btn = QPushButton("−")
         self.min_btn.setStyleSheet(button_style)
@@ -111,6 +117,7 @@ class CustomTitleBar(QWidget):
         self.close_btn.setStyleSheet(close_style)
         self.close_btn.clicked.connect(self.parent.close)
 
+        layout.addWidget(self.qq_btn)
         layout.addWidget(self.min_btn)
         layout.addWidget(self.max_btn)
         layout.addWidget(self.close_btn)
