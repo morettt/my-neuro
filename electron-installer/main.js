@@ -139,6 +139,11 @@ async function install(components) {
       for (const raw of parts) {
         const line = raw.trim();
         if (!line) continue;
+        const moduleEvent = line.match(/^@@MODULE_(START|DONE|FAIL):(live2d|bert|tts|rag|asr)$/);
+        if (moduleEvent) {
+          send({type:'module-status',status:moduleEvent[1].toLowerCase(),module:moduleEvent[2]});
+          continue;
+        }
         const named = line.match(/Downloading\s+\[(.+?)\].*?(\d{1,3})%.*?([\d.]+)\s*(B|KB|MB|GB|TB)\s*\/\s*([\d.]+)\s*(B|KB|MB|GB|TB)/i);
         const generic = line.match(/\|\s*(\d{1,3})%/);
         const pct = named ? Number(named[2]) : generic ? Number(generic[1]) : null;
