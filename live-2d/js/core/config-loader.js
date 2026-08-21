@@ -26,10 +26,26 @@ class ConfigLoader {
             }
             
             console.log('配置文件加载成功');
-            
+
             // 处理特殊路径，例如 ~ 表示用户主目录
             this.processSpecialPaths();
-            
+
+            // LLM 通讯录：加载/迁移/注入 config.llm_providers（仅内存），并初始化运行时管理器。
+            // 传入真实 configPath 以便首次迁移时备份 config.json.pre-provider.bak。
+            // writeBack:false：此处不把清洗后的 config 写回磁盘（写回由 main.js 的 save-config 统一负责）。
+            // 注意：即便不写盘，内存中的旧三格仍会被清空，运行时依赖 llm_providers.json。
+            try {
+                const { persistProviderStore } = require('./llm-provider-store.js');
+                const { llmProviderManager } = require('./llm-provider.js');
+                const baseDir = path.dirname(this.configPath);
+                persistProviderStore(baseDir, this.configPath, this.config, { writeBack: false });
+                llmProviderManager.init(this.config);
+            } catch (providerError) {
+                // 通讯录初始化失败不应阻断启动。若本次尚未清空旧三格，桌宠仍可走旧三格；
+                // 若通讯录已初始化成功、旧三格已被清空，则必须修复 llm_providers.json。
+                console.warn('LLM 通讯录初始化失败:', providerError.message);
+            }
+
             return this.config;
         } catch (error) {
             console.error('配置文件读取失败:', error);

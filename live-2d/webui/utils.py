@@ -12,14 +12,18 @@ from pathlib import Path
 
 # 项目根目录（live-2d/）
 PROJECT_ROOT = Path(__file__).parent.parent.absolute()
-# 数据根目录（my-neuro/），AI记录室等持久化数据存放于此
+# 数据根目录（my-neuro-main/），AI记录室等持久化数据可放置于此
 DATA_ROOT = PROJECT_ROOT.parent
 
-# 云端版本检测：tts-hub 不存在或内部无子文件夹（仅有占位文件）则为云端版本
+# WebUI 版本
+WEBUI_VERSION = 'v2.5'
+
+# 云端版本检测：tts-hub 不存在或内部无子文件夹（仅有占位文件）则视为云端版本
 _tts_hub = DATA_ROOT / 'full-hub' / 'tts-hub'
-IS_CLOUD_VERSION = not _tts_hub.is_dir() or not any(p.is_dir() for p in _tts_hub.iterdir())
-
-
+try:
+    IS_CLOUD_VERSION = not _tts_hub.is_dir() or not any(p.is_dir() for p in _tts_hub.iterdir())
+except Exception:
+    IS_CLOUD_VERSION = False
 
 # 配置日志 - 使用 WARNING 级别减少输出
 logging.basicConfig(
@@ -36,6 +40,15 @@ werkzeug_log.setLevel(logging.ERROR)
 # 服务状态跟踪（全局变量，供各模块使用）
 service_processes = {}
 service_pids = {}
+service_log_files = {}
+
+# WebUI 内嵌日志与 Live2D 启动门控只覆盖这三个本地服务。
+SERVICE_PORTS = {
+    'asr': 1000,
+    'tts': 5000,
+    'memos': 8003,
+}
+SERVICE_LOG_SERVICES = set(SERVICE_PORTS.keys())
 
 # 日志文件路径配置
 LOG_FILE_PATHS = {

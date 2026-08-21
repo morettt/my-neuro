@@ -7,6 +7,8 @@ WebUI 模块化重构 - 插件管理模块
 
 import os
 import json
+import urllib.request
+import urllib.error
 from collections import OrderedDict
 from flask import Blueprint, request, jsonify
 
@@ -20,6 +22,53 @@ from .marketplace_updater import (
 plugin_bp = Blueprint('plugin', __name__)
 
 PLUGIN_FRAMEWORK_VERSION = '1.0.0'
+
+
+def _schema_value(node, default=None):
+    """Read a plugin_config schema node without exposing nested secrets."""
+    if not isinstance(node, dict):
+        return default
+    if 'value' in node:
+        return node.get('value')
+    return node.get('default', default)
+
+
+def _to_bool(value, default=False):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in ('true', '1', 'yes', 'on'):
+            return True
+        if lowered in ('false', '0', 'no', 'off', ''):
+            return False
+    return default
+
+
+def _read_plugin_config(plugin_path):
+    if '/' not in plugin_path:
+        return None
+    category, dir_name = plugin_path.split('/', 1)
+    if category not in ['built-in', 'community']:
+        return None
+    config_path = PROJECT_ROOT / 'plugins' / category / dir_name / 'plugin_config.json'
+    if not config_path.exists():
+        return None
+    with open(config_path, 'r', encoding='utf-8-sig') as f:
+        return json.load(f)
+
+
+def _probe_local_json(url, timeout=0.35):
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            if resp.status != 200:
+                return None
+            raw = resp.read(64 * 1024).decode('utf-8', errors='replace')
+            return json.loads(raw)
+    except (OSError, ValueError, urllib.error.URLError):
+        return None
 
 
 def load_enabled_plugins():
@@ -94,7 +143,13 @@ def scan_plugins_directory():
                     'enabled': plugin_enabled,
                     'plugin_path': plugin_path,
                     'plugin_dir': str(plugin_dir),
-                    'has_own_config': (plugin_dir / 'plugin_config.json').exists()
+                    'has_own_config': (plugin_dir / 'plugin_config.json').exists(),
+                    # 独立面板入口仅当插件目录真实存在且属于已知名单时才标真。
+                    # 本仓库未内置 auto-act / companion-director，故默认全为 False。
+                    'has_local_panel': plugin_path in (
+                        'built-in/companion-director',
+                        'built-in/auto-act',
+                    ) and plugin_dir.is_dir()
                 })
             except Exception as e:
                 logger.error(f'读取插件元数据失败 {plugin_dir.name}: {e}')
@@ -167,6 +222,95 @@ def toggle_plugin():
             'plugin_path': plugin_path
         })
     return jsonify({'success': False, 'error': '保存失败'}), 500
+
+
+@plugin_bp.route('/api/plugins/panel-info', methods=['POST'])
+def plugin_panel_info():
+    """Return safe local panel metadata for plugins that expose an own WebUI."""
+    data = request.get_json() or {}
+    plugin_path = data.get('plugin_path', '')
+    panel_defaults = {
+        'built-in/companion-director': {
+            'port': 22336,
+            'probe_path': 'api/status',
+            'kind': 'companion-director',
+        },
+        'built-in/auto-act': {
+            'port': 22341,
+            'probe_path': 'health',
+            'kind': 'feiniu-house',
+        },
+    }
+    panel = panel_defaults.get(plugin_path)
+    if not panel:
+        return jsonify({
+            'success': False,
+            'error': '该插件没有已知的独立面板'
+        }), 404
+
+    try:
+        cfg = _read_plugin_config(plugin_path) or {}
+        enabled = _to_bool(_schema_value(cfg.get('webui_enabled'), True), True)
+        host = str(_schema_value(cfg.get('webui_host'), '127.0.0.1') or '127.0.0.1').strip()
+        port = int(_schema_value(cfg.get('webui_port'), panel['port']) or panel['port'])
+
+        # The companion panel is intentionally local-only. Even if config drifts,
+        # the main WebUI should never hand out a non-loopback management URL.
+        if host not in ('127.0.0.1', 'localhost', '::1'):
+            host = '127.0.0.1'
+
+        url_host = '[::1]' if host == '::1' else host
+        url = f'http://{url_host}:{port}/'
+        status = None
+        for candidate_port in range(port, port + 21):
+            candidate_url = f'http://{url_host}:{candidate_port}/'
+            candidate_status = _probe_local_json(f"{candidate_url}{panel['probe_path']}")
+            if candidate_status and candidate_status.get('ok'):
+                url = candidate_url
+                status = candidate_status
+                break
+        return jsonify({
+            'success': True,
+            'available': bool(status and status.get('ok')),
+            'enabled': enabled,
+            'url': url,
+            'mode': status.get('mode') if isinstance(status, dict) else None,
+            'panel_kind': panel['kind'],
+            'reason': None if status else 'panel_not_running'
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@plugin_bp.route('/api/plugins/open-panel', methods=['POST'])
+def open_plugin_panel():
+    """Ask the OS browser to open a known safe local plugin panel."""
+    info_resp = plugin_panel_info()
+    status_code = info_resp[1] if isinstance(info_resp, tuple) else 200
+    resp = info_resp[0] if isinstance(info_resp, tuple) else info_resp
+    if status_code != 200:
+        return info_resp
+
+    payload = resp.get_json() or {}
+    url = payload.get('url')
+    if payload.get('enabled') is False:
+        return jsonify({
+            'success': False,
+            'error': '该插件当前未启用，本地面板未运行',
+            'url': url
+        }), 409
+    if not url or not str(url).startswith(('http://127.0.0.1:', 'http://localhost:')):
+        return jsonify({'success': False, 'error': '面板 URL 不安全或不可用'}), 400
+
+    try:
+        import webbrowser
+        webbrowser.open(url)
+        payload['opened'] = True
+        return jsonify(payload)
+    except Exception as e:
+        payload['opened'] = False
+        payload['error'] = str(e)
+        return jsonify(payload), 500
 
 
 @plugin_bp.route('/api/plugins/open-config', methods=['POST'])
