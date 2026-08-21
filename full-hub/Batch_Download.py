@@ -18,7 +18,9 @@ version_tag = "v6.6.2"
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
+current_dir = os.environ.get('MY_NEURO_FULL_HUB_DIR') or os.path.dirname(os.path.abspath(__file__))
+current_dir = os.path.abspath(current_dir)
+os.makedirs(current_dir, exist_ok=True)
 
 MAX_RETRY = 3
 RETRY_WAIT = 5
