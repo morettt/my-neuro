@@ -1,18 +1,31 @@
 @echo off
-cd /d %~dp0
+setlocal
+cd /d "%~dp0electron-installer"
 
-pip show pyinstaller >nul 2>&1
-if errorlevel 1 pip install pyinstaller -q
-
-for /f "delims=" %%i in ('python -c "import sys; print(sys.prefix)"') do set PYPREFIX=%%i
-
-pyinstaller --onedir --noconsole --name "My-Neuro-Installer" --hidden-import tkinter --hidden-import tkinter.ttk --hidden-import tkinter.scrolledtext --hidden-import tkinter.messagebox --add-data "%PYPREFIX%\tcl\tcl8.6;tcl8.6" --add-data "%PYPREFIX%\tcl\tk8.6;tk8.6" --runtime-hook rthook_tkinter.py installer.py
-
+where node >nul 2>&1
 if errorlevel 1 (
-    echo Build failed.
+    echo Node.js was not found. Install Node.js 20 or newer first.
     pause
     exit /b 1
 )
 
-echo Done. Output: dist\My-Neuro-Installer\
+if not exist node_modules (
+    echo Installing Electron build dependencies...
+    call npm install
+    if errorlevel 1 goto :failed
+)
+
+call npm run build
+if errorlevel 1 goto :failed
+
+copy /y "dist\My-Neuro-Installer.exe" "..\My-Neuro-Installer.exe" >nul
+if errorlevel 1 goto :failed
+
+echo Done. Output: My-Neuro-Installer.exe
 pause
+exit /b 0
+
+:failed
+echo Build failed.
+pause
+exit /b 1
