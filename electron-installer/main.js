@@ -90,13 +90,31 @@ async function install(components) {
   send({type:'progress',overall:60,fileProgress:0,label:'开始下载模型…'});
   const allowed = ['asr','bert','tts','rag','live2d'];
   const flags = allowed.filter(name => components.includes(name)).map(name => `--${name}`);
+  const expectedBytes = {asr:2,bert:1,tts:4,rag:2,live2d:.2};
+  const expectedModelBytes = allowed.filter(name => components.includes(name))
+    .reduce((sum,name) => sum + expectedBytes[name] * 1024 ** 3, 0);
+  const downloadedByFile = new Map();
+  let downloadedModelBytes = 0;
+  const parseBytes = (value,unit) => {
+    const powers = {B:0,KB:1,MB:2,GB:3,TB:4};
+    return Number(value) * 1024 ** (powers[unit.toUpperCase()] ?? 0);
+  };
+  const capacityOverall = () => expectedModelBytes > 0
+    ? Math.min(95,60 + downloadedModelBytes / expectedModelBytes * 35) : 95;
+  const modelRoot = path.join(installDir, 'full-hub');
+  fs.mkdirSync(modelRoot, {recursive:true});
+  log(`模型保存目录: ${modelRoot}`);
   if (flags.length) await new Promise((resolve, reject) => {
     const child = spawn(envPython, [batchScript, ...flags], {
       cwd: installDir,
       windowsHide: true,
-      env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' }
+      env: {
+        ...process.env,
+        PYTHONUTF8: '1',
+        PYTHONIOENCODING: 'utf-8',
+        MY_NEURO_FULL_HUB_DIR: modelRoot
+      }
     });
-    let overall = 60;
     const stdoutDecoder = new StringDecoder('utf8');
     const stderrDecoder = new StringDecoder('utf8');
     let stdoutPending = '', stderrPending = '';
@@ -108,16 +126,25 @@ async function install(components) {
       for (const raw of parts) {
         const line = raw.trim();
         if (!line) continue;
-        const named = line.match(/Downloading\s+\[(.+?)\].*?(\d{1,3})%/i);
+        const named = line.match(/Downloading\s+\[(.+?)\].*?(\d{1,3})%.*?([\d.]+)\s*(B|KB|MB|GB|TB)\s*\/\s*([\d.]+)\s*(B|KB|MB|GB|TB)/i);
         const generic = line.match(/\|\s*(\d{1,3})%/);
         const pct = named ? Number(named[2]) : generic ? Number(generic[1]) : null;
         if (pct !== null) {
-          send({ type:'progress', overall:Math.min(95,overall+=.2), fileProgress:pct,
+          if (named) {
+            const file = named[1];
+            const currentBytes = parseBytes(named[3],named[4]);
+            const previousBytes = downloadedByFile.get(file) || 0;
+            if (currentBytes > previousBytes) {
+              downloadedModelBytes += currentBytes - previousBytes;
+              downloadedByFile.set(file,currentBytes);
+            }
+          }
+          send({ type:'progress', overall:capacityOverall(), fileProgress:pct,
             label:named ? `下载 ${named[1]}` : line.replace(/[|━─█▏▎▍▌▋▊▉]+/g, ' ').replace(/\s+/g, ' ').slice(0,80) });
           continue;
         }
         log(line);
-        send({type:'progress',overall:Math.min(95,overall+=.2),fileProgress:0,label:line.slice(0,80)});
+        send({type:'progress',overall:capacityOverall(),fileProgress:0,label:line.slice(0,80)});
       }
     };
     child.stdout.on('data',data => consume(stdoutDecoder.write(data),'stdout'));
@@ -129,6 +156,23 @@ async function install(components) {
       code===0 ? resolve() : reject(new Error(`模型下载失败（退出码 ${code}）`));
     });
   });
+  const hasFile = directory => {
+    if (!fs.existsSync(directory)) return false;
+    const pending = [directory];
+    while (pending.length) {
+      for (const entry of fs.readdirSync(pending.pop(), {withFileTypes:true})) {
+        if (entry.isFile()) return true;
+        if (entry.isDirectory()) pending.push(path.join(entry.parentPath || entry.path, entry.name));
+      }
+    }
+    return false;
+  };
+  const modelDirs = {asr:'asr-hub',bert:'bert-hub',tts:'tts-hub',rag:'rag-hub'};
+  const missing = Object.entries(modelDirs)
+    .filter(([name]) => components.includes(name))
+    .filter(([,dir]) => !hasFile(path.join(modelRoot,dir)))
+    .map(([name]) => name.toUpperCase());
+  if (missing.length) throw new Error(`模型目录为空: ${missing.join(', ')}。目标目录: ${modelRoot}`);
   log('安装成功'); send({type:'done',logPath});
 }
 
