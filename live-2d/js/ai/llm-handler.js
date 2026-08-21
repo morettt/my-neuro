@@ -5,6 +5,8 @@ const { Events } = require('../core/events.js');
 const { appState } = require('../core/app-state.js');
 const { LLMClient } = require('./llm-client.js');
 const { toolExecutor } = require('./tool-executor.js');
+const { getAvatarMotionMode } = require('../avatar/motion-mode.js');
+const { motionDirector } = require('./motion-director.js');
 const { llmProviderManager } = require('../core/llm-provider.js');
 
 /**
@@ -19,6 +21,16 @@ function filterThinkingContent(text) {
     if (/^思考\s*\n/.test(filtered)) return '';
     if (/^Thinking\s*\n/i.test(filtered)) return '';
     return filtered.trim();
+}
+
+// 编舞会关闭流式 TTS 改走整段播放，因此必须显式开启；缺省配置一律保持原有流式行为。
+// paramDirector 只在 Live2D 运行时挂载，缺席时编舞不会产生任何效果，此时也不能牺牲流式。
+function shouldRunMotionChoreography(config = {}) {
+    if (config?.tts?.enabled === false) return false;
+    if (config?.ui?.text_only_mode === true) return false;
+    if (getAvatarMotionMode(config) === 'legacy') return false;
+    if (!global.paramDirector) return false;
+    return config?.motion_director?.enabled === true;
 }
 
 class LLMHandler {
@@ -111,6 +123,23 @@ class LLMHandler {
         return async function(prompt) {
             let hasRetriedWithoutImage = false; // 标志：是否已经重试过（避免无限循环）
             let isFirstAttempt = true; // 标志：是否是第一次尝试
+            const choreographyMode = getAvatarMotionMode(config);
+            const shouldRunChoreography = shouldRunMotionChoreography(config);
+            const waitForChoreography = shouldRunChoreography &&
+                choreographyMode === 'director' &&
+                config?.motion_director?.wait_before_tts !== false;
+            const choreographyUserMessage = Array.isArray(prompt)
+                ? prompt
+                    .filter(item => item && item.type === 'text')
+                    .map(item => item.text || '')
+                    .join(' ')
+                : prompt;
+
+            // 新一轮输入必须终止上一轮尚未完成的编舞请求和时间线。
+            motionDirector.cancel('new-turn');
+            try {
+                global.paramDirector?.cancel?.();
+            } catch (_) {}
 
             // 🔥 外层重试循环：用于处理视觉不支持错误
             while (true) {
@@ -275,6 +304,8 @@ class LLMHandler {
                         _streamBuf = '';
                         ttsProcessor.reset();
                         result = await visionClient.chatCompletion(messagesForAPI, null, true, (text) => {
+                            if (shouldRunChoreography) return;
+                            isStreamingToTTS = true;
                             ttsProcessor.addStreamingText(text);
                         });
                     } else {
@@ -302,6 +333,8 @@ class LLMHandler {
                         if (iteration === 0) ttsProcessor.reset();
                         result = await llmClient.chatCompletion(messagesForAPI, allTools, true, (text) => {
                             if (iteration > 0) return;
+                            if (shouldRunChoreography) return;
+                            isStreamingToTTS = true;
                             ttsProcessor.addStreamingText(text);
                         });
                     }
@@ -770,7 +803,33 @@ class LLMHandler {
                         await global.pluginManager.runTTSStartHooks(responseObj.text).catch(() => {});
                     }
 
-                    if (iteration === 0) {
+                    if (shouldRunChoreography && responseObj.text && responseObj.text.trim()) {
+                        const choreographyWork = motionDirector.choreograph(
+                            responseObj.text,
+                            config,
+                            { userMessage: choreographyUserMessage }
+                        );
+                        if (waitForChoreography) {
+                            const waitMs = Math.max(
+                                200,
+                                Math.min(
+                                    3000,
+                                    Number(config?.motion_director?.first_frame_wait_ms) || 1500
+                                )
+                            );
+                            logToTerminal(
+                                'info',
+                                `[MotionDirector] director 模式等待首帧，最多 ${waitMs}ms`
+                            );
+                            await Promise.race([
+                                choreographyWork.firstFrameLoaded,
+                                new Promise(resolve => setTimeout(resolve, waitMs))
+                            ]);
+                        }
+                        choreographyWork.catch(() => {});
+                    }
+
+                    if (iteration === 0 && isStreamingToTTS && !waitForChoreography) {
                         // streaming already started - finalize
                         if (typeof ttsProcessor.finalizeStreamingText === 'function') {
                             ttsProcessor.finalizeStreamingText();
@@ -802,6 +861,10 @@ class LLMHandler {
                     if (error.message === 'USER_INTERRUPTED') {
                         console.log('用户打断处理完成，静默退出');
                         logToTerminal('info', '✅ 已响应用户打断');
+                        motionDirector.cancel('user-interrupted');
+                        try {
+                            global.paramDirector?.cancel?.();
+                        } catch (_) {}
 
                         // 确保ASR恢复
                         if (voiceChat.asrProcessor && asrEnabled) {
@@ -924,4 +987,8 @@ class LLMHandler {
     }
 }
 
-module.exports = { LLMHandler };
+module.exports = {
+    LLMHandler,
+    filterThinkingContent,
+    shouldRunMotionChoreography
+};
