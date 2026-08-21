@@ -10,6 +10,12 @@ const ENV_URL = 'https://modelscope.cn/models/morelle/my-neuro-env/resolve/maste
 let mainWindow;
 let installing = false;
 
+function resolveInstallDir() {
+  return app.isPackaged
+    ? path.resolve(process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath))
+    : path.resolve(__dirname, '..');
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({ width: 780, height: 570, minWidth: 780, minHeight: 570, resizable: false, frame: false, backgroundColor: '#f2f2f0', title: 'My-Neuro Installer',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
@@ -68,16 +74,22 @@ function download(url, destination) {
 }
 
 async function install(components) {
-  const installDir = app.isPackaged
-    ? path.resolve(process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath))
-    : path.resolve(__dirname, '..');
+  const installDir = resolveInstallDir();
   const envDir = path.join(installDir, 'env');
   const envPython = path.join(envDir, 'python.exe');
   const archive = path.join(installDir, 'my-neuro-env.tar.gz');
-  const batchScript = app.isPackaged ? path.join(process.resourcesPath, 'full-hub', 'Batch_Download.py') : path.join(installDir, 'full-hub', 'Batch_Download.py');
+  const modelRoot = path.join(installDir, 'full-hub');
+  const batchScript = path.join(modelRoot, 'Batch_Download.py');
+  const bundledBatchScript = app.isPackaged
+    ? path.join(process.resourcesPath, 'full-hub', 'Batch_Download.py')
+    : batchScript;
   const logPath = path.join(installDir, 'installer.log');
   const log = message => { const line = `[${new Date().toLocaleTimeString('zh-CN',{hour12:false})}] ${message}`; fs.appendFileSync(logPath, `${line}\n`, 'utf8'); send({type:'log',message:line}); };
   fs.writeFileSync(logPath, '', 'utf8');
+  fs.mkdirSync(modelRoot, {recursive:true});
+  if (app.isPackaged) fs.copyFileSync(bundledBatchScript, batchScript);
+  log(`安装根目录: ${installDir}`);
+  log(`模型保存目录: ${modelRoot}`);
 
   if (!fs.existsSync(envPython)) {
     log('开始下载 Python 环境包…');
@@ -88,6 +100,8 @@ async function install(components) {
     fs.unlinkSync(archive);
     log('环境解压完成');
   } else log('env 已存在，跳过环境下载');
+
+  if (!fs.existsSync(envPython)) throw new Error(`Python 环境无效: ${envPython}`);
 
   send({type:'progress',overall:60,fileProgress:0,label:'开始下载模型…'});
   const allowed = ['asr','bert','tts','rag','live2d'];
@@ -103,9 +117,6 @@ async function install(components) {
   };
   const capacityOverall = () => expectedModelBytes > 0
     ? Math.min(95,60 + downloadedModelBytes / expectedModelBytes * 35) : 95;
-  const modelRoot = path.join(installDir, 'full-hub');
-  fs.mkdirSync(modelRoot, {recursive:true});
-  log(`模型保存目录: ${modelRoot}`);
   if (flags.length) await new Promise((resolve, reject) => {
     const child = spawn(envPython, [batchScript, ...flags], {
       cwd: installDir,
@@ -169,10 +180,16 @@ async function install(components) {
     }
     return false;
   };
-  const modelDirs = {asr:'asr-hub',bert:'bert-hub',tts:'tts-hub',rag:'rag-hub'};
-  const missing = Object.entries(modelDirs)
+  const outputDirs = {
+    asr:path.join(modelRoot,'asr-hub'),
+    bert:path.join(modelRoot,'bert-hub'),
+    tts:path.join(modelRoot,'tts-hub'),
+    rag:path.join(modelRoot,'rag-hub'),
+    live2d:path.join(installDir,'live-2d')
+  };
+  const missing = Object.entries(outputDirs)
     .filter(([name]) => components.includes(name))
-    .filter(([,dir]) => !hasFile(path.join(modelRoot,dir)))
+    .filter(([,dir]) => !hasFile(dir))
     .map(([name]) => name.toUpperCase());
   if (missing.length) throw new Error(`模型目录为空: ${missing.join(', ')}。目标目录: ${modelRoot}`);
   log('安装成功'); send({type:'done',logPath});
@@ -187,5 +204,19 @@ ipcMain.handle('start-install', async (_event, components) => {
   install(Array.isArray(components)?components:[]).catch(error => send({type:'error',message:error.message})).finally(() => {installing=false;});
   return {accepted:true};
 });
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  const diagnosticFile = process.env.MY_NEURO_PATH_DIAGNOSTIC;
+  if (diagnosticFile) {
+    const installDir = resolveInstallDir();
+    fs.writeFileSync(diagnosticFile, JSON.stringify({
+      portableExecutableDir: process.env.PORTABLE_EXECUTABLE_DIR || null,
+      processExecPath: process.execPath,
+      installDir,
+      modelRoot: path.join(installDir, 'full-hub')
+    }, null, 2), 'utf8');
+    app.quit();
+    return;
+  }
+  createWindow();
+});
 app.on('window-all-closed', () => app.quit());
