@@ -22,11 +22,14 @@ function filterThinkingContent(text) {
     return filtered.trim();
 }
 
+// 编舞会关闭流式 TTS 改走整段播放，因此必须显式开启；缺省配置一律保持原有流式行为。
+// paramDirector 只在 Live2D 运行时挂载，缺席时编舞不会产生任何效果，此时也不能牺牲流式。
 function shouldRunMotionChoreography(config = {}) {
     if (config?.tts?.enabled === false) return false;
     if (config?.ui?.text_only_mode === true) return false;
     if (getAvatarMotionMode(config) === 'legacy') return false;
-    return config?.motion_director?.enabled !== false;
+    if (!global.paramDirector) return false;
+    return config?.motion_director?.enabled === true;
 }
 
 class LLMHandler {

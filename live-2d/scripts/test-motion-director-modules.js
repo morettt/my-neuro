@@ -375,30 +375,54 @@ async function testLegacyModeSkipsApi() {
 }
 
 async function main() {
-    assert.strictEqual(
-        shouldRunMotionChoreography({
-            tts: { enabled: true },
-            ui: { avatar_motion_mode: 'blend' },
-            motion_director: { enabled: true }
-        }),
-        true
-    );
-    assert.strictEqual(
-        shouldRunMotionChoreography({
-            tts: { enabled: false },
-            ui: { avatar_motion_mode: 'blend' },
-            motion_director: { enabled: true }
-        }),
-        false
-    );
-    assert.strictEqual(
-        shouldRunMotionChoreography({
-            tts: { enabled: true },
-            ui: { avatar_motion_mode: 'blend', text_only_mode: true },
-            motion_director: { enabled: true }
-        }),
-        false
-    );
+    const previousParamDirector = global.paramDirector;
+    global.paramDirector = { cancel() {} };
+    try {
+        assert.strictEqual(
+            shouldRunMotionChoreography({
+                tts: { enabled: true },
+                ui: { avatar_motion_mode: 'blend' },
+                motion_director: { enabled: true }
+            }),
+            true
+        );
+        assert.strictEqual(
+            shouldRunMotionChoreography({
+                tts: { enabled: false },
+                ui: { avatar_motion_mode: 'blend' },
+                motion_director: { enabled: true }
+            }),
+            false
+        );
+        assert.strictEqual(
+            shouldRunMotionChoreography({
+                tts: { enabled: true },
+                ui: { avatar_motion_mode: 'blend', text_only_mode: true },
+                motion_director: { enabled: true }
+            }),
+            false
+        );
+        assert.strictEqual(
+            shouldRunMotionChoreography({
+                tts: { enabled: true },
+                ui: { avatar_motion_mode: 'blend' }
+            }),
+            false,
+            '缺 motion_director.enabled 时必须保持流式，不能默认开启编舞'
+        );
+        global.paramDirector = undefined;
+        assert.strictEqual(
+            shouldRunMotionChoreography({
+                tts: { enabled: true },
+                ui: { avatar_motion_mode: 'blend' },
+                motion_director: { enabled: true }
+            }),
+            false,
+            'paramDirector 缺席时不能开启编舞'
+        );
+    } finally {
+        global.paramDirector = previousParamDirector;
+    }
     assert.strictEqual(
         shouldUseLegacyEmotionLogic({ ui: { avatar_motion_mode: 'blend' } }),
         true

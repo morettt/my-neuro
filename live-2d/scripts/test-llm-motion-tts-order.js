@@ -26,6 +26,13 @@ async function testDirectorWaitsForChoreographyBeforeTts() {
     const events = [];
     const originalChatCompletion = LLMClient.prototype.chatCompletion;
     const originalChoreograph = motionDirector.choreograph;
+    const originalParamDirector = global.paramDirector;
+    global.paramDirector = {
+        cancel() {},
+        prepareSpeech() {},
+        noteSpeechProgress() {},
+        getParamCatalog: () => []
+    };
     const voiceChat = {
         messages: [],
         enableContextLimit: false,
@@ -91,6 +98,7 @@ async function testDirectorWaitsForChoreographyBeforeTts() {
     } finally {
         LLMClient.prototype.chatCompletion = originalChatCompletion;
         motionDirector.choreograph = originalChoreograph;
+        global.paramDirector = originalParamDirector;
     }
 }
 
