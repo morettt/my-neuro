@@ -28,8 +28,20 @@ function main() {
     };
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
 
-    persistProviderStore(dir, configPath, config);
+    persistProviderStore(dir, configPath, config, { writeBack: false });
     assert.ok(fs.existsSync(storePath), '第一次 load 应写出 llm_providers.json');
+    assert.ok(
+        fs.existsSync(`${configPath}.pre-provider.bak`),
+        '首次迁移必须备份 config.json.pre-provider.bak'
+    );
+    const backup = readJson(`${configPath}.pre-provider.bak`);
+    assert.strictEqual(backup.llm.api_key, 'sk-mig');
+    const diskAfterNoWriteBack = readJson(configPath);
+    assert.strictEqual(
+        diskAfterNoWriteBack.llm.api_key,
+        'sk-mig',
+        'writeBack:false 不得把清洗后的空三格写回 config.json'
+    );
 
     const firstStore = readJson(storePath);
     assert.ok(Array.isArray(firstStore.providers));

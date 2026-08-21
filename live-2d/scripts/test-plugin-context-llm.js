@@ -94,7 +94,7 @@ async function main() {
     await withFetch(async (_url, init) => {
         const body = JSON.parse(init.body);
         assert.strictEqual(body.model, 'model-b');
-        assert.strictEqual('temperature' in body, false);
+        assert.strictEqual(body.temperature, 1.0);
         assert.strictEqual('reasoning_effort' in body, false);
         return jsonResponse();
     }, async () => {

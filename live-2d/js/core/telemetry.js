@@ -7,6 +7,7 @@
 //   2. 递归剥离 api_key / authorization / cookie / token / 消息正文 / 工具 arguments
 //   3. title 最长 160 字
 //   4. 任何失败一律吞掉,绝不影响对话主流程
+//   5. 仅本地落盘,不外传; config.telemetry.enabled === false 时可关闭（缺省开启）
 
 const fs = require('fs');
 const path = require('path');
@@ -66,12 +67,18 @@ function rotateIfNeeded() {
     } catch (_) { /* 静默 */ }
 }
 
+function isTelemetryEnabled() {
+    const config = global.live2dRuntime?.config || global.configLoader?.config;
+    return config?.telemetry?.enabled !== false;
+}
+
 /**
  * 追加一条遥测。同步写入(追加一行极快);失败吞掉。
  * @param {object} event - { cat, type, title, level?, pipeline_stage?, metrics?, source? }
  */
 function emitTelemetry(event) {
     try {
+        if (!isTelemetryEnabled()) return;
         if (!event || typeof event !== 'object') return;
         if (!event.cat || !event.type || !event.title) return;
 

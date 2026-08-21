@@ -15,6 +15,7 @@ import urllib.request
 import urllib.error
 from flask import Blueprint, request, jsonify
 
+from .state_io import atomic_write_json
 from .utils import PROJECT_ROOT, logger
 
 # 创建配置管理蓝图
@@ -468,8 +469,10 @@ def load_provider_store():
 
 def save_provider_store(providers):
     try:
-        with open(PROVIDER_STORE_PATH, 'w', encoding='utf-8') as f:
-            json.dump({'providers': normalize_providers_data(providers)}, f, ensure_ascii=False, indent=2)
+        atomic_write_json(
+            PROVIDER_STORE_PATH,
+            {'providers': normalize_providers_data(providers)},
+        )
         return True
     except Exception as e:
         logger.error(f'保存 llm_providers.json 失败：{str(e)}')
@@ -650,6 +653,65 @@ def apply_selections_and_scrub(config, providers, llm_selection=None, vision_sel
     return config_changed, providers_changed
 
 
+def apply_legacy_vision_model_to_providers(config, providers, vm):
+    """把旧版视觉三格同步进通讯录。返回是否修改了 providers。"""
+    if not isinstance(vm, dict) or not isinstance(providers, list):
+        return False
+
+    vision_config = config.setdefault('vision', {})
+    target_id = str(vision_config.get('provider_id') or '').strip() or 'vision'
+    target = find_provider(providers, target_id)
+    if target is None:
+        target = {
+            'id': target_id,
+            'name': target_id,
+            'api_key': '',
+            'api_url': '',
+            'enabled': True,
+            'models': [],
+        }
+        providers.append(target)
+
+    changed = False
+    if 'api_key' in vm:
+        target['api_key'] = vm.get('api_key', '')
+        changed = True
+    if 'api_url' in vm:
+        target['api_url'] = vm.get('api_url', '')
+        changed = True
+    if 'model' in vm:
+        model_name = str(vm.get('model') or '').strip()
+        if model_name:
+            ensure_selected_model_present(target, model_name)
+            vision_config['provider_id'] = target_id
+            vision_config['model_id'] = model_name
+            changed = True
+    elif not vision_config.get('provider_id'):
+        vision_config['provider_id'] = target_id
+        changed = True
+    return changed
+
+
+def apply_legacy_temperature_to_model(provider, model_id, data):
+    """把旧版 LLM POST 的 temperature 写进当前选中模型条目。"""
+    if not isinstance(provider, dict) or not model_id:
+        return
+    if 'temperature' not in data and 'temperature_enabled' not in data:
+        return
+    ensure_selected_model_present(provider, model_id)
+    for model in provider.setdefault('models', []):
+        if not isinstance(model, dict) or model.get('model_id') != model_id:
+            continue
+        if 'temperature' in data:
+            try:
+                model['temperature'] = float(data.get('temperature'))
+            except (TypeError, ValueError):
+                pass
+        if 'temperature_enabled' in data:
+            model['temperature_enabled'] = bool(data.get('temperature_enabled'))
+        break
+
+
 def ensure_provider_store(config, persist=True):
     """
     完整的「读取 → 迁移 → 清洗 → 持久化」流程（Python 端入口）。
@@ -785,7 +847,9 @@ def handle_llm_config():
             if isinstance(data.get('providers'), list):
                 # 新前端：直接提交完整 providers
                 providers = normalize_providers_data(data['providers'])
-            elif any(k in data for k in ('api_key', 'api_url', 'model')):
+                if not providers and current_providers:
+                    return jsonify({'error': '不能用空通讯录覆盖已有提供商数据'}), 400
+            elif any(k in data for k in ('api_key', 'api_url', 'model', 'temperature', 'temperature_enabled')):
                 # 旧前端三格：写进当前 provider（没有则创建 main），并更新选中 model
                 providers = current_providers
                 llm_sel = config.setdefault('llm', {})
@@ -805,6 +869,8 @@ def handle_llm_config():
                     llm_sel['provider_id'] = target_id
                     if model_name:
                         llm_sel['model_id'] = model_name
+                selected_model_id = str(llm_sel.get('model_id') or '').strip()
+                apply_legacy_temperature_to_model(target, selected_model_id, data)
             else:
                 providers = current_providers
 
@@ -1237,6 +1303,12 @@ def handle_advanced_settings():
         # 旧版前端契约字段（双契约：旧「功能配置」页仍读这些）
         bert_config = config.get('bert', {})
         legacy_vision_model = vision_config.get('vision_model', {}) or {}
+        vision_provider = find_provider(providers, vision_provider_id) or {}
+        vision_model_payload = {
+            'api_key': vision_provider.get('api_key') or legacy_vision_model.get('api_key', ''),
+            'api_url': vision_provider.get('api_url') or legacy_vision_model.get('api_url', ''),
+            'model': vision_model_id or legacy_vision_model.get('model', ''),
+        }
 
         return jsonify({
             # vision_enabled 已移除，不再使用
@@ -1254,11 +1326,7 @@ def handle_advanced_settings():
             'mcp_enabled': mcp_config.get('enabled', True),
             # 旧字段回显：BERT 开关 + 视觉三格（旧前端读写）
             'bert_enabled': bert_config.get('enabled', False),
-            'vision_model': {
-                'api_key': legacy_vision_model.get('api_key', ''),
-                'api_url': legacy_vision_model.get('api_url', ''),
-                'model': legacy_vision_model.get('model', ''),
-            },
+            'vision_model': vision_model_payload,
         })
     elif request.method == 'POST':
         try:
@@ -1308,6 +1376,8 @@ def handle_advanced_settings():
                 config['bert']['enabled'] = data.get('bert_enabled', False)
 
             # 旧字段：视觉三格（旧前端写 vision.vision_model.{api_key,api_url,model}）
+            providers = ensure_provider_store(config, persist=False)
+            providers_changed = False
             if 'vision_model' in data and isinstance(data['vision_model'], dict):
                 vm = data['vision_model']
                 legacy_vm = config['vision'].setdefault('vision_model', {})
@@ -1317,12 +1387,18 @@ def handle_advanced_settings():
                     legacy_vm['api_url'] = vm.get('api_url', '')
                 if 'model' in vm:
                     legacy_vm['model'] = vm.get('model', '')
+                providers_changed = apply_legacy_vision_model_to_providers(config, providers, vm)
 
             # 新字段：视觉模型引用（'provider_id|model_id' 复合值，空字符串表示不使用）
             if 'vision_model_ref' in data:
                 provider_id, model_id = parse_model_ref(data.get('vision_model_ref'))
                 config['vision']['provider_id'] = provider_id
                 config['vision']['model_id'] = model_id
+
+            if providers_changed:
+                apply_selections_and_scrub(config, providers)
+                if not save_provider_store(providers):
+                    return jsonify({'error': '保存提供商数据失败'}), 500
 
             if save_config(config):
                 return jsonify({
@@ -1390,10 +1466,12 @@ def handle_dialog_settings():
             config['tts']['enabled'] = data.get('tts_enabled', True)
             config['asr']['enabled'] = data.get('asr_enabled', True)
             config['asr']['voice_barge_in'] = data.get('voice_barge_in', True)
-            config['asr']['ptt_enabled'] = bool(data.get('ptt_enabled', False))
-            config['asr']['ptt_key'] = normalize_ptt_key(
-                data.get('ptt_key', config['asr'].get('ptt_key', PTT_DEFAULT_KEY))
-            )
+            if 'ptt_enabled' in data:
+                config['asr']['ptt_enabled'] = bool(data.get('ptt_enabled', False))
+            if 'ptt_key' in data:
+                config['asr']['ptt_key'] = normalize_ptt_key(
+                    data.get('ptt_key', config['asr'].get('ptt_key', PTT_DEFAULT_KEY))
+                )
             config['ui']['show_chat_box'] = data.get('show_chat_box', True)
 
             # 对话模型引用（'provider_id|model_id' 复合值）

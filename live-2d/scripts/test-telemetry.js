@@ -94,7 +94,19 @@ ok('pipeline_stage 非法值被丢弃', () => {
     assert.strictEqual(rows[1].pipeline_stage, 'llm');
 });
 
+ok('telemetry.enabled=false 时不写盘', () => {
+    const original = global.live2dRuntime;
+    global.live2dRuntime = { config: { telemetry: { enabled: false } } };
+    try {
+        if (fs.existsSync(TELEMETRY_FILE)) fs.unlinkSync(TELEMETRY_FILE);
+        emitTelemetry({ cat: 'dialogue', type: 'x', title: 'y' });
+        assert.strictEqual(fs.existsSync(TELEMETRY_FILE), false);
+    } finally {
+        global.live2dRuntime = original;
+    }
+});
+
 // 清理测试产物
 try { if (fs.existsSync(TELEMETRY_FILE)) fs.unlinkSync(TELEMETRY_FILE); } catch (_) {}
 
-console.log(`\n${passed}/7 通过`);
+console.log(`\n${passed}/9 通过`);

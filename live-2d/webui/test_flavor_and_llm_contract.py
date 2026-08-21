@@ -31,6 +31,7 @@ class FlavorAndLlmContractTests(unittest.TestCase):
                         'system_prompt': 'hi',
                     },
                     'bert': {'enabled': True},
+                    'asr': {'ptt_enabled': True, 'ptt_key': 'v'},
                     'vision': {
                         'use_vision_model': False,
                         'vision_model': {
@@ -246,6 +247,78 @@ class FlavorAndLlmContractTests(unittest.TestCase):
         resp = self.client.get('/api/logs/runtime')
         self.assertNotEqual(resp.status_code, 404)
         self.assertIn('logs', resp.get_json() or {})
+
+    def test_dialog_post_without_ptt_does_not_disable_it(self):
+        self.assertTrue(json.loads(self.config_path.read_text(encoding='utf-8'))['asr']['ptt_enabled'])
+        resp = self.client.post(
+            '/api/settings/dialog',
+            json={
+                'intro_text': '你好啊',
+                'max_messages': 30,
+                'enable_limit': True,
+                'persistent_history': False,
+                'tts_enabled': True,
+                'asr_enabled': True,
+                'voice_barge_in': True,
+                'show_chat_box': True,
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        saved = json.loads(self.config_path.read_text(encoding='utf-8'))
+        self.assertTrue(saved['asr']['ptt_enabled'])
+        self.assertTrue(self.client.get('/api/settings/dialog').get_json().get('ptt_enabled'))
+
+    def test_llm_old_post_keeps_temperature(self):
+        self.client.get('/api/config/llm')
+        resp = self.client.post(
+            '/api/config/llm',
+            json={
+                'api_key': 'sk-temp',
+                'api_url': 'https://temp.example/v1',
+                'model': 'temp-model',
+                'temperature': 0.5,
+                'temperature_enabled': True,
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = self.client.get('/api/config/llm').get_json()
+        self.assertEqual(data.get('temperature'), 0.5)
+        self.assertTrue(data.get('temperature_enabled'))
+
+    def test_empty_providers_cannot_wipe_existing_store(self):
+        self.client.get('/api/config/llm')
+        before = self.provider_path.read_text(encoding='utf-8')
+        resp = self.client.post('/api/config/llm', json={'providers': []})
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(self.provider_path.read_text(encoding='utf-8'), before)
+        again = self.client.get('/api/config/llm').get_json()
+        self.assertGreaterEqual(len(again.get('providers') or []), 1)
+
+    def test_advanced_vision_model_syncs_into_provider_store(self):
+        self.client.get('/api/settings/advanced')
+        resp = self.client.post(
+            '/api/settings/advanced',
+            json={
+                'vision_model': {
+                    'api_key': 'vis-synced',
+                    'api_url': 'https://vision-sync.example/v1',
+                    'model': 'vl-synced',
+                },
+                'use_vision_model': True,
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        again = self.client.get('/api/settings/advanced').get_json()
+        vision = again.get('vision_model') or {}
+        self.assertEqual(vision.get('api_key'), 'vis-synced')
+        self.assertEqual(vision.get('model'), 'vl-synced')
+        store = json.loads(self.provider_path.read_text(encoding='utf-8'))
+        self.assertTrue(
+            any(
+                p.get('api_key') == 'vis-synced'
+                for p in (store.get('providers') or [])
+            )
+        )
 
 
 if __name__ == '__main__':

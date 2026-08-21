@@ -180,12 +180,13 @@ class PluginContext {
             ...requestOptions,
             model
         };
-        // 模型级参数合并：仅在调用方未显式提供时，用 provider 解析出的模型参数
-        if (
-            !Object.prototype.hasOwnProperty.call(requestOptions, 'temperature') &&
-            resolvedProvider && resolvedProvider.temperature_enabled === true
-        ) {
-            requestBody.temperature = resolvedProvider.temperature ?? 1.0;
+        // 无显式 temperature 时保持旧默认 1.0；若当前模型开启了模型级温度则用模型值。
+        if (!Object.prototype.hasOwnProperty.call(requestOptions, 'temperature')) {
+            if (resolvedProvider && resolvedProvider.temperature_enabled === true) {
+                requestBody.temperature = resolvedProvider.temperature ?? 1.0;
+            } else {
+                requestBody.temperature = 1.0;
+            }
         }
         if (
             !Object.prototype.hasOwnProperty.call(requestOptions, 'reasoning_effort') &&
@@ -208,19 +209,23 @@ class PluginContext {
             ? apiUrl.replace(/\/+$/, '')
             : `${apiUrl.replace(/\/+$/, '')}/chat/completions`;
 
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify(requestBody),
-            signal: requestSignal
-        });
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(requestBody),
+                signal: requestSignal
+            });
 
-        if (!response.ok) throw new Error(`LLM API error: ${response.status}`);
-        const data = await response.json();
-        return data.choices[0].message.content;
+            if (!response.ok) throw new Error(`LLM API error: ${response.status}`);
+            const data = await response.json();
+            return data.choices[0].message.content;
+        } finally {
+            if (deadline) deadline.cleanup();
+        }
     }
 
     // ===== 事件 =====

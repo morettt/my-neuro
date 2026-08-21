@@ -337,7 +337,11 @@ function applySelectionsAndScrub(config, providers, selections) {
     }
 
     // ---- 清洗 config.vision.vision_model ----
-    if (visionConfig.vision_model && Object.keys(visionConfig.vision_model).length > 0) {
+    // 只在视觉凭据已经迁进通讯录之后才清空，避免只有 model、或 key/url 为空时把配置抹掉。
+    const visionMigrated = Boolean(
+        visionConfig.provider_id && findProvider(providers, visionConfig.provider_id)
+    );
+    if (visionMigrated && visionConfig.vision_model && Object.keys(visionConfig.vision_model).length > 0) {
         visionConfig.vision_model = {};
         configChanged = true;
     }
@@ -405,10 +409,12 @@ function saveProviders(baseDir, providers) {
 /**
  * 完整的「加载 → 迁移 → 清洗 → 持久化」流程。
  * @param {string} baseDir - llm_providers.json 所在目录（即 live-2d 根目录）
- * @param {string|null} configPath - config.json 路径；为 null 时不写回 config
+ * @param {string|null} configPath - config.json 路径；首次迁移时据此备份
  * @param {object} config - 已解析的 config 对象（会被原地修改：清洗旧字段 + 注入 llm_providers）
+ * @param {{ writeBack?: boolean }} [options] - writeBack 默认 true；false 时不把清洗结果写回 config.json
  */
-function persistProviderStore(baseDir, configPath, config) {
+function persistProviderStore(baseDir, configPath, config, options = {}) {
+    const writeBack = options.writeBack !== false;
     const result = ensureProviderStore(baseDir, config);
 
     // 首次迁移前备份 config.json（仅一次）
@@ -432,7 +438,7 @@ function persistProviderStore(baseDir, configPath, config) {
         }
     }
 
-    if (configPath && result.configChanged) {
+    if (writeBack && configPath && result.configChanged) {
         try {
             const persistable = clone(config);
             delete persistable.llm_providers;

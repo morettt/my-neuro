@@ -528,7 +528,7 @@ ipcMain.handle('save-config', async (event, configData) => {
         let preparedConfig = configData;
         try {
             preparedConfig = JSON.parse(JSON.stringify(configData));
-            persistProviderStore(configBaseDir, null, preparedConfig);
+            persistProviderStore(configBaseDir, configPath, preparedConfig, { writeBack: false });
             delete preparedConfig.llm_providers;
         } catch (providerError) {
             console.warn('通讯录处理失败（按原样保存 config）:', providerError.message);
