@@ -68,7 +68,9 @@ function download(url, destination) {
 }
 
 async function install(components) {
-  const installDir = app.isPackaged ? path.dirname(process.execPath) : path.resolve(__dirname, '..');
+  const installDir = app.isPackaged
+    ? path.resolve(process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath))
+    : path.resolve(__dirname, '..');
   const envDir = path.join(installDir, 'env');
   const envPython = path.join(envDir, 'python.exe');
   const archive = path.join(installDir, 'my-neuro-env.tar.gz');
