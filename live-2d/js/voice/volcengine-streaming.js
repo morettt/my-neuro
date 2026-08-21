@@ -8,6 +8,7 @@ const { randomUUID } = require('crypto');
 const WebSocket = require('ws');
 const { eventBus } = require('../core/event-bus.js');
 const { Events } = require('../core/events.js');
+const { shouldUseLegacyEmotionLogic } = require('../avatar/motion-mode.js');
 const {
     EventType, MsgType,
     receiveMessage, waitForEvent,
@@ -27,6 +28,7 @@ class VolcengineStreamingSession {
         this.onComplete      = onComplete;
         this.emotionMapper   = emotionMapper;
         this.expressionMapper = expressionMapper;
+        this.useLegacyEmotionLogic = shouldUseLegacyEmotionLogic(config);
 
         const volcCfg = config.cloud?.volcengine_tts || {};
         this.appid       = volcCfg.appid || '';
@@ -161,11 +163,15 @@ class VolcengineStreamingSession {
             const c = char;
             const delay = 1000 + this._subtitleCharIdx * 210;
             this._subtitleCharIdx++;
+            const progressChars = this._subtitleCharIdx;
             this._subtitleFull += c;
             setTimeout(() => {
                 if (this.stopped) return;
                 this._subtitleAccum += c;
                 this._showSubtitle(this._subtitleAccum);
+                try {
+                    global.paramDirector?.noteSpeechProgress?.(progressChars);
+                } catch (_) {}
             }, delay);
             await taskRequest(
                 this.ws,
@@ -191,6 +197,7 @@ class VolcengineStreamingSession {
     }
 
     _triggerEmotionMarkersDelayed(raw) {
+        if (!this.useLegacyEmotionLogic) return;
         // 按情绪标签在文本中的位置计算延迟，和对应字幕字符同步触发
         const parts = raw.split(/(<[^\s<>]+>)/);
         let cleanCharsBefore = 0;
@@ -336,6 +343,9 @@ class VolcengineStreamingSession {
 
         // 确保字幕完整显示（用全量文本，不受 stopped 影响）
         if (this._subtitleFull) this._showSubtitle(this._subtitleFull);
+        try {
+            global.paramDirector?.noteSpeechProgress?.(this._subtitleFull.length);
+        } catch (_) {}
 
         try {
             finishConnection(this.ws).catch(() => {});

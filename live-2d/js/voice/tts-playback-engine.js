@@ -3,6 +3,7 @@
 
 const { eventBus } = require('../core/event-bus.js');
 const { Events } = require('../core/events.js');
+const { shouldUseLegacyEmotionLogic } = require('../avatar/motion-mode.js');
 
 class TTSPlaybackEngine {
     constructor(config, onAudioDataCallback, onStartCallback, onEndCallback) {
@@ -114,6 +115,7 @@ class TTSPlaybackEngine {
             
             const segmentLength = processedText.length;
             let charDisplayIndex = 0;
+            const useLegacyEmotionLogic = shouldUseLegacyEmotionLogic(this.config);
             // let textAnimInterval = null;
             
             // 🔥 文本动画函数
@@ -132,9 +134,18 @@ class TTSPlaybackEngine {
                     if (currentTime - lastUpdateTime >= charInterval) {
                         if (charDisplayIndex < segmentLength) {
                             charDisplayIndex++;
+
+                            // AI 编舞关键帧按字幕/TTS 字符进度触发。
+                            if (global.paramDirector) {
+                                try {
+                                    global.paramDirector.noteSpeechProgress(
+                                        this.displayedText.length + charDisplayIndex
+                                    );
+                                } catch (_) {}
+                            }
                             
                             // 触发情绪动作
-                            if (this.emotionMapper && emotionMarkers.length > 0) {
+                            if (useLegacyEmotionLogic && this.emotionMapper && emotionMarkers.length > 0) {
                                 this.emotionMapper.triggerEmotionByTextPosition(
                                     charDisplayIndex, segmentLength, emotionMarkers
                                 );
@@ -142,7 +153,7 @@ class TTSPlaybackEngine {
                             
                             
                             // 触发表情
-                            if (this.expressionMapper) {
+                            if (useLegacyEmotionLogic && this.expressionMapper) {
                                 // 方法1: 直接通过情绪标签触发表情
                                 if (this.expressionMapper.triggerExpressionByEmotion) {
                                     // 检查当前位置是否有情绪标记
@@ -298,7 +309,7 @@ class TTSPlaybackEngine {
                 
     
                 // 触发剩余情绪
-                if (this.emotionMapper && emotionMarkers.length > 0) {
+                if (useLegacyEmotionLogic && this.emotionMapper && emotionMarkers.length > 0) {
                     emotionMarkers.forEach(m => {
                         this.emotionMapper.playConfiguredEmotion(m.emotion);
                         
@@ -309,6 +320,14 @@ class TTSPlaybackEngine {
                             }, 100);
                         }
                     });
+                }
+
+                if (global.paramDirector) {
+                    try {
+                        global.paramDirector.noteSpeechProgress(
+                            this.displayedText.length + segmentLength
+                        );
+                    } catch (_) {}
                 }
                 
                 // 更新显示文本
