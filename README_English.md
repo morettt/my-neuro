@@ -17,7 +17,10 @@
   <a href="./README_English.md">English</a> | <a href="./README.md">中文</a>
 </p>
 
-## Deployment guide: [Official Website](http://mynewbot.com/tutorials)
+## WebUI docs (control panel): run `打开教程网页.bat` at the repo root, or `npm run docs:dev` in `docs/`
+For the browser UI opened by `live-2d/启动 WebUI 控制面板.bat`.
+
+## Older website tutorials (`肥牛.exe` / legacy UI): [Official Website](http://mynewbot.com/tutorials)
 
 ---
 
@@ -27,8 +30,8 @@ This project was inspired by Neuro-sama, hence the name "my-neuro" (community-su
 
 If you want to run everything locally using a local large language model (LLM) for inference or fine-tuning — without relying on any third-party API — head to the `LLM-studio` folder for local model inference and fine-tuning guides.
 
-### For closed-source AI models, we recommend [DMXAPI](https://www.dmxapi.cn)
-### Supports unified access to most mainstream AI models on the market.
+### For closed-source AI models, we recommend [RabbitAPI](https://rabbitapi.online/) (a VPN is required)
+### One API key for multiple OpenAI-compatible models; paste it into the WebUI.
 
 <img src="./image/dmx1.png" width="300" />
 

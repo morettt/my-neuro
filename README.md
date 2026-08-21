@@ -19,7 +19,12 @@
 
 
 
-## 本项目部署流程请看官网：[点我进官网](http://mynewbot.com/tutorials)
+## WebUI 教程（控制中心）：双击仓库根目录 `打开教程网页.bat`，或在 `docs/` 下执行 `npm run docs:dev`
+适用：用 `live-2d/启动 WebUI 控制面板.bat` 打开的浏览器界面。
+
+## 官网旧教程（肥牛.exe / 旧界面）：[点我进官网](http://mynewbot.com/tutorials)
+官网教程会继续保留，不和 WebUI 新站混用。
+
 ## 肥牛部署新人整合包（文件路径不能有中文空格括号等字符）：[点我下载](https://pan.baidu.com/s/1kohirTKi_0NGmjL9O5LeNQ?pwd=6666)
 针对新手小白特化的一键解压包，解压即用，记得阅读整合包内的教程
 
@@ -31,8 +36,8 @@ my-neuro的目标是打造专属个人的 AI 角色,打造出逼近真人的AI�
 
 如果你想用全部都用本地推理，使用本地的大语言模型（LLM）推理或者微调。不基于第三方的API的话，那可以进入LLM-studio文件夹，里面有本地模型的推理、微调指导。
 
-### 如果想用闭源AI模型，推荐使用 [DMXAPI](https://www.dmxapi.cn)
-### 支持市面上大部分主流AI模型的统一调用。
+### 如果想用闭源AI模型，推荐使用 [RabbitAPI](https://rabbitapi.online/)（需要梯子）
+### 一个 Key 调用多家 OpenAI 兼容模型，WebUI 里直接填即可。
 
 <img src="./image/dmx1.png" width="300" />
 
