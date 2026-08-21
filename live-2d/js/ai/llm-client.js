@@ -7,12 +7,30 @@ const { sanitizeToolMessageSequence } = require('./tool-message-utils.js');
  * 封装所有LLM API调用逻辑,消除重复代码
  */
 class LLMClient {
+    /**
+     * 支持两种入参：
+     *   1. new LLMClient(config)                     - 旧方式，读取 config.llm
+     *   2. LLMClient.fromProviderConfig(resolved, r) - 新方式，传入 provider 解析结果（平铺对象）
+     */
     constructor(config) {
-        this.apiKey = config.llm.api_key;
-        this.apiUrl = config.llm.api_url;
-        this.model = config.llm.model;
-        this.temperature = config.llm.temperature || 1.0;  // 🔥 读取temperature配置，默认1.0
-        this.temperatureEnabled = config.llm.temperature_enabled ?? false;
+        // 兼容：完整 config（取 config.llm）或已解析的 provider 平铺对象（直接取字段）
+        const llmConfig = (config && config.llm) ? config.llm : (config || {});
+        this.apiKey = llmConfig.api_key;
+        this.apiUrl = llmConfig.api_url;
+        this.model = llmConfig.model;
+        this.providerId = llmConfig.id || llmConfig.provider_id || '';
+        this.temperature = llmConfig.temperature || 1.0;
+        this.temperatureEnabled = llmConfig.temperature_enabled ?? false;
+    }
+
+    /**
+     * 从 provider 解析结果创建客户端。
+     * @param {object} resolved - llmProviderManager.resolveProvider 系列方法的返回值
+     * @param {object} [retryConfig] - 全局重试配置（config.llm.retry）
+     * @returns {LLMClient}
+     */
+    static fromProviderConfig(resolved, retryConfig) {
+        return new LLMClient({ ...resolved, retry: retryConfig || resolved.retry || {} });
     }
 
     /**

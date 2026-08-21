@@ -24,10 +24,21 @@ class VoiceChatFacade {
         this.showSubtitle = showSubtitle;
         this.hideSubtitle = hideSubtitle;
 
-        // LLM配置（暴露给外部使用）
-        this.API_KEY = config.llm.api_key;
-        this.API_URL = config.llm.api_url;
-        this.MODEL = config.llm.model;
+        // LLM配置（暴露给外部使用）：优先走通讯录解析，回退旧三格
+        const resolvedLlm = (function () {
+            try {
+                const { llmProviderManager } = require('../../core/llm-provider.js');
+                return llmProviderManager.resolveProviderOrFallback(
+                    (config.llm && config.llm.provider_id) || null,
+                    (config.llm && config.llm.model_id) || null
+                );
+            } catch (e) {
+                return null;
+            }
+        })();
+        this.API_KEY = (resolvedLlm && resolvedLlm.api_key) || config.llm.api_key;
+        this.API_URL = (resolvedLlm && resolvedLlm.api_url) || config.llm.api_url;
+        this.MODEL = (resolvedLlm && resolvedLlm.model) || config.llm.model;
 
         // ASR相关属性（暴露给外部使用）
         // ASR启用：本地ASR或百度流式ASR任一启用即可

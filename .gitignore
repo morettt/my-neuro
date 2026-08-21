@@ -69,3 +69,8 @@ live-2d/plugins/community/agent-dream/dream_state.json
 
 # Avatar runtime preferences generated on the local machine
 live-2d/model-preferences.json
+
+# LLM 通讯录（含密钥，绝不入库）
+live-2d/llm_providers.json
+live-2d/.runtime/
+live-2d/config.json.pre-provider.bak

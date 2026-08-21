@@ -5,6 +5,7 @@ const { Events } = require('../core/events.js');
 const { appState } = require('../core/app-state.js');
 const { LLMClient } = require('./llm-client.js');
 const { toolExecutor } = require('./tool-executor.js');
+const { llmProviderManager } = require('../core/llm-provider.js');
 
 /**
  * 过滤模型思考内容，与 LLMClient._filterThinkingContent 保持一致
@@ -23,22 +24,66 @@ function filterThinkingContent(text) {
 class LLMHandler {
     // 创建增强的sendToLLM方法
     static createEnhancedSendToLLM(voiceChat, ttsProcessor, asrEnabled, config) {
-        // 创建LLM客户端实例
-        const llmClient = new LLMClient(config);
+        const retryCfg = (config.llm && config.llm.retry) || {};
+
+        // 创建LLM客户端实例：优先走 provider 注册表（通讯录），旧式 config.llm 三格仅作回退
+        const resolvedLlmProvider = llmProviderManager.resolveProviderOrFallback(
+            (config.llm && config.llm.provider_id) || null,
+            (config.llm && config.llm.model_id) || null
+        );
+        const llmClient = resolvedLlmProvider
+            ? LLMClient.fromProviderConfig(resolvedLlmProvider, retryCfg)
+            : new LLMClient(config);
+        if (resolvedLlmProvider) {
+            logToTerminal('info', `✅ 对话模型: ${resolvedLlmProvider.model}（提供商: ${resolvedLlmProvider.name || resolvedLlmProvider.id}）`);
+        }
+
+        // 保底模型：主模型失败/空回复时再试一次；与主模型相同则跳过
+        const fallbackProviderId = retryCfg.fallback_provider_id || (retryCfg.fallback && retryCfg.fallback.provider_id) || null;
+        const fallbackModelId = retryCfg.fallback_model_id || (retryCfg.fallback && retryCfg.fallback.model_id) || null;
+        let fallbackClient = null;
+        if (fallbackProviderId || fallbackModelId) {
+            const resolvedFallbackProvider = llmProviderManager.resolveProviderOrFallback(
+                fallbackProviderId || (config.llm && config.llm.provider_id) || null,
+                fallbackModelId || null
+            );
+            const sameAsPrimary = resolvedFallbackProvider && resolvedLlmProvider &&
+                resolvedFallbackProvider.api_url === resolvedLlmProvider.api_url &&
+                resolvedFallbackProvider.model === resolvedLlmProvider.model;
+            if (resolvedFallbackProvider && !sameAsPrimary) {
+                fallbackClient = LLMClient.fromProviderConfig(resolvedFallbackProvider, retryCfg);
+                logToTerminal('info', `✅ 保底模型: ${resolvedFallbackProvider.model}（提供商: ${resolvedFallbackProvider.name || resolvedFallbackProvider.id}）`);
+            } else if (sameAsPrimary) {
+                logToTerminal('warn', '⚠️ 保底模型与主模型相同，已跳过保底模型配置');
+            }
+        }
+        // 暴露给返回的闭包使用（主模型完全失败时的最后一道兜底）
+        const getFallbackClient = () => fallbackClient;
 
         // 创建视觉模型客户端（如果启用）
         let visionClient = null;
-        if (config.vision && config.vision.use_vision_model && config.vision.vision_model) {
-            const visionConfig = {
-                llm: {
-                    api_key: config.vision.vision_model.api_key,
-                    api_url: config.vision.vision_model.api_url,
-                    model: config.vision.vision_model.model
-                }
-            };
-            visionClient = new LLMClient(visionConfig);
-            console.log('✅ 视觉模型已启用:', config.vision.vision_model.model);
-            logToTerminal('info', `✅ 视觉模型已启用: ${config.vision.vision_model.model}`);
+        if (config.vision && config.vision.use_vision_model) {
+            // 优先走通讯录：vision.provider_id + vision.model_id
+            const resolvedVisionProvider = config.vision.provider_id
+                ? llmProviderManager.resolveProviderOrFallback(config.vision.provider_id, config.vision.model_id || null)
+                : null;
+            if (resolvedVisionProvider) {
+                visionClient = LLMClient.fromProviderConfig(resolvedVisionProvider, retryCfg);
+                console.log('✅ 视觉模型已启用:', resolvedVisionProvider.model);
+                logToTerminal('info', `✅ 视觉模型已启用: ${resolvedVisionProvider.model}（提供商: ${resolvedVisionProvider.name || resolvedVisionProvider.id}）`);
+            } else if (config.vision.vision_model) {
+                // 回退：旧式 vision.vision_model 三格
+                const visionConfig = {
+                    llm: {
+                        api_key: config.vision.vision_model.api_key,
+                        api_url: config.vision.vision_model.api_url,
+                        model: config.vision.vision_model.model
+                    }
+                };
+                visionClient = new LLMClient(visionConfig);
+                console.log('✅ 视觉模型已启用:', config.vision.vision_model.model);
+                logToTerminal('info', `✅ 视觉模型已启用: ${config.vision.vision_model.model}`);
+            }
         }
 
         // 辅助函数：清理消息中的所有图片内容
@@ -802,6 +847,24 @@ class LLMHandler {
                     logToTerminal('error', `LLM处理错误: ${error.message}`);
                     if (error.stack) {
                         logToTerminal('error', `错误堆栈: ${error.stack}`);
+                    }
+
+                    // 保底模型最后兜底：主模型彻底失败且配置了不同的保底模型时，用保底再试一次
+                    const fbClient = typeof getFallbackClient === 'function' ? getFallbackClient() : null;
+                    if (fbClient) {
+                        try {
+                            logToTerminal('info', '⚠️ 主模型失败，尝试保底模型');
+                            const fbResult = await fbClient.chatCompletion(voiceChat.messages, [], false);
+                            const fbText = fbResult && fbResult.content;
+                            if (fbText) {
+                                voiceChat.showSubtitle(fbText, 3000);
+                                if (voiceChat.asrProcessor && asrEnabled) voiceChat.asrProcessor.resumeRecording();
+                                setTimeout(() => voiceChat.hideSubtitle(), 3000);
+                                break;
+                            }
+                        } catch (fbError) {
+                            logToTerminal('error', `保底模型也失败: ${fbError.message}`);
+                        }
                     }
 
                     let errorMessage = "抱歉，出现了一个错误";

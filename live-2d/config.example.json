@@ -1,0 +1,302 @@
+{
+  "api_gateway": {
+    "use_gateway": false,
+    "base_url": "http://ominifn.natapp1.cc/api/v1",
+    "api_key": ""
+  },
+  "llm": {
+    "api_key": "",
+    "api_url": "",
+    "system_prompt": "",
+    "provider_id": "",
+    "model_id": "",
+    "retry": {
+      "empty_max_per_phase": 1,
+      "empty_phases_vision": 1,
+      "empty_phases_default": 1,
+      "concurrent_retry_enabled": true,
+      "concurrent_after_sequential_fails": 1,
+      "concurrent_start_size": 4,
+      "concurrent_max_size": 4,
+      "concurrent_batch_timeout_ms": 30000,
+      "fallback_provider_id": "",
+      "fallback_model_id": ""
+    }
+  },
+  "tts": {
+    "enabled": true,
+    "url": "http://127.0.0.1:5000",
+    "language": "zh"
+  },
+  "asr": {
+    "enabled": true,
+    "vad_url": "ws://127.0.0.1:1000/v1/ws/vad",
+    "asr_url": "http://127.0.0.1:1000/v1/upload_audio",
+    "voice_barge_in": false,
+    "merge_window_ms": 1000,
+    "ptt_enabled": false,
+    "ptt_key": "v"
+  },
+  "chat_merge": {
+    "enabled": true,
+    "silence_window_ms": 500,
+    "separator": "\n"
+  },
+  "bert": {
+    "enabled": false,
+    "url": "http://127.0.0.1:6007/classify"
+  },
+  "rag": {
+    "enabled": true,
+    "url": "http://127.0.0.1:8002/ask"
+  },
+  "vision": {
+    "enabled": false,
+    "auto_screenshot": true,
+    "screenshot_max_long_edge": 1280,
+    "screenshot_jpeg_quality": 70,
+    "use_vision_model": false,
+    "vision_model": {},
+    "provider_id": "",
+    "model_id": ""
+  },
+  "motion_director": {
+    "enabled": true,
+    "provider_id": "",
+    "model_id": "",
+    "stream": true,
+    "wait_before_tts": true,
+    "body": {
+      "provider_id": null,
+      "model_id": null,
+      "min_keyframes": 7,
+      "max_keyframes": 10
+    },
+    "face": {
+      "provider_id": null,
+      "model_id": null,
+      "min_keyframes": 7,
+      "max_keyframes": 10
+    },
+    "vad": {
+      "enabled": true,
+      "baseline": {
+        "valence": 0.1,
+        "arousal": 0,
+        "dominance": 0.05
+      },
+      "reactivity": 1,
+      "decay_rate": 0.018,
+      "hold_seconds": 18,
+      "ambient_drift_strength": 0.034,
+      "sway_modulation": 0.35
+    },
+    "face_micro": {
+      "enabled": true,
+      "intensity": 1
+    },
+    "directives": {
+      "enabled": true
+    },
+    "timeout_ms": 30000,
+    "disable_thinking": true,
+    "max_tokens": 2800,
+    "temperature": 0.25,
+    "max_keyframes": 9,
+    "min_keyframes": 8,
+    "fallback_enabled": true,
+    "fallback_keyframes": 9,
+    "joint_boost": 1.35,
+    "head_boost": 1.1,
+    "body_follow_boost": 1.05,
+    "max_amplitude_test": {
+      "enabled": true,
+      "face": true,
+      "body": true,
+      "face_event_hold_ms": 820,
+      "face_event_release_ms": 1900,
+      "face_sustain_hold_ms": 640,
+      "face_sustain_release_ms": 1600,
+      "body_multiplier": 2.35,
+      "body_y_multiplier": 2.2,
+      "body_head_limit": 12,
+      "body_y_limit": 24,
+      "body_follow_limit": 8,
+      "face_squint_max": 1
+    },
+    "classifier": {
+      "enabled": true,
+      "provider_id": "",
+      "model": ""
+    },
+    "style": "lively"
+  },
+  "avatar_drop": {
+    "enabled": true
+  },
+  "expression_solver": {
+    "enabled": true,
+    "transition_ms": 600,
+    "neutral_ms": 600,
+    "min_hold_ms": 2000,
+    "randomness": 0.5,
+    "diversity": 0.6,
+    "history_avoidance": 0.7,
+    "max_units": 5,
+    "typicality_floor": 0.3,
+    "typicality_power": 0.5
+  },
+  "cloud": {
+    "provider": "",
+    "api_key": "",
+    "volcengine_tts": {
+      "enabled": false,
+      "appid": "",
+      "access_token": "",
+      "voice_type": "zh_female_tianmeixiaoyuan_uranus_bigtts",
+      "resource_id": "seed-tts-2.0"
+    },
+    "aliyun_tts": {
+      "enabled": false,
+      "api_key": "",
+      "model": "cosyvoice-v3.5-plus",
+      "voice": "cosyvoice-v3.5-plus-feiniu-422586879961438295e57043caf239bc",
+      "sample_rate": 48000,
+      "volume": 50,
+      "rate": 1,
+      "pitch": 1,
+      "workspace_id": ""
+    },
+    "tts": {
+      "enabled": false,
+      "url": "https://api.siliconflow.cn/v1/audio/speech",
+      "model": "FunAudioLLM/CosyVoice2-0.5B",
+      "voice": "speech:fake-neuro:j3qz9ij4k2:kquiiycgizgaoxeujypx",
+      "response_format": "wav",
+      "speed": 1
+    },
+    "baidu_asr": {
+      "enabled": false,
+      "url": "ws://vop.baidu.com/realtime_asr",
+      "appid": "",
+      "appkey": "",
+      "dev_pid": 15372
+    }
+  },
+  "game": {
+    "Minecraft": {
+      "enabled": false,
+      "server_url": "http://localhost:8080",
+      "agent_name": "fake-neuro"
+    }
+  },
+  "ui": {
+    "webui_flavor": "new",
+    "intro_text": "????? fake neuro?",
+    "model_type": "live2d",
+    "vrm_model": "",
+    "vrm_model_path": "",
+    "model_scale": 1,
+    "focus_factor": 0.3,
+    "hide_from_screenshot": true,
+    "show_chat_box": false,
+    "show_model": true,
+    "disable_hardware_acceleration": false,
+    "text_only_mode": false,
+    "auto_show_chat_on_text_mode": true,
+    "model_position": {
+      "x": null,
+      "y": null,
+      "x_dual": null,
+      "y_dual": null,
+      "remember_position": true
+    },
+    "screen_extend": {
+      "extend": false,
+      "left": false,
+      "right": true
+    },
+    "live2d_model": "",
+    "live2d_gaze_tracking": false,
+    "avatar_motion_mode": "legacy",
+    "expression_engine": "au",
+    "head_pat": {
+      "enabled": true,
+      "start_distance": 24,
+      "settle_ms": 1000,
+      "head_region": {
+        "auto_detect": true,
+        "max_height_ratio": 0.45,
+        "refresh_ms": 3000,
+        "fallback": {
+          "x": 0.25,
+          "y": 0,
+          "w": 0.5,
+          "h": 0.35
+        },
+        "overrides": {},
+        "debug_overlay": false
+      },
+      "head_follow": {
+        "enabled": true,
+        "angle_x": 12,
+        "tilt_z": 8,
+        "duck_y": 6,
+        "body_x": 3,
+        "cheek": 1,
+        "smooth_ms": 120,
+        "release_ms": 1200
+      },
+      "cursor": true
+    },
+    "body_motion": {
+      "intensity": "normal",
+      "idle_enabled": true,
+      "sway_enabled": true,
+      "director_audio_sway_enabled": false,
+      "director_idle_during_speech": false,
+      "idle_amplitude": 0.85,
+      "sway_amplitude": 1.1,
+      "sway_frequency": 0.26
+    }
+  },
+  "scene_routing": {
+    "enabled": true,
+    "game_enabled": true,
+    "watch_enabled": true
+  },
+  "context": {
+    "enable_limit": false,
+    "max_messages": 18,
+    "persistent_history": true,
+    "history_file": "AI记录室/对话历史.json",
+    "compress_proactive_prompts": true,
+    "proactive_prompt_placeholder": "【主动对话】",
+    "autonomous_action_placeholder": "【自主行动】",
+    "min_length_to_compress": 100
+  },
+  "vmc": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 39539
+  },
+  "mcp": {
+    "enabled": false,
+    "config_path": "./mcp/mcp_config.json",
+    "startup_timeout": 30000,
+    "auto_start_servers": true
+  },
+  "subtitle_labels": {
+    "enabled": true,
+    "user": "主人",
+    "ai": "肥牛"
+  },
+  "auto_close_services": {
+    "enabled": false
+  },
+  "version": "v6.5.4",
+  "tools": {
+    "enabled": false,
+    "auto_reload": false
+  }
+}
