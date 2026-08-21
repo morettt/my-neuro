@@ -63,8 +63,12 @@ async function main() {
         path.join(__dirname, '..', 'js', 'ai', 'motion-director.js'),
         'utf8'
     );
-    assert.ok(!source.includes('llmProviderManager'));
-    assert.ok(!source.includes('provider_id'));
+    // Choreography reuses the main dialogue connection. Reading a provider or
+    // model selection out of the motion_director block would let it drift onto a
+    // second provider, so the selection may only ever come from config.llm.
+    assert.ok(!source.includes('cfg.provider_id'));
+    assert.ok(!source.includes('cfg.model_id'));
+    assert.ok(!source.includes("motion_director?.provider_id"));
     assert.ok(!source.includes('/embeddings'));
 
     const config = {
@@ -81,6 +85,8 @@ async function main() {
             api_url: 'https://wrong.example/v1',
             api_key: 'wrong-secret',
             model: 'wrong-model',
+            provider_id: 'wrong-provider',
+            model_id: 'wrong-model-id',
             body: { enabled: true },
             face: { enabled: true }
         }
@@ -129,6 +135,7 @@ async function main() {
             assert.strictEqual(request.body.model, 'main-dialogue-model');
             assert.ok(!JSON.stringify(request.body).includes('wrong-secret'));
             assert.ok(!JSON.stringify(request.body).includes('wrong-model'));
+            assert.ok(!JSON.stringify(request.body).includes('wrong-provider'));
         }
     } finally {
         director.cancel();

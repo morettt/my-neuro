@@ -13,6 +13,7 @@ const {
 const {
     shouldRunMotionChoreography
 } = require('../js/ai/llm-handler.js');
+const { llmProviderManager } = require('../js/core/llm-provider.js');
 
 function responseJson(payload, status = 200) {
     return {
@@ -374,6 +375,62 @@ async function testLegacyModeSkipsApi() {
     }
 }
 
+// 通讯录接管后 config.llm 三格会被清空，编舞必须能从 provider_id / model_id 解析出连接。
+function testDialogueApiFromProviderStore() {
+    const providerConfig = {
+        llm: {
+            api_key: '',
+            api_url: '',
+            provider_id: 'main',
+            model_id: 'store-model'
+        },
+        llm_providers: [{
+            id: 'main',
+            name: 'main',
+            api_key: 'store-key',
+            api_url: 'https://store.example/v1/',
+            enabled: true,
+            models: [{ model_id: 'store-model', name: 'store-model', enabled: true }]
+        }]
+    };
+
+    const wasInitialized = llmProviderManager.isInitialized();
+    try {
+        llmProviderManager.init(providerConfig);
+        assert.deepStrictEqual(
+            resolveDialogueApi(providerConfig),
+            {
+                api_url: 'https://store.example/v1',
+                api_key: 'store-key',
+                model: 'store-model'
+            },
+            '三格被清空后应从通讯录解析出编舞用的连接配置'
+        );
+
+        // 通讯录里没有可用条目时仍要回落到旧三格
+        llmProviderManager.init({ llm: {}, llm_providers: [] });
+        assert.deepStrictEqual(
+            resolveDialogueApi({
+                llm: {
+                    api_url: 'https://legacy.example/v1',
+                    api_key: 'legacy-key',
+                    model: 'legacy-model'
+                }
+            }),
+            {
+                api_url: 'https://legacy.example/v1',
+                api_key: 'legacy-key',
+                model: 'legacy-model'
+            },
+            '通讯录为空时应回落到旧三格'
+        );
+    } finally {
+        if (!wasInitialized) {
+            llmProviderManager._initialized = false;
+        }
+    }
+}
+
 async function main() {
     const previousParamDirector = global.paramDirector;
     global.paramDirector = { cancel() {} };
@@ -462,6 +519,7 @@ async function main() {
         }
     );
     assert.strictEqual(resolveDialogueApi({ llm: {} }), null);
+    testDialogueApiFromProviderStore();
     testDirectiveParsing();
     await testFallbackAndMainApiReuse();
     await testStreamingAndFallback();

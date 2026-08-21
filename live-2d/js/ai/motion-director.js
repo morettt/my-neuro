@@ -13,6 +13,7 @@ const {
 const facsMapper = require('../avatar/live2d/facs-mapper.js');
 const emotionArchetypes = require('../avatar/live2d/emotion-archetypes.js');
 const { vadState } = require('../avatar/live2d/vad-state.js');
+const { llmProviderManager } = require('../core/llm-provider.js');
 const motionDirectives = require('./motion-directives.js');
 
 const APP_ROOT = path.join(__dirname, '..', '..');
@@ -175,13 +176,38 @@ function stripTags(text) {
     return { purifiedText, tags };
 }
 
+function normalizeDialogueApi(apiUrl, apiKey, model) {
+    const url = String(apiUrl || '').trim().replace(/\/+$/, '');
+    const key = String(apiKey || '').trim();
+    const name = String(model || '').trim();
+    if (!url || !key || !name) return null;
+    return { api_url: url, api_key: key, model: name };
+}
+
+// 编舞复用主对话的连接配置。通讯录接管后 config.llm 的三格会被清空，
+// 所以优先按 provider_id / model_id 解析；未初始化时才回落到旧三格。
+// isInitialized 门闩不能省：未初始化时 resolveProvider 会走失败分支并打日志刷屏。
 function resolveDialogueApi(config) {
     const llm = config?.llm || {};
-    const apiUrl = String(llm.api_url || '').trim().replace(/\/+$/, '');
-    const apiKey = String(llm.api_key || '').trim();
-    const model = String(llm.model || '').trim();
-    if (!apiUrl || !apiKey || !model) return null;
-    return { api_url: apiUrl, api_key: apiKey, model };
+
+    try {
+        if (llmProviderManager.isInitialized?.()) {
+            const resolved = llmProviderManager.resolveProviderOrFallback(
+                llm.provider_id || null,
+                llm.model_id || null
+            );
+            if (resolved) {
+                const fromStore = normalizeDialogueApi(
+                    resolved.api_url,
+                    resolved.api_key,
+                    resolved.model
+                );
+                if (fromStore) return fromStore;
+            }
+        }
+    } catch (_) {}
+
+    return normalizeDialogueApi(llm.api_url, llm.api_key, llm.model);
 }
 
 function extractContentFromCompletion(payload) {
