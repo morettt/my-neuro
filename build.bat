@@ -21,9 +21,18 @@ if errorlevel 1 goto :failed
 copy /y "dist\My-Neuro-Installer.exe" "..\My-Neuro-Installer.exe" >nul
 if errorlevel 1 goto :failed
 
+echo Cleaning build dependencies and intermediate files...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0electron-installer\cleanup-build.ps1"
+if errorlevel 1 goto :cleanup_failed
+
 echo Done. Output: My-Neuro-Installer.exe
 pause
 exit /b 0
+
+:cleanup_failed
+echo Build succeeded, but cleanup failed. Output: My-Neuro-Installer.exe
+pause
+exit /b 1
 
 :failed
 echo Build failed.
