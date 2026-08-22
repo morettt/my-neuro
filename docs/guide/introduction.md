@@ -2,7 +2,7 @@
 
 本站是 **my-neuro 的 WebUI 版文档**。WebUI 指用 `live-2d/启动 WebUI 控制面板.bat` 打开后，浏览器里那套「My Neuro - 控制中心」。
 
-如果你打开的是桌面上的 `肥牛.exe`，或正在跟着 [官网旧教程](http://mynewbot.com/tutorials) 里的旧界面操作，请先去那边，两边截图不是同一套控件。
+如果你打开的是桌面上的 `肥牛.exe`，请去 [肥牛.exe 教程](/qt/)。安装包和更旧的箭头图仍在 [官网教程](http://mynewbot.com/tutorials)。三套截图不是同一套控件。
 
 ::: tip
 想尽快见到桌宠说话，直接进入 [快速开始](./quick-start.md)。
@@ -23,9 +23,10 @@ my-neuro（社区常叫「肥牛」）是一个跑在 Windows 桌面上的 AI �
 | 你正在用的东西 | 该看哪份文档 |
 | --- | --- |
 | 浏览器「My Neuro - 控制中心」，顶栏有启动、LLM 配置、云端配置 | **本站** |
-| `肥牛.exe`、官网教程里的旧标签和箭头图 | [官网旧教程](http://mynewbot.com/tutorials) |
+| 桌面上的 `肥牛.exe`，左侧栏有启动、终端控制室 | [肥牛.exe 教程](/qt/) |
+| 安装包、更旧的标签和箭头图 | [官网教程](http://mynewbot.com/tutorials) |
 
-详见 [本站与官网旧教程](./which-docs.md)。
+详见 [三份文档怎么选](./which-docs.md)。
 
 ## 和普通聊天机器人差在哪
 

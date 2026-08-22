@@ -14,6 +14,9 @@ hero:
     - theme: alt
       text: 插件
       link: /plugins/
+    - theme: alt
+      text: 肥牛.exe 教程
+      link: /qt/
 features:
   - title: 听和说可以分开选
     details: 本地识别配云端发音、云端识别配本地声音，都是同一套界面里的勾选，按你装了什么来搭。
@@ -27,4 +30,6 @@ features:
     details: 内置插件、社区插件和插件广场，在「插件管理」里逐个启用。
   - title: 记忆与工具
     details: MemOS 长期记忆、视觉识图、MCP 与 Function Call，都在 WebUI 里开关。
+  - title: 肥牛.exe
+    details: 用 Qt 桌面窗口操作时，走单独一份教程，按钮名称以左侧栏为准。
 ---
