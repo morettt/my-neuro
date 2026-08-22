@@ -6,7 +6,7 @@ const { appState } = require('../core/app-state.js');
 const { LLMClient } = require('./llm-client.js');
 const { toolExecutor } = require('./tool-executor.js');
 const { getAvatarMotionMode } = require('../avatar/motion-mode.js');
-const { motionDirector } = require('./motion-director.js');
+const { motionDirector, isChoreographyConfigEnabled } = require('./motion-director.js');
 const { llmProviderManager } = require('../core/llm-provider.js');
 
 /**
@@ -23,14 +23,18 @@ function filterThinkingContent(text) {
     return filtered.trim();
 }
 
-// 编舞会关闭流式 TTS 改走整段播放，因此必须显式开启；缺省配置一律保持原有流式行为。
-// paramDirector 只在 Live2D 运行时挂载，缺席时编舞不会产生任何效果，此时也不能牺牲流式。
+// 编舞会关闭流式 TTS 改走整段播放。动作模式选了 AI 编舞时开启；
+// 仓库里曾经把 enabled 默认写成 false，WebUI 又没有独立开关，所以不能再要求 enabled === true。
+function describeChoreographySkip(config = {}) {
+    if (config?.tts?.enabled === false) return 'tts-disabled';
+    if (config?.ui?.text_only_mode === true) return 'text-only';
+    if (!isChoreographyConfigEnabled(config)) return 'legacy-or-paths-disabled';
+    if (!global.paramDirector) return 'no-param-director';
+    return null;
+}
+
 function shouldRunMotionChoreography(config = {}) {
-    if (config?.tts?.enabled === false) return false;
-    if (config?.ui?.text_only_mode === true) return false;
-    if (getAvatarMotionMode(config) === 'legacy') return false;
-    if (!global.paramDirector) return false;
-    return config?.motion_director?.enabled === true;
+    return describeChoreographySkip(config) == null;
 }
 
 class LLMHandler {
@@ -826,7 +830,17 @@ class LLMHandler {
                                 new Promise(resolve => setTimeout(resolve, waitMs))
                             ]);
                         }
-                        choreographyWork.catch(() => {});
+                        choreographyWork.catch((error) => {
+                            logToTerminal(
+                                'warn',
+                                `[MotionDirector] 编舞失败，继续播放 TTS: ${String(error && error.message || error).slice(0, 240)}`
+                            );
+                        });
+                    } else if (responseObj.text && responseObj.text.trim()) {
+                        const skipReason = describeChoreographySkip(config);
+                        if (skipReason) {
+                            logToTerminal('info', `[MotionDirector] 本轮跳过编舞: ${skipReason}`);
+                        }
                     }
 
                     if (iteration === 0 && isStreamingToTTS && !waitForChoreography) {
@@ -990,5 +1004,6 @@ class LLMHandler {
 module.exports = {
     LLMHandler,
     filterThinkingContent,
-    shouldRunMotionChoreography
+    shouldRunMotionChoreography,
+    describeChoreographySkip
 };

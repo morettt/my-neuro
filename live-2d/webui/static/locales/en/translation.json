@@ -293,7 +293,7 @@
     "motion_mode_blend": "Auto expression + AI choreography (recommended)",
     "motion_mode_legacy": "Auto expression + classic motions",
     "motion_mode_director": "AI choreography only",
-    "motion_mode_hint": "Auto expression composes facial changes live; classic motions use existing motion files; AI choreography uses the new motion system. Restart the pet to take effect after saving.",
+    "motion_mode_hint": "Auto expression composes facial changes live; classic motions use existing motion files; AI choreography uses the new motion system. If no choreography-specific API is filled in, it reuses the current main dialogue model. Choosing an AI choreography mode turns choreography on; classic motions turns it off.",
     "choreo_style_label": "Motion style preset (only in \"AI choreography only\" mode)",
     "choreo_style_none": "No preset (keep manual parameters)",
     "choreo_style_hint": "A preset tunes the VAD personality baseline, discrete idle frequency, gaze stability and motion amplitude at once; the other two modes are unaffected."

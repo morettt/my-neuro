@@ -293,7 +293,7 @@
     "motion_mode_blend": "自动表情 + AI 编舞（推荐）",
     "motion_mode_legacy": "自动表情 + 传统动作",
     "motion_mode_director": "仅 AI 编舞",
-    "motion_mode_hint": "自动表情会现场组合脸部变化；传统动作使用已有动作文件；AI 编舞使用新版动作系统。保存后重启桌宠生效。",
+    "motion_mode_hint": "自动表情会现场组合脸部变化；传统动作使用已有动作文件；AI 编舞使用新版动作系统。未填写编舞专用 API 时，会自动使用当前主对话模型。选择带 AI 编舞的模式会打开编舞；传统动作模式会关闭编舞。",
     "choreo_style_label": "动作风格预设（仅『仅 AI 编舞』模式生效）",
     "choreo_style_none": "不使用预设（沿用手动参数）",
     "choreo_style_hint": "预设一次性调好 VAD 性格基线、离散待机动作频率、视线稳定度与动作幅度；其它两个模式不受影响。"
