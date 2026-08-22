@@ -218,7 +218,7 @@
     },
     "live2d_model": "",
     "live2d_gaze_tracking": false,
-    "avatar_motion_mode": "legacy",
+    "avatar_motion_mode": "blend",
     "expression_engine": "au",
     "head_pat": {
       "enabled": true,

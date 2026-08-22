@@ -142,6 +142,39 @@ def normalize_avatar_motion_mode(value):
     return mode if mode in AVATAR_MOTION_MODES else 'blend'
 
 
+def _nonempty_id(value):
+    text = str(value or '').strip()
+    if not text or text.lower() in ('none', 'null', 'undefined'):
+        return ''
+    return text
+
+
+def has_paired_choreography_provider(block):
+    if not isinstance(block, dict):
+        return False
+    return bool(_nonempty_id(block.get('provider_id')) and _nonempty_id(block.get('model_id')))
+
+
+def motion_director_uses_dialogue(config):
+    """未成对填写编舞专用 provider/model 时，编舞复用主对话模型。"""
+    md = config.get('motion_director') if isinstance(config.get('motion_director'), dict) else {}
+    if has_paired_choreography_provider(md):
+        return False
+    body = md.get('body') if isinstance(md.get('body'), dict) else {}
+    face = md.get('face') if isinstance(md.get('face'), dict) else {}
+    return not (
+        has_paired_choreography_provider(body) or has_paired_choreography_provider(face)
+    )
+
+
+def sync_motion_director_enabled(config, mode):
+    """动作模式与编舞总闸一起写，避免只改下拉框、enabled 仍为 false。"""
+    if not isinstance(config.get('motion_director'), dict):
+        config['motion_director'] = {}
+    config['motion_director']['enabled'] = mode != 'legacy'
+    return config['motion_director']['enabled']
+
+
 # 动作风格预设（soullink 对齐更新 P1）：仅「仅 AI 编舞」档消费，空字符串 = 不使用预设
 CHOREO_MOTION_STYLES = {'natural', 'lively', 'calm', 'shy'}
 
@@ -1163,12 +1196,15 @@ def handle_ui_settings():
     if request.method == 'GET':
         ui_config = config.get('ui', {})
         subtitle_config = config.get('subtitle_labels', {})
+        motion_mode = normalize_avatar_motion_mode(ui_config.get('avatar_motion_mode', 'blend'))
         return jsonify({
             'show_chat_box': ui_config.get('show_chat_box', True),
             'show_model': ui_config.get('show_model', True),
             'model_scale': ui_config.get('model_scale', 2.3),
-            'avatar_motion_mode': normalize_avatar_motion_mode(ui_config.get('avatar_motion_mode', 'blend')),
+            'avatar_motion_mode': motion_mode,
             'motion_style': normalize_choreo_motion_style((config.get('motion_director') or {}).get('style', '')),
+            'motion_director_enabled': motion_mode != 'legacy',
+            'motion_director_uses_dialogue': motion_director_uses_dialogue(config),
             'subtitle_user': subtitle_config.get('user', '用户'),
             'subtitle_ai': subtitle_config.get('ai', 'AI'),
             'subtitle_enabled': subtitle_config.get('enabled', False)
@@ -1183,7 +1219,9 @@ def handle_ui_settings():
             config['ui']['show_chat_box'] = data.get('show_chat_box', True)
             config['ui']['show_model'] = data.get('show_model', True)
             config['ui']['model_scale'] = data.get('model_scale', 2.3)
-            config['ui']['avatar_motion_mode'] = normalize_avatar_motion_mode(data.get('avatar_motion_mode', 'blend'))
+            motion_mode = normalize_avatar_motion_mode(data.get('avatar_motion_mode', 'blend'))
+            config['ui']['avatar_motion_mode'] = motion_mode
+            sync_motion_director_enabled(config, motion_mode)
             # 动作风格预设：写进 motion_director.style（仅 director 档消费）；未选预设时移除该键
             if 'motion_style' in data:
                 if not isinstance(config.get('motion_director'), dict):
@@ -1197,7 +1235,12 @@ def handle_ui_settings():
             config['subtitle_labels']['ai'] = data.get('subtitle_ai', 'AI')
             config['subtitle_labels']['enabled'] = data.get('subtitle_enabled', False)
             if save_config(config):
-                return jsonify({'success': True, 'runtime_reloaded': notify_runtime_config_reload()})
+                return jsonify({
+                    'success': True,
+                    'runtime_reloaded': notify_runtime_config_reload(),
+                    'motion_director_enabled': config['motion_director']['enabled'],
+                    'motion_director_uses_dialogue': motion_director_uses_dialogue(config),
+                })
             return jsonify({'error': '保存失败'}), 500
         except Exception as e:
             return jsonify({'error': str(e)}), 500

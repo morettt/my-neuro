@@ -1,7 +1,8 @@
 'use strict';
 
-// Live2D body/face choreography. The request endpoint, key, and model always
-// come from config.llm so choreography cannot drift onto a second provider.
+// Live2D body/face choreography. Empty dedicated provider/model fields reuse
+// config.llm so choreography does not require a second API. A complete
+// provider_id + model_id pair can still override one path.
 const fs = require('fs');
 const path = require('path');
 const { logToTerminal } = require('../api-utils.js');
@@ -184,6 +185,74 @@ function normalizeDialogueApi(apiUrl, apiKey, model) {
     return { api_url: url, api_key: key, model: name };
 }
 
+function nonEmptyId(value) {
+    if (value == null) return '';
+    const text = String(value).trim();
+    if (!text || text === 'null' || text === 'undefined') return '';
+    return text;
+}
+
+function readPairedIds(block) {
+    if (!block || typeof block !== 'object') return null;
+    const providerId = nonEmptyId(block.provider_id);
+    const modelId = nonEmptyId(block.model_id);
+    if (!providerId || !modelId) return null;
+    return { providerId, modelId };
+}
+
+function isUsableChoreographyApi(resolved) {
+    return !!(resolved && resolved.api_url && resolved.api_key && resolved.model);
+}
+
+function summarizeChoreographyApi(resolved) {
+    if (!resolved) {
+        return { source: 'none', provider_id: '', model: '', has_api_key: false };
+    }
+    return {
+        source: resolved.source || 'dialogue',
+        provider_id: resolved.provider_id || '',
+        model: resolved.model || '',
+        has_api_key: Boolean(resolved.api_key)
+    };
+}
+
+// 动作模式不是 legacy 时打开编舞。仓库里曾经把 enabled 默认写成 false，
+// 而 WebUI 从未提供独立开关，所以 blend/director 下 enabled=false 仍视为开启。
+function isChoreographyConfigEnabled(config = {}) {
+    if (getAvatarMotionMode(config) === 'legacy') return false;
+    const cfg = config?.motion_director || {};
+    if (cfg.body?.enabled === false && cfg.face?.enabled === false) return false;
+    return true;
+}
+
+function resolveExactStoredApi(providerId, modelId) {
+    const pid = nonEmptyId(providerId);
+    const mid = nonEmptyId(modelId);
+    if (!pid || !mid) return null;
+    try {
+        if (!llmProviderManager.isInitialized?.()) return null;
+        const provider = llmProviderManager.getProvider(pid);
+        if (!provider || provider.enabled === false) return null;
+        const resolved = llmProviderManager.resolveProvider(pid, mid);
+        if (!resolved || resolved.id === '_empty' || resolved.id !== pid) return null;
+        if (nonEmptyId(resolved.model) !== mid) return null;
+        const normalized = normalizeDialogueApi(
+            resolved.api_url,
+            resolved.api_key,
+            resolved.model
+        );
+        if (!normalized) return null;
+        return {
+            ...normalized,
+            provider_id: pid,
+            source: 'dedicated',
+            has_api_key: true
+        };
+    } catch (_) {
+        return null;
+    }
+}
+
 // 编舞复用主对话的连接配置。通讯录接管后 config.llm 的三格会被清空，
 // 所以优先按 provider_id / model_id 解析；未初始化时才回落到旧三格。
 // isInitialized 门闩不能省：未初始化时 resolveProvider 会走失败分支并打日志刷屏。
@@ -202,12 +271,44 @@ function resolveDialogueApi(config) {
                     resolved.api_key,
                     resolved.model
                 );
-                if (fromStore) return fromStore;
+                if (fromStore) {
+                    return {
+                        ...fromStore,
+                        provider_id: resolved.id || nonEmptyId(llm.provider_id),
+                        source: 'dialogue',
+                        has_api_key: true
+                    };
+                }
             }
         }
     } catch (_) {}
 
-    return normalizeDialogueApi(llm.api_url, llm.api_key, llm.model);
+    const legacy = normalizeDialogueApi(llm.api_url, llm.api_key, llm.model);
+    if (!legacy) return null;
+    return {
+        ...legacy,
+        provider_id: nonEmptyId(llm.provider_id),
+        source: 'dialogue',
+        has_api_key: true
+    };
+}
+
+function resolveChoreographyApi(config, pathName) {
+    const cfg = config?.motion_director || {};
+    const dedicated = readPairedIds(pathName ? cfg[pathName] : null) || readPairedIds(cfg);
+    if (dedicated) {
+        const resolved = resolveExactStoredApi(dedicated.providerId, dedicated.modelId);
+        if (resolved) return resolved;
+        return {
+            source: 'dedicated',
+            provider_id: dedicated.providerId,
+            model: dedicated.modelId,
+            api_url: '',
+            api_key: '',
+            has_api_key: false
+        };
+    }
+    return resolveDialogueApi(config);
 }
 
 function extractContentFromCompletion(payload) {
@@ -237,10 +338,9 @@ class MotionDirector {
 
     isEnabled(config = this.config) {
         if (!shouldUseParamDirector(config)) return false;
-        const cfg = config?.motion_director || {};
-        if (cfg.enabled === false) return false;
-        if (cfg.body?.enabled === false && cfg.face?.enabled === false) return false;
-        return !!resolveDialogueApi(config);
+        if (!isChoreographyConfigEnabled(config)) return false;
+        return isUsableChoreographyApi(resolveChoreographyApi(config, 'body'))
+            || isUsableChoreographyApi(resolveChoreographyApi(config, 'face'));
     }
 
     cancel(reason = 'cancelled') {
@@ -277,9 +377,15 @@ class MotionDirector {
         }
 
         const cfg = config?.motion_director || {};
-        if (cfg.enabled === false) {
+        if (!isChoreographyConfigEnabled(config)) {
             firstFrameGate.resolve({ source: 'disabled' });
             return { mode, source: 'disabled', accepted: 0 };
+        }
+        if (cfg.enabled === false) {
+            logToTerminal(
+                'warn',
+                `[MotionDirector] motion_director.enabled=false 但动作模式为 ${mode}，仍启用编舞。请改选「传统动作」模式关闭`
+            );
         }
         const { purifiedText, tags } = stripTags(fullText);
         const motionInstruction = motionDirectives.analyzeSpeechMotionInstruction(
@@ -323,11 +429,18 @@ class MotionDirector {
             });
         }
 
-        const resolved = resolveDialogueApi(config);
-        if (!resolved) {
+        const bodyResolved = cfg.body?.enabled === false
+            ? null
+            : resolveChoreographyApi(config, 'body');
+        const faceResolved = cfg.face?.enabled === false
+            ? null
+            : resolveChoreographyApi(config, 'face');
+        const bodyUsable = isUsableChoreographyApi(bodyResolved);
+        const faceUsable = isUsableChoreographyApi(faceResolved);
+        if (!bodyUsable && !faceUsable) {
             logToTerminal(
                 'warn',
-                '[MotionDirector] 主对话 API 配置不完整，保留本地编舞'
+                '[MotionDirector] 编舞 API 配置不完整，保留本地编舞'
             );
             firstFrameGate.resolve({ source: 'missing-dialogue-api' });
             return { mode, source: 'fallback-only', accepted: 0 };
@@ -341,7 +454,6 @@ class MotionDirector {
         }
 
         const common = {
-            resolved,
             text: speechText,
             tags: emotionTags,
             userMessage: extras?.userMessage || '',
@@ -355,11 +467,11 @@ class MotionDirector {
             primaryEmotion
         };
         const tasks = [];
-        if (cfg.body?.enabled !== false) {
-            tasks.push(this._runPath({ ...common, pathName: 'body' }));
+        if (bodyUsable) {
+            tasks.push(this._runPath({ ...common, pathName: 'body', resolved: bodyResolved }));
         }
-        if (cfg.face?.enabled !== false) {
-            tasks.push(this._runPath({ ...common, pathName: 'face' }));
+        if (faceUsable) {
+            tasks.push(this._runPath({ ...common, pathName: 'face', resolved: faceResolved }));
         }
 
         const results = await Promise.allSettled(tasks);
@@ -628,7 +740,7 @@ class MotionDirector {
                 global.paramDirector?.truncateTimeline?.(options.pathName, frame.at);
                 firstAccepted = true;
                 options.firstFrameGate.resolve({
-                    source: `${options.pathName}-dialogue-api`,
+                    source: `${options.pathName}-${options.resolved?.source || 'dialogue'}-api`,
                     at: frame.at
                 });
             }
@@ -667,9 +779,11 @@ class MotionDirector {
                     acceptFrame(frame, index);
                 });
             }
+            const summary = summarizeChoreographyApi(options.resolved);
+            const sourceLabel = summary.source === 'dedicated' ? '专用模型' : '主对话模型';
             logToTerminal(
                 'info',
-                `[MotionDirector] ${options.pathName} 使用主对话模型 ${safeText(options.resolved.model, 80)}，接受 ${accepted} 帧，耗时 ${Date.now() - startedAt}ms`
+                `[MotionDirector] ${options.pathName} source=${summary.source} provider=${safeText(summary.provider_id, 80)} 使用${sourceLabel} ${safeText(summary.model, 80)}，接受 ${accepted} 帧，耗时 ${Date.now() - startedAt}ms`
             );
         } catch (error) {
             const timeout = error?.name === 'AbortError' || controller.signal.aborted;
@@ -1092,5 +1206,10 @@ module.exports = {
     extractContentFromCompletion,
     motionDirector,
     resolveDialogueApi,
+    resolveChoreographyApi,
+    isChoreographyConfigEnabled,
+    isUsableChoreographyApi,
+    summarizeChoreographyApi,
+    readPairedIds,
     stripTags
 };
