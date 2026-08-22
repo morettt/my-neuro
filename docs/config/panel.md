@@ -29,7 +29,7 @@
 
 ![插件广场](/images/webui-market-plugin.png)
 
-插件管理这一页可以开关内置插件和社区插件，详细用法见 [使用插件](/plugins/)。
+插件管理这一页可以开关内置插件和社区插件。先看 [使用插件](/plugins/) 学会启用和打开配置；每个插件干什么见 [内置插件](/plugins/built-in) 和 [社区插件](/plugins/community)。
 
 ![插件管理](/images/webui-plugins.png)
 
