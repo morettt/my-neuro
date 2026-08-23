@@ -1,21 +1,24 @@
-const typeStyles=document.createElement('link');typeStyles.rel='stylesheet';typeStyles.href='typography.css';document.head.append(typeStyles);
-const windowBar=document.createElement('div');windowBar.className='window-bar';windowBar.innerHTML='<div class="window-drag"></div><button class="window-min" aria-label="最小化">−</button><button class="window-close" aria-label="关闭">×</button>';document.body.prepend(windowBar);
-windowBar.querySelector('.window-min').addEventListener('click',()=>window.installer.minimizeWindow());
-windowBar.querySelector('.window-close').addEventListener('click',()=>window.installer.closeWindow());
-const pages=['welcome','components','confirm','installing','done'];
-const items=[['asr','ASR','语音识别','~2 GB',true],['bert','BERT','语言理解','~1 GB',true],['tts','TTS','语音合成','~4 GB',true],['live2d','Live2D','立绘模型','~200 MB',true],['rag','RAG','长期记忆（可选）','~2 GB',false]];
-let current='welcome'; const list=document.querySelector('#component-list');
-const moduleLabels={live2d:'Live2D',bert:'BERT',tts:'TTS',rag:'RAG',asr:'ASR'};
-const moduleOrder=['live2d','bert','tts','rag','asr'];
-const moduleTrack=document.createElement('div');moduleTrack.className='module-track';
-document.querySelector('#installing .progress-block').before(moduleTrack);
-function buildModuleTrack(names){const enabled=new Set(names);moduleTrack.innerHTML='';for(const name of moduleOrder.filter(item=>enabled.has(item))){const node=document.createElement('div');node.className='module-node pending';node.dataset.module=name;node.innerHTML=`<i><span></span></i><b>${moduleLabels[name]}</b><small>等待中</small>`;moduleTrack.append(node)}}
-for(const [key,name,desc,size,checked] of items){const label=document.createElement('label');label.className='component';label.innerHTML=`<input type="checkbox" value="${key}" ${checked?'checked':''}><strong>${name}</strong><span>${desc}</span><em>${size}</em>`;list.append(label)}
-const selected=()=>[...document.querySelectorAll('.component input:checked')].map(el=>el.value);
-function updateCount(){document.querySelector('#selected-count').textContent=selected().length}
-list.addEventListener('change',updateCount);
-function show(name){current=name;document.querySelectorAll('.page').forEach(el=>el.classList.toggle('shown',el.id===name));const index=pages.indexOf(name);document.querySelectorAll('.step').forEach((el,i)=>{el.classList.toggle('active',i===index-1);el.classList.toggle('done',i<index-1)});const back=document.querySelector('#back'),next=document.querySelector('#next');back.hidden=!['components','confirm'].includes(name);next.hidden=name==='installing';next.disabled=false;if(name==='welcome')next.textContent='开始';if(name==='components')next.textContent='下一步';if(name==='confirm'){next.textContent='开始安装';refreshConfirm()}if(name==='done')next.textContent='关闭'}
-async function refreshConfirm(){const box=document.querySelector('#summary');box.innerHTML='<div class="row"><label>系统检查</label><span>正在检测显卡…</span></div>';const system=await window.installer.inspectSystem();const chosen=selected(),sizes={asr:2,bert:1,tts:4,live2d:.2,rag:2},total=3.6+chosen.reduce((sum,key)=>sum+sizes[key],0);box.innerHTML=`<div class="row"><label>安装组件</label><span>${chosen.map(k=>items.find(x=>x[0]===k)[1]).join('　')||'未选择'}</span></div><div class="row"><label>显卡</label><span>${system.gpu}</span></div><div class="row"><label>可用显存</label><span>${system.freeMb===null?'无法检测（需要 NVIDIA 驱动）':(system.freeMb/1024).toFixed(1)+' GB'}</span></div><div class="row"><label>预计下载</label><span>约 ${total.toFixed(1)} GB</span></div>`;document.querySelector('#next').disabled=!system.ok}
-document.querySelector('#next').addEventListener('click',async()=>{if(current==='welcome')show('components');else if(current==='components')show('confirm');else if(current==='confirm'){const modules=selected();buildModuleTrack(modules);show('installing');await window.installer.start(modules)}else if(current==='done')window.close()});
-document.querySelector('#back').addEventListener('click',()=>show(current==='confirm'?'components':'welcome'));
-window.installer.onStatus(status=>{if(status.type==='progress'){const pct=Math.floor(status.overall);document.querySelector('#overall').value=status.overall;document.querySelector('#percent').textContent=`${pct}%`;document.querySelector('.ring-progress').style.background=`conic-gradient(var(--violet) ${pct*3.6}deg,rgba(255,255,255,.06) 0)`;document.querySelector('#task').textContent=status.label}if(status.type==='module-status'){const node=moduleTrack.querySelector(`[data-module="${status.module}"]`);if(node){node.className=`module-node ${status.status}`;node.querySelector('small').textContent=status.status==='start'?'下载中':status.status==='done'?'已完成':'失败'}}if(status.type==='log'){const log=document.querySelector('#log');log.textContent+=status.message+'\n';log.scrollTop=log.scrollHeight}if(status.type==='done'){document.querySelector('#done-message').textContent='所有选定组件均已就绪';show('done')}if(status.type==='error'){document.querySelector('#done').classList.add('error');document.querySelector('#done-icon').textContent='×';document.querySelector('#done-title').textContent='安装失败';document.querySelector('#done-message').textContent=status.message;show('done')}});updateCount();show('welcome');
+const bar=document.createElement('div');bar.className='window-bar';bar.innerHTML='<div class="window-drag"></div><button class="window-min">−</button><button class="window-close">×</button>';document.body.prepend(bar);
+bar.querySelector('.window-min').addEventListener('click',()=>window.installer.minimizeWindow());
+bar.querySelector('.window-close').addEventListener('click',()=>window.installer.closeWindow());
+
+let edition=null;
+const next=document.querySelector('#next');
+const modules=['live2d','bert','tts','asr'];
+const labels={live2d:'Live2D',bert:'BERT',tts:'TTS',asr:'ASR'};
+document.querySelectorAll('.edition').forEach(button=>button.addEventListener('click',()=>{
+  document.querySelectorAll('.edition').forEach(item=>item.classList.remove('selected'));
+  button.classList.add('selected');edition=button.dataset.edition;next.disabled=false;
+}));
+
+function show(id){document.querySelectorAll('.page').forEach(page=>page.classList.toggle('shown',page.id===id));next.hidden=id==='installing';document.querySelectorAll('.step').forEach((step,index)=>{step.classList.toggle('active',index===(id==='welcome'?0:id==='installing'?1:2));step.classList.toggle('done',index<(id==='welcome'?0:id==='installing'?1:2))})}
+function makeTrack(){const track=document.querySelector('#module-track');track.innerHTML='<div class="module-line"><span></span></div>';track.hidden=false;track.style.setProperty('--track-progress','0%');track.className=`module-track${edition==='cloud'?' single':''}`;const visibleModules=edition==='cloud'?['live2d']:modules;for(const name of visibleModules){const node=document.createElement('div');node.className='module-node pending';node.dataset.module=name;node.innerHTML=`<i><span></span></i><b>${labels[name]}</b><small>等待中</small>`;track.append(node)}}
+
+next.addEventListener('click',async()=>{if(document.querySelector('#done').classList.contains('shown')){window.close();return}makeTrack();show('installing');await window.installer.start({edition,components:edition==='local'?modules:[]})});
+window.installer.onStatus(status=>{
+  if(status.type==='progress'){const pct=Math.floor(status.overall);document.querySelector('#module-track').style.setProperty('--track-progress',`${Math.max(0,Math.min(100,status.overall))}%`);document.querySelector('#percent').textContent=`${pct}%`;document.querySelector('#task').textContent=status.label}
+  if(status.type==='module-status'){const node=document.querySelector(`[data-module="${status.module}"]`);if(node){node.className=`module-node ${status.status}`;node.querySelector('small').textContent=status.status==='start'?'下载中':status.status==='done'?'已完成':'失败'}}
+  if(status.type==='log'){const log=document.querySelector('#log');log.textContent+=status.message+'\n';log.scrollTop=log.scrollHeight}
+  if(status.type==='done'){document.querySelector('#done-message').textContent=edition==='cloud'?'打开 live-2d 文件夹，双击“肥牛.exe”即可使用。':'本地版环境和模型已部署';next.textContent='关闭';next.hidden=false;show('done')}
+  if(status.type==='error'){document.querySelector('#done').classList.add('error');document.querySelector('#done-icon').textContent='×';document.querySelector('#done-title').textContent='安装失败';document.querySelector('#done-message').textContent=status.message;next.textContent='关闭';next.hidden=false;show('done')}
+});
