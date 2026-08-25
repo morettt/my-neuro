@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const https = require('node:https');
@@ -7,20 +7,30 @@ const { StringDecoder } = require('node:string_decoder');
 const tar = require('tar');
 
 const ENV_URL = 'https://modelscope.cn/models/morelle/my-neuro-env/resolve/master/my-neuro-env.tar.gz';
-const APP_URL = 'https://github.com/morettt/my-neuro/archive/refs/tags/vv1.0.zip';
+const APP_URLS = [
+  'https://gh-proxy.org/https://github.com/morettt/my-neuro/archive/refs/tags/vv1.0.zip',
+  'https://hk.gh-proxy.org/https://github.com/morettt/my-neuro/archive/refs/tags/vv1.0.zip',
+  'https://github.com/morettt/my-neuro/archive/refs/tags/vv1.0.zip'
+];
 const LIVE2D_VERSION = 'v6.6.2';
 const LIVE2D_URLS = [
-  `https://hk.gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/${LIVE2D_VERSION}/live-2d.zip`,
   `https://gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/${LIVE2D_VERSION}/live-2d.zip`,
+  `https://hk.gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/${LIVE2D_VERSION}/live-2d.zip`,
   `https://github.com/morettt/my-neuro/releases/download/${LIVE2D_VERSION}/live-2d.zip`
 ];
 let mainWindow;
 let installing = false;
 
-function resolveInstallDir() {
-  return app.isPackaged
-    ? path.resolve(process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(process.execPath))
-    : path.resolve(__dirname, '..');
+function defaultInstallDir() {
+  const localAppData = process.env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local');
+  return path.join(localAppData, 'Programs', 'My-Neuro');
+}
+
+function resolveInstallDir(requestedDir) {
+  if (typeof requestedDir !== 'string' || !requestedDir.trim()) return defaultInstallDir();
+  const resolved = path.resolve(requestedDir.trim());
+  if (resolved === path.parse(resolved).root) throw new Error('不能直接安装到磁盘根目录，请选择一个文件夹');
+  return resolved;
 }
 
 function createWindow() {
@@ -60,26 +70,87 @@ function send(payload) {
 }
 
 function download(url, destination, options = {}) {
-  const {start = 0, span = 100, label = '下载文件'} = options;
+  const {start = 0, span = 100, label = '下载文件', timeoutMs = 0} = options;
   return new Promise((resolve, reject) => {
-    const request = currentUrl => https.get(currentUrl, { headers: { 'User-Agent': 'My-Neuro-Installer/1.0' } }, response => {
-      if ([301,302,303,307,308].includes(response.statusCode) && response.headers.location) { response.resume(); return request(new URL(response.headers.location, currentUrl).toString()); }
-      if (response.statusCode !== 200) { response.resume(); return reject(new Error(`${label}失败（HTTP ${response.statusCode}）`)); }
-      const total = Number(response.headers['content-length']) || 0;
-      let received = 0;
-      const output = fs.createWriteStream(destination);
-      response.on('data', chunk => {
-        received += chunk.length;
-        const pct = total ? Math.floor(received / total * 100) : 0;
-        send({ type:'progress', overall:total ? start + pct / 100 * span : start,
-          label:`${label} ${(received/1048576).toFixed(0)} MB${total ? ` / ${(total/1048576).toFixed(0)} MB` : ''}` });
+    const request = currentUrl => {
+      let output;
+      const req = https.get(currentUrl, { headers: { 'User-Agent': 'My-Neuro-Installer/1.0' } }, response => {
+        if ([301,302,303,307,308].includes(response.statusCode) && response.headers.location) { response.resume(); return request(new URL(response.headers.location, currentUrl).toString()); }
+        if (response.statusCode !== 200) { response.resume(); return reject(new Error(`${label}失败（HTTP ${response.statusCode}）`)); }
+        const total = Number(response.headers['content-length']) || 0;
+        let received = 0;
+        output = fs.createWriteStream(destination);
+        response.on('data', chunk => {
+          received += chunk.length;
+          const pct = total ? Math.floor(received / total * 100) : 0;
+          send({ type:'progress', overall:total ? start + pct / 100 * span : start,
+            label:`${label} ${(received/1048576).toFixed(0)} MB${total ? ` / ${(total/1048576).toFixed(0)} MB` : ''}` });
+        });
+        response.on('aborted', () => output.destroy(new Error(`${label}连接中断`)));
+        response.pipe(output);
+        output.on('finish', () => output.close(resolve));
+        output.on('error', reject);
       });
-      response.pipe(output);
-      output.on('finish', () => output.close(resolve));
-      output.on('error', reject);
-    }).on('error', reject);
+      if (timeoutMs > 0) req.setTimeout(timeoutMs, () => req.destroy(new Error(`${label}连续 10 秒无响应`)));
+      req.on('error', error => output ? output.destroy(error) : reject(error));
+    };
     request(url);
   });
+}
+
+function probeDownloadUrl(url, timeoutMs = 10000) {
+  const started = Date.now();
+  const targetBytes = 512 * 1024;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error, bytes = 0) => {
+      if (settled) return;
+      settled = true;
+      if (error) reject(error);
+      else resolve({url, score: bytes / Math.max(1, Date.now() - started)});
+    };
+    const request = currentUrl => {
+      const req = https.get(currentUrl, {
+        headers: {'User-Agent':'My-Neuro-Installer/1.0','Range':`bytes=0-${targetBytes - 1}`}
+      }, response => {
+        if ([301,302,303,307,308].includes(response.statusCode) && response.headers.location) {
+          response.resume();
+          return request(new URL(response.headers.location, currentUrl).toString());
+        }
+        if (![200,206].includes(response.statusCode)) {
+          response.resume();
+          return finish(new Error(`HTTP ${response.statusCode}`));
+        }
+        let received = 0;
+        response.on('data', chunk => {
+          received += chunk.length;
+          if (received >= targetBytes) {
+            finish(null, received);
+            response.destroy();
+          }
+        });
+        response.on('end', () => finish(received ? null : new Error('未收到数据'), received));
+        response.on('error', error => { if (!settled) finish(error); });
+      });
+      req.setTimeout(timeoutMs, () => req.destroy(new Error('测速超时')));
+      req.on('error', error => { if (!settled) finish(error); });
+    };
+    request(url);
+  });
+}
+
+async function rankDownloadUrls(urls, log, label) {
+  log(`正在测试 ${label} 的 ${urls.length} 个下载源`);
+  const results = await Promise.allSettled(urls.map(url => probeDownloadUrl(url)));
+  const ranked = results
+    .filter(result => result.status === 'fulfilled')
+    .map(result => result.value)
+    .sort((a, b) => b.score - a.score)
+    .map(result => result.url);
+  const unavailable = urls.filter(url => !ranked.includes(url));
+  const ordered = [...ranked, ...unavailable];
+  log(`测速完成，优先使用下载源 ${urls.indexOf(ordered[0]) + 1}`);
+  return ordered;
 }
 
 async function deploySource(installDir, log) {
@@ -87,17 +158,23 @@ async function deploySource(installDir, log) {
   const staging = path.join(installDir, '.my-neuro-source-staging');
   if (fs.existsSync(staging)) fs.rmSync(staging, {recursive:true,force:true});
   fs.mkdirSync(staging, {recursive:true});
-  log('开始下载 vv1.0 程序源码…');
-  await download(APP_URL, archive, {start:2,span:23,label:'下载程序源码'});
-  send({type:'progress',overall:26,label:'正在解压程序源码…'});
-  await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-    "Expand-Archive -LiteralPath $env:MY_NEURO_ARCHIVE -DestinationPath $env:MY_NEURO_STAGING -Force"], {
-    env: {
-      ...process.env,
-      MY_NEURO_ARCHIVE: archive,
-      MY_NEURO_STAGING: staging
+  const appUrls = await rankDownloadUrls(APP_URLS, log, '程序源码');
+  let downloaded = false;
+  for (let index = 0; index < appUrls.length; index += 1) {
+    try {
+      if (fs.existsSync(archive)) fs.rmSync(archive, {force:true});
+      const sourceNumber = APP_URLS.indexOf(appUrls[index]) + 1;
+      log(`正在从下载源 ${sourceNumber}/3 下载 vv1.0 程序源码`);
+      await download(appUrls[index], archive, {start:2,span:23,label:'下载程序源码',timeoutMs:10000});
+      downloaded = true;
+      break;
+    } catch (error) {
+      log(`程序源码下载源 ${APP_URLS.indexOf(appUrls[index]) + 1} 失败: ${error.message}`);
     }
-  });
+  }
+  if (!downloaded) throw new Error('所有程序源码下载源均失败');
+  send({type:'progress',overall:26,label:'正在解压程序源码…'});
+  await run('tar.exe', ['-xf', archive, '-C', staging]);
   const entries = fs.readdirSync(staging, {withFileTypes:true});
   const sourceRoot = entries.length === 1 && entries[0].isDirectory()
     ? path.join(staging, entries[0].name) : staging;
@@ -117,28 +194,23 @@ async function installLive2D(installDir, log) {
   let downloaded = false;
   try {
     send({type:'module-status',status:'start',module:'live2d'});
-    for (let index = 0; index < LIVE2D_URLS.length; index += 1) {
+    const live2dUrls = await rankDownloadUrls(LIVE2D_URLS, log, 'Live2D');
+    for (let index = 0; index < live2dUrls.length; index += 1) {
       try {
         if (fs.existsSync(archive)) fs.rmSync(archive, {force:true});
-        log(`正在从下载源 ${index + 1}/${LIVE2D_URLS.length} 下载 Live2D ${LIVE2D_VERSION}`);
-        await download(LIVE2D_URLS[index], archive, {start:28,span:62,label:'下载 Live2D'});
+        const sourceNumber = LIVE2D_URLS.indexOf(live2dUrls[index]) + 1;
+        log(`正在从下载源 ${sourceNumber}/3 下载 Live2D ${LIVE2D_VERSION}`);
+        await download(live2dUrls[index], archive, {start:28,span:62,label:'下载 Live2D',timeoutMs:10000});
         downloaded = true;
         break;
       } catch (error) {
-        log(`Live2D 下载源 ${index + 1} 失败: ${error.message}`);
+        log(`Live2D 下载源 ${LIVE2D_URLS.indexOf(live2dUrls[index]) + 1} 失败: ${error.message}`);
       }
     }
     if (!downloaded) throw new Error('所有 Live2D 下载源均失败');
     fs.mkdirSync(staging, {recursive:true});
     send({type:'progress',overall:92,label:'正在解压 Live2D…'});
-    await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-      "Expand-Archive -LiteralPath $env:MY_NEURO_ARCHIVE -DestinationPath $env:MY_NEURO_STAGING -Force"], {
-      env: {
-        ...process.env,
-        MY_NEURO_ARCHIVE: archive,
-        MY_NEURO_STAGING: staging
-      }
-    });
+    await run('tar.exe', ['-xf', archive, '-C', staging]);
     if (!fs.readdirSync(staging).length) throw new Error('Live2D 压缩包解压后为空');
     if (fs.existsSync(target)) fs.rmSync(target, {recursive:true,force:true});
     fs.renameSync(staging, target);
@@ -156,7 +228,8 @@ async function installLive2D(installDir, log) {
 async function install(request) {
   const edition = request?.edition === 'cloud' ? 'cloud' : 'local';
   const components = Array.isArray(request?.components) ? request.components : [];
-  const installDir = resolveInstallDir();
+  const installDir = resolveInstallDir(request?.installDir);
+  fs.mkdirSync(installDir, {recursive:true});
   const envDir = path.join(installDir, 'env');
   const envPython = path.join(envDir, 'python.exe');
   const archive = path.join(installDir, 'my-neuro-env.tar.gz');
@@ -300,6 +373,18 @@ async function install(request) {
 }
 
 ipcMain.handle('inspect-system', inspectSystem);
+ipcMain.handle('get-default-install-dir', () => defaultInstallDir());
+ipcMain.handle('choose-install-dir', (_event, currentDir) => {
+  let dialogStart = typeof currentDir === 'string' && currentDir.trim() ? path.resolve(currentDir.trim()) : defaultInstallDir();
+  while (!fs.existsSync(dialogStart) && dialogStart !== path.parse(dialogStart).root) dialogStart = path.dirname(dialogStart);
+  const result = dialog.showOpenDialogSync(mainWindow, {
+    title: '选择 My-Neuro 安装位置',
+    defaultPath: dialogStart,
+    buttonLabel: '选择此文件夹',
+    properties: ['openDirectory', 'createDirectory', 'promptToCreate']
+  });
+  return result?.[0] || null;
+});
 ipcMain.on('window-minimize', () => mainWindow?.minimize());
 ipcMain.on('window-close', () => mainWindow?.close());
 ipcMain.handle('start-install', async (_event, request) => {
@@ -323,7 +408,7 @@ app.whenReady().then(() => {
   }
   const diagnosticFile = process.env.MY_NEURO_PATH_DIAGNOSTIC;
   if (diagnosticFile) {
-    const installDir = resolveInstallDir();
+    const installDir = defaultInstallDir();
     fs.writeFileSync(diagnosticFile, JSON.stringify({
       portableExecutableDir: process.env.PORTABLE_EXECUTABLE_DIR || null,
       processExecPath: process.execPath,

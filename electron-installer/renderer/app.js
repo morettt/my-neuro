@@ -4,17 +4,29 @@ bar.querySelector('.window-close').addEventListener('click',()=>window.installer
 
 let edition=null;
 const next=document.querySelector('#next');
+const installDir=document.querySelector('#install-dir');
 const modules=['live2d','bert','tts','asr'];
 const labels={live2d:'Live2D',bert:'BERT',tts:'TTS',asr:'ASR'};
 document.querySelectorAll('.edition').forEach(button=>button.addEventListener('click',()=>{
   document.querySelectorAll('.edition').forEach(item=>item.classList.remove('selected'));
   button.classList.add('selected');edition=button.dataset.edition;next.disabled=false;
 }));
+window.installer.getDefaultInstallDir().then(value=>{installDir.value=value}).catch(error=>{installDir.placeholder=error.message});
+document.querySelector('#browse-dir').addEventListener('click',async()=>{
+  const browse=document.querySelector('#browse-dir');
+  browse.disabled=true;
+  try{
+    const selected=await window.installer.chooseInstallDir(installDir.value);
+    if(selected)installDir.value=selected;
+  }catch(error){
+    window.alert(`无法打开文件夹选择窗口：${error.message}`);
+  }finally{browse.disabled=false}
+});
 
 function show(id){document.querySelectorAll('.page').forEach(page=>page.classList.toggle('shown',page.id===id));next.hidden=id==='installing';document.querySelectorAll('.step').forEach((step,index)=>{step.classList.toggle('active',index===(id==='welcome'?0:id==='installing'?1:2));step.classList.toggle('done',index<(id==='welcome'?0:id==='installing'?1:2))})}
 function makeTrack(){const track=document.querySelector('#module-track');track.innerHTML='<div class="module-line"><span></span></div>';track.hidden=false;track.style.setProperty('--track-progress','0%');track.className=`module-track${edition==='cloud'?' single':''}`;const visibleModules=edition==='cloud'?['live2d']:modules;for(const name of visibleModules){const node=document.createElement('div');node.className='module-node pending';node.dataset.module=name;node.innerHTML=`<i><span></span></i><b>${labels[name]}</b><small>等待中</small>`;track.append(node)}}
 
-next.addEventListener('click',async()=>{if(document.querySelector('#done').classList.contains('shown')){window.close();return}makeTrack();show('installing');await window.installer.start({edition,components:edition==='local'?modules:[]})});
+next.addEventListener('click',async()=>{if(document.querySelector('#done').classList.contains('shown')){window.close();return}if(!installDir.value.trim()){installDir.focus();return}makeTrack();show('installing');await window.installer.start({edition,components:edition==='local'?modules:[],installDir:installDir.value.trim()})});
 window.installer.onStatus(status=>{
   if(status.type==='progress'){const pct=Math.floor(status.overall);document.querySelector('#module-track').style.setProperty('--track-progress',`${Math.max(0,Math.min(100,status.overall))}%`);document.querySelector('#percent').textContent=`${pct}%`;document.querySelector('#task').textContent=status.label}
   if(status.type==='module-status'){const node=document.querySelector(`[data-module="${status.module}"]`);if(node){node.className=`module-node ${status.status}`;node.querySelector('small').textContent=status.status==='start'?'下载中':status.status==='done'?'已完成':'失败'}}
