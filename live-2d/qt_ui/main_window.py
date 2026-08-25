@@ -175,6 +175,7 @@ class set_pyqt(VoiceCloneMixin, MotionExpressionMixin, Live2DControlMixin, LogsM
         # 云端配置：补充 SiliconFlow ASR 子标签
         self.setup_cloud_tts_provider_tab()
         self.setup_siliconflow_asr_tab()
+        self.setup_module_download_controls()
 
         # self.ui.label_model_status.setText("未上传模型文件 (.pth)")
         # self.ui.label_audio_status.setText("未上传参考音频 (.wav)")
@@ -230,10 +231,10 @@ class set_pyqt(VoiceCloneMixin, MotionExpressionMixin, Live2DControlMixin, LogsM
         self.set_btu()
         self.set_config()
         self._init_config_dirty_tracking()
+        self.ui.pushButton_terminal.show()
 
         # 云端版本隐藏本地专属功能入口
         if IS_CLOUD_VERSION:
-            self.ui.pushButton_terminal.hide()
             self.ui.pushButton_voice_clone.hide()
 
         # 为API KEY输入框添加小眼睛图标

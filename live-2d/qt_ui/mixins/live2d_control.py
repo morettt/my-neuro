@@ -386,11 +386,10 @@ class Live2DControlMixin:
     def toggle_cloud_preview(self):
         """切换本地/云端侧边栏样式预览"""
         self._previewing_local = not self._previewing_local
+        self.ui.pushButton_terminal.show()
         if self._previewing_local:
-            self.ui.pushButton_terminal.show()
             self.ui.pushButton_voice_clone.show()
         else:
-            self.ui.pushButton_terminal.hide()
             self.ui.pushButton_voice_clone.hide()
         self._update_cloud_preview_button()
         self._update_title_cloud_tag()
