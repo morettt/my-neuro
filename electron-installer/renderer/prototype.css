@@ -1,3 +1,33 @@
 #welcome{padding-top:70px}#welcome>p{font-size:14px}.edition-list{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:34px}.edition{min-height:132px;text-align:left;padding:22px;border:1px solid #dedee3;border-radius:14px;background:rgba(255,255,255,.8);color:#1d1d1f;box-shadow:none}.edition:hover{background:#fff;border-color:#b8b8be;transform:none;filter:none}.edition.selected{border:2px solid #1677d2;padding:21px;background:#f5faff;box-shadow:0 0 0 4px rgba(22,119,210,.08)}.edition strong{display:block;font-size:19px;margin-bottom:10px}.edition span{display:block;color:#6e6e73;font-size:13px;line-height:1.5}footer{justify-content:flex-end}.module-track:empty{display:none}.module-track.single{position:relative;justify-content:flex-end}.module-track.single:before{content:"";position:absolute;top:10px;left:0;right:44px;height:2px;background:#dedee2}.module-track.single .module-node{flex:0 0 88px}#installing .page-head{display:block}#installing .progress-hero{text-align:center;margin:26px 0 25px}#installing #percent{display:block;color:#1d1d1f;font-size:58px;line-height:1;font-weight:650;letter-spacing:-2.5px;font-variant-numeric:tabular-nums}#installing #task{margin-top:12px;font-size:13px;min-height:20px}#installing .progress-block{margin-top:25px}details{margin-top:25px}pre{height:145px}
 .module-track{position:relative;justify-content:space-between}.module-track:before,.module-track.single:before{display:none}.module-track .module-line{position:absolute;z-index:0;top:10px;left:44px;right:44px;height:2px;overflow:hidden;background:#dedee2}.module-track.single .module-line{left:0;right:44px}.module-track .module-line span{display:block;width:var(--track-progress,0%);height:100%;background:#1677d2;transition:width .2s ease}.module-track .module-node{flex:0 0 88px}.module-track .module-node:not(:last-child):after{display:none}
 .install-location{margin-top:25px}.install-location>label{display:block;margin-bottom:8px;color:#6e6e73;font-size:11px}.install-location>div{display:flex;gap:8px}.install-location input{flex:1;min-width:0;height:34px;padding:0 10px;border:1px solid #d2d2d7;border-radius:7px;background:#fff;color:#1d1d1f;font:11px "Segoe UI",sans-serif;outline:none}.install-location input:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(0,113,227,.12)}.install-location button{flex:none;background:#f0f0f2;color:#1d1d1f}.install-location button:hover{background:#e5e5e7}
+
+/* Single-flow installer: focused, modern layout */
+body{display:block;padding:32px 14px 14px;background:radial-gradient(circle at 18% -10%,rgba(255,255,255,.9),transparent 36%),linear-gradient(145deg,#e5e7ec 0%,#eeeef1 52%,#e4e5e9 100%)}
+body{-webkit-user-select:none;user-select:none}
+input,textarea,pre{-webkit-user-select:text;user-select:text}
+body:after{content:"";position:fixed;z-index:0;left:7%;right:7%;bottom:3px;height:22px;border-radius:50%;background:rgba(45,48,60,.2);filter:blur(20px);pointer-events:none}
+.window-bar{height:32px;background:linear-gradient(180deg,rgba(246,246,248,.96),rgba(232,233,237,.94));border-bottom:1px solid rgba(115,116,126,.11);box-shadow:inset 0 1px 0 rgba(255,255,255,.85)}
+.window-bar button{height:32px;min-height:32px;line-height:32px;color:#6f7077}
+main{position:relative;z-index:1;width:100%;height:100%;margin:0;border:1px solid rgba(255,255,255,.88);outline:1px solid rgba(100,102,112,.08);outline-offset:-2px;border-radius:21px;background:radial-gradient(circle at 20% 0,rgba(232,239,255,.72),transparent 36%),radial-gradient(circle at 86% 14%,rgba(244,235,255,.62),transparent 34%),#f9f9fa;box-shadow:0 28px 60px rgba(37,39,49,.13),0 7px 18px rgba(37,39,49,.08),inset 0 1px 0 rgba(255,255,255,.9)}
+main:before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:linear-gradient(135deg,rgba(255,255,255,.75),transparent 38%,rgba(255,255,255,.12) 72%,rgba(214,217,225,.18))}
+.page,footer{position:relative;z-index:1}
+.page{padding:38px 68px 24px}
+#welcome{padding-top:50px}
+.install-hero{text-align:center}
+.app-logo{position:relative;width:78px;height:78px;margin:0 auto 22px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.75);border-radius:23px;background:linear-gradient(145deg,#272a36 0%,#15161c 66%,#25202e 100%);box-shadow:0 18px 34px rgba(27,29,38,.2),inset 0 1px 0 rgba(255,255,255,.16)}
+.app-logo:before{content:"";position:absolute;inset:7px;border:1px solid rgba(255,255,255,.08);border-radius:17px}
+.app-logo:after{content:"";position:absolute;width:30px;height:30px;right:-6px;bottom:-7px;border-radius:50%;background:linear-gradient(145deg,#86a8ff,#9e7cf4);filter:blur(12px);opacity:.55}
+.app-logo span{position:relative;z-index:1;color:#fff;font-size:29px;font-weight:720;letter-spacing:-1px}
+.install-hero h1{margin:0;font-size:31px;font-weight:680;letter-spacing:-1.1px;color:#1d1d20}
+.install-location{width:100%;max-width:570px;margin:42px auto 0}
+.install-location>label{margin:0 0 9px 4px;color:#74747a;font-size:11px;font-weight:600}
+.install-location>div{gap:0;height:48px;padding:4px;border:1px solid rgba(115,116,126,.18);border-radius:14px;background:rgba(255,255,255,.78);box-shadow:0 8px 24px rgba(40,42,52,.07),inset 0 1px 0 rgba(255,255,255,.8);backdrop-filter:blur(18px)}
+.install-location input{height:38px;padding:0 13px;border:0;border-radius:10px;background:transparent;color:#29292d;font-size:11px;box-shadow:none}
+.install-location input:focus{border:0;box-shadow:none}
+.install-location button{height:38px;min-height:38px;padding:0 17px;border-radius:10px;background:#edeef1;color:#34343a;font-size:11px;box-shadow:none}
+.install-location button:hover{background:#e4e5e9}
+footer{flex-basis:74px;height:74px;min-height:74px;padding:0 38px;border-top:1px solid rgba(115,116,126,.12);background:rgba(249,249,250,.56);backdrop-filter:blur(18px)}
+footer button{min-width:116px;min-height:41px;border-radius:12px;background:linear-gradient(180deg,#2485df,#1674cd);box-shadow:0 8px 18px rgba(22,116,205,.2),inset 0 1px 0 rgba(255,255,255,.22)}
+footer button:hover{background:linear-gradient(180deg,#2b8ce6,#126bc0)}
+#installing,#done{padding-left:68px;padding-right:68px}

@@ -3,10 +3,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const https = require('node:https');
 const { spawn } = require('node:child_process');
-const { StringDecoder } = require('node:string_decoder');
-const tar = require('tar');
+// 本地版下载恢复时重新启用：
+// const { StringDecoder } = require('node:string_decoder');
+// const tar = require('tar');
 
-const ENV_URL = 'https://modelscope.cn/models/morelle/my-neuro-env/resolve/master/my-neuro-env.tar.gz';
+// 本地版 Python 环境下载地址，暂时停用：
+// const ENV_URL = 'https://modelscope.cn/models/morelle/my-neuro-env/resolve/master/my-neuro-env.tar.gz';
 const APP_URLS = [
   'https://gh-proxy.org/https://github.com/morettt/my-neuro/archive/refs/tags/vv1.0.zip',
   'https://hk.gh-proxy.org/https://github.com/morettt/my-neuro/archive/refs/tags/vv1.0.zip',
@@ -52,6 +54,7 @@ function run(command, args, options = {}) {
   });
 }
 
+/* 本地版显卡与显存检测，暂时停用：
 async function inspectSystem() {
   try {
     const output = await run('nvidia-smi', ['--query-gpu=name,memory.free', '--format=csv,noheader,nounits']);
@@ -64,6 +67,7 @@ async function inspectSystem() {
     return { gpu: gpu || '未检测到显卡', freeMb: null, ok: false };
   }
 }
+*/
 
 function send(payload) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('install-status', payload);
@@ -226,23 +230,26 @@ async function installLive2D(installDir, log) {
 }
 
 async function install(request) {
-  const edition = request?.edition === 'cloud' ? 'cloud' : 'local';
-  const components = Array.isArray(request?.components) ? request.components : [];
+  // 安装器现在固定使用云端版。旧版版本判断保留供以后恢复：
+  // const edition = request?.edition === 'cloud' ? 'cloud' : 'local';
+  // const components = Array.isArray(request?.components) ? request.components : [];
   const installDir = resolveInstallDir(request?.installDir);
   fs.mkdirSync(installDir, {recursive:true});
+  /* 本地版环境路径，暂时停用：
+  const modelRoot = path.join(installDir, 'full-hub');
   const envDir = path.join(installDir, 'env');
   const envPython = path.join(envDir, 'python.exe');
   const archive = path.join(installDir, 'my-neuro-env.tar.gz');
-  const modelRoot = path.join(installDir, 'full-hub');
   const batchScript = path.join(modelRoot, 'Batch_Download.py');
   const bundledBatchScript = app.isPackaged
     ? path.join(process.resourcesPath, 'full-hub', 'Batch_Download.py')
     : batchScript;
+  */
   let logPath = path.join(installDir, 'installer.log');
   const log = message => { const line = `[${new Date().toLocaleTimeString('zh-CN',{hour12:false})}] ${message}`; fs.appendFileSync(logPath, `${line}\n`, 'utf8'); send({type:'log',message:line}); };
   fs.writeFileSync(logPath, '', 'utf8');
   log(`安装根目录: ${installDir}`);
-  log(`模型保存目录: ${modelRoot}`);
+  // 本地版日志，暂时停用：log(`模型保存目录: ${modelRoot}`);
 
   try {
     await deploySource(installDir, log);
@@ -253,13 +260,13 @@ async function install(request) {
     if (fs.existsSync(sourceStaging)) fs.rmSync(sourceStaging, {recursive:true,force:true});
     throw error;
   }
-  if (edition === 'cloud') {
-    await installLive2D(installDir, log);
-    send({type:'progress',overall:100,label:'云端版安装完成'});
-    log('云端版安装成功');
-    send({type:'done',logPath});
-    return;
-  }
+  await installLive2D(installDir, log);
+  send({type:'progress',overall:100,label:'云端版安装完成'});
+  log('云端版安装成功');
+  send({type:'done',logPath});
+  return;
+
+  /* 本地版 Python 环境与模型下载逻辑，暂时停用但保留供以后恢复。
   fs.mkdirSync(modelRoot, {recursive:true});
   if (app.isPackaged) fs.copyFileSync(bundledBatchScript, batchScript);
 
@@ -370,9 +377,10 @@ async function install(request) {
     .map(([name]) => name.toUpperCase());
   if (missing.length) throw new Error(`模型目录为空: ${missing.join(', ')}。目标目录: ${modelRoot}`);
   log('安装成功'); send({type:'done',logPath});
+  */
 }
 
-ipcMain.handle('inspect-system', inspectSystem);
+// 本地版显卡检测接口，暂时停用：ipcMain.handle('inspect-system', inspectSystem);
 ipcMain.handle('get-default-install-dir', () => defaultInstallDir());
 ipcMain.handle('choose-install-dir', (_event, currentDir) => {
   let dialogStart = typeof currentDir === 'string' && currentDir.trim() ? path.resolve(currentDir.trim()) : defaultInstallDir();

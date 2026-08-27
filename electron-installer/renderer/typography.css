@@ -17,3 +17,17 @@ main{margin:10px 10px 10px 0;border-radius:0 14px 14px 0;background:linear-gradi
 footer{flex:0 0 76px;height:76px;min-height:76px;padding:0 34px;border-top:1px solid #e5e5e2;background:rgba(250,250,248,.92)}
 button{min-height:40px;border-radius:9px;background:#1677d2;padding:10px 22px;line-height:20px}button:hover{background:#0869c3}.secondary{background:transparent;color:#45464a}
 .notice{padding-left:3px}.version{color:#8c8d91}
+
+/* Bundled variable font keeps preview and packaged builds visually identical. */
+@font-face{font-family:"MyNeuro Sans";src:url("fonts/NotoSansSC-VF.ttf") format("truetype");font-style:normal;font-weight:100 900;font-display:block}
+:root{font-family:"MyNeuro Sans","Microsoft YaHei UI",sans-serif;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
+button,input{font-family:inherit;font-synthesis:none}
+h1,.install-hero h1,.hero h1{font-family:"MyNeuro Sans","Microsoft YaHei UI",sans-serif;font-weight:650;line-height:1.16}
+.install-hero h1{letter-spacing:-1.25px}
+.install-location>label{font-weight:580;letter-spacing:.08px}
+.install-location input{font-family:"MyNeuro Sans",sans-serif;font-variant-numeric:tabular-nums;letter-spacing:-.08px}
+button{font-weight:620;letter-spacing:.05px}
+#percent{font-family:"MyNeuro Sans",sans-serif;font-weight:620;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+#task,.module-node b,.module-node small{font-family:"MyNeuro Sans","Microsoft YaHei UI",sans-serif}
+pre{font-family:"Cascadia Mono","SFMono-Regular",Consolas,monospace;font-variant-ligatures:none}
+.app-logo span{font-family:"MyNeuro Sans",sans-serif;font-weight:700}
