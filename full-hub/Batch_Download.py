@@ -14,7 +14,7 @@ import subprocess
 
 system = platform.system()
 
-version_tag = "v6.6.2"
+version_tag = "v6.6.3"
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
