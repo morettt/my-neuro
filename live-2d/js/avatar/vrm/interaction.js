@@ -223,6 +223,7 @@ class VRMInteractionController {
                 const vr = model.viewRect;
                 vr.x = e.clientX - this.dragOffset.x;
                 vr.y = e.clientY - this.dragOffset.y;
+                this._maybeExpandPetWindow(vr.x, vr.y);
                 return;
             }
             if (isRightDragging) {
@@ -269,7 +270,7 @@ class VRMInteractionController {
             }
         });
 
-        this._on(window, 'mouseup', async (e) => {
+        this._on(window, 'mouseup', (e) => {
             if (e.button === 0 && this.isDragging) {
                 this.isDragging = false;
 
@@ -282,12 +283,8 @@ class VRMInteractionController {
                     }
                 }
 
-                // 松手时若“光标拖到了窗口边缘 + 模型越过该边”，整窗重定位到那一侧的显示器；
-                // 未切屏时若模型越出窗口，平滑回弹到窗口内（两个分支内部各自负责保存位置）。
-                const switched = await this.checkAndSwitchDisplay(e.clientX, e.clientY);
-                if (!switched) {
-                    this._bounceViewRectIntoWindow();
-                }
+                // 巨窗方案：松手不再整窗切屏。回弹按整块窗口判断。
+                this._bounceViewRectIntoWindow();
                 setTimeout(() => {
                     if (this.model && !model.containsPoint({ x: e.clientX, y: e.clientY })) {
                         ipcRenderer.send('set-ignore-mouse-events', { ignore: true, options: { forward: true } });
@@ -406,15 +403,21 @@ class VRMInteractionController {
 
     resetModelPosition() {
         if (!this.model) return { success: false };
-        this.model.viewRect = this._savedToViewRect(1.35, 0.8, 2.3);
+        const primary = this._getPrimaryWindowOffset();
+        const vr = this._savedToViewRectWithSize(1.35, 0.8, 2.3, primary.width, primary.height);
+        vr.x += primary.x;
+        vr.y += primary.y;
+        this.model.viewRect = vr;
         this._clampViewRect();
         this.saveModelPosition();
         return { success: true };
     }
 
     _savedToViewRect(relX, relY, scale) {
-        const iW = window.innerWidth;
-        const iH = window.innerHeight;
+        return this._savedToViewRectWithSize(relX, relY, scale, window.innerWidth, window.innerHeight);
+    }
+
+    _savedToViewRectWithSize(relX, relY, scale, iW, iH) {
         const width = scale * VRM_SCALE_FACTOR * iW;
         const height = width * VRM_VIEWPORT_ASPECT;
         return {
@@ -423,6 +426,32 @@ class VRMInteractionController {
             width,
             height
         };
+    }
+
+    _getPrimaryWindowOffset() {
+        try {
+            const info = ipcRenderer.sendSync('get-screen-info-sync');
+            if (info?.primaryDisplay?.bounds && info?.windowBounds) {
+                return {
+                    x: info.primaryDisplay.bounds.x - info.windowBounds.x,
+                    y: info.primaryDisplay.bounds.y - info.windowBounds.y,
+                    width: info.primaryDisplay.bounds.width,
+                    height: info.primaryDisplay.bounds.height
+                };
+            }
+        } catch (_) { /* ignore */ }
+        return { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight };
+    }
+
+    _maybeExpandPetWindow(x, y) {
+        const now = Date.now();
+        if (this._lastWindowMoveAt && now - this._lastWindowMoveAt < 200) return;
+        const edge = 40;
+        const nearEdge = x < edge || y < edge ||
+            x > window.innerWidth - edge || y > window.innerHeight - edge;
+        if (!nearEdge) return;
+        this._lastWindowMoveAt = now;
+        ipcRenderer.send('window-move', { mouseX: 0, mouseY: 0 });
     }
 
     // overrideWidth/Height：跨屏切换时传入“目标显示器的 DIP 尺寸”作基准。
@@ -437,83 +466,10 @@ class VRMInteractionController {
         };
     }
 
-    // ===== 跨屏：松手时若“光标拖到窗口边缘 + 模型越过该边”，整窗重定位到那一侧的显示器 =====
-    // 触发用“光标贴边(EDGE 内) 且 模型可见区也越过该边”双重确认：光标到边缘=明确要往那侧推出去，
-    // 松手在屏幕中间不会误触；光标永远能拖到边缘，故四向、任意抓取点都对称。
-    // VRM 在 client/CSS 像素下工作（渲染器 1:1）。cursorX/cursorY：松手时光标的窗口 CSS 坐标。
-    async checkAndSwitchDisplay(cursorX, cursorY) {
-        if (!window.electronScreen || !window.electronScreen.moveWindowToDisplay) return false;
-        if (!this.model || !this.model.viewRect) return false;
-        if (!Number.isFinite(cursorX) || !Number.isFinite(cursorY)) return false;
-
-        try {
-            const displays = await window.electronScreen.getAllDisplays();
-            if (!displays || displays.length <= 1) return false;
-            const currentDisplay = await window.electronScreen.getCurrentDisplay();
-            if (!currentDisplay) return false;
-
-            const vr = this.model.viewRect;
-            const W = window.innerWidth, H = window.innerHeight;
-            // 模型可见区域在当前窗口 client 像素下的边界
-            const vLeft = vr.x + VRM_PADDING_X * vr.width;
-            const vRight = vr.x + (1 - VRM_PADDING_X) * vr.width;
-            const vTop = vr.y + VRM_PADDING_Y * vr.height;
-            const vBottom = vr.y + 0.96 * vr.height;
-
-            // 光标贴到哪条边(EDGE 内) 且 模型也越过该边，就在那侧“边外一点”探测目标显示器；另一轴用光标位置。
-            const EDGE = 10;
-            const sX = currentDisplay.screenX, sY = currentDisplay.screenY;
-            const probes = [];
-            if (cursorX <= EDGE && vLeft < 0)       probes.push({ x: sX - 1,      y: sY + cursorY });
-            if (cursorX >= W - EDGE && vRight > W)   probes.push({ x: sX + W + 1,  y: sY + cursorY });
-            if (cursorY <= EDGE && vTop < 0)        probes.push({ x: sX + cursorX, y: sY - 1 });
-            if (cursorY >= H - EDGE && vBottom > H)  probes.push({ x: sX + cursorX, y: sY + H + 1 });
-
-            let targetDisplay = null, probe = null;
-            for (const p of probes) {
-                for (const d of displays) {
-                    if (d.id === currentDisplay.id) continue;
-                    if (p.x >= d.screenX && p.x < d.screenX + d.width &&
-                        p.y >= d.screenY && p.y < d.screenY + d.height) {
-                        targetDisplay = d; probe = p; break;
-                    }
-                }
-                if (targetDisplay) break;
-            }
-            if (!targetDisplay) return false;
-
-            console.log('[VRM] 光标拖到屏幕边缘，准备切换到屏幕:', targetDisplay.id);
-            const result = await window.electronScreen.moveWindowToDisplay(probe.x, probe.y);
-            if (result && result.success && !result.sameDisplay) {
-                if (result.scaleRatio && result.scaleRatio !== 1) {
-                    console.log('[VRM] 屏幕缩放比变化:', result.scaleRatio);
-                }
-
-                // 以探测点为视觉中心放到新窗口，再夹住可见模型完整落入目标屏（用目标屏 DIP 尺寸，免受 innerWidth 未稳定影响）。
-                const tw = targetDisplay.width, th = targetDisplay.height;
-                const halfVisW = (vRight - vLeft) / 2;
-                const halfVisH = (vBottom - vTop) / 2; // VRM_CENTER_Y_FRAC 取可见区上下中点，故上下对称
-                const margin = 16;
-                let cx = probe.x - targetDisplay.screenX;
-                let cy = probe.y - targetDisplay.screenY;
-                const loX = margin + halfVisW, hiX = tw - margin - halfVisW;
-                const loY = margin + halfVisH, hiY = th - margin - halfVisH;
-                cx = hiX >= loX ? Math.min(Math.max(cx, loX), hiX) : tw / 2;
-                cy = hiY >= loY ? Math.min(Math.max(cy, loY), hiY) : th / 2;
-
-                this.model.viewRect.x = cx - 0.5 * vr.width;
-                this.model.viewRect.y = cy - VRM_CENTER_Y_FRAC * vr.height;
-
-                // 保存：用目标显示器 DIP 尺寸作基准，避免依赖跨屏后尚未稳定的 innerWidth。
-                this.saveModelPosition(tw, th);
-                console.log('[VRM] 跨屏切换完成，viewRect:', this.model.viewRect);
-                return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('[VRM] 跨屏检测/切换出错:', error);
-            return false;
-        }
+    // 6.55 巨窗下不再整窗切屏。保留空实现，避免旧调用把窗口缩回单屏。
+    async checkAndSwitchDisplay() {
+        console.log('[VRM] 巨窗方案不再整窗切屏');
+        return false;
     }
 
     // ===== 回弹：以「碰撞箱（getScreenHitBox，骨骼投影的真实可抓取范围）」为判断依据 =====

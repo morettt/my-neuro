@@ -97,22 +97,37 @@ class UIController {
             textChatContainer.style.setProperty('opacity', '0', 'important');
         }
 
-        // 窗口只覆盖“当前显示器”，聊天框/字幕直接锚定到本窗口的右下角即可，
-        // 不再需要 get-screen-info-sync 把坐标换算到主屏（那是旧巨型跨屏窗口才需要的）。
-        textChatContainer.style.setProperty('left', 'auto', 'important');
-        textChatContainer.style.setProperty('right', '20px', 'important');
-        textChatContainer.style.setProperty('bottom', '50px', 'important');
+        // 巨窗覆盖多屏时，必须锚到主屏右下，不能锚整窗右下（否则对话框会跑到副屏最右侧）。
+        const screenInfo = ipcRenderer.sendSync('get-screen-info-sync');
+        if (screenInfo?.primaryDisplay && screenInfo?.windowBounds) {
+            const { primaryDisplay, windowBounds } = screenInfo;
+            const winX = windowBounds.x;
+            const winY = windowBounds.y;
+            const winH = windowBounds.height;
+            const primaryLeftOffset = primaryDisplay.bounds.x - winX;
+            const primaryTopOffset = primaryDisplay.bounds.y - winY;
+            const primaryBottomOffset = winH - (primaryTopOffset + primaryDisplay.bounds.height);
+            const rightPos = primaryLeftOffset + primaryDisplay.bounds.width - 350 - 20;
 
-        const subtitleContainer = document.getElementById('subtitle-container');
-        if (subtitleContainer) {
-            subtitleContainer.style.setProperty('position', 'fixed', 'important');
-            subtitleContainer.style.setProperty('left', 'auto', 'important');
-            subtitleContainer.style.setProperty('right', '20px', 'important');
-            subtitleContainer.style.setProperty('bottom', '20px', 'important');
-            subtitleContainer.style.setProperty('width', '400px', 'important');
-            subtitleContainer.style.setProperty('max-width', '400px', 'important');
-            subtitleContainer.style.setProperty('transform', 'none', 'important');
-            subtitleContainer.style.setProperty('display', 'block', 'important');
+            textChatContainer.style.setProperty('left', rightPos + 'px', 'important');
+            textChatContainer.style.setProperty('right', 'auto', 'important');
+            textChatContainer.style.setProperty('bottom', (primaryBottomOffset + 50) + 'px', 'important');
+
+            const subtitleContainer = document.getElementById('subtitle-container');
+            if (subtitleContainer) {
+                subtitleContainer.style.setProperty('position', 'fixed', 'important');
+                subtitleContainer.style.setProperty('left', (primaryLeftOffset + primaryDisplay.bounds.width - 800) + 'px', 'important');
+                subtitleContainer.style.setProperty('right', 'auto', 'important');
+                subtitleContainer.style.setProperty('bottom', (primaryBottomOffset + 20) + 'px', 'important');
+                subtitleContainer.style.setProperty('width', '400px', 'important');
+                subtitleContainer.style.setProperty('max-width', '400px', 'important');
+                subtitleContainer.style.setProperty('transform', 'none', 'important');
+                subtitleContainer.style.setProperty('display', 'block', 'important');
+            }
+        } else {
+            textChatContainer.style.setProperty('left', 'auto', 'important');
+            textChatContainer.style.setProperty('right', '20px', 'important');
+            textChatContainer.style.setProperty('bottom', '50px', 'important');
         }
 
         const setMousePassthrough = (ignore, forward = true) => {
@@ -1025,7 +1040,17 @@ class UIController {
         this.subtitleScale = 1;
 
         if (this.isAdjustingSubtitle) {
-            const tx = window.innerWidth * 0.7, ty = window.innerHeight - 80;
+            let tx = window.innerWidth * 0.7;
+            let ty = window.innerHeight - 80;
+            try {
+                const info = ipcRenderer.sendSync('get-screen-info-sync');
+                if (info?.primaryDisplay?.bounds && info?.windowBounds) {
+                    const left = info.primaryDisplay.bounds.x - info.windowBounds.x;
+                    const top = info.primaryDisplay.bounds.y - info.windowBounds.y;
+                    tx = left + info.primaryDisplay.bounds.width * 0.7;
+                    ty = top + info.primaryDisplay.bounds.height - 80;
+                }
+            } catch (_) { /* 单屏回退 */ }
             this._subtitleCenterX = tx; this._subtitleCenterY = ty;
             Object.assign(c.style, {
                 left: `${tx}px`, top: `${ty}px`,
