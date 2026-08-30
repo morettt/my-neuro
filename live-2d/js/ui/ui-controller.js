@@ -1,6 +1,7 @@
 // ui-controller.js - UI控制模块
 const { ipcRenderer } = require('electron');
 const { logToTerminal } = require('../api-utils.js');
+const { configLoader } = require('../core/config-loader.js');
 
 class UIController {
     constructor(config) {
@@ -647,6 +648,39 @@ class UIController {
             }
             toggleChatBtn.classList.toggle('active', !visible);
         });
+
+        // Live2D 视线跟随开关（VRM 模式下隐藏，VRM 有自己的 gaze 按钮）
+        const toggleGazeBtn = document.getElementById('btn-toggle-gaze-l2d');
+        if (toggleGazeBtn) {
+            const syncGazeBtn = () => {
+                const rt = global.live2dRuntime;
+                if (!rt) {
+                    toggleGazeBtn.style.display = 'none';
+                    return;
+                }
+                toggleGazeBtn.style.display = '';
+                toggleGazeBtn.classList.toggle('active', !!rt.isGazeTrackingEnabled());
+            };
+            syncGazeBtn();
+            // runtime 初始化晚于 UI 装配，延迟同步一次
+            setTimeout(syncGazeBtn, 3000);
+
+            toggleGazeBtn.addEventListener('click', () => {
+                const rt = global.live2dRuntime;
+                if (!rt) return;
+                const next = !rt.isGazeTrackingEnabled();
+                rt.setGazeTracking(next);
+                const targetConfig = this.config || config || {};
+                targetConfig.ui = targetConfig.ui || {};
+                targetConfig.ui.live2d_gaze_tracking = next;
+                this.config = targetConfig;
+                const saved = configLoader.save(targetConfig);
+                if (!saved) {
+                    logToTerminal('warn', '[QuickPanel] 视线跟随开关状态保存失败');
+                }
+                toggleGazeBtn.classList.toggle('active', next);
+            });
+        }
 
         toggleModeBtn.addEventListener('click', () => {
             const proc = voiceChat.asrController?.asrProcessor;
