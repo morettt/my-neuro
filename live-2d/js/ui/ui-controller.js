@@ -1,7 +1,6 @@
 // ui-controller.js - UI控制模块
 const { ipcRenderer } = require('electron');
 const { logToTerminal } = require('../api-utils.js');
-const { configLoader } = require('../core/config-loader.js');
 
 class UIController {
     constructor(config) {
@@ -665,7 +664,7 @@ class UIController {
             // runtime 初始化晚于 UI 装配，延迟同步一次
             setTimeout(syncGazeBtn, 3000);
 
-            toggleGazeBtn.addEventListener('click', () => {
+            toggleGazeBtn.addEventListener('click', async () => {
                 const rt = global.live2dRuntime;
                 if (!rt) return;
                 const next = !rt.isGazeTrackingEnabled();
@@ -674,9 +673,13 @@ class UIController {
                 targetConfig.ui = targetConfig.ui || {};
                 targetConfig.ui.live2d_gaze_tracking = next;
                 this.config = targetConfig;
-                const saved = configLoader.save(targetConfig);
-                if (!saved) {
-                    logToTerminal('warn', '[QuickPanel] 视线跟随开关状态保存失败');
+                try {
+                    const result = await ipcRenderer.invoke('save-config', targetConfig);
+                    if (!result?.success) {
+                        logToTerminal('warn', '[QuickPanel] 视线跟随开关状态保存失败');
+                    }
+                } catch (error) {
+                    logToTerminal('warn', `[QuickPanel] 视线跟随开关状态保存失败: ${error.message}`);
                 }
                 toggleGazeBtn.classList.toggle('active', next);
             });
