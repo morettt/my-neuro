@@ -202,37 +202,18 @@ class HttpServer {
 		
 		    const jsCode = `
 		        (() => {
-		            // 获取全局的模型控制器
-		            const mc = global.modelController;
-		            if (!mc?.model) return { success: false};
-		
-		            const { ipcRenderer } = require('electron');
-		            const model = mc.model;
-		            const scaleFactor = window.canvasScaleFactor || 2;
-		            // 窗口只覆盖当前显示器，重置到当前窗口内的默认相对位置即可（不再区分单/双屏）。
-		            const relX = 0.65;
-		            const relY = 0.38;
-		            const scale = 0.65;
+		            const facade = global.avatarFacade || window.avatar;
+		            const mc = facade?.getController?.() || global.modelController;
+		            if (!mc) return { success: false };
 
-		            if (model.modelType === 'vrm') {
-		                model.viewRect = mc._savedToViewRect(relX, relY, scale);
-		                if (mc._clampViewRect) mc._clampViewRect();
-		            } else {
-		                const defaultX = relX * window.innerWidth * scaleFactor;
-		                const defaultY = relY * window.innerHeight * scaleFactor;
-		                model.x = defaultX;
-		                model.y = defaultY;
-		                if (model.scale?.set) model.scale.set(scale);
-		                if (mc.updateInteractionArea) mc.updateInteractionArea();
+		            if (typeof mc.resetModelPosition === 'function') {
+		                const result = mc.resetModelPosition();
+		                const uic = global.uiController;
+		                if (uic) uic.resetSubtitlePosition();
+		                return result && result.success !== false ? { success: true } : { success: false };
 		            }
-		
-		            ipcRenderer.send('save-model-position', { x: relX, y: relY, scale });
 
-		            // 同步复位字幕位置
-		            const uic = global.uiController;
-		            if (uic) uic.resetSubtitlePosition();
-
-		            return { success: true};
+		            return { success: false };
 		        })()
 		    `;
 		

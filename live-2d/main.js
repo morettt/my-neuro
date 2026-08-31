@@ -269,9 +269,7 @@ function ensureTopMost(win) {
 }
 
 // ===== 跨屏方案辅助函数 =====
-// 单显示器全屏边界：左/上各内缩 1px，破坏“起点贴齐 + size 等于 display”的完美全屏判定，
-// 规避 DWM/Chromium borderless-fullscreen / 遮挡优化带来的副作用（后台视频暂停、播放器卡顿等）。
-// 用于把窗口尺寸定为单个显示器的全屏填充范围。
+// 6.6 单屏窗口边界（仅留给调试/兼容调用，创建窗口不再走这条路径）。
 function getFullscreenDisplayBounds(display) {
     const b = display && display.bounds ? display.bounds : { x: 0, y: 0, width: 1280, height: 720 };
     return {
@@ -282,24 +280,69 @@ function getFullscreenDisplayBounds(display) {
     };
 }
 
-// 启动时选择窗口所在显示器：优先上次保存的显示器（config.ui.model_position.display），否则主屏。
-function findStartupDisplay(config) {
-    const displays = screen.getAllDisplays();
-    const saved = config && config.ui && config.ui.model_position && config.ui.model_position.display;
-    if (saved && Number.isFinite(saved.screenX) && Number.isFinite(saved.screenY)) {
-        const px = saved.screenX + 10;
-        const py = saved.screenY + 10;
-        const found = displays.find(d =>
-            px >= d.bounds.x && px < d.bounds.x + d.bounds.width &&
-            py >= d.bounds.y && py < d.bounds.y + d.bounds.height
-        );
-        if (found) return found;
-        try {
-            const near = screen.getDisplayNearestPoint({ x: saved.screenX, y: saved.screenY });
-            if (near) return near;
-        } catch (e) { /* ignore */ }
+// 6.55 巨窗并集：用 Electron display.bounds 原始 x/y（副屏在左时为负数），禁止 clamp 到 0。
+// 相对 6.55 的唯一行为调整：显式 extend=false 但已有 2 块及以上屏幕时，仍覆盖全部屏幕，
+// 避免用户必须先改 config.json 才能把皮套拖到副屏。
+function computePetWindowBounds(config, displays, primaryDisplay) {
+    const screenExtend = (config && config.ui && config.ui.screen_extend) || { extend: false, left: false, right: true };
+    const all = Array.isArray(displays) && displays.length > 0 ? displays : [primaryDisplay];
+    const primary = primaryDisplay || all[0];
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    const include = (display) => {
+        const { x, y, width, height } = display.bounds;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x + width);
+        maxY = Math.max(maxY, y + height);
+    };
+
+    const multi = all.length >= 2;
+    if (screenExtend.extend === false && !multi) {
+        include(primary);
+    } else if (screenExtend.extend === true && screenExtend.left) {
+        all.forEach((display) => {
+            if (display.bounds.x <= primary.bounds.x) include(display);
+        });
+    } else {
+        all.forEach(include);
     }
-    return screen.getPrimaryDisplay();
+
+    return {
+        minX,
+        minY,
+        maxX,
+        maxY,
+        totalWidth: maxX - minX,
+        totalHeight: maxY - minY,
+        screenExtend,
+        displayCount: all.length
+    };
+}
+
+function applyPetUnionBounds(win, config) {
+    if (!win || win.isDestroyed()) return null;
+    const displays = screen.getAllDisplays();
+    const primary = screen.getPrimaryDisplay();
+    const target = computePetWindowBounds(config || {}, displays, primary);
+    const next = {
+        x: target.minX,
+        y: target.minY,
+        width: target.totalWidth,
+        height: target.totalHeight
+    };
+    const current = win.getBounds();
+    const near = (a, b) => Math.abs(a - b) <= 2;
+    if (!(near(current.x, next.x) && near(current.y, next.y) &&
+        near(current.width, next.width) && near(current.height, next.height))) {
+        win.setBounds(next);
+        schedulePetBoundsRepair(win, next);
+        console.log(`窗口调整: ${next.width}x${next.height} at (${next.x}, ${next.y})`);
+    }
+    return target;
 }
 
 // 创建/跨屏后多次重申窗口边界：抵消创建期被夹到 workArea，以及跨不同 DPI 屏时 Electron 单次
@@ -378,19 +421,24 @@ function createWindow () {
         console.error('读取配置失败:', e);
     }
 
-    // ===== 跨屏方案：窗口只覆盖“单个”显示器，跨屏靠整窗重定位（move-window-to-display）实现 =====
-    // 不再把所有显示器并集成一块巨型窗口；启动时落在上次所在的显示器（否则主屏）。
-    const startupDisplay = findStartupDisplay(config);
-    const startupBounds = getFullscreenDisplayBounds(startupDisplay);
-    const minX = startupBounds.x;
-    const minY = startupBounds.y;
-    const totalWidth = startupBounds.width;
-    const totalHeight = startupBounds.height;
+    // ===== 跨屏方案：恢复 6.55 巨窗并集。拖到副屏靠画布坐标，不再整窗跳单屏。 =====
+    const displays = screen.getAllDisplays();
+    const primaryDisplay = screen.getPrimaryDisplay();
+    displays.forEach((display, index) => {
+        const { x, y, width, height } = display.bounds;
+        console.log(`显示器 ${index}: id=${display.id}, x=${x}, y=${y}, width=${width}, height=${height}, scale=${display.scaleFactor}`);
+    });
+    const union = computePetWindowBounds(config, displays, primaryDisplay);
+    const minX = union.minX;
+    const minY = union.minY;
+    const totalWidth = union.totalWidth;
+    const totalHeight = union.totalHeight;
 
-    console.log(`=== 窗口创建信息（单屏方案）===`)
-    console.log(`目标显示器: id=${startupDisplay.id}, 缩放=${startupDisplay.scaleFactor}, bounds=${JSON.stringify(startupDisplay.bounds)}`)
-    console.log(`窗口尺寸: ${totalWidth}x${totalHeight}`)
-    console.log(`窗口位置: (${minX}, ${minY})`)
+    console.log(`=== 窗口创建信息（6.55 巨窗并集）===`);
+    console.log(`screen_extend: ${JSON.stringify(union.screenExtend)}, 显示器数量=${union.displayCount}`);
+    console.log(`总边界: minX=${minX}, minY=${minY}, maxX=${union.maxX}, maxY=${union.maxY}`);
+    console.log(`计算的窗口尺寸: ${totalWidth}x${totalHeight}`);
+    console.log(`窗口位置: (${minX}, ${minY})`);
     
     const win = new BrowserWindow({
         x: minX,
@@ -411,7 +459,7 @@ function createWindow () {
             zoomFactor: 1.0,
             enableWebSQL: true
         },
-        resizable: false,
+        resizable: true,
         movable: true,
         skipTaskbar: true,
         maximizable: false,
@@ -425,7 +473,7 @@ function createWindow () {
     console.log(`窗口创建后立即尺寸: ${immediateBounds.width}x${immediateBounds.height}`)
     console.log(`窗口创建后立即位置: (${immediateBounds.x}, ${immediateBounds.y})`)
     
-    // 创建后多次重申单屏边界（替代旧的一次性 100ms 自检），抵消创建期被夹到 workArea。
+    // 创建后多次重申并集边界，抵消创建期被夹到 workArea；不再打回单屏。
     schedulePetBoundsRepair(win, { x: minX, y: minY, width: totalWidth, height: totalHeight })
     
     win.loadFile('index.html')
@@ -498,8 +546,30 @@ app.on('activate', () => {
     }
 })
 
-// 旧的 'window-move'（巨窗跟随 + 动态并集 setBounds）方案已废弃。
-// 跨屏改由 'move-window-to-display' 实现（见下方），渲染端拖动只移动模型精灵。
+// 恢复 6.55 的 window-move：拖到窗边时把窗口扩成当前配置下的显示器并集。
+ipcMain.on('window-move', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return;
+    let config = {};
+    try {
+        config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch (e) { /* 用空配置走 computePetWindowBounds 的多屏默认 */ }
+    applyPetUnionBounds(win, config);
+});
+
+ipcMain.on('get-screen-info-sync', (event) => {
+    try {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        event.returnValue = {
+            primaryDisplay: screen.getPrimaryDisplay(),
+            allDisplays: screen.getAllDisplays(),
+            windowBounds: win && !win.isDestroyed() ? win.getBounds() : null
+        };
+    } catch (e) {
+        console.error('获取屏幕信息失败:', e);
+        event.returnValue = null;
+    }
+});
 
 ipcMain.on('set-ignore-mouse-events', (event, { ignore, options }) => {
     BrowserWindow.fromWebContents(event.sender).setIgnoreMouseEvents(ignore, options)
@@ -829,68 +899,20 @@ ipcMain.handle('get-primary-display-info', () => {
     };
 });
 
-// ===== 跨屏核心：把整个窗口重定位到“包含指定屏幕点”的显示器并填满它 =====
-// 渲染端在松手时检测到模型中心越出当前窗口，换算成屏幕绝对坐标后调用本接口。
-ipcMain.handle('move-window-to-display', async (event, screenX, screenY) => {
+// 6.6 单屏切屏入口保留给旧调用，但不再把窗口缩回一块屏。
+ipcMain.handle('move-window-to-display', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win || win.isDestroyed()) return { success: false, error: 'Window not found' };
     try {
-        const displays = screen.getAllDisplays();
-        const currentBounds = win.getBounds();
-
-        // 找到包含该屏幕点的目标显示器
-        let targetDisplay = null;
-        for (const display of displays) {
-            const b = display.bounds;
-            if (screenX >= b.x && screenX < b.x + b.width &&
-                screenY >= b.y && screenY < b.y + b.height) {
-                targetDisplay = display;
-                break;
-            }
-        }
-        if (!targetDisplay) {
-            console.log('move-window-to-display: 未找到包含点的屏幕, screenX=', screenX, 'screenY=', screenY);
-            return { success: false, error: 'No display found at the given point' };
-        }
-
-        const currentDisplay = screen.getDisplayMatching(currentBounds);
-        if (currentDisplay.id === targetDisplay.id) {
-            return { success: true, sameDisplay: true };
-        }
-
-        console.log('move-window-to-display: 从屏幕', currentDisplay.id, '切换到屏幕', targetDisplay.id);
-
-        // 不同屏幕可能有不同缩放：广播 scaleRatio（渲染端目前保持模型原大小，仅调位置）
-        const scaleRatio = targetDisplay.scaleFactor / currentDisplay.scaleFactor;
-        const newBounds = getFullscreenDisplayBounds(targetDisplay);
-
-        // 切屏期间隐藏窗口，遮住“尺寸过冲/修正”那一两帧的闪跳；尺寸稳定后由 revealPetAfterMove 恢复。
-        hidePetForMove(win);
-        win.setBounds(newBounds);
-
-        // 关键修复：跨“不同缩放因子(DPI)”的显示器时，Electron 单次 setBounds 会用错误的缩放因子
-        // 计算物理尺寸，使窗口尺寸不匹配目标屏。等窗口落到目标屏后多次重申边界，按目标屏缩放因子重算尺寸。
-        schedulePetBoundsRepair(win, newBounds);
-        revealPetAfterMove(win, newBounds);
-
-        setTimeout(() => {
-            if (!win.isDestroyed()) {
-                win.webContents.send('display-changed', {
-                    displayId: targetDisplay.id,
-                    bounds: targetDisplay.bounds,
-                    scaleFactor: targetDisplay.scaleFactor,
-                    scaleRatio: scaleRatio,
-                    previousScaleFactor: currentDisplay.scaleFactor
-                });
-            }
-        }, 32);
-
+        let config = {};
+        try {
+            config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        } catch (e) { /* ignore */ }
+        const target = applyPetUnionBounds(win, config);
         return {
             success: true,
-            displayId: targetDisplay.id,
-            bounds: targetDisplay.bounds,
-            scaleFactor: targetDisplay.scaleFactor,
-            scaleRatio: scaleRatio
+            sameDisplay: true,
+            bounds: target ? { x: target.minX, y: target.minY, width: target.totalWidth, height: target.totalHeight } : null
         };
     } catch (err) {
         console.error('move-window-to-display 错误:', err.message);
@@ -918,12 +940,17 @@ ipcMain.on('save-model-position', (event, position) => {
             };
         }
 
-        // 跨屏方案：位置按“当前显示器内的相对位置（0~1）”保存，不再区分单/双屏 x_dual/y_dual。
-        configData.ui.model_position.x = nextPosition.x;
-        configData.ui.model_position.y = nextPosition.y;
+        // 巨窗方案恢复 6.55 的单/双屏坐标：右扩巨窗写 x_dual/y_dual。
+        if (nextPosition.dual) {
+            configData.ui.model_position.x_dual = nextPosition.x;
+            configData.ui.model_position.y_dual = nextPosition.y;
+        } else {
+            configData.ui.model_position.x = nextPosition.x;
+            configData.ui.model_position.y = nextPosition.y;
+        }
         configData.ui.model_scale = nextPosition.scale;
 
-        // 记录当前窗口所在显示器的屏幕原点，供下次启动把窗口落回同一块屏（findStartupDisplay 使用）。
+        // 仍记录当前屏原点，仅供诊断；启动落点以巨窗并集为准。
         const win = BrowserWindow.fromWebContents(event.sender);
         if (win && !win.isDestroyed()) {
             try {
