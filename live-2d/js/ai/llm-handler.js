@@ -788,6 +788,7 @@ class LLMHandler {
 
                     // ===== 保存对话历史 =====
                     voiceChat.saveConversationHistory();
+                    logToTerminal('info', 'AI 已回复');
                     // MemOS 保存由 memos 插件的 onLLMResponse 钩子处理
 
                     // 🎙️ 播放最终回复的TTS（统一在这里播放，参考旧版本的设计）
