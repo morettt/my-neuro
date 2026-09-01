@@ -5,6 +5,7 @@
 		"TotalInputCount": 34,
 		"TotalOutputCount": 35,
 		"VertexCount": 58,
+		"Fps": 120,
 		"EffectiveForces": {
 			"Gravity": {
 				"X": 0,
