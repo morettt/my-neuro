@@ -1,10 +1,11 @@
-const { app, BrowserWindow, ipcMain, shell, net } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, net, dialog } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const http = require('http');
 const nodeNet = require('node:net');
 const { scanLive2DModels, resolveLive2DModel, scanVRMModels } = require('./js/avatar/model-registry');
+const { loadProvidersFromStore, saveProviders } = require('./js/core/llm-provider-store');
 
 const configPath = path.join(__dirname, 'config.json');
 const pluginsPath = path.join(__dirname, 'plugins');
@@ -13,6 +14,8 @@ const runtimeLogPath = path.join(__dirname, 'runtime.log');
 let runtimeLogSender = null;
 let runtimeLogLength = 0;
 let runtimeLogRemainder = '';
+let selectedVoiceModelPath = '';
+let selectedVoiceAudioPath = '';
 
 function cleanToolLog(line) {
   return line
@@ -86,6 +89,19 @@ const serviceDefinitions = {
 const projectRoot = path.resolve(__dirname, '..');
 const hubRoot = path.join(projectRoot, 'full-hub');
 
+function serviceLaunchDefinition(id) {
+  const definition = serviceDefinitions[id];
+  if (id !== 'asr' || !definition) return definition;
+  const current = readJson(configPath, {});
+  if (current.cloud?.baidu_asr?.enabled === true) {
+    return { ...definition, name: '百度流式 ASR（仅 VAD）', bat: 'VAD.bat' };
+  }
+  if (current.cloud?.siliconflow_asr?.enabled === true) {
+    return { ...definition, name: 'SiliconFlow ASR（本地 VAD）' };
+  }
+  return { ...definition, name: '本地 ASR' };
+}
+
 function serviceInstalled(definition) {
   return definition.checks.every(item => fs.existsSync(path.join(hubRoot, item)));
 }
@@ -114,6 +130,23 @@ async function serviceStatus() {
   })));
 }
 
+async function stopConfiguredServices() {
+  const current = readJson(configPath, {});
+  if (current.auto_close_services?.enabled === false) return;
+  for (const [id, definition] of Object.entries(serviceDefinitions)) {
+    const pids = await listeningPids(definition.port);
+    if (serviceProcesses[id]?.pid) pids.push(String(serviceProcesses[id].pid));
+    for (const pid of new Set(pids)) {
+      await runProcess('taskkill.exe', ['/pid', pid, '/t', '/f']).catch(() => {});
+    }
+    serviceProcesses[id] = null;
+    if (serviceDownloads[id]?.pid) {
+      await runProcess('taskkill.exe', ['/pid', String(serviceDownloads[id].pid), '/t', '/f']).catch(() => {});
+      serviceDownloads[id] = null;
+    }
+  }
+}
+
 function listeningPids(port) {
   return new Promise(resolve => {
     const child = spawn('netstat.exe', ['-ano', '-p', 'tcp'], { windowsHide: true });
@@ -135,6 +168,107 @@ function readJson(filePath, fallback = {}) {
   try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return fallback; }
 }
 
+function loadControlConfig() {
+  const config = readJson(configPath, {});
+  config.llm ||= {};
+  const providers = loadProvidersFromStore(__dirname).providers;
+  const provider = providers.find(item => item.id === config.llm.provider_id)
+    || providers.find(item => item.enabled !== false)
+    || providers[0];
+  const model = provider?.models?.find(item => item.model_id === config.llm.model_id)
+    || provider?.models?.find(item => item.enabled !== false)
+    || provider?.models?.[0];
+  if (provider) {
+    config.llm.provider_id = provider.id;
+    config.llm.api_key = provider.api_key || '';
+    config.llm.api_url = provider.api_url || '';
+  }
+  if (model) {
+    config.llm.model_id = model.model_id;
+    config.llm.model = model.model_id;
+    if (model.temperature !== undefined) config.llm.temperature = model.temperature;
+    if (model.temperature_enabled !== undefined) config.llm.temperature_enabled = model.temperature_enabled;
+  }
+  config.vision ||= {};
+  config.vision.vision_model ||= {};
+  const visionProvider = providers.find(item => item.id === config.vision.provider_id);
+  const visionModel = visionProvider?.models?.find(item => item.model_id === config.vision.model_id)
+    || visionProvider?.models?.find(item => item.enabled !== false)
+    || visionProvider?.models?.[0];
+  if (visionProvider) {
+    config.vision.vision_model.api_key = visionProvider.api_key || '';
+    config.vision.vision_model.api_url = visionProvider.api_url || '';
+  }
+  if (visionModel) config.vision.vision_model.model = visionModel.model_id;
+  return config;
+}
+
+function saveControlConfig(config) {
+  config.llm ||= {};
+  const providers = loadProvidersFromStore(__dirname).providers;
+  let provider = providers.find(item => item.id === config.llm.provider_id)
+    || providers.find(item => item.enabled !== false)
+    || providers[0];
+  if (!provider) {
+    provider = { id: 'main', name: '主模型', api_key: '', api_url: '', enabled: true, models: [] };
+    providers.push(provider);
+  }
+  provider.api_key = String(config.llm.api_key || '');
+  provider.api_url = String(config.llm.api_url || '');
+  provider.enabled = true;
+  provider.models ||= [];
+  const modelId = String(Object.prototype.hasOwnProperty.call(config.llm, 'model') ? config.llm.model : (config.llm.model_id || '')).trim();
+  let model = provider.models.find(item => item.model_id === modelId);
+  if (modelId && !model) {
+    model = { model_id: modelId, name: modelId, enabled: true };
+    provider.models.push(model);
+  }
+  if (model) {
+    model.enabled = true;
+    model.temperature = Number(config.llm.temperature ?? model.temperature ?? 1);
+    model.temperature_enabled = Boolean(config.llm.temperature_enabled);
+  }
+  config.llm.provider_id = provider.id;
+  config.llm.model_id = modelId;
+  config.vision ||= {};
+  const visionView = config.vision.vision_model || {};
+  const visionModelId = String(Object.prototype.hasOwnProperty.call(visionView, 'model') ? visionView.model : (config.vision.model_id || '')).trim();
+  const hasVisionConfig = Boolean(String(visionView.api_key || '').trim() || String(visionView.api_url || '').trim() || visionModelId);
+  if (hasVisionConfig) {
+    let visionProvider = providers.find(item => item.id === config.vision.provider_id);
+    if (!visionProvider) {
+      visionProvider = providers.find(item => item.api_key === String(visionView.api_key || '') && item.api_url === String(visionView.api_url || ''));
+    }
+    if (!visionProvider) {
+      let id = 'vision';
+      let suffix = 2;
+      while (providers.some(item => item.id === id)) id = `vision-${suffix++}`;
+      visionProvider = { id, name: '视觉模型', api_key: '', api_url: '', enabled: true, models: [] };
+      providers.push(visionProvider);
+    }
+    visionProvider.api_key = String(visionView.api_key || '');
+    visionProvider.api_url = String(visionView.api_url || '');
+    visionProvider.enabled = true;
+    visionProvider.models ||= [];
+    if (visionModelId && !visionProvider.models.some(item => item.model_id === visionModelId)) {
+      visionProvider.models.push({ model_id: visionModelId, name: visionModelId, enabled: true });
+    }
+    config.vision.provider_id = visionProvider.id;
+    config.vision.model_id = visionModelId;
+  } else {
+    config.vision.provider_id = '';
+    config.vision.model_id = '';
+  }
+  config.vision.vision_model = {};
+  delete config.llm.api_key;
+  delete config.llm.api_url;
+  delete config.llm.model;
+  delete config.llm.temperature;
+  delete config.llm.temperature_enabled;
+  saveProviders(__dirname, providers);
+  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+}
+
 function listPlugins() {
   const enabled = new Set(readJson(path.join(pluginsPath, 'enabled_plugins.json'), { plugins: [] }).plugins || []);
   const result = { builtIn: [], community: [], market: [] };
@@ -152,13 +286,89 @@ function listPlugins() {
         displayName: meta.displayName || meta.name || entry.name, description: meta.description || '',
         author: meta.author || '', version: meta.version || '', enabled: enabled.has(`${type}/${entry.name}`),
         hasConfig: fs.existsSync(configFile), config: readJson(configFile, {}),
-        hasReadme: fs.existsSync(path.join(dir, 'README.md')), bat: meta.bat || '', downloadDlc: meta.download_dlc || '' });
+        hasReadme: fs.existsSync(path.join(dir, 'README.md')), bat: meta.bat || '', downloadDlc: meta.download_dlc || '',
+        dlcInstalled: !meta.download_dlc || fs.existsSync(path.join(__dirname, 'plugins-dlc', entry.name)) });
     }
     result[key].sort((a, b) => a.displayName.localeCompare(b.displayName, 'zh-CN'));
   }
   const market = readJson(path.join(pluginsPath, 'plugin-house', 'plugin_hub.json'), {});
   result.market = Object.entries(market).map(([id, item]) => ({ id, ...item, installed: result.community.some(p => p.name === id) }));
   return result;
+}
+
+const pluginMarketUrl = 'https://raw.githubusercontent.com/morettt/my-neuro/main/live-2d/plugins/plugin-house/plugin_hub.json';
+
+async function refreshPluginMarket() {
+  const response = await net.fetch(pluginMarketUrl, { signal: AbortSignal.timeout(15000) });
+  if (!response.ok) throw new Error(`获取插件列表失败（HTTP ${response.status}）`);
+  const market = await response.json();
+  if (!market || Array.isArray(market) || typeof market !== 'object') throw new Error('插件列表格式无效');
+  fs.writeFileSync(path.join(pluginsPath, 'plugin-house', 'plugin_hub.json'), `${JSON.stringify(market, null, 2)}\n`, 'utf8');
+  return listPlugins();
+}
+
+function runProcess(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { windowsHide: true, ...options });
+    let output = '';
+    child.stdout?.on('data', chunk => { output += chunk.toString(); });
+    child.stderr?.on('data', chunk => { output += chunk.toString(); });
+    child.once('error', reject);
+    child.once('exit', code => code === 0 ? resolve(output) : reject(new Error(output.trim() || `${command} 退出码 ${code}`)));
+  });
+}
+
+async function downloadFile(url, file) {
+  const response = await net.fetch(url, { signal: AbortSignal.timeout(180000) });
+  if (!response.ok) throw new Error(`下载失败（HTTP ${response.status}）`);
+  fs.writeFileSync(file, Buffer.from(await response.arrayBuffer()));
+}
+
+async function expandZip(zipFile, destination) {
+  fs.mkdirSync(destination, { recursive: true });
+  await runProcess('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+    'Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force', zipFile, destination]);
+}
+
+async function installDependencies(pluginDir) {
+  const messages = [];
+  if (fs.existsSync(path.join(pluginDir, 'requirements.txt'))) {
+    await runProcess('python.exe', ['-m', 'pip', 'install', '-r', path.join(pluginDir, 'requirements.txt')], { cwd: pluginDir });
+    messages.push('Python 依赖已安装');
+  }
+  return messages;
+}
+
+async function installPluginArchive(id, repo) {
+  if (!/^[\w.-]+$/.test(id) || !/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\.git)?\/?$/i.test(repo)) throw new Error('插件信息无效');
+  const target = path.join(pluginsPath, 'community', id);
+  if (fs.existsSync(target)) throw new Error('插件已经安装');
+  const match = repo.replace(/\.git\/?$/i, '').match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)$/i);
+  const temp = fs.mkdtempSync(path.join(app.getPath('temp'), 'my-neuro-plugin-'));
+  const zipFile = path.join(temp, 'plugin.zip');
+  const extractDir = path.join(temp, 'extract');
+  try {
+    let lastError;
+    for (const branch of ['main', 'master']) {
+      try { await downloadFile(`https://github.com/${match[1]}/${match[2]}/archive/refs/heads/${branch}.zip`, zipFile); lastError = null; break; }
+      catch (error) { lastError = error; }
+    }
+    if (lastError) throw lastError;
+    await expandZip(zipFile, extractDir);
+    const roots = fs.readdirSync(extractDir, { withFileTypes: true }).filter(entry => entry.isDirectory());
+    if (roots.length !== 1) throw new Error('插件压缩包结构无效');
+    const source = path.join(extractDir, roots[0].name);
+    if (!fs.existsSync(path.join(source, 'metadata.json'))) throw new Error('仓库根目录缺少 metadata.json');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.cpSync(source, target, { recursive: true });
+    const dependencyMessages = await installDependencies(target);
+    return { ok: true, message: ['插件安装完成', ...dependencyMessages].join('，') };
+  } catch (error) {
+    if (fs.existsSync(target)) fs.rmSync(target, { recursive: true, force: true });
+    throw error;
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
 }
 
 function postDesktop(route, payload, timeout = 2500) {
@@ -177,6 +387,7 @@ function postDesktop(route, payload, timeout = 2500) {
 }
 
 function motionData(character) {
+  if (String(character || '').startsWith('[VRM] ')) return { character, actions: {}, expressions: {} };
   const actionsAll = readJson(path.join(__dirname, 'emotion_actions.json'), {});
   const expressionsAll = readJson(path.join(__dirname, 'emotion_expressions.json'), {});
   const candidates = [character, ...(Object.keys(actionsAll))].filter(Boolean);
@@ -259,10 +470,21 @@ function createControlWindow() {
     if (closing) return;
     event.preventDefault();
     closing = true;
-    Promise.all([fadeWindow(win.getOpacity(), 0, 260), stopLive2dProcess()])
+    Promise.all([fadeWindow(win.getOpacity(), 0, 260), stopLive2dProcess(), stopConfiguredServices()])
       .finally(() => { if (!win.isDestroyed()) win.destroy(); });
   });
   win.loadFile('control.html');
+  let pluginWatcher = null;
+  try {
+    let refreshTimer = null;
+    pluginWatcher = fs.watch(pluginsPath, { recursive: true }, () => {
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        if (!win.isDestroyed()) win.webContents.send('control:plugins-changed');
+      }, 350);
+    });
+  } catch {}
+  win.once('closed', () => pluginWatcher?.close());
 }
 
 async function stopLive2dProcess() {
@@ -295,9 +517,54 @@ ipcMain.handle('control:window', (event, action) => {
 });
 
 ipcMain.handle('control:open-github', () => shell.openExternal('https://github.com/morettt/my-neuro'));
+ipcMain.handle('control:reset-model-position', async () => {
+  const current = readJson(configPath, {});
+  current.ui ||= {};
+  current.ui.model_position ||= {};
+  Object.assign(current.ui.model_position, { x: 1.35, y: 0.8, remember_position: true });
+  current.ui.model_scale = 0.65;
+  fs.writeFileSync(configPath, `${JSON.stringify(current, null, 2)}\n`, 'utf8');
+  const result = await postDesktop('/reset-model-position', {});
+  return result.success ? { ok: true, message: '皮套位置已立即复位' } : { ok: true, message: '皮套位置已保存，桌宠启动后生效' };
+});
+ipcMain.handle('control:adjust-subtitle-position', async () => {
+  const result = await postDesktop('/adjust-subtitle-position', {});
+  return result.success ? { ok: true, message: '已进入字幕调整模式' } : { ok: false, message: '请先启动桌宠再调整字幕位置' };
+});
+ipcMain.handle('control:select-voice-file', async (_event, kind) => {
+  const isModel = kind === 'model';
+  const result = await dialog.showOpenDialog({ properties: ['openFile'], filters: isModel
+    ? [{ name: 'PyTorch 模型', extensions: ['pth'] }]
+    : [{ name: '音频文件', extensions: ['wav'] }] });
+  if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true };
+  const source = result.filePaths[0];
+  const targetDir = path.join(__dirname, 'Voice_Model_Factory');
+  fs.mkdirSync(targetDir, { recursive: true });
+  const target = path.join(targetDir, path.basename(source));
+  fs.copyFileSync(source, target);
+  if (isModel) selectedVoiceModelPath = target;
+  else selectedVoiceAudioPath = target;
+  return { ok: true, filename: path.basename(target) };
+});
+ipcMain.handle('control:generate-voice-bat', (_event, options) => {
+  const character = String(options?.character || '').trim();
+  const text = String(options?.text || '').trim();
+  const language = ['zh', 'en', 'ja'].includes(options?.language) ? options.language : 'zh';
+  if (!character || !text) return { ok: false, message: '请填写角色名称和参考文本' };
+  if (!selectedVoiceModelPath || !fs.existsSync(selectedVoiceModelPath)) return { ok: false, message: '请先选择模型文件' };
+  if (!selectedVoiceAudioPath || !fs.existsSync(selectedVoiceAudioPath)) return { ok: false, message: '请先选择参考音频' };
+  const safeName = character.replace(/[<>:"/\\|?*]/g, '_');
+  const escapedText = text.replace(/"/g, '""');
+  const batPath = path.join(__dirname, 'Voice_Model_Factory', `${safeName}_TTS.bat`);
+  const content = ['@echo off', 'set "PATH=%~dp0..\\..\\full-hub\\tts-hub\\GPT-SoVITS-Bundle\\runtime;%PATH%"',
+    'cd /d "%~dp0..\\..\\full-hub\\tts-hub\\GPT-SoVITS-Bundle"',
+    `python api.py -p 5000 -d cuda -s "${selectedVoiceModelPath}" -dr "${selectedVoiceAudioPath}" -dt "${escapedText}" -dl ${language}`, 'pause', ''].join('\r\n');
+  fs.writeFileSync(batPath, content, 'utf8');
+  return { ok: true, message: `已生成：${path.basename(batPath)}` };
+});
 ipcMain.handle('control:service-status', () => serviceStatus());
 ipcMain.handle('control:start-service', async (event, id) => {
-  const definition = serviceDefinitions[id];
+  const definition = serviceLaunchDefinition(id);
   if (!definition) return { ok: false, message: '未知服务' };
   if (!serviceInstalled(definition)) return { ok: false, message: `${definition.name} 模块尚未安装` };
   if (await portListening(definition.port)) return { ok: false, message: `${definition.name} 已在运行` };
@@ -359,6 +626,7 @@ ipcMain.handle('control:open-external', (_event, url) => {
   return shell.openExternal(url);
 });
 ipcMain.handle('control:list-plugins', () => listPlugins());
+ipcMain.handle('control:refresh-plugin-market', () => refreshPluginMarket());
 ipcMain.handle('control:set-plugin-enabled', (_event, relPath, enabled) => {
   if (!/^(built-in|community)\/[\w.-]+$/.test(relPath)) throw new Error('插件路径无效');
   const file = path.join(pluginsPath, 'enabled_plugins.json');
@@ -379,20 +647,32 @@ ipcMain.handle('control:read-plugin-readme', (_event, type, name) => {
   const file = path.join(pluginsPath, type, name, 'README.md');
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
 });
-ipcMain.handle('control:install-plugin', (_event, id, repo) => new Promise(resolve => {
-  if (!/^[\w.-]+$/.test(id) || !/^https:\/\/github\.com\//i.test(repo)) return resolve({ ok: false, message: '插件信息无效' });
-  const target = path.join(pluginsPath, 'community', id);
-  if (fs.existsSync(target)) return resolve({ ok: false, message: '插件已经安装' });
-  const child = spawn('git.exe', ['clone', '--depth', '1', repo, target], { windowsHide: true });
-  let errorText = '';
-  child.stderr.on('data', data => { errorText += data.toString(); });
-  child.on('error', error => resolve({ ok: false, message: error.message }));
-  child.on('exit', code => resolve(code === 0 ? { ok: true, message: '插件安装完成' } : { ok: false, message: errorText.trim() || `安装失败（${code}）` }));
-}));
-
-ipcMain.handle('control:load-config', () => {
-  return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+ipcMain.handle('control:install-plugin', async (_event, id, repo) => {
+  try { return await installPluginArchive(id, repo); }
+  catch (error) { return { ok: false, message: `安装失败：${error.message}` }; }
 });
+ipcMain.handle('control:install-plugin-dlc', async (_event, name, url) => {
+  if (!/^[\w.-]+$/.test(name) || !/^https:\/\//i.test(url)) return { ok: false, message: 'DLC 信息无效' };
+  const target = path.join(__dirname, 'plugins-dlc', name);
+  const temp = fs.mkdtempSync(path.join(app.getPath('temp'), 'my-neuro-dlc-'));
+  const zipFile = path.join(temp, 'dlc.zip');
+  try {
+    await downloadFile(url, zipFile);
+    await expandZip(zipFile, target);
+    return { ok: true, message: 'DLC 安装完成' };
+  } catch (error) { return { ok: false, message: `DLC 安装失败：${error.message}` }; }
+  finally { fs.rmSync(temp, { recursive: true, force: true }); }
+});
+ipcMain.handle('control:launch-plugin-bat', (_event, name, bat) => {
+  if (!/^[\w.-]+$/.test(name) || typeof bat !== 'string') return { ok: false, message: '启动信息无效' };
+  const root = path.resolve(__dirname, 'plugins-dlc', name);
+  const file = path.resolve(root, bat);
+  if (!file.startsWith(`${root}${path.sep}`) || !fs.existsSync(file)) return { ok: false, message: '找不到插件启动文件' };
+  spawn('cmd.exe', ['/d', '/c', 'start', '', file], { cwd: path.dirname(file), windowsHide: true, detached: true }).unref();
+  return { ok: true, message: '插件已启动' };
+});
+
+ipcMain.handle('control:load-config', () => loadControlConfig());
 ipcMain.handle('control:get-chat-history', () => {
   const file = path.join(projectRoot, 'AI记录室', '对话历史.jsonl');
   if (!fs.existsSync(file)) return { exists: false, file, messages: [], invalidLines: 0 };
@@ -470,7 +750,7 @@ ipcMain.handle('control:download-tool', async (_event, tool) => {
 });
 
 ipcMain.handle('control:save-config', (_event, config) => {
-  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+  saveControlConfig(config);
   return { ok: true };
 });
 
