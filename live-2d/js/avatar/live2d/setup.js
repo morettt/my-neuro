@@ -14,6 +14,7 @@ const { Live2DRuntime } = require('./runtime.js');
 const { MusicPlayer } = require('../../services/music-player.js');
 const { logToTerminal } = require('../../api-utils.js');
 const { bindVoiceChatAvatar } = require('../avatar-voice-chat-binding.js');
+const avatarTransition = require('../transition-overlay.js');
 
 // 模块级单例（跨形态切换存活）
 let _stage = null;
@@ -157,6 +158,7 @@ class Live2DSetup {
                     return;
                 }
                 const previousModel = _loader.currentModel;
+                await avatarTransition.show('正在切换皮套');
                 try {
                     logToTerminal('info', `[Live2DSetup] 热切换模型: ${modelName} (${nextPath})`);
                     const nextPrefs = getModelPrefs('live2d', modelName);
@@ -187,6 +189,7 @@ class Live2DSetup {
                         message: `模型切换失败: ${e.message}${restored ? '，已保留原模型' : ''}${suffix}`
                     };
                 }
+                avatarTransition.hide();
                 await reportResult();
             });
         }

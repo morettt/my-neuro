@@ -301,6 +301,20 @@ class HttpServer {
             });
         });
 
+        // 桌宠退出前播放淡出动画，控制端收到完成响应后再结束进程。
+        this.emotionApp.post('/prepare-close', async (_req, res) => {
+            const mainWindow = BrowserWindow.getAllWindows()[0];
+            if (!mainWindow) return res.json({ success: false, message: '应用窗口未找到' });
+            try {
+                const result = await mainWindow.webContents.executeJavaScript(
+                    `require('./js/avatar/transition-overlay.js').fadeOut().then(() => ({ success: true }))`
+                );
+                res.json(result);
+            } catch (error) {
+                res.json({ success: false, message: error.toString() });
+            }
+        });
+
         // 复位字幕位置接口（供 WebUI 调用）：桌宠在线时实时复位并清除已保存的位置
         this.emotionApp.post('/reset-subtitle-position', async (req, res) => {
             const mainWindow = BrowserWindow.getAllWindows()[0];

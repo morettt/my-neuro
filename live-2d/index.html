@@ -22,6 +22,9 @@
     <div id="vrm-container" class="avatar-container" style="display: none;">
         <canvas id="vrm-canvas"></canvas>
     </div>
+    <div id="avatar-transition" aria-hidden="true">
+        <div class="avatar-transition-spinner"></div>
+    </div>
     <div id="subtitle-container">
         <div id="subtitle-confirm-btn">确定</div>
         <p id="subtitle-text"></p>
@@ -42,8 +45,13 @@
     <div id="text-chat-container">
         <div id="chat-messages"></div>
         <div id="chat-input-container">
-            <div id="chat-input" contenteditable="true" placeholder="输入消息..."></div>
-            <div id="chat-send-btn">发送</div>
+            <div class="chat-input-frame">
+                <div id="chat-input" contenteditable="true" role="textbox" aria-label="输入消息"></div>
+                <span class="chat-input-label">输入消息，回车发送</span>
+                <span class="chat-input-topline"></span>
+                <span class="chat-input-underline"></span>
+            </div>
+            <button id="chat-send-btn" type="button" hidden aria-hidden="true" tabindex="-1">发送</button>
         </div>
     </div>
 
