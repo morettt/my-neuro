@@ -36,6 +36,9 @@ function applyEdition(edition = environment.edition) {
     document.querySelector('[data-page="home"]').classList.add('active');
   }
   $('toggle-edition-preview').textContent = edition === 'local' ? '切回云端样式' : '预览本地样式';
+  $('tutorial-content').innerHTML = edition === 'cloud'
+    ? '<h2>云端版本教程</h2><p>云端版本教程还没有制作好，请耐心等待。</p>'
+    : '<h2>首次使用</h2><p>在“模型配置”填写 API KEY、API URL，点击“获取模型”选择模型并保存。</p><p>回到“启动”选择 Live2D 或 VRM 角色，然后点击“启动桌宠”。</p><h2>语音功能</h2><p>在“对话设置”启用 ASR、TTS，并在“终端控制室”启动对应服务。</p><h2>插件与工具</h2><p>插件在“插件”页面启用和配置；MCP 工具在“工具屋”启用。</p>';
 }
 
 $('toggle-edition-preview').addEventListener('click', () => {
@@ -55,6 +58,27 @@ document.querySelectorAll('[data-window]').forEach(button => {
 });
 
 $('github-link').addEventListener('click', () => window.controlApi.openGithub());
+$('gateway-website').addEventListener('click', () => window.controlApi.openExternal('http://mynewbot.com'));
+$('volcengine-tutorial').addEventListener('click', () => window.controlApi.openExternal('http://mynewbot.com/tutorials/ByteDance-TTS'));
+$('reset-model-position').addEventListener('click', async () => {
+  const result = await window.controlApi.resetModelPosition(); showToast(result.message);
+});
+$('adjust-subtitle-position').addEventListener('click', async () => {
+  const result = await window.controlApi.adjustSubtitlePosition(); showToast(result.message);
+});
+$('select-voice-model').addEventListener('click', async () => {
+  const result = await window.controlApi.selectVoiceFile('model');
+  if (result.ok) { $('voice-model-status').textContent = result.filename; showToast('模型文件已保存'); }
+});
+$('select-voice-audio').addEventListener('click', async () => {
+  const result = await window.controlApi.selectVoiceFile('audio');
+  if (result.ok) { $('voice-audio-status').textContent = result.filename; showToast('参考音频已保存'); }
+});
+$('generate-voice-bat').addEventListener('click', async () => {
+  const result = await window.controlApi.generateVoiceBat({ character: $('voice-character-name').value, text: $('voice-reference-text').value, language: $('voice-language').value });
+  $('voice-bat-status').textContent = result.message;
+  showToast(result.message);
+});
 
 let pageTransition = null;
 function switchPage(pageId, navButton = null) {
@@ -222,19 +246,19 @@ const fields = {
   'llm-url': ['llm.api_url', 'value'], 'llm-key': ['llm.api_key', 'value'],
   'llm-model': ['llm.model', 'value'], 'llm-prompt': ['llm.system_prompt', 'value'],
   temperature: ['llm.temperature', 'number'], 'tts-language': ['tts.language', 'value'],
-  'opening-text': ['conversation.opening_text', 'value'], 'max-messages': ['conversation.max_messages', 'number'],
-  'text-input-enabled': ['ui.text_input_enabled', 'checked'], 'ptt-enabled': ['asr.ptt_enabled', 'checked'],
-  'context-limit': ['conversation.context_limit_enabled', 'checked'], 'history-enabled': ['conversation.persistent_history', 'checked'],
+  'opening-text': ['ui.intro_text', 'value'], 'max-messages': ['context.max_messages', 'number'],
+  'text-input-enabled': ['ui.show_chat_box', 'checked'], 'ptt-enabled': ['asr.ptt_enabled', 'checked'],
+  'context-limit': ['context.enable_limit', 'checked'], 'history-enabled': ['context.persistent_history', 'checked'],
   'temperature-enabled': ['llm.temperature_enabled', 'checked'],
   'tts-enabled': ['tts.enabled', 'checked'], 'asr-enabled': ['asr.enabled', 'checked'],
-  'rag-enabled': ['rag.enabled', 'checked'], 'vision-enabled': ['vision.enabled', 'checked'],
+  'rag-enabled': ['rag.enabled', 'checked'], 'vision-enabled': ['vision.use_vision_model', 'checked'],
   'vision-key': ['vision.vision_model.api_key', 'value'], 'vision-url': ['vision.vision_model.api_url', 'value'],
   'vision-model': ['vision.vision_model.model', 'value'],
   'barge-enabled': ['asr.voice_barge_in', 'checked'], 'mcp-enabled': ['mcp.enabled', 'checked'],
   'auto-vision': ['vision.auto_screenshot', 'checked'],
-  'user-name': ['ui.user_name', 'value'], 'ai-name': ['ui.ai_name', 'value'],
-  'subtitle-enabled': ['ui.subtitle_enabled', 'checked'], 'hide-model': ['ui.hide_model', 'checked'],
-  'auto-close-services': ['ui.auto_close_services', 'checked'],
+  'user-name': ['subtitle_labels.user', 'value'], 'ai-name': ['subtitle_labels.ai', 'value'],
+  'subtitle-enabled': ['subtitle_labels.enabled', 'checked'],
+  'auto-close-services': ['auto_close_services.enabled', 'checked'],
   'gateway-enabled': ['api_gateway.use_gateway', 'checked'], 'gateway-url': ['api_gateway.base_url', 'value'],
   'gateway-key': ['api_gateway.api_key', 'value'], 'cloud-provider': ['cloud.provider', 'value'],
   'cloud-key': ['cloud.api_key', 'value'], 'cloud-tts-enabled': ['cloud.tts.enabled', 'checked'],
@@ -271,6 +295,7 @@ function render() {
       }
     }
   }
+  $('hide-model').checked = !Boolean(get(config, 'ui.show_model', true));
   const ttsProvider = get(config, 'cloud.aliyun_tts.enabled', false) ? 'aliyun' : get(config, 'cloud.volcengine_tts.enabled', false) ? 'volcengine' : 'siliconflow';
   $('cloud-tts-provider').value = ttsProvider;
   $('cloud-tts-master-enabled').checked = Boolean(get(config, 'cloud.aliyun_tts.enabled', false) || get(config, 'cloud.volcengine_tts.enabled', false) || get(config, 'cloud.tts.enabled', false));
@@ -314,11 +339,12 @@ window.controlApi.onServiceLog(({ service, text }) => {
 window.controlApi.onServiceState(refreshServiceStatus);
 
 function historyContent(content) {
-  if (typeof content === 'string') return `<p>${escapeHtml(content)}</p>`;
+  const formatText = value => escapeHtml(value).replace(/&lt;([\u4e00-\u9fa5]+)&gt;/g, '<span class="emotion-tag">&lt;$1&gt;</span>');
+  if (typeof content === 'string') return `<p>${formatText(content)}</p>`;
   if (!Array.isArray(content)) return `<p>${escapeHtml(content == null ? '' : JSON.stringify(content))}</p>`;
   return content.map(item => {
-    if (typeof item === 'string') return `<p>${escapeHtml(item)}</p>`;
-    if (item?.type === 'text') return `<p>${escapeHtml(item.text || '')}</p>`;
+    if (typeof item === 'string') return `<p>${formatText(item)}</p>`;
+    if (item?.type === 'text') return `<p>${formatText(item.text || '')}</p>`;
     const url = item?.image_url?.url || item?.image_url;
     if (typeof url === 'string' && (url.startsWith('data:image/') || /^https?:\/\//i.test(url))) {
       return `<img class="history-image" src="${escapeHtml(url)}" alt="对话图片">`;
@@ -368,6 +394,8 @@ $('save-config').addEventListener('click', async () => {
     if (!el) continue;
     set(config, path, type === 'checked' ? el.checked : type === 'number' ? Number(el.value) : el.value);
   }
+  set(config, 'ui.show_model', !$('hide-model').checked);
+  delete config.conversation;
   try {
     await window.controlApi.saveConfig(config);
     render(); showToast('配置保存成功');
@@ -380,6 +408,7 @@ $('start-live2d').addEventListener('click', async () => {
   const button = $('start-live2d');
   const wasRunning = live2dRunning;
   button.disabled = true;
+  if (!wasRunning) clearDesktopLogs();
   try {
     const result = wasRunning
       ? await window.controlApi.stopLive2d()
@@ -398,10 +427,12 @@ $('start-live2d').addEventListener('click', async () => {
   }
 });
 
-$('clear-logs').addEventListener('click', () => {
+function clearDesktopLogs() {
   $('pet-log').textContent = '';
   $('tool-log').textContent = '';
-});
+}
+
+$('clear-logs').addEventListener('click', clearDesktopLogs);
 
 window.controlApi.onLive2dLog(text => {
   if ($('pet-log').textContent === '暂无日志') $('pet-log').textContent = '';
@@ -428,11 +459,14 @@ let editingPlugin = null;
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char]);
 
 function pluginCard(plugin) {
+  const dlcInstalled = !plugin.downloadDlc || plugin.dlcInstalled;
   return `<article class="plugin-card card">
     <div class="plugin-summary"><strong>${escapeHtml(plugin.displayName)}</strong><p>${escapeHtml(plugin.description || '暂无说明')}</p><small>${escapeHtml([plugin.author, plugin.version].filter(Boolean).join(' · '))}</small></div>
     <div class="plugin-actions">
+      ${plugin.downloadDlc && !dlcInstalled ? `<button type="button" class="primary" data-plugin-dlc="${escapeHtml(plugin.relPath)}">安装 DLC</button>` : ''}
+      ${plugin.bat && dlcInstalled ? `<button type="button" data-plugin-launch="${escapeHtml(plugin.relPath)}">启动</button>` : ''}
       ${plugin.hasConfig ? `<button type="button" data-plugin-config="${escapeHtml(plugin.relPath)}">配置</button>` : ''}
-      <label class="plugin-switch"><span>启用</span><input type="checkbox" data-plugin-enabled="${escapeHtml(plugin.relPath)}" ${plugin.enabled ? 'checked' : ''}><i></i></label>
+      ${dlcInstalled ? `<label class="plugin-switch"><span>启用</span><input type="checkbox" data-plugin-enabled="${escapeHtml(plugin.relPath)}" ${plugin.enabled ? 'checked' : ''}><i></i></label>` : ''}
     </div>
   </article>`;
 }
@@ -443,12 +477,26 @@ function marketCard(plugin) {
 
 function bindPluginCards() {
   document.querySelectorAll('[data-plugin-enabled]').forEach(input => input.addEventListener('change', async () => {
-    try { await window.controlApi.setPluginEnabled(input.dataset.pluginEnabled, input.checked); showToast(input.checked ? '插件已启用，重启桌宠后生效' : '插件已停用，重启桌宠后生效'); }
+    try { await window.controlApi.setPluginEnabled(input.dataset.pluginEnabled, input.checked); showToast(input.checked ? '插件已启用' : '插件已停用'); }
     catch (error) { input.checked = !input.checked; showToast(error.message); }
   }));
   document.querySelectorAll('[data-plugin-config]').forEach(button => button.addEventListener('click', () => {
     const plugin = [...pluginData.builtIn, ...pluginData.community].find(item => item.relPath === button.dataset.pluginConfig);
     if (plugin) openPluginDetail(plugin);
+  }));
+  document.querySelectorAll('[data-plugin-dlc]').forEach(button => button.addEventListener('click', async () => {
+    const plugin = [...pluginData.builtIn, ...pluginData.community].find(item => item.relPath === button.dataset.pluginDlc);
+    if (!plugin) return;
+    button.disabled = true; button.textContent = '安装中…';
+    const result = await window.controlApi.installPluginDlc(plugin.name, plugin.downloadDlc);
+    showToast(result.message);
+    await loadPlugins();
+  }));
+  document.querySelectorAll('[data-plugin-launch]').forEach(button => button.addEventListener('click', async () => {
+    const plugin = [...pluginData.builtIn, ...pluginData.community].find(item => item.relPath === button.dataset.pluginLaunch);
+    if (!plugin) return;
+    const result = await window.controlApi.launchPluginBat(plugin.name, plugin.bat);
+    showToast(result.message);
   }));
   document.querySelectorAll('[data-plugin-repo]').forEach(button => button.addEventListener('click', () => button.dataset.pluginRepo && window.controlApi.openExternal(button.dataset.pluginRepo)));
   document.querySelectorAll('[data-plugin-install]').forEach(button => button.addEventListener('click', async () => {
@@ -484,7 +532,10 @@ function configFields(config, prefix = '') {
     const description = schema ? (definition.description || '') : '';
     if (type === 'boolean' || type === 'bool') html += `<label class="plugin-config-check"><span>${escapeHtml(title)}</span><input data-plugin-field="${escapeHtml(path)}" data-field-type="boolean" type="checkbox" ${value ? 'checked' : ''}></label>`;
     else if (type === 'text' || type === 'textarea') html += `<label>${escapeHtml(title)}<textarea data-plugin-field="${escapeHtml(path)}" data-field-type="string" rows="4">${escapeHtml(value)}</textarea>${description ? `<small>${escapeHtml(description)}</small>` : ''}</label>`;
-    else html += `<label>${escapeHtml(title)}<input data-plugin-field="${escapeHtml(path)}" data-field-type="${type === 'number' || type === 'integer' ? 'number' : 'string'}" ${type === 'number' || type === 'integer' ? 'type="number"' : ''} value="${escapeHtml(value)}">${description ? `<small>${escapeHtml(description)}</small>` : ''}</label>`;
+    else {
+      const numeric = ['number', 'integer', 'int', 'float'].includes(type);
+      html += `<label>${escapeHtml(title)}<input data-plugin-field="${escapeHtml(path)}" data-field-type="${numeric ? 'number' : 'string'}" ${numeric ? 'type="number"' : ''} value="${escapeHtml(value)}">${description ? `<small>${escapeHtml(description)}</small>` : ''}</label>`;
+    }
   }
   return html;
 }
@@ -505,20 +556,38 @@ $('plugin-detail-back').addEventListener('click', () => {
 $('plugin-readme').addEventListener('click', async () => {
   if (!editingPlugin) return;
   const readme = await window.controlApi.readPluginReadme(editingPlugin.type, editingPlugin.name);
-  $('plugin-detail-content').innerHTML = `<pre class="plugin-readme-text">${escapeHtml(readme)}</pre>`;
+  $('plugin-detail-content').innerHTML = `<div class="plugin-readme-text">${markdownToHtml(readme)}</div>`;
+  $('plugin-detail-content').querySelectorAll('a[href]').forEach(link => link.addEventListener('click', event => {
+    event.preventDefault();
+    window.controlApi.openExternal(link.href);
+  }));
 });
+
+function markdownToHtml(markdown) {
+  const escaped = escapeHtml(markdown).replace(/\r\n?/g, '\n');
+  return escaped
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>').replace(/^## (.+)$/gm, '<h2>$1</h2>').replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+    .replace(/^[-*] (.+)$/gm, '<div class="markdown-list-item">• $1</div>').replace(/\n/g, '<br>');
+}
 $('save-plugin-config').addEventListener('click', async () => {
   if (!editingPlugin) return;
   const updated = structuredClone(editingPlugin.config);
+  let invalidField = '';
   document.querySelectorAll('[data-plugin-field]').forEach(field => {
+    if (invalidField) return;
     const keys = field.dataset.pluginField.split('.');
     const leaf = keys.pop();
     let target = updated;
     for (const key of keys) target = target[key]?.fields || target[key] || (target[key] = {});
     const value = field.dataset.fieldType === 'boolean' ? field.checked : field.dataset.fieldType === 'number' ? Number(field.value) : field.value;
+    if (field.dataset.fieldType === 'number' && !Number.isFinite(value)) { invalidField = field.dataset.pluginField; return; }
     if (target[leaf] && typeof target[leaf] === 'object' && 'type' in target[leaf]) target[leaf].value = value;
     else target[leaf] = value;
   });
+  if (invalidField) { showToast(`${invalidField} 必须是数字`); return; }
   await window.controlApi.savePluginConfig(editingPlugin.type, editingPlugin.name, updated);
   editingPlugin.config = updated; showToast('插件配置已保存');
 });
@@ -529,7 +598,17 @@ document.querySelectorAll('[data-plugin-tab]').forEach(button => button.addEvent
   button.classList.add('active');
   document.querySelector(`[data-plugin-panel="${button.dataset.pluginTab}"]`).classList.add('active');
 }));
-$('refresh-plugins').addEventListener('click', loadPlugins);
+$('refresh-plugins').addEventListener('click', async () => {
+  const button = $('refresh-plugins');
+  button.disabled = true; button.textContent = '刷新中…';
+  try {
+    pluginData = await window.controlApi.refreshPluginMarket();
+    renderPlugins();
+    showToast(`插件广场已更新，共 ${pluginData.market.length} 个插件`);
+  } catch (error) { showToast(error.message); }
+  finally { button.disabled = false; button.textContent = '刷新列表'; }
+});
+window.controlApi.onPluginsChanged(() => loadPlugins());
 
 let toolMarketData = [];
 async function loadMcpTools() {
@@ -677,14 +756,19 @@ for (const [id, kind] of [['reset-expressions', 'expressions'], ['reset-actions'
     $('vmc-port').value = get(config, 'vmc.port', 39539);
     await loadPlugins();
     await loadMcpTools();
-    await loadMotionPage();
     await refreshServiceStatus();
     const models = await window.controlApi.listLive2dModels();
     const currentModel = await window.controlApi.currentLive2dModel();
     if (currentModel) {
       $('live2d-model').value = currentModel;
       $('model-menu-text').textContent = `当前桌宠：${currentModel}`;
-      set(config, 'ui.live2d_model', currentModel);
+      if (currentModel.startsWith('[VRM] ')) {
+        set(config, 'ui.model_type', 'vrm');
+        set(config, 'ui.vrm_model', currentModel.slice(6));
+      } else {
+        set(config, 'ui.model_type', 'live2d');
+        set(config, 'ui.live2d_model', currentModel);
+      }
     }
     const submenu = $('model-submenu');
     if (models.length) {
@@ -712,6 +796,7 @@ for (const [id, kind] of [['reset-expressions', 'expressions'], ['reset-actions'
     } else {
       submenu.innerHTML = '<li class="listitem"><span class="article">未找到模型</span></li>';
     }
+    await loadMotionPage();
   }
   catch (error) { showToast(`配置加载失败：${error.message}`); }
 })();
