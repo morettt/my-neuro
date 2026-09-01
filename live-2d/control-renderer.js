@@ -222,9 +222,9 @@ const fields = {
   'llm-url': ['llm.api_url', 'value'], 'llm-key': ['llm.api_key', 'value'],
   'llm-model': ['llm.model', 'value'], 'llm-prompt': ['llm.system_prompt', 'value'],
   temperature: ['llm.temperature', 'number'], 'tts-language': ['tts.language', 'value'],
-  'opening-text': ['conversation.opening_text', 'value'], 'max-messages': ['conversation.max_messages', 'number'],
-  'text-input-enabled': ['ui.text_input_enabled', 'checked'], 'ptt-enabled': ['asr.ptt_enabled', 'checked'],
-  'context-limit': ['conversation.context_limit_enabled', 'checked'], 'history-enabled': ['conversation.persistent_history', 'checked'],
+  'opening-text': ['ui.intro_text', 'value'], 'max-messages': ['context.max_messages', 'number'],
+  'text-input-enabled': ['ui.show_chat_box', 'checked'], 'ptt-enabled': ['asr.ptt_enabled', 'checked'],
+  'context-limit': ['context.enable_limit', 'checked'], 'history-enabled': ['context.persistent_history', 'checked'],
   'temperature-enabled': ['llm.temperature_enabled', 'checked'],
   'tts-enabled': ['tts.enabled', 'checked'], 'asr-enabled': ['asr.enabled', 'checked'],
   'rag-enabled': ['rag.enabled', 'checked'], 'vision-enabled': ['vision.enabled', 'checked'],
@@ -368,6 +368,7 @@ $('save-config').addEventListener('click', async () => {
     if (!el) continue;
     set(config, path, type === 'checked' ? el.checked : type === 'number' ? Number(el.value) : el.value);
   }
+  delete config.conversation;
   try {
     await window.controlApi.saveConfig(config);
     render(); showToast('配置保存成功');
