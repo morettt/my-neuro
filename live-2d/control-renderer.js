@@ -3,6 +3,9 @@ let live2dRunning = false;
 let environment = { edition: 'cloud', editionLabel: '云端', version: '' };
 let previewEdition = null;
 let activeServiceLog = 'tts';
+let configDirty = false;
+let loadingConfigUi = true;
+let closePromptOpen = false;
 const serviceLogs = { tts: '', asr: '', bert: '' };
 
 const $ = id => document.getElementById(id);
@@ -23,6 +26,14 @@ const set = (obj, path, value) => {
   const target = keys.reduce((value, key) => value[key] ??= {}, obj);
   target[last] = value;
 };
+
+function setConfigDirty(dirty) {
+  configDirty = Boolean(dirty);
+  const button = $('save-config');
+  button?.classList.toggle('config-dirty', configDirty);
+  if (button) button.title = configDirty ? '当前配置有未保存的修改，请先保存配置' : '';
+  window.controlApi.setConfigDirty(configDirty);
+}
 
 function applyEdition(edition = environment.edition) {
   const label = edition === 'local' ? '本地' : '云端';
@@ -133,6 +144,7 @@ document.querySelectorAll('.dropdown-option[data-target]').forEach(button => {
       option.setAttribute('aria-selected', String(selected));
     });
     dropdown.querySelector('.sr-only').checked = false;
+    setConfigDirty(true);
   });
 });
 
@@ -232,6 +244,7 @@ $('fetch-llm-models').addEventListener('click', async () => {
     options.querySelectorAll('[data-llm-model]').forEach(option => option.addEventListener('click', () => {
       $('llm-model').value = option.dataset.llmModel;
       set(config, 'llm.model', option.dataset.llmModel);
+      setConfigDirty(true);
       options.hidden = true;
     }));
     showToast(`已获取 ${models.length} 个模型`);
@@ -274,6 +287,17 @@ const fields = {
   ,'silicon-asr-enabled': ['cloud.siliconflow_asr.enabled', 'checked'], 'silicon-asr-api': ['cloud.siliconflow_asr.api', 'value'],
   'silicon-asr-key': ['cloud.siliconflow_asr.key', 'value'], 'silicon-asr-model': ['cloud.siliconflow_asr.model', 'value']
 };
+
+const trackedConfigIds = new Set([
+  ...Object.keys(fields), 'hide-model', 'cloud-tts-provider', 'cloud-tts-master-enabled',
+  'cloud-asr-provider', 'cloud-asr-master-enabled'
+]);
+document.addEventListener('input', event => {
+  if (!loadingConfigUi && trackedConfigIds.has(event.target.id)) setConfigDirty(true);
+});
+document.addEventListener('change', event => {
+  if (!loadingConfigUi && trackedConfigIds.has(event.target.id)) setConfigDirty(true);
+});
 
 function render() {
   for (const [id, [path, type]] of Object.entries(fields)) {
@@ -362,6 +386,44 @@ function historyToolCalls(toolCalls) {
   }).join('');
 }
 
+function historyImages(images) {
+  return (Array.isArray(images) ? images : [])
+    .filter(url => typeof url === 'string' && url.startsWith('data:image/'))
+    .map(url => `<img class="history-image" src="${escapeHtml(url)}" alt="对话截图" title="点击查看大图" tabindex="0" role="button">`)
+    .join('');
+}
+
+function closeHistoryImagePreview() {
+  $('history-image-modal').hidden = true;
+  $('history-image-preview').removeAttribute('src');
+}
+
+function openHistoryImagePreview(src) {
+  if (!src) return;
+  $('history-image-preview').src = src;
+  $('history-image-modal').hidden = false;
+  $('history-image-close').focus();
+}
+
+$('history-list').addEventListener('click', event => {
+  const image = event.target.closest('.history-image');
+  if (image) openHistoryImagePreview(image.src);
+});
+$('history-list').addEventListener('keydown', event => {
+  const image = event.target.closest('.history-image');
+  if (image && (event.key === 'Enter' || event.key === ' ')) {
+    event.preventDefault();
+    openHistoryImagePreview(image.src);
+  }
+});
+$('history-image-close').addEventListener('click', closeHistoryImagePreview);
+$('history-image-modal').addEventListener('click', event => {
+  if (event.target === $('history-image-modal')) closeHistoryImagePreview();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !$('history-image-modal').hidden) closeHistoryImagePreview();
+});
+
 async function loadChatHistory() {
   try {
     const result = await window.controlApi.getChatHistory();
@@ -372,7 +434,7 @@ async function loadChatHistory() {
     $('history-list').innerHTML = result.messages.map(message => {
       const role = message.role === 'user' ? 'user' : message.role === 'assistant' ? 'assistant' : 'other';
       const roleName = role === 'user' ? '用户' : role === 'assistant' ? 'AI' : (message.role || '未知');
-      return `<article class="history-entry ${role}"><header>${escapeHtml(roleName)}</header><div class="history-content">${historyContent(message.content)}${historyToolCalls(message.tool_calls)}</div></article>`;
+      return `<article class="history-entry ${role}"><header>${escapeHtml(roleName)}</header><div class="history-content">${historyContent(message.content)}${historyImages(message.history_images)}${historyToolCalls(message.tool_calls)}</div></article>`;
     }).join('') || '<div class="history-empty">暂无对话记录</div>';
     $('history-list').scrollTop = $('history-list').scrollHeight;
   } catch (error) {
@@ -387,7 +449,7 @@ function showToast(message) {
   toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
 }
 
-$('save-config').addEventListener('click', async () => {
+async function saveConfig() {
   syncCloudProviders();
   for (const [id, [path, type]] of Object.entries(fields)) {
     const el = $(id);
@@ -398,15 +460,41 @@ $('save-config').addEventListener('click', async () => {
   delete config.conversation;
   try {
     await window.controlApi.saveConfig(config);
-    render(); showToast('配置保存成功');
+    render(); setConfigDirty(false); showToast('配置保存成功');
+    return true;
   } catch (error) {
     showToast(`保存失败：${error.message}`);
+    return false;
+  }
+}
+
+$('save-config').addEventListener('click', saveConfig);
+
+async function confirmUnsavedConfig(title) {
+  if (!configDirty) return true;
+  const choice = await window.controlApi.confirmUnsavedConfig(title);
+  if (choice === 'save') return saveConfig();
+  if (choice === 'discard') return true;
+  return false;
+}
+
+window.controlApi.onCloseRequested(async () => {
+  if (closePromptOpen) return;
+  closePromptOpen = true;
+  try {
+    if (await confirmUnsavedConfig('关闭前保存配置')) {
+      setConfigDirty(false);
+      await window.controlApi.windowAction('close');
+    }
+  } finally {
+    closePromptOpen = false;
   }
 });
 
 $('start-live2d').addEventListener('click', async () => {
   const button = $('start-live2d');
   const wasRunning = live2dRunning;
+  if (!wasRunning && !(await confirmUnsavedConfig('启动前保存配置'))) return;
   button.disabled = true;
   if (!wasRunning) clearDesktopLogs();
   try {
@@ -661,6 +749,7 @@ function renderPrompts(prompts) {
     const prompt = prompts[Number(button.dataset.applyPrompt)];
     $('llm-prompt').value = prompt.content || '';
     set(config, 'llm.system_prompt', prompt.content || '');
+    setConfigDirty(true);
     showToast('已更新系统提示词，请保存配置');
   }));
 }
@@ -797,6 +886,8 @@ for (const [id, kind] of [['reset-expressions', 'expressions'], ['reset-actions'
       submenu.innerHTML = '<li class="listitem"><span class="article">未找到模型</span></li>';
     }
     await loadMotionPage();
+    loadingConfigUi = false;
+    setConfigDirty(false);
   }
-  catch (error) { showToast(`配置加载失败：${error.message}`); }
+  catch (error) { loadingConfigUi = false; showToast(`配置加载失败：${error.message}`); }
 })();

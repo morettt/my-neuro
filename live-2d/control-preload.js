@@ -2,6 +2,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('controlApi', {
   windowAction: action => ipcRenderer.invoke('control:window', action),
+  confirmUnsavedConfig: title => ipcRenderer.invoke('control:confirm-unsaved-config', title),
+  setConfigDirty: dirty => ipcRenderer.send('control:config-dirty', Boolean(dirty)),
+  onCloseRequested: callback => ipcRenderer.on('control:close-requested', () => callback()),
   openGithub: () => ipcRenderer.invoke('control:open-github'),
   resetModelPosition: () => ipcRenderer.invoke('control:reset-model-position'),
   adjustSubtitlePosition: () => ipcRenderer.invoke('control:adjust-subtitle-position'),

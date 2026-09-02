@@ -60,6 +60,8 @@ class Live2DSetup {
             // switches so a resume cannot assemble the same model twice.
             notifyLoaded: false
         });
+        // 此时模型尺寸与保存位置均已应用，加载转圈才能准确落在皮套中心。
+        avatarTransition.reposition(model);
 
         // 4. 交互控制器
         modelController.init(model, _stage.app, config, { stage: _stage });

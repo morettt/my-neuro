@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    html, body { width:100%; height:100%; margin:0; overflow:hidden; background:transparent; }
+    body { display:grid; place-items:center; }
+    .spinner {
+      width:42px;
+      height:42px;
+      border:4px solid rgba(142,132,115,.22);
+      border-top-color:#8e8473;
+      border-right-color:rgba(142,132,115,.58);
+      border-radius:50%;
+      filter:drop-shadow(0 4px 8px rgba(66,55,40,.16));
+      animation:spin .72s linear infinite;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+  </style>
+</head>
+<body><div class="spinner" aria-label="正在加载桌宠"></div></body>
+</html>

@@ -8,6 +8,17 @@ const { toolExecutor } = require('./tool-executor.js');
 const { getAvatarMotionMode } = require('../avatar/motion-mode.js');
 const { motionDirector, isChoreographyConfigEnabled } = require('./motion-director.js');
 const { llmProviderManager } = require('../core/llm-provider.js');
+const fs = require('fs');
+const path = require('path');
+
+function saveScreenshotForHistory(base64Image) {
+    const recordsDir = path.join(__dirname, '..', '..', '..', 'AI记录室');
+    const screenshotDir = path.join(recordsDir, '对话截图');
+    fs.mkdirSync(screenshotDir, { recursive: true });
+    const filename = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}.jpg`;
+    fs.writeFileSync(path.join(screenshotDir, filename), Buffer.from(base64Image, 'base64'));
+    return `对话截图/${filename}`;
+}
 
 /**
  * 过滤模型思考内容，与 LLMClient._filterThinkingContent 保持一致
@@ -197,6 +208,14 @@ class LLMHandler {
                             console.log("需要截图");
                             logToTerminal('info', "需要截图");
                             screenshotBase64 = await voiceChat.takeScreenshotBase64();
+                            const lastUserMessage = [...voiceChat.messages].reverse().find(message => message.role === 'user');
+                            if (lastUserMessage) {
+                                const screenshotPath = saveScreenshotForHistory(screenshotBase64);
+                                lastUserMessage.attachments = [
+                                    ...(Array.isArray(lastUserMessage.attachments) ? lastUserMessage.attachments : []),
+                                    { type: 'image', path: screenshotPath }
+                                ];
+                            }
                         } catch (error) {
                             console.error("截图处理失败:", error);
                             logToTerminal('error', `截图处理失败: ${error.message}`);
@@ -258,6 +277,7 @@ class LLMHandler {
                     }
                     // 准备发送给API的消息列表
                     let messagesForAPI = JSON.parse(JSON.stringify(voiceChat.messages));
+                    messagesForAPI.forEach(message => { delete message.attachments; });
 
                     // 模型不支持图片时，在最后一条用户消息后追加一条说明，让 AI 用自己的语气告知用户
                     if (hasRetriedWithoutImage && iteration === 0) {

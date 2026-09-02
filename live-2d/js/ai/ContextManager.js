@@ -85,9 +85,12 @@ class ContextManager {
                     // 避免相同内容的工具调用/响应被误判为重复而丢失
                     const msgToolCalls = JSON.stringify(msg.tool_calls || []);
                     const historyToolCalls = JSON.stringify(historyMsg.tool_calls || []);
+                    const msgAttachments = JSON.stringify(msg.attachments || []);
+                    const historyAttachments = JSON.stringify(historyMsg.attachments || []);
                     return historyMsg.content === msg.content &&
                         historyMsg.tool_call_id === msg.tool_call_id &&
-                        msgToolCalls === historyToolCalls;
+                        msgToolCalls === historyToolCalls &&
+                        msgAttachments === historyAttachments;
                 });
 
                 if (!isInHistory) {

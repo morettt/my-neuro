@@ -4,6 +4,25 @@ const { logToTerminal } = require('../api-utils.js');
 const { eventBus } = require('../core/event-bus.js');
 const { Events } = require('../core/events.js');
 
+// 情绪/动作标签只供皮套驱动使用，不能进入字幕和聊天记录。
+// 第二个 replace 会隐藏流式响应末尾尚未闭合的半截标签（例如“<开”）。
+function cleanDisplayText(text) {
+    return String(text || '')
+        .replace(/<[^>]*>/g, '').replace(/<[^<>]*$/g, '')
+        .replace(/＜[^＞]*＞/g, '').replace(/＜[^＜＞]*$/g, '')
+        .trim();
+}
+
+function appendAiMessage(container, text) {
+    if (!container || !text) return;
+    const messageElement = document.createElement('div');
+    const label = document.createElement('strong');
+    label.textContent = 'Fake Neuro:';
+    messageElement.append(label, document.createTextNode(` ${text}`));
+    container.appendChild(messageElement);
+    container.scrollTop = container.scrollHeight;
+}
+
 class TTSFactory {
     // 创建TTS处理器
     static create(config, modelController, voiceChat, uiController, onBarrageTTSComplete) {
@@ -42,16 +61,12 @@ class TTSFactory {
                 reset: () => {},
                 processTextToSpeech: (text) => {
                     // 直接显示文本，不进行语音合成
-                    uiController.showSubtitle(`Fake Neuro: ${text}`, 3000);
+                    const displayText = cleanDisplayText(text);
+                    uiController.showSubtitle(`Fake Neuro: ${displayText}`, 3000);
 
                     // 添加到聊天记录
                     const chatMessages = document.getElementById('chat-messages');
-                    if (chatMessages) {
-                        const messageElement = document.createElement('div');
-                        messageElement.innerHTML = `<strong>Fake Neuro:</strong> ${text}`;
-                        chatMessages.appendChild(messageElement);
-                        chatMessages.scrollTop = chatMessages.scrollHeight;
-                    }
+                    appendAiMessage(chatMessages, displayText);
 
                     // 立即调用结束回调，解锁ASR
                     if (virtualTTS.onEndCallback) {
@@ -69,21 +84,17 @@ class TTSFactory {
                     // 在纯文本模式下，流式文本直接累积显示，带自动消失
                     if (!virtualTTS.accumulatedText) virtualTTS.accumulatedText = '';
                     virtualTTS.accumulatedText += text;
-                    uiController.showSubtitle(`Fake Neuro: ${virtualTTS.accumulatedText}`, 3000);
+                    uiController.showSubtitle(`Fake Neuro: ${cleanDisplayText(virtualTTS.accumulatedText)}`, 3000);
                 },
                 finalizeStreamingText: () => {
                     if (virtualTTS.accumulatedText) {
+                        const displayText = cleanDisplayText(virtualTTS.accumulatedText);
                         // 最终确保字幕会在3秒后消失
-                        uiController.showSubtitle(`Fake Neuro: ${virtualTTS.accumulatedText}`, 3000);
+                        uiController.showSubtitle(`Fake Neuro: ${displayText}`, 3000);
 
                         // 添加到聊天记录
                         const chatMessages = document.getElementById('chat-messages');
-                        if (chatMessages) {
-                            const messageElement = document.createElement('div');
-                            messageElement.innerHTML = `<strong>Fake Neuro:</strong> ${virtualTTS.accumulatedText}`;
-                            chatMessages.appendChild(messageElement);
-                            chatMessages.scrollTop = chatMessages.scrollHeight;
-                        }
+                        appendAiMessage(chatMessages, displayText);
                         virtualTTS.accumulatedText = '';
 
                         // 立即调用结束回调，解锁ASR
