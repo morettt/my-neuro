@@ -658,7 +658,7 @@ $('plugin-detail-back').addEventListener('click', () => {
 $('plugin-readme').addEventListener('click', async () => {
   if (!editingPlugin) return;
   const readme = await window.controlApi.readPluginReadme(editingPlugin.type, editingPlugin.name);
-  $('plugin-detail-content').innerHTML = `<div class="plugin-readme-text">${markdownToHtml(readme)}</div>`;
+  $('plugin-detail-content').innerHTML = `<div class="plugin-readme-text">${renderPluginMarkdown(readme)}</div>`;
   $('plugin-detail-content').querySelectorAll('a[href]').forEach(link => link.addEventListener('click', event => {
     event.preventDefault();
     window.controlApi.openExternal(link.href);
@@ -674,6 +674,65 @@ function markdownToHtml(markdown) {
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
     .replace(/^[-*] (.+)$/gm, '<div class="markdown-list-item">• $1</div>').replace(/\n/g, '<br>');
 }
+function renderPluginMarkdown(markdown) {
+  const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
+  const inline = text => escapeHtml(text)
+    .replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/~~([^~]+)~~/g, '<del>$1</del>')
+    .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
+  const isBlockStart = (line, next = '') => /^\s*$|^```|^#{1,6}\s+|^\s*([-*+] |\d+\. )|^>\s?|^\s*([-*_])(?:\s*\2){2,}\s*$/.test(line)
+    || (line.includes('|') && /^\s*\|?\s*:?-{3,}/.test(next));
+  const out = [];
+
+  for (let i = 0; i < lines.length;) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+    const fence = line.match(/^```\s*([\w-]*)/);
+    if (fence) {
+      const code = [];
+      for (i++; i < lines.length && !/^```/.test(lines[i]); i++) code.push(lines[i]);
+      if (i < lines.length) i++;
+      out.push(`<pre><code${fence[1] ? ` class="language-${escapeHtml(fence[1])}"` : ''}>${escapeHtml(code.join('\n'))}</code></pre>`);
+      continue;
+    }
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) { const level = heading[1].length; out.push(`<h${level}>${inline(heading[2])}</h${level}>`); i++; continue; }
+    if (/^\s*([-*_])(?:\s*\1){2,}\s*$/.test(line)) { out.push('<hr>'); i++; continue; }
+    if (line.includes('|') && i + 1 < lines.length && /^\s*\|?\s*:?-{3,}/.test(lines[i + 1])) {
+      const splitRow = row => row.trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim());
+      const headers = splitRow(line); i += 2;
+      const rows = [];
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim()) rows.push(splitRow(lines[i++]));
+      out.push(`<div class="markdown-table-wrap"><table><thead><tr>${headers.map(cell => `<th>${inline(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map((_, index) => `<td>${inline(row[index] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+      continue;
+    }
+    const listMatch = line.match(/^\s*([-*+]|\d+\.)\s+(.+)$/);
+    if (listMatch) {
+      const ordered = /\d+\./.test(listMatch[1]); const items = [];
+      while (i < lines.length) {
+        const match = lines[i].match(/^\s*([-*+]|\d+\.)\s+(.+)$/);
+        if (!match || /\d+\./.test(match[1]) !== ordered) break;
+        items.push(`<li>${inline(match[2])}</li>`); i++;
+      }
+      out.push(`<${ordered ? 'ol' : 'ul'}>${items.join('')}</${ordered ? 'ol' : 'ul'}>`);
+      continue;
+    }
+    if (/^>\s?/.test(line)) {
+      const quote = [];
+      while (i < lines.length && /^>\s?/.test(lines[i])) quote.push(lines[i++].replace(/^>\s?/, ''));
+      out.push(`<blockquote>${quote.map(inline).join('<br>')}</blockquote>`);
+      continue;
+    }
+    const paragraph = [line.trim()]; i++;
+    while (i < lines.length && !isBlockStart(lines[i], lines[i + 1] || '')) paragraph.push(lines[i++].trim());
+    out.push(`<p>${paragraph.map(inline).join('<br>')}</p>`);
+  }
+  return out.join('');
+}
+
 async function savePluginConfig() {
   if (!editingPlugin) return;
   const updated = structuredClone(editingPlugin.config);
