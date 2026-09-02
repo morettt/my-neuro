@@ -619,12 +619,16 @@ function bindPluginCards() {
   }));
 }
 
-async function loadPlugins() {
-  pluginData = await window.controlApi.listPlugins();
+function renderPlugins() {
   $('builtin-plugin-list').innerHTML = pluginData.builtIn.map(pluginCard).join('') || '<div class="empty card">暂无内置插件</div>';
   $('community-plugin-list').innerHTML = pluginData.community.map(pluginCard).join('') || '<div class="empty card">暂无社区插件</div>';
   $('market-plugin-list').innerHTML = pluginData.market.map(marketCard).join('') || '<div class="empty card">插件广场暂无内容</div>';
   bindPluginCards();
+}
+
+async function loadPlugins() {
+  pluginData = await window.controlApi.listPlugins();
+  renderPlugins();
 }
 
 function configFields(config, prefix = '') {
