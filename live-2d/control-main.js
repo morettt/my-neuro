@@ -372,7 +372,13 @@ async function downloadFile(url, file) {
 async function expandZip(zipFile, destination) {
   fs.mkdirSync(destination, { recursive: true });
   await runProcess('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-    'Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force', zipFile, destination]);
+    '$ErrorActionPreference = "Stop"; [Console]::OutputEncoding = [Text.UTF8Encoding]::new(); Expand-Archive -LiteralPath $env:MY_NEURO_PLUGIN_ZIP -DestinationPath $env:MY_NEURO_PLUGIN_DESTINATION -Force'], {
+    env: {
+      ...process.env,
+      MY_NEURO_PLUGIN_ZIP: zipFile,
+      MY_NEURO_PLUGIN_DESTINATION: destination
+    }
+  });
 }
 
 async function installDependencies(pluginDir) {
