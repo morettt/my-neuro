@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, globalShortcut, desktopCapturer, dialog } = require('electron')
+const { app, BrowserWindow, ipcMain, screen, globalShortcut, desktopCapturer, dialog, nativeImage } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { HttpServer } = require('./js/services/http-server')
@@ -668,7 +668,20 @@ ipcMain.handle('take-screenshot', async (event) => {
             format: 'jpg'
         });
 
-        return imgBuffer.toString('base64');
+        // 视觉模型默认使用均衡画质：限制到 1600x900 内、保持比例且不放大小图。
+        // 这样可显著减少 2K/4K 屏幕截图的 Base64 体积和上传延迟。
+        const image = nativeImage.createFromBuffer(imgBuffer);
+        if (image.isEmpty()) throw new Error('截图图像解码失败');
+        const sourceSize = image.getSize();
+        const scale = Math.min(1, 1600 / sourceSize.width, 900 / sourceSize.height);
+        const targetSize = {
+            width: Math.max(1, Math.round(sourceSize.width * scale)),
+            height: Math.max(1, Math.round(sourceSize.height * scale))
+        };
+        const resized = scale < 1 ? image.resize({ ...targetSize, quality: 'good' }) : image;
+        const compressed = resized.toJPEG(80);
+        console.log(`截图已压缩: ${sourceSize.width}x${sourceSize.height} -> ${targetSize.width}x${targetSize.height}, JPEG 80%`);
+        return compressed.toString('base64');
     } catch (error) {
         console.error('截图错误:', error)
         throw error;

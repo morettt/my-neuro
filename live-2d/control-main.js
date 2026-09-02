@@ -16,6 +16,50 @@ let runtimeLogLength = 0;
 let runtimeLogRemainder = '';
 let selectedVoiceModelPath = '';
 let selectedVoiceAudioPath = '';
+let avatarLoadingWindow = null;
+let avatarLoadingTimer = null;
+
+function closeAvatarLoadingWindow() {
+  clearTimeout(avatarLoadingTimer);
+  avatarLoadingTimer = null;
+  if (avatarLoadingWindow && !avatarLoadingWindow.isDestroyed()) avatarLoadingWindow.destroy();
+  avatarLoadingWindow = null;
+}
+
+function showAvatarLoadingWindow() {
+  closeAvatarLoadingWindow();
+  const displays = require('electron').screen.getAllDisplays();
+  const minX = Math.min(...displays.map(display => display.bounds.x));
+  const minY = Math.min(...displays.map(display => display.bounds.y));
+  const maxX = Math.max(...displays.map(display => display.bounds.x + display.bounds.width));
+  const maxY = Math.max(...displays.map(display => display.bounds.y + display.bounds.height));
+  const cached = readJson(path.join(__dirname, 'avatar-loading-position.json'), null);
+  const config = readJson(configPath, {});
+  const pos = config.ui?.model_position || {};
+  const relX = Number.isFinite(cached?.x) ? cached.x : Math.max(0, Math.min(1, Number(pos.x) || 0.65));
+  const relY = Number.isFinite(cached?.y) ? cached.y : Math.max(0, Math.min(1, Number(pos.y) || 0.38));
+  const size = 72;
+  avatarLoadingWindow = new BrowserWindow({
+    x: Math.round(minX + (maxX - minX) * relX - size / 2),
+    y: Math.round(minY + (maxY - minY) * relY - size / 2),
+    width: size,
+    height: size,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    alwaysOnTop: true,
+    focusable: false,
+    skipTaskbar: true,
+    resizable: false,
+    hasShadow: false,
+    webPreferences: { contextIsolation: true, nodeIntegration: false }
+  });
+  avatarLoadingWindow.setIgnoreMouseEvents(true);
+  avatarLoadingWindow.setAlwaysOnTop(true, 'screen-saver');
+  avatarLoadingWindow.loadFile('avatar-loading.html');
+  avatarLoadingWindow.once('ready-to-show', () => avatarLoadingWindow?.showInactive());
+  avatarLoadingTimer = setTimeout(closeAvatarLoadingWindow, 30000);
+}
 
 function cleanToolLog(line) {
   return line
@@ -45,6 +89,7 @@ function pumpRuntimeLog(flush = false) {
     for (const rawLine of lines) {
       const line = rawLine.trim();
       if (!line) continue;
+      if (/\[AvatarFacade\]\s*形态已激活|\[Live2DLoader\]\s*模型加载完成/.test(line)) closeAvatarLoadingWindow();
       const channel = line.includes('[TOOL]') ? 'control:tool-log' : 'control:live2d-log';
       const cleaned = channel === 'control:tool-log' ? cleanToolLog(line) : cleanPetLog(line);
       if (cleaned) runtimeLogSender.send(channel, `${cleaned}\n`);
@@ -462,6 +507,7 @@ function createControlWindow() {
     }, 16);
   });
   let closing = false;
+  let configDirty = false;
   win.once('ready-to-show', () => {
     win.show();
     fadeWindow(0, 1);
@@ -469,11 +515,18 @@ function createControlWindow() {
   win.on('close', event => {
     if (closing) return;
     event.preventDefault();
+    if (configDirty) {
+      win.webContents.send('control:close-requested');
+      return;
+    }
     closing = true;
     Promise.all([fadeWindow(win.getOpacity(), 0, 260), stopLive2dProcess(), stopConfiguredServices()])
       .finally(() => { if (!win.isDestroyed()) win.destroy(); });
   });
   win.loadFile('control.html');
+  ipcMain.on('control:config-dirty', (event, dirty) => {
+    if (event.sender === win.webContents) configDirty = Boolean(dirty);
+  });
   let pluginWatcher = null;
   try {
     let refreshTimer = null;
@@ -514,6 +567,21 @@ ipcMain.handle('control:window', (event, action) => {
   if (action === 'minimize') win.minimize();
   if (action === 'maximize') win.isMaximized() ? win.unmaximize() : win.maximize();
   if (action === 'close') win.close();
+});
+
+ipcMain.handle('control:confirm-unsaved-config', async (event, title = '未保存配置') => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showMessageBox(win, {
+    type: 'warning',
+    title,
+    message: '当前配置有未保存的修改，继续操作可能导致配置未生效。',
+    detail: '是否保存当前配置？',
+    buttons: ['保存', '放弃', '取消'],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true
+  });
+  return ['save', 'discard', 'cancel'][result.response] || 'cancel';
 });
 
 ipcMain.handle('control:open-github', () => shell.openExternal('https://github.com/morettt/my-neuro'));
@@ -680,7 +748,20 @@ ipcMain.handle('control:get-chat-history', () => {
   let invalidLines = 0;
   for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
     if (!line.trim()) continue;
-    try { messages.push(JSON.parse(line)); } catch { invalidLines += 1; }
+    try {
+      const message = JSON.parse(line);
+      message.history_images = (Array.isArray(message.attachments) ? message.attachments : [])
+        .filter(item => item?.type === 'image' && typeof item.path === 'string')
+        .map(item => {
+          const imageRoot = path.join(projectRoot, 'AI记录室', '对话截图');
+          const imagePath = path.resolve(path.join(projectRoot, 'AI记录室'), item.path);
+          if (!imagePath.startsWith(`${imageRoot}${path.sep}`) || !fs.existsSync(imagePath)) return null;
+          const mime = path.extname(imagePath).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
+          return `data:${mime};base64,${fs.readFileSync(imagePath).toString('base64')}`;
+        })
+        .filter(Boolean);
+      messages.push(message);
+    } catch { invalidLines += 1; }
   }
   return { exists: true, file, messages, invalidLines };
 });
@@ -829,6 +910,7 @@ ipcMain.handle('control:apply-vmc', async (_event, host, port) => {
 ipcMain.handle('control:start-live2d', event => {
   if (live2dProcess && live2dProcess.exitCode === null) return { ok: false, message: '桌宠已在运行' };
   startRuntimeLog(event.sender);
+  showAvatarLoadingWindow();
   live2dProcess = spawn('cmd.exe', ['/d', '/c', 'go.bat'], {
     cwd: __dirname,
     windowsHide: true
@@ -836,6 +918,7 @@ ipcMain.handle('control:start-live2d', event => {
   live2dProcess.stdout.on('data', () => {});
   live2dProcess.stderr.on('data', () => {});
   live2dProcess.on('exit', code => {
+    closeAvatarLoadingWindow();
     stopRuntimeLog();
     if (!event.sender.isDestroyed()) {
       event.sender.send('control:tool-log', `桌宠进程已退出（${code ?? '未知'}）\n`);

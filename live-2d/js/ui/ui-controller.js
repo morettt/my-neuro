@@ -213,7 +213,11 @@ class UIController {
             this.subtitleTimeout = null;
         }
 
-        subtitleText.textContent = text;
+        // 最终展示边界：情绪/动作标签只用于驱动皮套，绝不能显示给用户。
+        const displayText = String(text || '')
+            .replace(/<[^>]*>/g, '').replace(/<[^<>]*$/g, '')
+            .replace(/＜[^＞]*＞/g, '').replace(/＜[^＜＞]*$/g, '');
+        subtitleText.textContent = displayText;
         container.style.display = 'block';
         this.applySubtitlePosition();
         container.scrollTop = container.scrollHeight;
@@ -270,6 +274,30 @@ class UIController {
         return { x: modelX, y: modelY };
     }
 
+    _getModelScreenBounds() {
+        const { model } = this._getActiveAvatarState();
+        if (!model) return null;
+        let bounds = null;
+        try {
+            bounds = model.getScreenHitBox?.() || model.getBounds?.() || model.viewRect;
+        } catch (_) {
+            return null;
+        }
+        if (!bounds) return null;
+        let left = Number.isFinite(bounds.left) ? bounds.left : Number(bounds.x);
+        let top = Number.isFinite(bounds.top) ? bounds.top : Number(bounds.y);
+        let right = Number.isFinite(bounds.right) ? bounds.right : left + Number(bounds.width);
+        let bottom = Number.isFinite(bounds.bottom) ? bounds.bottom : top + Number(bounds.height);
+        if (![left, top, right, bottom].every(Number.isFinite) || right <= left || bottom <= top) return null;
+
+        const visibleLeft = Math.max(0, Math.min(window.innerWidth, left));
+        const visibleTop = Math.max(0, Math.min(window.innerHeight, top));
+        const visibleRight = Math.max(0, Math.min(window.innerWidth, right));
+        const visibleBottom = Math.max(0, Math.min(window.innerHeight, bottom));
+        if (visibleRight <= visibleLeft || visibleBottom <= visibleTop) return null;
+        return { left: visibleLeft, top: visibleTop, right: visibleRight, bottom: visibleBottom };
+    }
+
     // 更新气泡框位置，使其跟随模型
     updateBubblePosition() {
         const bubbleContainer = document.getElementById('bubble-container');
@@ -311,10 +339,24 @@ class UIController {
 
             // 更新工具气泡堆叠容器位置 (身体下方)
             if (toolBubblesContainer) {
-                const toolOffsetX = 100;   // 向右偏移
-                const toolOffsetY = 230;   // 向下大幅偏移,定位到身体/下方
-                const toolTargetX = screenX + toolOffsetX;
-                const toolTargetY = screenY + toolOffsetY;
+                const modelBounds = this._getModelScreenBounds();
+                const cardRect = toolBubblesContainer.getBoundingClientRect();
+                const cardWidth = cardRect.width || 360;
+                const cardHeight = cardRect.height || 80;
+                const edge = 12;
+                let toolTargetX;
+                let toolTargetY;
+                if (modelBounds) {
+                    const bodyCenterX = (modelBounds.left + modelBounds.right) / 2;
+                    const bodyCenterY = modelBounds.top + (modelBounds.bottom - modelBounds.top) * 0.42;
+                    toolTargetX = bodyCenterX - cardWidth / 2;
+                    toolTargetY = bodyCenterY - cardHeight / 2;
+                } else {
+                    toolTargetX = screenX - cardWidth / 2;
+                    toolTargetY = screenY - cardHeight / 2;
+                }
+                toolTargetX = Math.max(edge, Math.min(toolTargetX, window.innerWidth - cardWidth - edge));
+                toolTargetY = Math.max(edge, Math.min(toolTargetY, window.innerHeight - cardHeight - edge));
 
                 if (!this._toolBubblesInitialized) {
                     this.toolBubblesCurrentX = toolTargetX;
@@ -451,6 +493,9 @@ class UIController {
 
         // 添加到容器
         container.appendChild(bubble);
+
+        this._toolBubblesInitialized = false;
+        this.updateBubblePosition();
 
         // 记录工具名称到日志
         logToTerminal('info', `🔧 工具调用: ${toolName}${parameters ? ' 参数: ' + JSON.stringify(parameters) : ''}`);
@@ -614,11 +659,12 @@ class UIController {
 
     // 快捷设置面板（齿轮菜单）
     setupQuickPanel(voiceChat, config) {
+        const panel = document.getElementById('quick-settings');
         const gear = document.getElementById('quick-gear');
         const items = document.getElementById('quick-settings-items');
         const toggleModeBtn = document.getElementById('btn-toggle-mode');
         const toggleChatBtn = document.getElementById('btn-toggle-chat');
-        if (!gear || !items) return;
+        if (!panel || !items) return;
 
         let panelOpen = false;
 
@@ -630,20 +676,53 @@ class UIController {
         const chatVisible = chatContainer && window.getComputedStyle(chatContainer).display !== 'none';
         toggleChatBtn.classList.toggle('active', chatVisible);
 
-        gear.addEventListener('click', (e) => {
-            e.stopPropagation();
-            panelOpen = !panelOpen;
-            items.classList.toggle('expanded', panelOpen);
-            gear.classList.toggle('open', panelOpen);
+        const closePanel = () => {
+            panelOpen = false;
+            panel.classList.remove('context-open');
+            items.classList.remove('expanded');
+        };
+
+        const pointHitsModel = (x, y) => {
+            const controller = global.avatarFacade?.getController?.() || global.modelController;
+            if (typeof controller?.isPointOverModel === 'function') {
+                try { return Boolean(controller.isPointOverModel(x, y)); } catch (_) {}
+            }
+            const model = global.avatarFacade?.getModel?.() || global.currentModel;
+            try {
+                if (typeof model?.containsPoint === 'function') return Boolean(model.containsPoint({ x, y }));
+                const box = model?.getScreenHitBox?.() || model?.getBounds?.() || model?.viewRect;
+                if (box) {
+                    const left = Number.isFinite(box.left) ? box.left : box.x;
+                    const top = Number.isFinite(box.top) ? box.top : box.y;
+                    const right = Number.isFinite(box.right) ? box.right : left + box.width;
+                    const bottom = Number.isFinite(box.bottom) ? box.bottom : top + box.height;
+                    return x >= left && x <= right && y >= top && y <= bottom;
+                }
+            } catch (_) {}
+            return false;
+        };
+
+        document.addEventListener('contextmenu', (e) => {
+            if (!pointHitsModel(e.clientX, e.clientY)) {
+                closePanel();
+                return;
+            }
+            e.preventDefault();
+            panelOpen = true;
+            panel.classList.add('context-open');
+            items.classList.add('expanded');
+            // 先显示再测量，保证菜单不会超出窗口边缘。
+            const rect = panel.getBoundingClientRect();
+            const left = Math.max(8, Math.min(e.clientX, window.innerWidth - rect.width - 8));
+            const top = Math.max(8, Math.min(e.clientY, window.innerHeight - rect.height - 8));
+            panel.style.left = `${left}px`;
+            panel.style.top = `${top}px`;
         });
 
         document.addEventListener('click', (e) => {
-            if (panelOpen && !e.target.closest('#quick-settings')) {
-                panelOpen = false;
-                items.classList.remove('expanded');
-                gear.classList.remove('open');
-            }
+            if (panelOpen && !e.target.closest('#quick-settings')) closePanel();
         });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
 
         toggleChatBtn.addEventListener('click', () => {
             const chatContainer = document.getElementById('text-chat-container');
@@ -661,6 +740,7 @@ class UIController {
                 chatContainer.style.setProperty('pointer-events', 'auto', 'important');
             }
             toggleChatBtn.classList.toggle('active', !visible);
+            closePanel();
         });
 
         toggleModeBtn.addEventListener('click', () => {
@@ -674,6 +754,7 @@ class UIController {
             config.asr = config.asr || {};
             config.asr.ptt_enabled = proc.pttModeEnabled;
             toggleModeBtn.classList.toggle('active', proc.pttModeEnabled);
+            closePanel();
         });
     }
 
