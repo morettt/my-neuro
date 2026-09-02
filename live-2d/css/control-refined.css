@@ -290,6 +290,11 @@ footer { position:fixed; left:180px; right:0; bottom:0; z-index:150; display:fle
 .plugin-config-group { display:grid; gap:10px; padding:12px; border:1px solid #e5dfd5; border-radius:10px; }
 .plugin-config-group h3,.plugin-config-group p { margin:0; }
 .plugin-config-check { grid-template-columns:1fr auto!important; align-items:center; }
+.plugin-config-check input[type="checkbox"] { appearance:none; -webkit-appearance:none; position:relative; width:45.5px; height:26px; margin:0; border:0; border-radius:8px; background:#b6b6b6; box-shadow:none; cursor:pointer; transition:.4s; }
+.plugin-config-check input[type="checkbox"]::before { content:""; position:absolute; width:18.2px; height:18.2px; left:3.9px; top:3.9px; border-radius:6px; background:#fff; transition:.4s; }
+.plugin-config-check input[type="checkbox"]:checked { background:#f2ad3f; }
+.plugin-config-check input[type="checkbox"]:checked::before { transform:translateX(19.5px); }
+.plugin-config-check input[type="checkbox"]:focus-visible { outline:2px solid rgba(33,150,243,.45); outline-offset:2px; }
 .plugin-readme-text { max-height:520px; overflow:auto; padding:14px; border-radius:9px; background:#f8f6f1; white-space:pre-wrap; font:13px/1.65 "Microsoft YaHei",sans-serif; }
 #animation { padding-bottom:66px; }
 .motion-section { display:grid; gap:12px; margin-bottom:12px; padding:16px; }
