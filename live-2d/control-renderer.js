@@ -577,6 +577,13 @@ function marketCard(plugin) {
   return `<article class="plugin-card card"><div class="plugin-summary"><strong>${escapeHtml(plugin.display_name || plugin.id)}</strong><p>${escapeHtml(plugin.desc || '暂无说明')}</p><small>${escapeHtml(plugin.author || '')}</small></div><div class="plugin-actions"><button type="button" data-plugin-repo="${escapeHtml(plugin.repo || '')}">仓库</button><button type="button" class="primary" data-plugin-install="${escapeHtml(plugin.id)}" ${plugin.installed ? 'disabled' : ''}>${plugin.installed ? '已安装' : '安装'}</button></div></article>`;
 }
 
+function selectPluginTab(name) {
+  document.querySelector('[data-plugin-tab].active')?.classList.remove('active');
+  document.querySelector('[data-plugin-panel].active')?.classList.remove('active');
+  document.querySelector(`[data-plugin-tab="${name}"]`)?.classList.add('active');
+  document.querySelector(`[data-plugin-panel="${name}"]`)?.classList.add('active');
+}
+
 function bindPluginCards() {
   document.querySelectorAll('[data-plugin-enabled]').forEach(input => input.addEventListener('change', async () => {
     try { await window.controlApi.setPluginEnabled(input.dataset.pluginEnabled, input.checked); showToast(input.checked ? '插件已启用' : '插件已停用'); }
@@ -608,6 +615,7 @@ function bindPluginCards() {
     const result = await window.controlApi.installPlugin(plugin.id, plugin.repo);
     showToast(result.message);
     await loadPlugins();
+    if (result.ok) selectPluginTab('community');
   }));
 }
 
@@ -770,10 +778,7 @@ document.addEventListener('change', event => {
 });
 
 document.querySelectorAll('[data-plugin-tab]').forEach(button => button.addEventListener('click', () => {
-  document.querySelector('[data-plugin-tab].active')?.classList.remove('active');
-  document.querySelector('[data-plugin-panel].active')?.classList.remove('active');
-  button.classList.add('active');
-  document.querySelector(`[data-plugin-panel="${button.dataset.pluginTab}"]`).classList.add('active');
+  selectPluginTab(button.dataset.pluginTab);
 }));
 $('refresh-plugins').addEventListener('click', async () => {
   const button = $('refresh-plugins');
