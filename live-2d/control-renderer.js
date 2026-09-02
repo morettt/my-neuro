@@ -658,6 +658,7 @@ $('plugin-detail-back').addEventListener('click', () => {
 $('plugin-readme').addEventListener('click', async () => {
   if (!editingPlugin) return;
   const readme = await window.controlApi.readPluginReadme(editingPlugin.type, editingPlugin.name);
+  $('plugin-readme').hidden = true;
   $('plugin-detail-content').innerHTML = `<div class="plugin-readme-text">${renderPluginMarkdown(readme)}</div>`;
   $('plugin-detail-content').querySelectorAll('a[href]').forEach(link => link.addEventListener('click', event => {
     event.preventDefault();
