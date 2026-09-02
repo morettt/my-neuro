@@ -291,7 +291,6 @@ footer { position:fixed; left:180px; right:0; bottom:0; z-index:150; display:fle
 .plugin-config-group h3,.plugin-config-group p { margin:0; }
 .plugin-config-check { grid-template-columns:1fr auto!important; align-items:center; }
 .plugin-readme-text { max-height:520px; overflow:auto; padding:14px; border-radius:9px; background:#f8f6f1; white-space:pre-wrap; font:13px/1.65 "Microsoft YaHei",sans-serif; }
-#save-plugin-config { margin-top:16px; }
 #animation { padding-bottom:66px; }
 .motion-section { display:grid; gap:12px; margin-bottom:12px; padding:16px; }
 .motion-section h2,.motion-section h3,.motion-section p { margin:0; }

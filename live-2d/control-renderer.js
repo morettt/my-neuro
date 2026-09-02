@@ -4,6 +4,7 @@ let environment = { edition: 'cloud', editionLabel: '云端', version: '' };
 let previewEdition = null;
 let activeServiceLog = 'tts';
 let configDirty = false;
+let pluginConfigDirty = false;
 let loadingConfigUi = true;
 let closePromptOpen = false;
 const serviceLogs = { tts: '', asr: '', bert: '' };
@@ -29,10 +30,20 @@ const set = (obj, path, value) => {
 
 function setConfigDirty(dirty) {
   configDirty = Boolean(dirty);
+  updateSaveDirtyState();
+}
+
+function setPluginConfigDirty(dirty) {
+  pluginConfigDirty = Boolean(dirty);
+  updateSaveDirtyState();
+}
+
+function updateSaveDirtyState() {
+  const dirty = configDirty || pluginConfigDirty;
   const button = $('save-config');
-  button?.classList.toggle('config-dirty', configDirty);
-  if (button) button.title = configDirty ? '当前配置有未保存的修改，请先保存配置' : '';
-  window.controlApi.setConfigDirty(configDirty);
+  button?.classList.toggle('config-dirty', dirty);
+  if (button) button.title = dirty ? '当前有未保存的修改，请先保存配置' : '';
+  window.controlApi.setConfigDirty(dirty);
 }
 
 function applyEdition(edition = environment.edition) {
@@ -450,6 +461,8 @@ function showToast(message) {
 }
 
 async function saveConfig() {
+  if (pluginConfigDirty && !(await savePluginConfig())) return false;
+  if (!configDirty) return true;
   syncCloudProviders();
   for (const [id, [path, type]] of Object.entries(fields)) {
     const el = $(id);
@@ -471,7 +484,7 @@ async function saveConfig() {
 $('save-config').addEventListener('click', saveConfig);
 
 async function confirmUnsavedConfig(title) {
-  if (!configDirty) return true;
+  if (!configDirty && !pluginConfigDirty) return true;
   const choice = await window.controlApi.confirmUnsavedConfig(title);
   if (choice === 'save') return saveConfig();
   if (choice === 'discard') return true;
@@ -484,6 +497,7 @@ window.controlApi.onCloseRequested(async () => {
   try {
     if (await confirmUnsavedConfig('关闭前保存配置')) {
       setConfigDirty(false);
+      setPluginConfigDirty(false);
       await window.controlApi.windowAction('close');
     }
   } finally {
@@ -660,7 +674,7 @@ function markdownToHtml(markdown) {
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
     .replace(/^[-*] (.+)$/gm, '<div class="markdown-list-item">• $1</div>').replace(/\n/g, '<br>');
 }
-$('save-plugin-config').addEventListener('click', async () => {
+async function savePluginConfig() {
   if (!editingPlugin) return;
   const updated = structuredClone(editingPlugin.config);
   let invalidField = '';
@@ -675,9 +689,24 @@ $('save-plugin-config').addEventListener('click', async () => {
     if (target[leaf] && typeof target[leaf] === 'object' && 'type' in target[leaf]) target[leaf].value = value;
     else target[leaf] = value;
   });
-  if (invalidField) { showToast(`${invalidField} 必须是数字`); return; }
-  await window.controlApi.savePluginConfig(editingPlugin.type, editingPlugin.name, updated);
-  editingPlugin.config = updated; showToast('插件配置已保存');
+  if (invalidField) { showToast(`${invalidField} 必须是数字`); return false; }
+  try {
+    await window.controlApi.savePluginConfig(editingPlugin.type, editingPlugin.name, updated);
+    editingPlugin.config = updated;
+    setPluginConfigDirty(false);
+    showToast('插件配置已保存');
+    return true;
+  } catch (error) {
+    showToast(`插件配置保存失败：${error.message}`);
+    return false;
+  }
+}
+
+document.addEventListener('input', event => {
+  if (event.target.matches?.('[data-plugin-field]')) setPluginConfigDirty(true);
+});
+document.addEventListener('change', event => {
+  if (event.target.matches?.('[data-plugin-field]')) setPluginConfigDirty(true);
 });
 
 document.querySelectorAll('[data-plugin-tab]').forEach(button => button.addEventListener('click', () => {
