@@ -578,6 +578,8 @@ function marketCard(plugin) {
 }
 
 function selectPluginTab(name) {
+  document.querySelectorAll('#plugins > .plugin-tabs, #plugins > .plugin-panel').forEach(element => { element.hidden = false; });
+  $('plugin-detail').hidden = true;
   document.querySelector('[data-plugin-tab].active')?.classList.remove('active');
   document.querySelector('[data-plugin-panel].active')?.classList.remove('active');
   document.querySelector(`[data-plugin-tab="${name}"]`)?.classList.add('active');
