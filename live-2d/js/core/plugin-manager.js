@@ -119,8 +119,6 @@ class PluginManager {
 
         const { name, main = 'index.js', lang } = metadata;
 
-        const configKey = name.replace(/-/g, '_');
-
         this._loadEnabledList();
         const relPath = path.relative(this._pluginsDir, pluginDir).replace(/\\/g, '/');
         if (!this._enabledPlugins.has(relPath)) {
@@ -128,7 +126,7 @@ class PluginManager {
             return;
         }
 
-        if (this._plugins.has(name)) {
+        if (this._plugins.has(relPath)) {
             //logToTerminal('info', `⏭️ 插件已加载，跳过: ${name}`);
             return;
         }
@@ -141,7 +139,7 @@ class PluginManager {
             throw new Error(`入口文件不存在: ${mainPath}`);
         }
 
-        const context = new PluginContext(configKey, this._config, this, pluginDir);
+        const context = new PluginContext(relPath, this._config, this, pluginDir);
 
         let plugin;
         if (isPython) {
@@ -160,7 +158,7 @@ class PluginManager {
 
         await plugin.onInit();
 
-        this._plugins.set(name, { plugin, metadata, pluginDir });
+        this._plugins.set(relPath, { plugin, metadata, pluginDir });
         const displayName = metadata.displayName || name;
         logToolAction('info', `✅ 插件已加载: ${displayName} v${metadata.version || '?'}${isPython ? ' [Python]' : ''}`);
     }
@@ -256,7 +254,7 @@ class PluginManager {
                 await this.load(pluginDir);
                 const metaPath = path.join(pluginDir, 'metadata.json');
                 const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-                const newEntry = this._plugins.get(meta.name);
+                const newEntry = this._plugins.get(relPath);
                 if (newEntry) await newEntry.plugin.onStart();
                 logToTerminal('info', `🔌 插件已因启用而加载: ${meta.name}`);
             } catch (e) {
@@ -272,10 +270,12 @@ class PluginManager {
      */
     getPluginList() {
         const list = [];
-        for (const [name, { metadata, pluginDir }] of this._plugins) {
+        for (const [id, { metadata, pluginDir }] of this._plugins) {
             list.push({
-                name,
-                displayName: metadata.displayName || name,
+                id,
+                name: id,
+                pluginName: metadata.name || path.basename(pluginDir),
+                displayName: metadata.displayName || metadata.name || path.basename(pluginDir),
                 version: metadata.version || '?',
                 lang: metadata.lang || 'js',
                 dir: pluginDir,
@@ -344,15 +344,9 @@ class PluginManager {
                     if (parts.length < 1) return;
                     const pluginFolderName = parts[0];
 
-                    let targetName = null;
-                    for (const [name, entry] of this._plugins) {
-                        const dirBasename = path.basename(entry.pluginDir);
-                        if (dirBasename === pluginFolderName) {
-                            targetName = name;
-                            break;
-                        }
-                    }
-                    if (!targetName) return;
+                    const source = baseDir === this._builtinDir ? 'built-in' : 'community';
+                    const targetName = `${source}/${pluginFolderName}`;
+                    if (!this._plugins.has(targetName)) return;
 
                     clearTimeout(this._reloadDebounceTimers.get(targetName));
                     this._reloadDebounceTimers.set(targetName, setTimeout(() => {
@@ -373,6 +367,11 @@ class PluginManager {
     _findPluginDir(name) {
         const entry = this._plugins.get(name);
         if (entry) return entry.pluginDir;
+        for (const loaded of this._plugins.values()) {
+            if (loaded.metadata.name === name || path.basename(loaded.pluginDir) === name) {
+                return loaded.pluginDir;
+            }
+        }
         for (const baseDir of [this._builtinDir, this._communityDir]) {
             const dir = path.join(baseDir, name);
             if (fs.existsSync(dir)) return dir;
@@ -383,7 +382,14 @@ class PluginManager {
     // ===== 查询 =====
 
     getPlugin(name) {
-        return this._plugins.get(name)?.plugin || null;
+        const exact = this._plugins.get(name);
+        if (exact) return exact.plugin;
+        for (const entry of this._plugins.values()) {
+            if (entry.metadata.name === name || path.basename(entry.pluginDir) === name) {
+                return entry.plugin;
+            }
+        }
+        return null;
     }
 
     getAllPlugins() {

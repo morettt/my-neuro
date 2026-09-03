@@ -337,7 +337,46 @@ function listPlugins() {
     result[key].sort((a, b) => a.displayName.localeCompare(b.displayName, 'zh-CN'));
   }
   const market = readJson(path.join(pluginsPath, 'plugin-house', 'plugin_hub.json'), {});
-  result.market = Object.entries(market).map(([id, item]) => ({ id, ...item, installed: result.community.some(p => p.name === id) }));
+  const marketDisplayNames = {
+    'time-awareness': '时间感知',
+    'my-neuro-plugin-hitokoto': '每日一言',
+    'my-neuro-plugin-memos': 'MemOS 长期记忆',
+    'loki-shadow': '洛基之影',
+    'myneuro-plugin-skills': '技能管理',
+    'core-memory-injector': '核心记忆注入',
+    'astrbook-forum': 'AstrBook 论坛',
+    'world-eye': '世界之眼',
+    'ai-log': '思痕之册',
+    'dawn-dusk-line': '晨昏之线',
+    'mood-chat': '心情对话系统',
+    'thinking-bubble': '思考气泡',
+    'rebirth-feiniu-music': '网易云音乐',
+    'bilibili-tools': 'B站工具',
+    'multi-search': '多引擎搜索',
+    'openrouter-image': 'OpenRouter 图像生成',
+    'windows-app-launcher': 'Windows 应用启动',
+    'mcp-filesystem': 'MCP 文件系统',
+    'remote-sync': '远程同步',
+    'exp3-model-processor': 'EXP3 表情整理器',
+    'check-in': '定时问候',
+    'txt-writer': '文本写入',
+    'minimax-music': 'MiniMax 音乐生成',
+    'feiniu-board-game': '肥牛棋盘游戏',
+    'kimi-search': 'Kimi 联网搜索',
+    'agent-dream': '梦境系统',
+    'qq-connect': 'QQ 连接',
+    'timed-tasks': '定时任务',
+    'screen-narrator': '屏幕感知'
+  };
+  result.market = Object.entries(market).map(([id, item]) => {
+    const installedPlugin = result.community.find(plugin => plugin.name === id);
+    return {
+      id,
+      ...item,
+      display_name: installedPlugin?.displayName || marketDisplayNames[id] || item.display_name || id,
+      installed: Boolean(installedPlugin)
+    };
+  });
   return result;
 }
 
@@ -372,7 +411,13 @@ async function downloadFile(url, file) {
 async function expandZip(zipFile, destination) {
   fs.mkdirSync(destination, { recursive: true });
   await runProcess('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
-    'Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force', zipFile, destination]);
+    '$ErrorActionPreference = "Stop"; [Console]::OutputEncoding = [Text.UTF8Encoding]::new(); Expand-Archive -LiteralPath $env:MY_NEURO_PLUGIN_ZIP -DestinationPath $env:MY_NEURO_PLUGIN_DESTINATION -Force'], {
+    env: {
+      ...process.env,
+      MY_NEURO_PLUGIN_ZIP: zipFile,
+      MY_NEURO_PLUGIN_DESTINATION: destination
+    }
+  });
 }
 
 async function installDependencies(pluginDir) {

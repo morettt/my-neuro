@@ -4,9 +4,11 @@ let environment = { edition: 'cloud', editionLabel: '云端', version: '' };
 let previewEdition = null;
 let activeServiceLog = 'tts';
 let configDirty = false;
+let pluginConfigDirty = false;
 let loadingConfigUi = true;
 let closePromptOpen = false;
 const serviceLogs = { tts: '', asr: '', bert: '' };
+let serviceData = [];
 
 const $ = id => document.getElementById(id);
 document.documentElement.spellcheck = false;
@@ -29,10 +31,20 @@ const set = (obj, path, value) => {
 
 function setConfigDirty(dirty) {
   configDirty = Boolean(dirty);
+  updateSaveDirtyState();
+}
+
+function setPluginConfigDirty(dirty) {
+  pluginConfigDirty = Boolean(dirty);
+  updateSaveDirtyState();
+}
+
+function updateSaveDirtyState() {
+  const dirty = configDirty || pluginConfigDirty;
   const button = $('save-config');
-  button?.classList.toggle('config-dirty', configDirty);
-  if (button) button.title = configDirty ? '当前配置有未保存的修改，请先保存配置' : '';
-  window.controlApi.setConfigDirty(configDirty);
+  button?.classList.toggle('config-dirty', dirty);
+  if (button) button.title = dirty ? '当前有未保存的修改，请先保存配置' : '';
+  window.controlApi.setConfigDirty(dirty);
 }
 
 function applyEdition(edition = environment.edition) {
@@ -295,8 +307,53 @@ const trackedConfigIds = new Set([
 document.addEventListener('input', event => {
   if (!loadingConfigUi && trackedConfigIds.has(event.target.id)) setConfigDirty(true);
 });
+
+document.querySelectorAll('[data-chat-tab]').forEach(button => {
+  button.addEventListener('click', () => {
+    document.querySelector('[data-chat-tab].active')?.classList.remove('active');
+    document.querySelector('[data-chat-panel].active')?.classList.remove('active');
+    button.classList.add('active');
+    document.querySelector(`[data-chat-panel="${button.dataset.chatTab}"]`)?.classList.add('active');
+  });
+});
+
+document.querySelectorAll('[data-motion-tab]').forEach(button => {
+  button.addEventListener('click', () => {
+    document.querySelector('[data-motion-tab].active')?.classList.remove('active');
+    document.querySelector('[data-motion-panel].active')?.classList.remove('active');
+    button.classList.add('active');
+    document.querySelector(`[data-motion-panel="${button.dataset.motionTab}"]`)?.classList.add('active');
+  });
+});
 document.addEventListener('change', event => {
   if (!loadingConfigUi && trackedConfigIds.has(event.target.id)) setConfigDirty(true);
+});
+
+function syncTemperatureField() {
+  const enabled = $('temperature-enabled')?.checked === true;
+  if ($('temperature-config')) $('temperature-config').hidden = !enabled;
+  if (!enabled && $('temperature-settings')?.classList.contains('active')) {
+    switchPage('chat', document.querySelector('[data-page="chat"]'));
+  }
+}
+
+function syncContextConfig() {
+  const enabled = $('context-limit')?.checked === true;
+  if ($('context-config')) $('context-config').hidden = !enabled;
+  if (!enabled && $('context-settings')?.classList.contains('active')) {
+    switchPage('chat', document.querySelector('[data-page="chat"]'));
+  }
+}
+
+$('temperature-enabled')?.addEventListener('change', syncTemperatureField);
+$('temperature-config')?.addEventListener('click', () => {
+  switchPage('temperature-settings');
+  $('temperature')?.focus();
+});
+$('context-limit')?.addEventListener('change', syncContextConfig);
+$('context-config')?.addEventListener('click', () => {
+  switchPage('context-settings');
+  $('max-messages')?.focus();
 });
 
 function render() {
@@ -327,32 +384,43 @@ function render() {
   $('cloud-asr-provider').value = asrProvider;
   $('cloud-asr-master-enabled').checked = Boolean(get(config, 'cloud.baidu_asr.enabled', false) || get(config, 'cloud.siliconflow_asr.enabled', false));
   syncCloudProviders();
+  syncTemperatureField();
+  syncContextConfig();
 }
 
 function paintServiceLog() {
+  $('service-log-title').textContent = `${activeServiceLog.toUpperCase()} 日志`;
   $('service-log-output').textContent = serviceLogs[activeServiceLog];
   $('service-log-output').scrollTop = $('service-log-output').scrollHeight;
 }
 
+function renderActiveService() {
+  const service = serviceData.find(item => item.id === activeServiceLog);
+  $('service-list').innerHTML = service
+    ? `<article class="service card" data-service="${service.id}"><div class="service-info"><b>${service.name}</b><small class="${service.running ? 'running' : ''}">${service.downloading ? '正在下载' : service.running ? '运行中' : service.installed ? '未启动' : '未安装'} · 端口 ${service.port}</small></div><div class="service-actions">${service.installed ? `<button data-service-action="start" ${service.running ? 'disabled' : ''}>启动</button><button data-service-action="stop" ${service.running ? '' : 'disabled'}>停止</button>` : `<button data-service-action="download" ${service.downloading ? 'disabled' : ''}>${service.downloading ? '下载中' : '下载模块'}</button>`}</div></article>`
+    : '<div class="empty"><p>暂无模块信息</p></div>';
+  document.querySelectorAll('[data-service-action]').forEach(button => button.addEventListener('click', async () => {
+    const id = button.closest('[data-service]').dataset.service;
+    button.disabled = true;
+    const action = button.dataset.serviceAction;
+    const result = action === 'start' ? await window.controlApi.startService(id) : action === 'stop' ? await window.controlApi.stopService(id) : await window.controlApi.downloadService(id);
+    showToast(result.message);
+    setTimeout(refreshServiceStatus, action === 'start' ? 1200 : 250);
+  }));
+}
+
 async function refreshServiceStatus() {
   try {
-    const services = await window.controlApi.serviceStatus();
-    $('service-list').innerHTML = services.map(service => `<article class="service card" data-service="${service.id}"><div class="service-info"><b>${service.name}</b><small class="${service.running ? 'running' : ''}">${service.downloading ? '正在下载' : service.running ? '运行中' : service.installed ? '未启动' : '未安装'} · 端口 ${service.port}</small></div><div class="service-actions">${service.installed ? `<button data-service-action="start" ${service.running ? 'disabled' : ''}>启动</button><button data-service-action="stop" ${service.running ? '' : 'disabled'}>停止</button>` : `<button data-service-action="download" ${service.downloading ? 'disabled' : ''}>${service.downloading ? '下载中' : '下载模块'}</button>`}</div></article>`).join('');
-    document.querySelectorAll('[data-service-action]').forEach(button => button.addEventListener('click', async () => {
-      const id = button.closest('[data-service]').dataset.service;
-      button.disabled = true;
-      const action = button.dataset.serviceAction;
-      const result = action === 'start' ? await window.controlApi.startService(id) : action === 'stop' ? await window.controlApi.stopService(id) : await window.controlApi.downloadService(id);
-      showToast(result.message);
-      setTimeout(refreshServiceStatus, action === 'start' ? 1200 : 250);
-    }));
+    serviceData = await window.controlApi.serviceStatus();
+    renderActiveService();
   } catch (error) { showToast(`服务状态读取失败：${error.message}`); }
 }
 
-document.querySelectorAll('[data-service-log]').forEach(button => button.addEventListener('click', () => {
-  document.querySelector('[data-service-log].active')?.classList.remove('active');
+document.querySelectorAll('[data-service-tab]').forEach(button => button.addEventListener('click', () => {
+  document.querySelector('[data-service-tab].active')?.classList.remove('active');
   button.classList.add('active');
-  activeServiceLog = button.dataset.serviceLog;
+  activeServiceLog = button.dataset.serviceTab;
+  renderActiveService();
   paintServiceLog();
 }));
 $('clear-service-log').addEventListener('click', () => { serviceLogs[activeServiceLog] = ''; paintServiceLog(); });
@@ -393,14 +461,89 @@ function historyImages(images) {
     .join('');
 }
 
+const historyPageSize = 30;
+let historyRounds = [];
+let historyPage = 1;
+
+function groupHistoryRounds(messages) {
+  const rounds = [];
+  for (const message of messages) {
+    if (message.role === 'user' || rounds.length === 0) rounds.push([]);
+    rounds[rounds.length - 1].push(message);
+  }
+  return rounds;
+}
+
+function historyMessageHtml(message) {
+  const role = message.role === 'user' ? 'user' : message.role === 'assistant' ? 'assistant' : 'other';
+  const roleName = role === 'user' ? '用户' : role === 'assistant' ? 'AI' : (message.role || '未知');
+  return `<article class="history-entry ${role}"><header>${escapeHtml(roleName)}</header><div class="history-content">${historyContent(message.content)}${historyImages(message.history_images)}${historyToolCalls(message.tool_calls)}</div></article>`;
+}
+
+function renderHistoryPage() {
+  const totalPages = Math.max(1, Math.ceil(historyRounds.length / historyPageSize));
+  historyPage = Math.min(Math.max(1, historyPage), totalPages);
+  const start = (historyPage - 1) * historyPageSize;
+  const rounds = historyRounds.slice(start, start + historyPageSize);
+  $('history-list').innerHTML = rounds.flat().map(historyMessageHtml).join('') || '<div class="history-empty">暂无对话记录</div>';
+  $('history-list').scrollTop = 0;
+
+  const pagination = $('history-pagination');
+  pagination.hidden = historyRounds.length === 0;
+  if (pagination.hidden) {
+    pagination.innerHTML = '';
+    return;
+  }
+  const visiblePages = [];
+  for (let page = 1; page <= totalPages; page++) {
+    if (page === 1 || page === totalPages || Math.abs(page - historyPage) <= 2) visiblePages.push(page);
+  }
+  let previous = 0;
+  const buttons = [];
+  for (const page of visiblePages) {
+    if (previous && page - previous > 1) buttons.push('<span class="history-page-gap">…</span>');
+    buttons.push(`<button type="button" data-history-page="${page}" class="${page === historyPage ? 'active' : ''}" ${page === historyPage ? 'aria-current="page"' : ''}>${page}</button>`);
+    previous = page;
+  }
+  pagination.innerHTML = `<button type="button" data-history-page="${historyPage - 1}" ${historyPage === 1 ? 'disabled' : ''} aria-label="上一页">‹</button>${buttons.join('')}<button type="button" data-history-page="${historyPage + 1}" ${historyPage === totalPages ? 'disabled' : ''} aria-label="下一页">›</button><span class="history-page-summary">共 ${historyRounds.length} 对</span>`;
+}
+
 function closeHistoryImagePreview() {
   $('history-image-modal').hidden = true;
   $('history-image-preview').removeAttribute('src');
 }
 
+let historyImageScale = 1;
+let historyImageX = 0;
+let historyImageY = 0;
+let historyImageDrag = null;
+
+function paintHistoryImageTransform() {
+  $('history-image-preview').style.transform = `translate(${historyImageX}px, ${historyImageY}px) scale(${historyImageScale})`;
+  $('history-image-zoom-value').textContent = `${Math.round(historyImageScale * 100)}%`;
+  $('history-image-viewport').classList.toggle('zoomed', historyImageScale > 1);
+}
+
+function setHistoryImageZoom(scale) {
+  historyImageScale = Math.min(8, Math.max(0.25, scale));
+  if (historyImageScale <= 1) {
+    historyImageX = 0;
+    historyImageY = 0;
+  }
+  paintHistoryImageTransform();
+}
+
+function resetHistoryImageTransform() {
+  historyImageScale = 1;
+  historyImageX = 0;
+  historyImageY = 0;
+  paintHistoryImageTransform();
+}
+
 function openHistoryImagePreview(src) {
   if (!src) return;
   $('history-image-preview').src = src;
+  resetHistoryImageTransform();
   $('history-image-modal').hidden = false;
   $('history-image-close').focus();
 }
@@ -417,6 +560,33 @@ $('history-list').addEventListener('keydown', event => {
   }
 });
 $('history-image-close').addEventListener('click', closeHistoryImagePreview);
+$('history-image-zoom-in').addEventListener('click', () => setHistoryImageZoom(historyImageScale * 1.25));
+$('history-image-zoom-out').addEventListener('click', () => setHistoryImageZoom(historyImageScale / 1.25));
+$('history-image-reset').addEventListener('click', resetHistoryImageTransform);
+$('history-image-viewport').addEventListener('wheel', event => {
+  event.preventDefault();
+  setHistoryImageZoom(historyImageScale * (event.deltaY < 0 ? 1.15 : 1 / 1.15));
+}, { passive: false });
+$('history-image-preview').addEventListener('dblclick', resetHistoryImageTransform);
+$('history-image-preview').addEventListener('pointerdown', event => {
+  if (historyImageScale <= 1) return;
+  historyImageDrag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, imageX: historyImageX, imageY: historyImageY };
+  event.currentTarget.setPointerCapture(event.pointerId);
+  event.currentTarget.classList.add('dragging');
+});
+$('history-image-preview').addEventListener('pointermove', event => {
+  if (!historyImageDrag || historyImageDrag.pointerId !== event.pointerId) return;
+  historyImageX = historyImageDrag.imageX + event.clientX - historyImageDrag.startX;
+  historyImageY = historyImageDrag.imageY + event.clientY - historyImageDrag.startY;
+  paintHistoryImageTransform();
+});
+const stopHistoryImageDrag = event => {
+  if (!historyImageDrag || historyImageDrag.pointerId !== event.pointerId) return;
+  historyImageDrag = null;
+  event.currentTarget.classList.remove('dragging');
+};
+$('history-image-preview').addEventListener('pointerup', stopHistoryImageDrag);
+$('history-image-preview').addEventListener('pointercancel', stopHistoryImageDrag);
 $('history-image-modal').addEventListener('click', event => {
   if (event.target === $('history-image-modal')) closeHistoryImagePreview();
 });
@@ -424,21 +594,27 @@ document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && !$('history-image-modal').hidden) closeHistoryImagePreview();
 });
 
+$('history-pagination').addEventListener('click', event => {
+  const button = event.target.closest('[data-history-page]');
+  if (!button || button.disabled) return;
+  historyPage = Number(button.dataset.historyPage);
+  renderHistoryPage();
+});
+
 async function loadChatHistory() {
   try {
     const result = await window.controlApi.getChatHistory();
     if (!result.exists) {
       $('history-list').innerHTML = '<div class="history-empty">对话历史文件不存在</div>';
+      $('history-pagination').hidden = true;
       return;
     }
-    $('history-list').innerHTML = result.messages.map(message => {
-      const role = message.role === 'user' ? 'user' : message.role === 'assistant' ? 'assistant' : 'other';
-      const roleName = role === 'user' ? '用户' : role === 'assistant' ? 'AI' : (message.role || '未知');
-      return `<article class="history-entry ${role}"><header>${escapeHtml(roleName)}</header><div class="history-content">${historyContent(message.content)}${historyImages(message.history_images)}${historyToolCalls(message.tool_calls)}</div></article>`;
-    }).join('') || '<div class="history-empty">暂无对话记录</div>';
-    $('history-list').scrollTop = $('history-list').scrollHeight;
+    historyRounds = groupHistoryRounds(result.messages);
+    historyPage = Math.max(1, Math.ceil(historyRounds.length / historyPageSize));
+    renderHistoryPage();
   } catch (error) {
     $('history-list').innerHTML = `<div class="history-empty error">读取失败：${escapeHtml(error.message)}</div>`;
+    $('history-pagination').hidden = true;
   }
 }
 
@@ -450,6 +626,8 @@ function showToast(message) {
 }
 
 async function saveConfig() {
+  if (pluginConfigDirty && !(await savePluginConfig())) return false;
+  if (!configDirty) return true;
   syncCloudProviders();
   for (const [id, [path, type]] of Object.entries(fields)) {
     const el = $(id);
@@ -471,7 +649,7 @@ async function saveConfig() {
 $('save-config').addEventListener('click', saveConfig);
 
 async function confirmUnsavedConfig(title) {
-  if (!configDirty) return true;
+  if (!configDirty && !pluginConfigDirty) return true;
   const choice = await window.controlApi.confirmUnsavedConfig(title);
   if (choice === 'save') return saveConfig();
   if (choice === 'discard') return true;
@@ -484,6 +662,7 @@ window.controlApi.onCloseRequested(async () => {
   try {
     if (await confirmUnsavedConfig('关闭前保存配置')) {
       setConfigDirty(false);
+      setPluginConfigDirty(false);
       await window.controlApi.windowAction('close');
     }
   } finally {
@@ -548,8 +727,8 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '
 
 function pluginCard(plugin) {
   const dlcInstalled = !plugin.downloadDlc || plugin.dlcInstalled;
-  return `<article class="plugin-card card">
-    <div class="plugin-summary"><strong>${escapeHtml(plugin.displayName)}</strong><p>${escapeHtml(plugin.description || '暂无说明')}</p><small>${escapeHtml([plugin.author, plugin.version].filter(Boolean).join(' · '))}</small></div>
+  return `<article class="plugin-card card" data-plugin-card="${escapeHtml(plugin.relPath)}">
+    <div class="plugin-summary"><strong>${escapeHtml(plugin.displayName)}</strong><p>${escapeHtml(plugin.description || '暂无说明')}</p><small>${escapeHtml([plugin.author, plugin.version, plugin.relPath].filter(Boolean).join(' · '))}</small></div>
     <div class="plugin-actions">
       ${plugin.downloadDlc && !dlcInstalled ? `<button type="button" class="primary" data-plugin-dlc="${escapeHtml(plugin.relPath)}">安装 DLC</button>` : ''}
       ${plugin.bat && dlcInstalled ? `<button type="button" data-plugin-launch="${escapeHtml(plugin.relPath)}">启动</button>` : ''}
@@ -561,6 +740,15 @@ function pluginCard(plugin) {
 
 function marketCard(plugin) {
   return `<article class="plugin-card card"><div class="plugin-summary"><strong>${escapeHtml(plugin.display_name || plugin.id)}</strong><p>${escapeHtml(plugin.desc || '暂无说明')}</p><small>${escapeHtml(plugin.author || '')}</small></div><div class="plugin-actions"><button type="button" data-plugin-repo="${escapeHtml(plugin.repo || '')}">仓库</button><button type="button" class="primary" data-plugin-install="${escapeHtml(plugin.id)}" ${plugin.installed ? 'disabled' : ''}>${plugin.installed ? '已安装' : '安装'}</button></div></article>`;
+}
+
+function selectPluginTab(name) {
+  document.querySelectorAll('#plugins > .plugin-tabs, #plugins > .plugin-panel').forEach(element => { element.hidden = false; });
+  $('plugin-detail').hidden = true;
+  document.querySelector('[data-plugin-tab].active')?.classList.remove('active');
+  document.querySelector('[data-plugin-panel].active')?.classList.remove('active');
+  document.querySelector(`[data-plugin-tab="${name}"]`)?.classList.add('active');
+  document.querySelector(`[data-plugin-panel="${name}"]`)?.classList.add('active');
 }
 
 function bindPluginCards() {
@@ -594,15 +782,29 @@ function bindPluginCards() {
     const result = await window.controlApi.installPlugin(plugin.id, plugin.repo);
     showToast(result.message);
     await loadPlugins();
+    if (result.ok) {
+      selectPluginTab('community');
+      requestAnimationFrame(() => {
+        const card = document.querySelector(`[data-plugin-card="community/${CSS.escape(plugin.id)}"]`);
+        if (!card) return;
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('just-installed');
+        setTimeout(() => card.classList.remove('just-installed'), 2400);
+      });
+    }
   }));
 }
 
-async function loadPlugins() {
-  pluginData = await window.controlApi.listPlugins();
+function renderPlugins() {
   $('builtin-plugin-list').innerHTML = pluginData.builtIn.map(pluginCard).join('') || '<div class="empty card">暂无内置插件</div>';
   $('community-plugin-list').innerHTML = pluginData.community.map(pluginCard).join('') || '<div class="empty card">暂无社区插件</div>';
   $('market-plugin-list').innerHTML = pluginData.market.map(marketCard).join('') || '<div class="empty card">插件广场暂无内容</div>';
   bindPluginCards();
+}
+
+async function loadPlugins() {
+  pluginData = await window.controlApi.listPlugins();
+  renderPlugins();
 }
 
 function configFields(config, prefix = '') {
@@ -644,7 +846,8 @@ $('plugin-detail-back').addEventListener('click', () => {
 $('plugin-readme').addEventListener('click', async () => {
   if (!editingPlugin) return;
   const readme = await window.controlApi.readPluginReadme(editingPlugin.type, editingPlugin.name);
-  $('plugin-detail-content').innerHTML = `<div class="plugin-readme-text">${markdownToHtml(readme)}</div>`;
+  $('plugin-readme').hidden = true;
+  $('plugin-detail-content').innerHTML = `<div class="plugin-readme-text">${renderPluginMarkdown(readme)}</div>`;
   $('plugin-detail-content').querySelectorAll('a[href]').forEach(link => link.addEventListener('click', event => {
     event.preventDefault();
     window.controlApi.openExternal(link.href);
@@ -660,7 +863,66 @@ function markdownToHtml(markdown) {
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
     .replace(/^[-*] (.+)$/gm, '<div class="markdown-list-item">• $1</div>').replace(/\n/g, '<br>');
 }
-$('save-plugin-config').addEventListener('click', async () => {
+function renderPluginMarkdown(markdown) {
+  const lines = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
+  const inline = text => escapeHtml(text)
+    .replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/~~([^~]+)~~/g, '<del>$1</del>')
+    .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
+  const isBlockStart = (line, next = '') => /^\s*$|^```|^#{1,6}\s+|^\s*([-*+] |\d+\. )|^>\s?|^\s*([-*_])(?:\s*\2){2,}\s*$/.test(line)
+    || (line.includes('|') && /^\s*\|?\s*:?-{3,}/.test(next));
+  const out = [];
+
+  for (let i = 0; i < lines.length;) {
+    const line = lines[i];
+    if (!line.trim()) { i++; continue; }
+    const fence = line.match(/^```\s*([\w-]*)/);
+    if (fence) {
+      const code = [];
+      for (i++; i < lines.length && !/^```/.test(lines[i]); i++) code.push(lines[i]);
+      if (i < lines.length) i++;
+      out.push(`<pre><code${fence[1] ? ` class="language-${escapeHtml(fence[1])}"` : ''}>${escapeHtml(code.join('\n'))}</code></pre>`);
+      continue;
+    }
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) { const level = heading[1].length; out.push(`<h${level}>${inline(heading[2])}</h${level}>`); i++; continue; }
+    if (/^\s*([-*_])(?:\s*\1){2,}\s*$/.test(line)) { out.push('<hr>'); i++; continue; }
+    if (line.includes('|') && i + 1 < lines.length && /^\s*\|?\s*:?-{3,}/.test(lines[i + 1])) {
+      const splitRow = row => row.trim().replace(/^\||\|$/g, '').split('|').map(cell => cell.trim());
+      const headers = splitRow(line); i += 2;
+      const rows = [];
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim()) rows.push(splitRow(lines[i++]));
+      out.push(`<div class="markdown-table-wrap"><table><thead><tr>${headers.map(cell => `<th>${inline(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${headers.map((_, index) => `<td>${inline(row[index] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`);
+      continue;
+    }
+    const listMatch = line.match(/^\s*([-*+]|\d+\.)\s+(.+)$/);
+    if (listMatch) {
+      const ordered = /\d+\./.test(listMatch[1]); const items = [];
+      while (i < lines.length) {
+        const match = lines[i].match(/^\s*([-*+]|\d+\.)\s+(.+)$/);
+        if (!match || /\d+\./.test(match[1]) !== ordered) break;
+        items.push(`<li>${inline(match[2])}</li>`); i++;
+      }
+      out.push(`<${ordered ? 'ol' : 'ul'}>${items.join('')}</${ordered ? 'ol' : 'ul'}>`);
+      continue;
+    }
+    if (/^>\s?/.test(line)) {
+      const quote = [];
+      while (i < lines.length && /^>\s?/.test(lines[i])) quote.push(lines[i++].replace(/^>\s?/, ''));
+      out.push(`<blockquote>${quote.map(inline).join('<br>')}</blockquote>`);
+      continue;
+    }
+    const paragraph = [line.trim()]; i++;
+    while (i < lines.length && !isBlockStart(lines[i], lines[i + 1] || '')) paragraph.push(lines[i++].trim());
+    out.push(`<p>${paragraph.map(inline).join('<br>')}</p>`);
+  }
+  return out.join('');
+}
+
+async function savePluginConfig() {
   if (!editingPlugin) return;
   const updated = structuredClone(editingPlugin.config);
   let invalidField = '';
@@ -675,16 +937,28 @@ $('save-plugin-config').addEventListener('click', async () => {
     if (target[leaf] && typeof target[leaf] === 'object' && 'type' in target[leaf]) target[leaf].value = value;
     else target[leaf] = value;
   });
-  if (invalidField) { showToast(`${invalidField} 必须是数字`); return; }
-  await window.controlApi.savePluginConfig(editingPlugin.type, editingPlugin.name, updated);
-  editingPlugin.config = updated; showToast('插件配置已保存');
+  if (invalidField) { showToast(`${invalidField} 必须是数字`); return false; }
+  try {
+    await window.controlApi.savePluginConfig(editingPlugin.type, editingPlugin.name, updated);
+    editingPlugin.config = updated;
+    setPluginConfigDirty(false);
+    showToast('插件配置已保存');
+    return true;
+  } catch (error) {
+    showToast(`插件配置保存失败：${error.message}`);
+    return false;
+  }
+}
+
+document.addEventListener('input', event => {
+  if (event.target.matches?.('[data-plugin-field]')) setPluginConfigDirty(true);
+});
+document.addEventListener('change', event => {
+  if (event.target.matches?.('[data-plugin-field]')) setPluginConfigDirty(true);
 });
 
 document.querySelectorAll('[data-plugin-tab]').forEach(button => button.addEventListener('click', () => {
-  document.querySelector('[data-plugin-tab].active')?.classList.remove('active');
-  document.querySelector('[data-plugin-panel].active')?.classList.remove('active');
-  button.classList.add('active');
-  document.querySelector(`[data-plugin-panel="${button.dataset.pluginTab}"]`).classList.add('active');
+  selectPluginTab(button.dataset.pluginTab);
 }));
 $('refresh-plugins').addEventListener('click', async () => {
   const button = $('refresh-plugins');
