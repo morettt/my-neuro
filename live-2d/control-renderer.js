@@ -13,6 +13,30 @@ let serviceData = [];
 const $ = id => document.getElementById(id);
 document.documentElement.spellcheck = false;
 document.querySelectorAll('input, textarea, [contenteditable="true"]').forEach(element => { element.spellcheck = false; });
+document.querySelectorAll('input[type="password"]').forEach(input => {
+  const field = document.createElement('div');
+  field.className = 'secret-field';
+  input.insertAdjacentElement('beforebegin', field);
+  field.append(input);
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'secret-toggle';
+  toggle.setAttribute('aria-label', '显示密钥');
+  toggle.setAttribute('aria-pressed', 'false');
+  toggle.title = '显示密钥';
+  toggle.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.7"/><path class="secret-eye-slash" d="m4 4 16 16"/></svg>';
+  toggle.addEventListener('click', () => {
+    const visible = input.type === 'password';
+    input.type = visible ? 'text' : 'password';
+    toggle.classList.toggle('revealed', visible);
+    toggle.setAttribute('aria-label', visible ? '隐藏密钥' : '显示密钥');
+    toggle.setAttribute('aria-pressed', String(visible));
+    toggle.title = visible ? '隐藏密钥' : '显示密钥';
+    input.focus();
+  });
+  field.append(toggle);
+});
 const sidebarHoverSound = new Audio('assets/audio/sidebar-hover.wav');
 sidebarHoverSound.volume = 0.3;
 document.addEventListener('click', event => {
@@ -211,7 +235,9 @@ function enhanceSelect(id) {
 }
 
 enhanceSelect('cloud-tts-provider');
+enhanceSelect('volc-voice');
 enhanceSelect('cloud-asr-provider');
+enhanceSelect('silicon-asr-model');
 
 document.querySelectorAll('[data-cloud-tab]').forEach(button => {
   button.addEventListener('click', () => {
@@ -380,10 +406,11 @@ function render() {
   const ttsProvider = get(config, 'cloud.aliyun_tts.enabled', false) ? 'aliyun' : get(config, 'cloud.volcengine_tts.enabled', false) ? 'volcengine' : 'siliconflow';
   $('cloud-tts-provider').value = ttsProvider;
   $('cloud-tts-master-enabled').checked = Boolean(get(config, 'cloud.aliyun_tts.enabled', false) || get(config, 'cloud.volcengine_tts.enabled', false) || get(config, 'cloud.tts.enabled', false));
-  const asrProvider = get(config, 'cloud.siliconflow_asr.enabled', false) ? 'siliconflow' : 'baidu';
+  const asrProvider = 'siliconflow';
   $('cloud-asr-provider').value = asrProvider;
   $('cloud-asr-master-enabled').checked = Boolean(get(config, 'cloud.baidu_asr.enabled', false) || get(config, 'cloud.siliconflow_asr.enabled', false));
   syncCloudProviders();
+  ['volc-voice', 'silicon-asr-model'].forEach(id => $(id)?.dispatchEvent(new Event('change')));
   syncTemperatureField();
   syncContextConfig();
 }

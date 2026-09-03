@@ -682,6 +682,12 @@ class UIController {
             items.classList.remove('expanded');
         };
 
+        const persistQuickSettings = (patch) => {
+            ipcRenderer.invoke('save-quick-settings', patch).then(result => {
+                if (!result?.success) console.error('保存皮套快捷设置失败:', result?.error || '未知错误');
+            }).catch(error => console.error('保存皮套快捷设置失败:', error));
+        };
+
         const pointHitsModel = (x, y) => {
             const controller = global.avatarFacade?.getController?.() || global.modelController;
             if (typeof controller?.isPointOverModel === 'function') {
@@ -739,6 +745,9 @@ class UIController {
                 chatContainer.style.setProperty('opacity', '1', 'important');
                 chatContainer.style.setProperty('pointer-events', 'auto', 'important');
             }
+            config.ui = config.ui || {};
+            config.ui.show_chat_box = !visible;
+            persistQuickSettings({ show_chat_box: !visible });
             toggleChatBtn.classList.toggle('active', !visible);
             closePanel();
         });
@@ -753,6 +762,7 @@ class UIController {
             proc.pttModeEnabled = nextPTTMode;
             config.asr = config.asr || {};
             config.asr.ptt_enabled = proc.pttModeEnabled;
+            persistQuickSettings({ ptt_enabled: proc.pttModeEnabled });
             toggleModeBtn.classList.toggle('active', proc.pttModeEnabled);
             closePanel();
         });

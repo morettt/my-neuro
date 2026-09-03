@@ -120,9 +120,106 @@
         <div class="page" id="cloud">
           <div class="page-head"><div><p class="eyebrow">CLOUD</p><h1>云端配置</h1></div></div>
           <div class="cloud-tabs" role="tablist"><button class="active" data-cloud-tab="gateway">云端肥牛</button><button data-cloud-tab="cloud-tts">云端 TTS</button><button data-cloud-tab="cloud-asr">云端 ASR</button></div>
-          <section class="cloud-panel active card form-card" data-cloud-panel="gateway"><h3>🐂 云端肥牛配置</h3><label class="check"><input id="gateway-enabled" type="checkbox"> 启动全云端</label><label>肥牛URL<input id="gateway-url"></label><label>肥牛密钥<input id="gateway-key" type="password"></label><p class="config-note">启动后，语音识别、语音合成和智能对话功能由云端运行。</p><button id="gateway-website" type="button">🔗 获取 API KEY - 前往云端肥牛官网</button></section>
-          <section class="cloud-panel card form-card" data-cloud-panel="cloud-tts"><h3>🔊 云端 TTS 配置</h3><label>TTS 平台<select id="cloud-tts-provider"><option value="aliyun">阿里云 TTS</option><option value="volcengine">字节 TTS</option><option value="siliconflow">SiliconFlow TTS</option></select></label><label class="check"><input id="cloud-tts-master-enabled" type="checkbox"> 启用云端 TTS</label><input id="aliyun-enabled" type="checkbox" hidden><input id="volc-enabled" type="checkbox" hidden><input id="cloud-tts-enabled" type="checkbox" hidden><div class="provider-panel" data-tts-provider="aliyun"><label>API Key<input id="aliyun-key" type="password"></label><label>模型<input id="aliyun-model"></label><label>音色<input id="aliyun-voice"></label></div><div class="provider-panel" data-tts-provider="volcengine"><label>APP ID<input id="volc-appid"></label><label>Access Token<input id="volc-token" type="password"></label><label>音色类型<input id="volc-voice"></label><button id="volcengine-tutorial" type="button">配置教程</button></div><div class="provider-panel" data-tts-provider="siliconflow"><label>API Key<input id="cloud-key" type="password"></label><label>音色<input id="cloud-tts-voice"></label><input id="cloud-provider" type="hidden" value="siliconflow"><input id="cloud-tts-url" type="hidden"><input id="cloud-tts-model" type="hidden"><input id="cloud-tts-format" type="hidden"><input id="cloud-tts-speed" type="hidden"></div></section>
-          <section class="cloud-panel card form-card" data-cloud-panel="cloud-asr"><h3>🎤 云端 ASR 配置</h3><label>ASR 平台<select id="cloud-asr-provider"><option value="baidu">百度流式 ASR</option><option value="siliconflow">SiliconFlow ASR</option></select></label><label class="check"><input id="cloud-asr-master-enabled" type="checkbox"> 启用云端 ASR</label><input id="cloud-asr-enabled" type="checkbox" hidden><input id="silicon-asr-enabled" type="checkbox" hidden><div class="provider-panel" data-asr-provider="baidu"><label>WebSocket URL<input id="cloud-asr-url"></label><label>APP ID<input id="cloud-asr-appid"></label><label>APP KEY<input id="cloud-asr-appkey" type="password"></label><label>DEV PID<input id="cloud-asr-pid"></label></div><div class="provider-panel" data-asr-provider="siliconflow"><label>API 地址<input id="silicon-asr-api"></label><label>API Key<input id="silicon-asr-key" type="password"></label><label>模型<input id="silicon-asr-model"></label></div></section>
+          <section class="cloud-panel active card form-card" data-cloud-panel="gateway"><label class="check"><input id="gateway-enabled" type="checkbox"> 启动全云端</label><input id="gateway-url" type="hidden"><label>肥牛密钥<input id="gateway-key" type="password"></label><button id="gateway-website" type="button">🔗 获取 API KEY - 前往云端肥牛官网</button></section>
+          <section class="cloud-panel card form-card" data-cloud-panel="cloud-tts"><label>TTS 平台<select id="cloud-tts-provider"><option value="aliyun">阿里云 TTS</option><option value="volcengine">字节 TTS</option><option value="siliconflow">SiliconFlow TTS</option></select></label><label class="check"><input id="cloud-tts-master-enabled" type="checkbox"> 启用云端 TTS</label><input id="aliyun-enabled" type="checkbox" hidden><input id="volc-enabled" type="checkbox" hidden><input id="cloud-tts-enabled" type="checkbox" hidden><div class="provider-panel" data-tts-provider="aliyun"><label>API Key<input id="aliyun-key" type="password"></label><label>模型<input id="aliyun-model"></label><label>音色<input id="aliyun-voice"></label></div><div class="provider-panel" data-tts-provider="volcengine"><label>APP ID<input id="volc-appid"></label><label>Access Token<input id="volc-token" type="password"></label><label>音色类型<select id="volc-voice">
+            <option value="zh_female_vv_uranus_bigtts">vivi 2.0</option>
+            <option value="saturn_zh_female_cancan_tob">知性灿灿</option>
+            <option value="saturn_zh_female_keainvsheng_tob">可爱女生</option>
+            <option value="saturn_zh_female_tiaopigongzhu_tob">调皮公主</option>
+            <option value="saturn_zh_male_shuanglangshaonian_tob">爽朗少年</option>
+            <option value="saturn_zh_male_tiancaitongzhuo_tob">天才同桌</option>
+            <option value="zh_female_xiaohe_uranus_bigtts">小何</option>
+            <option value="zh_male_m191_uranus_bigtts">云舟</option>
+            <option value="zh_male_taocheng_uranus_bigtts">小天</option>
+            <option value="zh_male_liufei_uranus_bigtts">刘飞 2.0</option>
+            <option value="zh_female_qingxinnvsheng_uranus_bigtts">清新女声 2.0</option>
+            <option value="zh_female_cancan_uranus_bigtts">知性灿灿 2.0</option>
+            <option value="zh_female_sajiaoxuemei_uranus_bigtts">撒娇学妹 2.0</option>
+            <option value="zh_female_tianmeixiaoyuan_uranus_bigtts">甜美小源 2.0</option>
+            <option value="zh_female_tianmeitaozi_uranus_bigtts">甜美桃子 2.0</option>
+            <option value="zh_female_shuangkuaisisi_uranus_bigtts">爽快思思 2.0</option>
+            <option value="zh_female_peiqi_uranus_bigtts">佩奇猪 2.0</option>
+            <option value="zh_female_linjianvhai_uranus_bigtts">邻家女孩 2.0</option>
+            <option value="zh_male_shaonianzixin_uranus_bigtts">少年梓辛/Brayan 2.0</option>
+            <option value="zh_male_sunwukong_uranus_bigtts">猴哥 2.0</option>
+            <option value="zh_female_yingyujiaoxue_uranus_bigtts">Tina老师 2.0</option>
+            <option value="zh_female_kefunvsheng_uranus_bigtts">暖阳女声 2.0</option>
+            <option value="zh_female_xiaoxue_uranus_bigtts">儿童绘本 2.0</option>
+            <option value="zh_male_dayi_uranus_bigtts">大壹 2.0</option>
+            <option value="zh_female_mizai_uranus_bigtts">黑猫侦探社咪仔 2.0</option>
+            <option value="zh_female_jitangnv_uranus_bigtts">鸡汤女 2.0</option>
+            <option value="zh_female_meilinvyou_uranus_bigtts">魅力女友 2.0</option>
+            <option value="zh_female_liuchangnv_uranus_bigtts">流畅女声 2.0</option>
+            <option value="zh_male_ruyayichen_uranus_bigtts">儒雅逸辰 2.0</option>
+            <option value="zh_female_wenroumama_uranus_bigtts">温柔妈妈 2.0</option>
+            <option value="zh_male_jieshuoxiaoming_uranus_bigtts">解说小明 2.0</option>
+            <option value="zh_female_tvbnv_uranus_bigtts">TVB女声 2.0</option>
+            <option value="zh_male_yizhipiannan_uranus_bigtts">译制片男 2.0</option>
+            <option value="zh_female_qiaopinv_uranus_bigtts">俏皮女声 2.0</option>
+            <option value="zh_female_zhishuaiyingzi_uranus_bigtts">直率英子 2.0</option>
+            <option value="zh_male_linjiananhai_uranus_bigtts">邻家男孩 2.0</option>
+            <option value="zh_male_silang_uranus_bigtts">四郎 2.0</option>
+            <option value="zh_male_ruyaqingnian_uranus_bigtts">儒雅青年 2.0</option>
+            <option value="zh_male_qingcang_uranus_bigtts">擎苍 2.0</option>
+            <option value="zh_male_xionger_uranus_bigtts">熊二 2.0</option>
+            <option value="zh_female_yingtaowanzi_uranus_bigtts">樱桃丸子 2.0</option>
+            <option value="zh_male_wennuanahu_uranus_bigtts">温暖阿虎/Alvin 2.0</option>
+            <option value="zh_male_naiqimengwa_uranus_bigtts">奶气萌娃 2.0</option>
+            <option value="zh_female_popo_uranus_bigtts">婆婆 2.0</option>
+            <option value="zh_female_gaolengyujie_uranus_bigtts">高冷御姐 2.0</option>
+            <option value="zh_male_aojiaobazong_uranus_bigtts">傲娇霸总 2.0</option>
+            <option value="zh_male_lanyinmianbao_uranus_bigtts">懒音绵宝 2.0</option>
+            <option value="zh_male_fanjuanqingnian_uranus_bigtts">反卷青年 2.0</option>
+            <option value="zh_female_wenroushunv_uranus_bigtts">温柔淑女 2.0</option>
+            <option value="zh_female_gufengshaoyu_uranus_bigtts">古风少御 2.0</option>
+            <option value="zh_male_huolixiaoge_uranus_bigtts">活力小哥 2.0</option>
+            <option value="zh_male_baqiqingshu_uranus_bigtts">霸气青叔 2.0</option>
+            <option value="zh_male_xuanyijieshuo_uranus_bigtts">悬疑解说 2.0</option>
+            <option value="zh_female_mengyatou_uranus_bigtts">萌丫头/Cutey 2.0</option>
+            <option value="zh_female_tiexinnvsheng_uranus_bigtts">贴心女声/Candy 2.0</option>
+            <option value="zh_female_jitangmei_uranus_bigtts">鸡汤妹妹/Hope 2.0</option>
+            <option value="zh_male_cixingjieshuonan_uranus_bigtts">磁性解说男声/Morgan 2.0</option>
+            <option value="zh_male_liangsangmengzai_uranus_bigtts">亮嗓萌仔 2.0</option>
+            <option value="zh_female_kailangjiejie_uranus_bigtts">开朗姐姐 2.0</option>
+            <option value="zh_male_gaolengchenwen_uranus_bigtts">高冷沉稳 2.0</option>
+            <option value="zh_male_shenyeboke_uranus_bigtts">深夜播客 2.0</option>
+            <option value="zh_male_lubanqihao_uranus_bigtts">鲁班七号 2.0</option>
+            <option value="zh_female_jiaochuannv_uranus_bigtts">娇喘女声 2.0</option>
+            <option value="zh_female_linxiao_uranus_bigtts">林潇 2.0</option>
+            <option value="zh_female_lingling_uranus_bigtts">玲玲姐姐 2.0</option>
+            <option value="zh_female_chunribu_uranus_bigtts">春日部姐姐 2.0</option>
+            <option value="zh_male_tangseng_uranus_bigtts">唐僧 2.0</option>
+            <option value="zh_male_zhuangzhou_uranus_bigtts">庄周 2.0</option>
+            <option value="zh_male_kailangdidi_uranus_bigtts">开朗弟弟 2.0</option>
+            <option value="zh_male_zhubajie_uranus_bigtts">猪八戒 2.0</option>
+            <option value="zh_female_ganmaodianyin_uranus_bigtts">感冒电音姐姐 2.0</option>
+            <option value="zh_female_chanmeinv_uranus_bigtts">谄媚女声 2.0</option>
+            <option value="zh_female_nvleishen_uranus_bigtts">女雷神 2.0</option>
+            <option value="zh_female_qinqienv_uranus_bigtts">亲切女声 2.0</option>
+            <option value="zh_male_kuailexiaodong_uranus_bigtts">快乐小东 2.0</option>
+            <option value="zh_male_kailangxuezhang_uranus_bigtts">开朗学长 2.0</option>
+            <option value="zh_male_youyoujunzi_uranus_bigtts">悠悠君子 2.0</option>
+            <option value="zh_female_wenjingmaomao_uranus_bigtts">文静毛毛 2.0</option>
+            <option value="zh_female_zhixingnv_uranus_bigtts">知性女声 2.0</option>
+            <option value="zh_male_qingshuangnanda_uranus_bigtts">清爽男大 2.0</option>
+            <option value="zh_male_yuanboxiaoshu_uranus_bigtts">渊博小叔 2.0</option>
+            <option value="zh_male_yangguangqingnian_uranus_bigtts">阳光青年 2.0</option>
+            <option value="zh_female_qingchezizi_uranus_bigtts">清澈梓梓 2.0</option>
+            <option value="zh_female_tianmeiyueyue_uranus_bigtts">甜美悦悦 2.0</option>
+            <option value="zh_female_xinlingjitang_uranus_bigtts">心灵鸡汤 2.0</option>
+            <option value="zh_male_wenrouxiaoge_uranus_bigtts">温柔小哥 2.0</option>
+            <option value="zh_female_roumeinvyou_uranus_bigtts">柔美女友 2.0</option>
+            <option value="zh_male_dongfanghaoran_uranus_bigtts">东方浩然 2.0</option>
+            <option value="zh_female_wenrouxiaoya_uranus_bigtts">温柔小雅 2.0</option>
+            <option value="zh_male_tiancaitongsheng_uranus_bigtts">天才童声 2.0</option>
+            <option value="zh_female_wuzetian_uranus_bigtts">武则天 2.0</option>
+            <option value="zh_female_gujie_uranus_bigtts">顾姐 2.0</option>
+            <option value="zh_male_guanggaojieshuo_uranus_bigtts">广告解说 2.0</option>
+            <option value="zh_female_shaoergushi_uranus_bigtts">少儿故事 2.0</option>
+            <option value="zh_female_sophie_uranus_bigtts">魅力苏菲 2.0</option>
+            <option value="saturn_zh_male_qingxinmumu_cs_tob">清新沐沐 2.0</option>
+          </select></label><button id="volcengine-tutorial" type="button">配置教程</button></div><div class="provider-panel" data-tts-provider="siliconflow"><label>API Key<input id="cloud-key" type="password"></label><label>音色<input id="cloud-tts-voice"></label><input id="cloud-provider" type="hidden" value="siliconflow"><input id="cloud-tts-url" type="hidden"><input id="cloud-tts-model" type="hidden"><input id="cloud-tts-format" type="hidden"><input id="cloud-tts-speed" type="hidden"></div></section>
+          <section class="cloud-panel card form-card" data-cloud-panel="cloud-asr"><label>ASR 平台<select id="cloud-asr-provider"><option value="siliconflow">SiliconFlow ASR</option></select></label><label class="check"><input id="cloud-asr-master-enabled" type="checkbox"> 启用云端 ASR</label><input id="cloud-asr-enabled" type="checkbox" hidden><input id="silicon-asr-enabled" type="checkbox" hidden><div hidden><input id="cloud-asr-url"><input id="cloud-asr-appid"><input id="cloud-asr-appkey" type="password"><input id="cloud-asr-pid"></div><div class="provider-panel" data-asr-provider="siliconflow"><input id="silicon-asr-api" type="hidden"><label>API Key<input id="silicon-asr-key" type="password"></label><label>模型<select id="silicon-asr-model"><option value="Qwen/Qwen3-ASR-1.7B">Qwen3-ASR-1.7B</option><option value="TeleAI/TeleSpeechASR">TeleSpeechASR</option><option value="XingChenAGI/XingChenASR-V3.2-Ultra">XingChenASR-V3.2-Ultra</option></select></label></div></section>
         </div>
         <div class="page" id="settings"><div class="page-head"><div><p class="eyebrow">UI</p><h1>UI界面设置</h1></div></div><div class="card form-card"><div class="edition-status"><span>当前版本</span><strong id="edition-status">检测中</strong></div><label>开场白<input id="opening-text"></label><label>用户显示名称<input id="user-name"></label><label>AI显示名称<input id="ai-name"></label><label class="check"><input id="subtitle-enabled" type="checkbox"> 启用字幕显示</label><label class="check"><input id="hide-model" type="checkbox"> 隐藏皮套</label><label class="check"><input id="auto-close-services" type="checkbox"> 关闭UI时自动关闭所有服务</label><button id="toggle-edition-preview">预览本地样式</button></div></div>
         <div class="page" id="tutorial"><div class="page-head"><div><h1>使用教程</h1></div><button data-go="home">返回</button></div><div id="tutorial-content" class="card form-card"></div></div>

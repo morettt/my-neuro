@@ -643,6 +643,26 @@ ipcMain.handle('get-config', async (event) => {
     }
 });
 
+// 皮套右键快捷菜单只保存自己的两个开关，不弹出“配置已保存”提示。
+ipcMain.handle('save-quick-settings', async (_event, patch = {}) => {
+    try {
+        const configData = loadConfigData();
+        if (!configData.ui) configData.ui = {};
+        if (!configData.asr) configData.asr = {};
+        if (typeof patch.show_chat_box === 'boolean') {
+            configData.ui.show_chat_box = patch.show_chat_box;
+        }
+        if (typeof patch.ptt_enabled === 'boolean') {
+            configData.asr.ptt_enabled = patch.ptt_enabled;
+        }
+        saveConfigData(configData);
+        return { success: true };
+    } catch (error) {
+        console.error('保存皮套快捷设置失败:', error);
+        return { success: false, error: error.message };
+    }
+});
+
 ipcMain.handle('take-screenshot', async (event) => {
     try {
         await new Promise(resolve => setTimeout(resolve, 100));
