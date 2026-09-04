@@ -229,8 +229,6 @@ async function serviceStatus() {
 }
 
 async function stopConfiguredServices() {
-  const current = readJson(configPath, {});
-  if (current.auto_close_services?.enabled === false) return;
   for (const [id, definition] of Object.entries(serviceDefinitions)) {
     const pids = await listeningPids(definition.port);
     if (serviceProcesses[id]?.pid) pids.push(String(serviceProcesses[id].pid));
@@ -268,6 +266,10 @@ function readJson(filePath, fallback = {}) {
 
 function loadControlConfig() {
   const config = readJson(configPath, {});
+  config.tts ||= {};
+  config.asr ||= {};
+  config.tts.enabled = true;
+  config.asr.enabled = true;
   config.llm ||= {};
   const providers = loadProvidersFromStore(__dirname).providers;
   const provider = providers.find(item => item.id === config.llm.provider_id)
