@@ -2,6 +2,8 @@ const { app, BrowserWindow, ipcMain, shell, net, dialog } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const { Readable } = require('node:stream');
+const { pipeline } = require('node:stream/promises');
 const http = require('http');
 const nodeNet = require('node:net');
 const { scanLive2DModels, resolveLive2DModel, scanVRMModels } = require('./js/avatar/model-registry');
@@ -133,6 +135,52 @@ const serviceDefinitions = {
 };
 const projectRoot = path.resolve(__dirname, '..');
 const hubRoot = path.join(projectRoot, 'full-hub');
+const projectEnvPython = path.join(projectRoot, 'env', 'python.exe');
+const projectEnvUrl = 'https://modelscope.cn/models/morelle/my-neuro-env/resolve/master/my-neuro-env.tar.gz';
+
+async function ensureProjectPython(sender, service) {
+  if (fs.existsSync(projectEnvPython)) return projectEnvPython;
+  const tempDir = fs.mkdtempSync(path.join(app.getPath('temp'), 'my-neuro-env-'));
+  const archive = path.join(tempDir, 'my-neuro-env.tar.gz');
+  const envDir = path.join(projectRoot, 'env');
+  sendServiceLog(sender, service, '@@ENV_START\n');
+  sendServiceLog(sender, service, '\u672a\u68c0\u6d4b\u5230\u9879\u76ee Python \u73af\u5883\uff0c\u5f00\u59cb\u4e0b\u8f7d morelle/my-neuro-env...\n');
+  try {
+    const response = await net.fetch(projectEnvUrl, { redirect: 'follow' });
+    if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+    const total = Number(response.headers.get('content-length')) || 0;
+    let received = 0;
+    let lastPercent = -1;
+    const progressStream = new (require('node:stream').Transform)({
+      transform(chunk, _encoding, callback) {
+        received += chunk.length;
+        const percent = total ? Math.min(100, Math.floor(received / total * 100)) : 0;
+        if (percent !== lastPercent) {
+          lastPercent = percent;
+          sendServiceLog(sender, service, `@@ENV_PROGRESS:${percent}:${received}:${total}\n`);
+        }
+        callback(null, chunk);
+      }
+    });
+    await pipeline(Readable.fromWeb(response.body), progressStream, fs.createWriteStream(archive));
+    fs.mkdirSync(envDir, { recursive: true });
+    sendServiceLog(sender, service, '@@ENV_EXTRACT\n');
+    sendServiceLog(sender, service, '\u9879\u76ee Python \u73af\u5883\u4e0b\u8f7d\u5b8c\u6210\uff0c\u6b63\u5728\u89e3\u538b...\n');
+    await new Promise((resolve, reject) => {
+      const child = spawn('tar.exe', ['-xzf', archive, '-C', envDir], { windowsHide: true });
+      let errorText = '';
+      child.stderr.on('data', chunk => { errorText += String(chunk); });
+      child.once('error', reject);
+      child.once('exit', code => code === 0 ? resolve() : reject(new Error(errorText.trim() || `tar.exe ${code}`)));
+    });
+    if (!fs.existsSync(projectEnvPython)) throw new Error('\u89e3\u538b\u540e\u672a\u627e\u5230 env\\python.exe');
+    sendServiceLog(sender, service, '@@ENV_DONE\n');
+    sendServiceLog(sender, service, '\u9879\u76ee Python \u73af\u5883\u5b89\u88c5\u5b8c\u6210\u3002\n');
+    return projectEnvPython;
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
 
 function serviceLaunchDefinition(id) {
   const definition = serviceDefinitions[id];
@@ -167,12 +215,17 @@ function sendServiceLog(sender, service, text) {
 }
 
 async function serviceStatus() {
-  return Promise.all(Object.entries(serviceDefinitions).map(async ([id, definition]) => ({
-    id, name: definition.name, port: definition.port,
-    installed: serviceInstalled(definition),
-    downloading: Boolean(serviceDownloads[id]),
-    running: await portListening(definition.port)
-  })));
+  return Promise.all(Object.entries(serviceDefinitions).map(async ([id, definition]) => {
+    const listening = await portListening(definition.port);
+    const processActive = Boolean(serviceProcesses[id] && serviceProcesses[id].exitCode === null);
+    return {
+      id, name: definition.name, port: definition.port,
+      installed: serviceInstalled(definition),
+      downloading: Boolean(serviceDownloads[id]),
+      running: listening || processActive,
+      starting: processActive && !listening
+    };
+  }));
 }
 
 async function stopConfiguredServices() {
@@ -705,16 +758,49 @@ ipcMain.handle('control:stop-service', async (event, id) => {
   const uniquePids = [...new Set(pids)];
   if (!uniquePids.length) return { ok: false, message: `${definition.name} 未在运行` };
   sendServiceLog(event.sender, id, `正在停止 ${definition.name}...\n`);
-  await Promise.all(uniquePids.map(pid => new Promise(resolve => {
-    const killer = spawn('taskkill.exe', ['/pid', pid, '/t', '/f'], { windowsHide: true });
-    killer.on('error', resolve);
-    killer.on('exit', resolve);
-  })));
+  if (id === 'bert') {
+    try {
+      await net.fetch('http://127.0.0.1:6007/shutdown', {
+        method: 'POST',
+        signal: AbortSignal.timeout(1500)
+      });
+      await new Promise(resolve => setTimeout(resolve, 500));
+      if (!(await portListening(definition.port))) {
+        serviceProcesses[id] = null;
+        sendServiceLog(event.sender, id, `${definition.name} 已停止\n`);
+        return { ok: true, message: `${definition.name} 已停止` };
+      }
+    } catch (_) {
+      // 旧版 BERT 服务没有退出接口时，继续使用进程结束兜底。
+    }
+  }
+  const stopResults = await Promise.allSettled(uniquePids.map(pid =>
+    runProcess('taskkill.exe', ['/pid', pid, '/t', '/f'])
+  ));
+  await new Promise(resolve => setTimeout(resolve, 300));
+  let remainingPids = await listeningPids(definition.port);
+  if (remainingPids.length) {
+    await Promise.allSettled(remainingPids.map(pid =>
+      runProcess('taskkill.exe', ['/pid', pid, '/f'])
+    ));
+    await new Promise(resolve => setTimeout(resolve, 500));
+    remainingPids = await listeningPids(definition.port);
+  }
+  if (remainingPids.length) {
+    const errors = stopResults
+      .filter(result => result.status === 'rejected')
+      .map(result => result.reason?.message)
+      .filter(Boolean)
+      .join('；');
+    const message = `${definition.name} 停止失败，端口 ${definition.port} 仍被 PID ${remainingPids.join(', ')} 占用${errors ? `：${errors}` : ''}`;
+    sendServiceLog(event.sender, id, `${message}\n`);
+    return { ok: false, message };
+  }
   serviceProcesses[id] = null;
   sendServiceLog(event.sender, id, `${definition.name} 已停止\n`);
   return { ok: true, message: `${definition.name} 已停止` };
 });
-ipcMain.handle('control:download-service', (event, id) => {
+ipcMain.handle('control:download-service', async (event, id) => {
   const definition = serviceDefinitions[id];
   if (!definition) return { ok: false, message: '未知服务' };
   if (serviceInstalled(definition)) return { ok: false, message: `${definition.name} 已安装` };
@@ -722,7 +808,22 @@ ipcMain.handle('control:download-service', (event, id) => {
   const script = path.join(hubRoot, 'Batch_Download.py');
   if (!fs.existsSync(script)) return { ok: false, message: '找不到 Batch_Download.py' };
   sendServiceLog(event.sender, id, `开始下载 ${definition.name} 模块...\n`);
-  const child = spawn('python.exe', ['-u', script, definition.flag], { cwd: hubRoot, windowsHide: true });
+  serviceDownloads[id] = { exitCode: null };
+  if (!event.sender.isDestroyed()) event.sender.send('control:service-state');
+  let pythonExecutable;
+  try {
+    pythonExecutable = await ensureProjectPython(event.sender, id);
+  } catch (error) {
+    serviceDownloads[id] = null;
+    sendServiceLog(event.sender, id, `\u9879\u76ee Python \u73af\u5883\u5b89\u88c5\u5931\u8d25\uff1a${error.message}\n`);
+    if (!event.sender.isDestroyed()) event.sender.send('control:service-state');
+    return { ok: false, message: `\u9879\u76ee Python \u73af\u5883\u5b89\u88c5\u5931\u8d25\uff1a${error.message}` };
+  }
+  const child = spawn(pythonExecutable, ['-u', script, definition.flag], {
+    cwd: hubRoot,
+    windowsHide: true,
+    env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', MY_NEURO_FULL_HUB_DIR: hubRoot }
+  });
   serviceDownloads[id] = child;
   child.stdout.on('data', chunk => sendServiceLog(event.sender, id, chunk));
   child.stderr.on('data', chunk => sendServiceLog(event.sender, id, chunk));

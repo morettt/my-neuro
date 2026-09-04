@@ -5,6 +5,8 @@ from pydantic import BaseModel
 import os
 import sys
 import re
+import threading
+import time
 
 # 保存原始stdout和stderr
 original_stdout = sys.stdout
@@ -44,6 +46,15 @@ sys.stdout = TeeOutput(original_stdout, log_file)
 sys.stderr = TeeOutput(original_stderr, log_file)
 
 app = FastAPI()
+
+@app.post("/shutdown")
+async def shutdown_service():
+    """让控制台无需管理员权限即可正常停止 BERT 服务。"""
+    def exit_after_response():
+        time.sleep(0.15)
+        os._exit(0)
+    threading.Thread(target=exit_after_response, daemon=True).start()
+    return {"ok": True}
 
 class TextInput(BaseModel):
     text: str

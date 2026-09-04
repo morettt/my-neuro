@@ -278,16 +278,32 @@ button:hover { background: #f0ece4; }
 #services .service-info b { color:#403a32; font-size:16px; }
 #services .service-info small { color:#91897e; }
 #services .service-info small.running { color:#b67818; }
+#services .service.is-downloading { border-color:#e0c99f; box-shadow:0 8px 22px rgba(139,100,39,.1); }
+#services .service-download-progress { width:min(620px,100%); margin-top:3px; }
+#services .service-download-meta { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:7px; color:#71685b; font-size:13px; }
+#services .service-download-meta span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#services .service-download-meta strong { flex:none; color:#b56a12; font-variant-numeric:tabular-nums; }
+#services .service-progress-track { position:relative; height:9px; overflow:hidden; border-radius:999px; background:#e9e3d9; box-shadow:inset 0 1px 2px rgba(68,53,31,.1); }
+#services .service-progress-track i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#dc9637,#efa848); box-shadow:0 0 8px rgba(222,145,47,.3); transition:width .22s ease; }
+#services .service-progress-track i.indeterminate { position:absolute; animation:service-download-moving 1.25s ease-in-out infinite; }
+@keyframes service-download-moving { from { transform:translateX(-110%); } to { transform:translateX(330%); } }
 #services .service-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 #services .service-actions button:only-child { grid-column:1/-1; }
 #services .service-console { display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; padding:0; }
 .service-log-tabs { display:flex; align-items:center; min-height:50px; padding:6px 8px; border-bottom:1px solid #e2dbcf; }
-.service-log-tabs strong { padding-left:8px; color:#5f574c; font-size:14px; }
+.service-log-tabs strong { padding-left:8px; color:#403a32; font-size:15px; font-weight:700; }
 .service-log-tabs button { min-height:36px; padding:7px 14px; border:0; background:transparent; box-shadow:none; color:#756d62; }
 .service-log-tabs button:hover { background:#eee9e0; transform:none; }
 .service-log-tabs button.active { background:#8e8473; color:#fff; }
 .service-log-tabs .service-log-clear { margin-left:auto; color:#81786c; }
-#service-log-output { flex:1; min-height:0; margin:0; padding:16px; overflow:auto; background:#fcfbf8; color:#625b50; white-space:pre-wrap; overflow-wrap:anywhere; font:13px/1.65 Consolas,monospace; user-select:text; }
+#service-log-output { flex:1; min-height:0; margin:0; padding:18px 20px; overflow:auto; background:#f8f6f1; color:#37322c; white-space:pre-wrap; overflow-wrap:anywhere; font:500 15px/1.75 "Cascadia Mono","Microsoft YaHei UI",Consolas,monospace; letter-spacing:.01em; user-select:text; }
+#service-log-output .service-log-line { color:#37322c; }
+#service-log-output .service-log-info { color:#246b95; }
+#service-log-output .service-log-success { color:#27824f; font-weight:650; }
+#service-log-output .service-log-warning { color:#b56a12; font-weight:650; }
+#service-log-output .service-log-error { color:#c13d36; font-weight:650; }
+#service-log-output .service-log-trace { color:#a64e49; }
+#service-log-output .service-log-debug { color:#81786c; }
 .log-panel { display:flex; flex-direction:column; min-width:0; min-height:0; height:100%; overflow:hidden; }
 .log-panel header { display:flex; align-items:center; justify-content:space-between; min-height:53px; padding:8px 15px; color:#5c5448; border-color:#e7e0d5; }
 .log-trash { display:grid; place-items:center; width:36px; height:34px; min-height:0; padding:0; border:0; border-radius:7px; background:transparent; color:#82796d; box-shadow:none; }
