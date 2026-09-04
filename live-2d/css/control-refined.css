@@ -228,6 +228,11 @@ button:hover { background: #f0ece4; }
 .chat-panel { display:none; }
 .chat-panel.active { display:block; animation:subpanel-enter .28s cubic-bezier(.22,.75,.3,1) both; }
 .chat-panel.card.active { display:grid; }
+#chat [data-chat-panel="basic"] > .form-card { align-items:stretch; gap:16px 20px; padding:20px 22px; }
+#chat [data-chat-panel="basic"] .model-field,
+#chat [data-chat-panel="basic"] .check { min-height:68px; }
+#chat [data-chat-panel="basic"] .hero-actions { grid-column:1/-1; display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:2px 0 0; padding-top:16px; border-top:1px solid #e7e0d5; }
+#chat [data-chat-panel="basic"] .hero-actions button { width:100%; min-height:46px; }
 .motion-tabs { --active:0; position:relative; display:grid; grid-template-columns:repeat(4,1fr); height:44px; margin-bottom:12px; overflow:hidden; border:1px solid #d9d2c7; border-radius:9px; background:rgba(255,255,255,.62); }
 .motion-tabs:has(button.active:nth-child(1)) { --active:0; }
 .motion-tabs:has(button.active:nth-child(2)) { --active:1; }
@@ -289,6 +294,7 @@ button:hover { background: #f0ece4; }
 @keyframes service-download-moving { from { transform:translateX(-110%); } to { transform:translateX(330%); } }
 #services .service-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 #services .service-actions button:only-child { grid-column:1/-1; }
+#services .service-actions [data-service-action="voice-clone"] { grid-column:1/-1; }
 #services .service-console { display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; padding:0; }
 .service-log-tabs { display:flex; align-items:center; min-height:50px; padding:6px 8px; border-bottom:1px solid #e2dbcf; }
 .service-log-tabs strong { padding-left:8px; color:#403a32; font-size:15px; font-weight:700; }

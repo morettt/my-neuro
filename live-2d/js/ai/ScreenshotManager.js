@@ -1,5 +1,6 @@
 // ScreenshotManager.js - 截图管理模块
 const { ipcRenderer } = require('electron');
+const nodeNet = require('node:net');
 const { logToTerminal } = require('../api-utils.js');
 
 class ScreenshotManager {
@@ -9,26 +10,8 @@ class ScreenshotManager {
         this.autoScreenshot = voiceChatInterface.autoScreenshot;
 
         // 根据配置选择本地或云端模式
-        const gatewayConfig = voiceChatInterface.config?.api_gateway || {};
-        const bertConfig = voiceChatInterface.config?.bert || {};
-        const bertEnabledByConfig = bertConfig.enabled === true;
-
-        const useBaiduASR = voiceChatInterface.config?.cloud?.baidu_asr?.enabled === true;
-
-        if (useBaiduASR || !bertEnabledByConfig) {
-            // 百度ASR不走BERT；未显式启用时也不调用BERT，避免默认报错。
-            this.bertEnabled = false;
-            this.bertUrl = null;
-            this.bertApiKey = null;
-        } else if (gatewayConfig.use_gateway) {
-            this.bertUrl = `${gatewayConfig.base_url}/bert/classify`;
-            this.bertApiKey = gatewayConfig.api_key || '';
-            this.bertEnabled = true;
-        } else {
-            this.bertUrl = bertConfig.url || 'http://127.0.0.1:6007/classify';
-            this.bertApiKey = null;
-            this.bertEnabled = true;
-        }
+        this.bertUrl = 'http://127.0.0.1:6007/classify';
+        this.bertApiKey = null;
     }
 
     // 判断是否需要截图
@@ -68,9 +51,7 @@ class ScreenshotManager {
 
     // 统一调用BERT分类API的方法
     async callBertClassifier(text) {
-        if (!this.bertEnabled) {
-            return null;
-        }
+        if (!(await this.isLocalBertAvailable())) return null;
         try {
             const headers = {
                 'Content-Type': 'application/json'
@@ -101,6 +82,21 @@ class ScreenshotManager {
             console.error('BERT分类错误:', error);
             return null;
         }
+    }
+
+    isLocalBertAvailable() {
+        return new Promise(resolve => {
+            const socket = nodeNet.createConnection({ host: '127.0.0.1', port: 6007 });
+            const finish = available => {
+                socket.removeAllListeners();
+                socket.destroy();
+                resolve(available);
+            };
+            socket.setTimeout(250);
+            socket.once('connect', () => finish(true));
+            socket.once('timeout', () => finish(false));
+            socket.once('error', () => finish(false));
+        });
     }
 
     // 截图功能

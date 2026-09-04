@@ -79,7 +79,6 @@ function applyEdition(edition = environment.edition) {
   const label = edition === 'local' ? '本地' : '云端';
   $('brand-title').textContent = `My-Neuro (${label})${environment.version ? `  ${environment.version}` : ''}`;
   $('edition-status').textContent = `${label}版本${environment.version ? ` · ${environment.version}` : ''}`;
-  $('voice-clone-nav').hidden = edition === 'cloud';
   if (edition === 'cloud' && $('voice').classList.contains('active')) {
     $('voice').classList.remove('active');
     $('home').classList.add('active');
@@ -305,7 +304,6 @@ const fields = {
   'text-input-enabled': ['ui.show_chat_box', 'checked'], 'ptt-enabled': ['asr.ptt_enabled', 'checked'],
   'context-limit': ['context.enable_limit', 'checked'], 'history-enabled': ['context.persistent_history', 'checked'],
   'temperature-enabled': ['llm.temperature_enabled', 'checked'],
-  'tts-enabled': ['tts.enabled', 'checked'], 'asr-enabled': ['asr.enabled', 'checked'],
   'rag-enabled': ['rag.enabled', 'checked'], 'vision-enabled': ['vision.use_vision_model', 'checked'],
   'vision-key': ['vision.vision_model.api_key', 'value'], 'vision-url': ['vision.vision_model.api_url', 'value'],
   'vision-model': ['vision.vision_model.model', 'value'],
@@ -313,7 +311,6 @@ const fields = {
   'auto-vision': ['vision.auto_screenshot', 'checked'],
   'user-name': ['subtitle_labels.user', 'value'], 'ai-name': ['subtitle_labels.ai', 'value'],
   'subtitle-enabled': ['subtitle_labels.enabled', 'checked'],
-  'auto-close-services': ['auto_close_services.enabled', 'checked'],
   'gateway-enabled': ['api_gateway.use_gateway', 'checked'], 'gateway-url': ['api_gateway.base_url', 'value'],
   'gateway-key': ['api_gateway.api_key', 'value'], 'cloud-provider': ['cloud.provider', 'value'],
   'cloud-key': ['cloud.api_key', 'value'], 'cloud-tts-enabled': ['cloud.tts.enabled', 'checked'],
@@ -529,7 +526,7 @@ function renderActiveService() {
     ? `<div class="service-download-progress"><div class="service-download-meta"><span>${escapeHtml(progressDetail)}</span>${progress ? `<strong>${Math.round(progressPercent)}%</strong>` : ''}</div><div class="service-progress-track"><i class="${progress ? '' : 'indeterminate'}" style="width:${progress ? progressPercent : 32}%"></i></div></div>`
     : '';
   $('service-list').innerHTML = service
-    ? `<article class="service card ${service.downloading ? 'is-downloading' : ''}" data-service="${service.id}"><div class="service-info"><b>${service.name}</b><small class="${service.running ? 'running' : ''}">${service.downloading ? '正在下载模块' : service.starting ? '正在启动' : service.running ? '运行中' : service.installed ? '未启动' : '未安装'} · 端口 ${service.port}</small>${progressMarkup}</div><div class="service-actions">${service.installed ? `<button data-service-action="start" ${service.running ? 'disabled' : ''}>启动</button><button data-service-action="stop" ${service.running ? '' : 'disabled'}>停止</button>` : `<button data-service-action="download" ${service.downloading ? 'disabled' : ''}>${service.downloading ? '下载中…' : '下载模块'}</button>`}</div></article>`
+    ? `<article class="service card ${service.downloading ? 'is-downloading' : ''}" data-service="${service.id}"><div class="service-info"><b>${service.name}</b><small class="${service.running ? 'running' : ''}">${service.downloading ? '正在下载模块' : service.starting ? '正在启动' : service.running ? '运行中' : service.installed ? '未启动' : '未安装'} · 端口 ${service.port}</small>${progressMarkup}</div><div class="service-actions">${service.installed ? `<button data-service-action="start" ${service.running ? 'disabled' : ''}>启动</button><button data-service-action="stop" ${service.running ? '' : 'disabled'}>停止</button>${service.id === 'tts' ? '<button data-service-action="voice-clone">声音克隆</button>' : ''}` : `<button data-service-action="download" ${service.downloading ? 'disabled' : ''}>${service.downloading ? '下载中…' : '下载模块'}</button>`}</div></article>`
     : '<div class="empty"><p>暂无模块信息</p></div>';
 }
 
@@ -540,6 +537,10 @@ $('service-list').addEventListener('click', async event => {
   if (!service) return;
   const id = service.dataset.service;
   const action = button.dataset.serviceAction;
+  if (action === 'voice-clone') {
+    switchPage('voice');
+    return;
+  }
   button.disabled = true;
   if (action === 'download') {
     serviceDownloadProgress[id] = null;
