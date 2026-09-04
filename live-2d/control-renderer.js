@@ -8,6 +8,10 @@ let pluginConfigDirty = false;
 let loadingConfigUi = true;
 let closePromptOpen = false;
 const serviceLogs = { tts: '', asr: '', bert: '' };
+const serviceDownloadProgress = { tts: null, asr: null, bert: null };
+const serviceDownloadActive = { tts: false, asr: false, bert: false };
+const serviceDownloadStage = { tts: null, asr: null, bert: null };
+const serviceDownloadHasEnvironmentStage = { tts: false, asr: false, bert: false };
 let serviceData = [];
 
 const $ = id => document.getElementById(id);
@@ -415,30 +419,157 @@ function render() {
   syncContextConfig();
 }
 
+function serviceLogLineType(line) {
+  if (/\b(ERROR|CRITICAL|FATAL)\b|Traceback|Exception|Error:|错误|失败|无法|找不到|未找到/i.test(line)) return 'error';
+  if (/\b(WARN(?:ING)?)\b|警告|注意/i.test(line)) return 'warning';
+  if (/\b(SUCCESS|DONE)\b|成功|已启动|已停止|下载完成|加载完成/i.test(line)) return 'success';
+  if (/\b(DEBUG|TRACE)\b/i.test(line)) return 'debug';
+  if (/\bINFO\b|正在启动|正在停止|开始下载|Listening|Running on|Uvicorn running/i.test(line)) return 'info';
+  if (/^\s*(File \"|at\s+|\^+)|\.(py|js):\d+/i.test(line)) return 'trace';
+  return 'plain';
+}
+
+function renderServiceLog(output, text) {
+  const cleanText = String(text || '').replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -\/]*[@-~])/g, '');
+  const lines = cleanText.split('\n');
+  const fragment = document.createDocumentFragment();
+  lines.forEach((line, index) => {
+    const span = document.createElement('span');
+    span.className = `service-log-line service-log-${serviceLogLineType(line)}`;
+    span.textContent = line;
+    fragment.appendChild(span);
+    if (index < lines.length - 1) fragment.appendChild(document.createTextNode('\n'));
+  });
+  output.replaceChildren(fragment);
+}
+
 function paintServiceLog() {
   $('service-log-title').textContent = `${activeServiceLog.toUpperCase()} 日志`;
-  $('service-log-output').textContent = serviceLogs[activeServiceLog];
-  $('service-log-output').scrollTop = $('service-log-output').scrollHeight;
+  const output = $('service-log-output');
+  renderServiceLog(output, serviceLogs[activeServiceLog]);
+  output.scrollTop = output.scrollHeight;
+}
+
+function consumeServiceDownloadProgress(service, text) {
+  const cleanText = String(text || '').replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -\/]*[@-~])/g, '');
+  if (!serviceDownloadActive[service]) return cleanText;
+  const parts = cleanText.split(/([\r\n]+)/);
+  for (let index = 0; index < parts.length; index += 2) {
+    const line = parts[index] || '';
+    if (line === '@@ENV_START') {
+      serviceDownloadHasEnvironmentStage[service] = true;
+      serviceDownloadProgress[service] = { percent: 0, stage: '\u6b63\u5728\u4e0b\u8f7d\u9879\u76ee Python \u73af\u5883', detail: '' };
+      continue;
+    }
+    const environmentProgress = line.match(/^@@ENV_PROGRESS:(\d+):(\d+):(\d+)$/);
+    if (environmentProgress) {
+      const filePercent = Number(environmentProgress[1]);
+      const receivedMb = Number(environmentProgress[2]) / 1024 / 1024;
+      const totalMb = Number(environmentProgress[3]) / 1024 / 1024;
+      serviceDownloadProgress[service] = {
+        percent: filePercent * 0.45,
+        stage: '\u6b63\u5728\u4e0b\u8f7d\u9879\u76ee Python \u73af\u5883',
+        detail: totalMb ? `${receivedMb.toFixed(0)}MB/${totalMb.toFixed(0)}MB` : `${receivedMb.toFixed(0)}MB`
+      };
+      continue;
+    }
+    if (line === '@@ENV_EXTRACT') {
+      serviceDownloadProgress[service] = { percent: 47, stage: '\u6b63\u5728\u89e3\u538b\u9879\u76ee Python \u73af\u5883', detail: '' };
+      continue;
+    }
+    if (line === '@@ENV_DONE') {
+      serviceDownloadProgress[service] = { percent: 50, stage: '\u9879\u76ee Python \u73af\u5883\u5b89\u88c5\u5b8c\u6210', detail: '' };
+      continue;
+    }
+    if (line === `@@MODULE_DONE:${service}`) {
+      serviceDownloadProgress[service] = { percent: 100, stage: '\u6a21\u5757\u5b89\u88c5\u5b8c\u6210', detail: '' };
+      continue;
+    }
+    if (service === 'asr') {
+      if (line.includes('morelle/my-neuro-vad')) serviceDownloadStage.asr = { index: 0, name: 'VAD \u6a21\u578b' };
+      else if (line.includes('speech_seaco_paraformer')) serviceDownloadStage.asr = { index: 1, name: 'ASR \u4e3b\u6a21\u578b' };
+      else if (line.includes('punc_ct-transformer')) serviceDownloadStage.asr = { index: 2, name: '\u6807\u70b9\u6a21\u578b' };
+      if (/ASR\u6a21\u578b\u4e0b\u8f7d\u5b8c\u6210/.test(line)) {
+        serviceDownloadProgress.asr = { percent: 100, stage: '\u5168\u90e8\u6a21\u578b\u4e0b\u8f7d\u5b8c\u6210', detail: '' };
+      }
+    }
+    const percentages = [...line.matchAll(/(\d{1,3}(?:\.\d+)?)\s*%/g)];
+    if (!percentages.length) continue;
+    const filePercent = Math.max(0, Math.min(100, Number(percentages.at(-1)[1])));
+    const asrStage = service === 'asr' ? (serviceDownloadStage.asr || { index: 0, name: 'VAD \u6a21\u578b' }) : null;
+    const basePercent = serviceDownloadHasEnvironmentStage[service] ? 50 : 0;
+    const stageCount = asrStage ? 3 : 1;
+    const stageIndex = asrStage?.index || 0;
+    let percent = basePercent + (stageIndex + Math.min(filePercent, 99) / 100) * ((100 - basePercent) / stageCount);
+    percent = Math.min(99, percent);
+    percent = Math.max(serviceDownloadProgress[service]?.percent || 0, percent);
+    const stageMatch = line.match(/([^:：|]{1,24})(?:[:：]|\s*\|)/);
+    const detailMatch = line.match(/\(([^)]+)\)/);
+    serviceDownloadProgress[service] = {
+      percent,
+      stage: (stageMatch?.[1] || (line.includes('解压') ? '正在解压' : '正在下载')).trim(),
+      detail: detailMatch?.[1] || ''
+    };
+    if (asrStage) serviceDownloadProgress[service].stage = `\u6b63\u5728\u4e0b\u8f7d${asrStage.name}`;
+  }
+  return cleanText
+    .replace(/^@@ENV_(?:START|EXTRACT|DONE|PROGRESS:[^\r\n]*)[\r\n]*/gm, '')
+    .replace(new RegExp(`^@@MODULE_(?:START|DONE|FAIL):${service}[\\r\\n]*`, 'gm'), '')
+    .replace(/\r/g, '\n');
 }
 
 function renderActiveService() {
   const service = serviceData.find(item => item.id === activeServiceLog);
+  const progress = service ? serviceDownloadProgress[service.id] : null;
+  const progressPercent = progress?.percent ?? 0;
+  const progressDetail = progress
+    ? `${progress.stage} · ${Math.round(progressPercent)}%${progress.detail ? ` · ${progress.detail}` : ''}`
+    : '正在准备下载，请稍候…';
+  const progressMarkup = service?.downloading
+    ? `<div class="service-download-progress"><div class="service-download-meta"><span>${escapeHtml(progressDetail)}</span>${progress ? `<strong>${Math.round(progressPercent)}%</strong>` : ''}</div><div class="service-progress-track"><i class="${progress ? '' : 'indeterminate'}" style="width:${progress ? progressPercent : 32}%"></i></div></div>`
+    : '';
   $('service-list').innerHTML = service
-    ? `<article class="service card" data-service="${service.id}"><div class="service-info"><b>${service.name}</b><small class="${service.running ? 'running' : ''}">${service.downloading ? '正在下载' : service.running ? '运行中' : service.installed ? '未启动' : '未安装'} · 端口 ${service.port}</small></div><div class="service-actions">${service.installed ? `<button data-service-action="start" ${service.running ? 'disabled' : ''}>启动</button><button data-service-action="stop" ${service.running ? '' : 'disabled'}>停止</button>` : `<button data-service-action="download" ${service.downloading ? 'disabled' : ''}>${service.downloading ? '下载中' : '下载模块'}</button>`}</div></article>`
+    ? `<article class="service card ${service.downloading ? 'is-downloading' : ''}" data-service="${service.id}"><div class="service-info"><b>${service.name}</b><small class="${service.running ? 'running' : ''}">${service.downloading ? '正在下载模块' : service.starting ? '正在启动' : service.running ? '运行中' : service.installed ? '未启动' : '未安装'} · 端口 ${service.port}</small>${progressMarkup}</div><div class="service-actions">${service.installed ? `<button data-service-action="start" ${service.running ? 'disabled' : ''}>启动</button><button data-service-action="stop" ${service.running ? '' : 'disabled'}>停止</button>` : `<button data-service-action="download" ${service.downloading ? 'disabled' : ''}>${service.downloading ? '下载中…' : '下载模块'}</button>`}</div></article>`
     : '<div class="empty"><p>暂无模块信息</p></div>';
-  document.querySelectorAll('[data-service-action]').forEach(button => button.addEventListener('click', async () => {
-    const id = button.closest('[data-service]').dataset.service;
-    button.disabled = true;
-    const action = button.dataset.serviceAction;
-    const result = action === 'start' ? await window.controlApi.startService(id) : action === 'stop' ? await window.controlApi.stopService(id) : await window.controlApi.downloadService(id);
-    showToast(result.message);
-    setTimeout(refreshServiceStatus, action === 'start' ? 1200 : 250);
-  }));
 }
+
+$('service-list').addEventListener('click', async event => {
+  const button = event.target.closest('[data-service-action]');
+  if (!button || button.disabled) return;
+  const service = button.closest('[data-service]');
+  if (!service) return;
+  const id = service.dataset.service;
+  const action = button.dataset.serviceAction;
+  button.disabled = true;
+  if (action === 'download') {
+    serviceDownloadProgress[id] = null;
+    serviceDownloadStage[id] = null;
+    serviceDownloadHasEnvironmentStage[id] = false;
+    serviceDownloadActive[id] = true;
+    button.textContent = '正在准备…';
+  }
+  if (action === 'stop') {
+    button.textContent = '正在停止...';
+    showToast('正在停止服务...');
+  }
+  try {
+    const result = action === 'start'
+      ? await window.controlApi.startService(id)
+      : action === 'stop'
+        ? await window.controlApi.stopService(id)
+        : await window.controlApi.downloadService(id);
+    showToast(result.message);
+  } catch (error) {
+    showToast(`操作失败：${error.message}`);
+  } finally {
+    await refreshServiceStatus();
+  }
+});
 
 async function refreshServiceStatus() {
   try {
     serviceData = await window.controlApi.serviceStatus();
+    serviceData.forEach(service => { serviceDownloadActive[service.id] = service.downloading; });
     renderActiveService();
   } catch (error) { showToast(`服务状态读取失败：${error.message}`); }
 }
@@ -452,8 +583,12 @@ document.querySelectorAll('[data-service-tab]').forEach(button => button.addEven
 }));
 $('clear-service-log').addEventListener('click', () => { serviceLogs[activeServiceLog] = ''; paintServiceLog(); });
 window.controlApi.onServiceLog(({ service, text }) => {
-  serviceLogs[service] = (serviceLogs[service] + text).slice(-120000);
-  if (service === activeServiceLog) paintServiceLog();
+  const logText = consumeServiceDownloadProgress(service, text);
+  serviceLogs[service] = (serviceLogs[service] + logText).slice(-120000);
+  if (service === activeServiceLog) {
+    paintServiceLog();
+    renderActiveService();
+  }
 });
 window.controlApi.onServiceState(refreshServiceStatus);
 
