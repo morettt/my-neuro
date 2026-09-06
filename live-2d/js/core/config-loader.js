@@ -75,10 +75,8 @@ class ConfigLoader {
                 console.log(`已创建配置文件备份: ${backupPath}`);
             }
             
-            // 通讯录含密钥，只存在内存 / llm_providers.json，不得写回 config.json
-            const persistable = JSON.parse(JSON.stringify(configToSave));
-            delete persistable.llm_providers;
-            fs.writeFileSync(this.configPath, JSON.stringify(persistable, null, 2), 'utf8');
+            // 保存配置
+            fs.writeFileSync(this.configPath, JSON.stringify(configToSave, null, 2), 'utf8');
             console.log('配置已保存');
             return true;
         } catch (error) {

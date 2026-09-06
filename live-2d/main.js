@@ -643,7 +643,7 @@ ipcMain.handle('get-config', async (event) => {
     }
 });
 
-// 皮套右键快捷菜单只保存自己的两个开关，不弹出“配置已保存”提示。
+// 皮套右键快捷菜单只保存自己的几个开关，不弹出“配置已保存”提示。
 ipcMain.handle('save-quick-settings', async (_event, patch = {}) => {
     try {
         const configData = loadConfigData();
@@ -651,6 +651,9 @@ ipcMain.handle('save-quick-settings', async (_event, patch = {}) => {
         if (!configData.asr) configData.asr = {};
         if (typeof patch.show_chat_box === 'boolean') {
             configData.ui.show_chat_box = patch.show_chat_box;
+        }
+        if (typeof patch.live2d_gaze_tracking === 'boolean') {
+            configData.ui.live2d_gaze_tracking = patch.live2d_gaze_tracking;
         }
         if (typeof patch.ptt_enabled === 'boolean') {
             configData.asr.ptt_enabled = patch.ptt_enabled;

@@ -664,6 +664,7 @@ class UIController {
         const items = document.getElementById('quick-settings-items');
         const toggleModeBtn = document.getElementById('btn-toggle-mode');
         const toggleChatBtn = document.getElementById('btn-toggle-chat');
+        const toggleGazeBtn = document.getElementById('btn-toggle-gaze-l2d');
         if (!panel || !items) return;
 
         let panelOpen = false;
@@ -675,6 +676,21 @@ class UIController {
         const chatContainer = document.getElementById('text-chat-container');
         const chatVisible = chatContainer && window.getComputedStyle(chatContainer).display !== 'none';
         toggleChatBtn.classList.toggle('active', chatVisible);
+
+        // Live2D 视线跟随开关：每次打开菜单时按 runtime 实际状态同步；
+        // VRM 形态下隐藏（VRM 控制条已有独立的 gaze 按钮）。
+        const syncGazeBtn = () => {
+            if (!toggleGazeBtn) return;
+            const activeType = global.avatarFacade?.getActiveType?.() || 'live2d';
+            const rt = global.live2dRuntime;
+            if (activeType !== 'live2d' || !rt) {
+                toggleGazeBtn.style.display = 'none';
+                return;
+            }
+            toggleGazeBtn.style.display = '';
+            toggleGazeBtn.classList.toggle('active', !!rt.isGazeTrackingEnabled());
+        };
+        syncGazeBtn();
 
         const closePanel = () => {
             panelOpen = false;
@@ -715,6 +731,7 @@ class UIController {
             }
             e.preventDefault();
             panelOpen = true;
+            syncGazeBtn();
             panel.classList.add('context-open');
             items.classList.add('expanded');
             // 先显示再测量，保证菜单不会超出窗口边缘。
@@ -752,40 +769,17 @@ class UIController {
             closePanel();
         });
 
-        // Live2D 视线跟随开关（VRM 模式下隐藏，VRM 有自己的 gaze 按钮）
-        const toggleGazeBtn = document.getElementById('btn-toggle-gaze-l2d');
         if (toggleGazeBtn) {
-            const syncGazeBtn = () => {
-                const rt = global.live2dRuntime;
-                if (!rt) {
-                    toggleGazeBtn.style.display = 'none';
-                    return;
-                }
-                toggleGazeBtn.style.display = '';
-                toggleGazeBtn.classList.toggle('active', !!rt.isGazeTrackingEnabled());
-            };
-            syncGazeBtn();
-            // runtime 初始化晚于 UI 装配，延迟同步一次
-            setTimeout(syncGazeBtn, 3000);
-
-            toggleGazeBtn.addEventListener('click', async () => {
+            toggleGazeBtn.addEventListener('click', () => {
                 const rt = global.live2dRuntime;
                 if (!rt) return;
                 const next = !rt.isGazeTrackingEnabled();
                 rt.setGazeTracking(next);
-                const targetConfig = this.config || config || {};
-                targetConfig.ui = targetConfig.ui || {};
-                targetConfig.ui.live2d_gaze_tracking = next;
-                this.config = targetConfig;
-                try {
-                    const result = await ipcRenderer.invoke('save-config', targetConfig);
-                    if (!result?.success) {
-                        logToTerminal('warn', '[QuickPanel] 视线跟随开关状态保存失败');
-                    }
-                } catch (error) {
-                    logToTerminal('warn', `[QuickPanel] 视线跟随开关状态保存失败: ${error.message}`);
-                }
+                config.ui = config.ui || {};
+                config.ui.live2d_gaze_tracking = next;
+                persistQuickSettings({ live2d_gaze_tracking: next });
                 toggleGazeBtn.classList.toggle('active', next);
+                closePanel();
             });
         }
 
