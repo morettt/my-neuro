@@ -9,7 +9,7 @@ const isQt = computed(() => localeIndex.value === 'qt')
 <template>
   <div v-if="isQt" class="webui-notice">
     <strong>本教程针对肥牛.exe。</strong>
-    窗口标题类似 <code>My-Neuro (本地)</code>，左侧栏换页，保存按钮是「更新配置」。
+    窗口标题类似 <code>My-Neuro (本地)</code>，左侧栏换页，底部保存按钮是「保存配置」。
     浏览器里的「My Neuro 控制中心」请看
     <a href="/">WebUI 文档</a>。
   </div>

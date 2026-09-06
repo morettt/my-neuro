@@ -127,7 +127,7 @@ export default defineConfig({
             {
               text: '配置',
               items: [
-                { text: 'LLM 四件套', link: '/qt/config/llm' },
+                { text: '模型配置', link: '/qt/config/llm' },
                 { text: '怎么听', link: '/qt/config/listen' },
                 { text: '怎么说', link: '/qt/config/speak' },
                 { text: '记忆', link: '/qt/config/memory' },
