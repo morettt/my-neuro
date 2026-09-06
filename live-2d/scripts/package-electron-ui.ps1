@@ -60,8 +60,16 @@ $builderCli = Join-Path (Split-Path -Parent $projectDir) 'electron-installer\nod
 if (-not (Test-Path -LiteralPath $builderCli)) {
     $builderCli = Join-Path $toolsDir 'node_modules\electron-builder\cli.js'
     if (-not (Test-Path -LiteralPath $builderCli)) {
-        & npm.cmd install --prefix $toolsDir --no-audit --no-fund
-        if ($LASTEXITCODE -ne 0) { throw 'Failed to install electron-builder.' }
+        # Run inside the tools package. With some npm versions, installing
+        # from the project root using --prefix links the root into node_modules,
+        # creating a directory cycle that breaks ZIP archiving.
+        Push-Location -LiteralPath $toolsDir
+        try {
+            & npm.cmd install --no-audit --no-fund
+            if ($LASTEXITCODE -ne 0) { throw 'Failed to install electron-builder.' }
+        } finally {
+            Pop-Location
+        }
     }
 }
 & node.exe $builderCli --projectDir $toolsDir --config $configPath --win portable --x64
