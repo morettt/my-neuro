@@ -264,13 +264,22 @@ button:hover { background: #f0ece4; }
 #llm .llm-row > input { min-width:0; height:44px; font-weight:400; }
 #llm .llm-row > input::placeholder { color:#918a80; font-weight:400; }
 #llm .llm-model-control { position:relative; display:grid; grid-template-columns:minmax(0,1fr) 108px; gap:8px; min-width:0; }
-#llm .llm-model-control > input { min-width:0; height:44px; font-weight:400; }
-#llm .llm-model-control > input::placeholder { color:#918a80; font-weight:400; }
+#llm .llm-model-dropdown { min-width:0; }
+#llm .llm-model-dropdown .trigger { gap:8px; padding:0 12px; }
+#llm .llm-model-dropdown .trigger::before { content:none; }
+#llm .llm-model-dropdown .trigger input { min-width:0; height:44px; padding:0; border:0; background:transparent; box-shadow:none; font-weight:400; }
+#llm .llm-model-dropdown .trigger input::placeholder { color:#918a80; font-weight:400; }
+#llm .llm-model-dropdown:focus-within { border-color:#938674; }
+#toggle-llm-models { flex:0 0 24px; min-height:28px; padding:0; border:0; background:transparent; box-shadow:none; color:#756d61; font-size:23px; transform:rotate(-90deg); transition:transform .35s ease; }
+#llm-model-dropdown-state:checked + .trigger #toggle-llm-models { transform:rotate(90deg); }
 #llm .llm-model-control > button { height:44px; }
-#llm .llm-model-options { position:absolute; top:calc(100% + 6px); left:0; right:116px; z-index:120; max-height:250px; padding:7px; overflow:auto; border:1px solid #d8d0c3; border-radius:10px; background:#fff; box-shadow:0 14px 30px rgba(65,52,36,.16); }
-#llm .llm-model-options[hidden] { display:none!important; }
-#llm .llm-model-options button { display:block; width:100%; min-height:36px; padding:7px 10px; border:0; background:transparent; text-align:left; box-shadow:none; }
-#llm .llm-model-options button:hover { background:#f1ede5; transform:none; }
+#llm-model-options .article { overflow-wrap:anywhere; }
+#llm-model-options .llm-test-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:5px 8px; align-items:center; }
+#llm-model-options .llm-test-button { min-width:58px; min-height:36px; padding:6px 10px; font-size:12px; }
+#llm-model-options .llm-test-button:disabled { opacity:.6; cursor:wait; }
+#llm-model-options .llm-test-result { grid-column:1/-1; padding:0 5px 5px; color:#776f63; font-size:12px; font-weight:400; overflow-wrap:anywhere; }
+#llm-model-options .llm-test-result.success { color:#37734b; }
+#llm-model-options .llm-test-result.failure { color:#ad4940; }
 #llm .llm-prompt-field { min-height:0; margin-top:3px; font-size:14px; font-weight:600; }
 #llm .llm-prompt-field textarea { min-height:0; font-weight:400; line-height:1.6; }
 #llm > .form-card > label:last-child { grid-template-rows:auto 1fr; min-height:300px; }

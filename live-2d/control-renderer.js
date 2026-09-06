@@ -272,6 +272,26 @@ function syncCloudProviders() {
 
 ['cloud-tts-provider','cloud-tts-master-enabled','cloud-asr-provider','cloud-asr-master-enabled'].forEach(id => $(id)?.addEventListener('change', syncCloudProviders));
 
+function setLlmModelsOpen(open) {
+  $('llm-model-dropdown-state').checked = open;
+  $('toggle-llm-models').setAttribute('aria-expanded', String(open));
+  $('llm-model-options').querySelectorAll('[data-llm-model]').forEach(option => {
+    const selected = option.dataset.llmModel === $('llm-model').value;
+    option.classList.toggle('selected', selected);
+    option.setAttribute('aria-selected', String(selected));
+  });
+}
+$('toggle-llm-models').addEventListener('click', () => {
+  if (!$('llm-model-options').children.length) { showToast('请先点击获取模型'); return; }
+  setLlmModelsOpen(!$('llm-model-dropdown-state').checked);
+});
+$('llm-model').addEventListener('click', () => {
+  if ($('llm-model-options').children.length) setLlmModelsOpen(true);
+});
+$('llm-model').addEventListener('input', () => setLlmModelsOpen(false));
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') setLlmModelsOpen(false);
+});
 $('fetch-llm-models').addEventListener('click', async () => {
   const button = $('fetch-llm-models');
   const apiUrl = $('llm-url').value.trim();
@@ -280,20 +300,39 @@ $('fetch-llm-models').addEventListener('click', async () => {
   try {
     const models = await window.controlApi.fetchLlmModels(apiUrl, $('llm-key').value);
     const options = $('llm-model-options');
-    options.innerHTML = models.map(name => `<button type="button" data-llm-model="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('');
-    options.hidden = false;
+    options.innerHTML = models.map(name => `<li class="listitem llm-test-row"><button class="article dropdown-option" type="button" data-llm-model="${escapeHtml(name)}">${escapeHtml(name)}</button><button class="llm-test-button" type="button" data-test-model="${escapeHtml(name)}" aria-label="测试 ${escapeHtml(name)}">测试</button><span class="llm-test-result" role="status" hidden></span></li>`).join('');
+    options.querySelectorAll('[data-test-model]').forEach(testButton => testButton.addEventListener('click', async () => {
+      const status = testButton.parentElement.querySelector('.llm-test-result');
+      testButton.disabled = true;
+      testButton.textContent = '测试中…';
+      status.hidden = false;
+      status.className = 'llm-test-result';
+      status.textContent = '正在请求模型，最多等待30秒…';
+      try {
+        const result = await window.controlApi.testLlmModel($('llm-url').value, $('llm-key').value, testButton.dataset.testModel);
+        status.classList.add(result.ok ? 'success' : 'failure');
+        status.textContent = result.ok ? `可用 · 响应耗时 ${result.elapsedMs} ms（完整回复）` : `测试失败 · ${result.message}`;
+      } catch {
+        status.classList.add('failure');
+        status.textContent = '测试失败，请重试';
+      } finally {
+        testButton.disabled = false;
+        testButton.textContent = '重测';
+      }
+    }));
+    setLlmModelsOpen(models.length > 0);
     options.querySelectorAll('[data-llm-model]').forEach(option => option.addEventListener('click', () => {
       $('llm-model').value = option.dataset.llmModel;
       set(config, 'llm.model', option.dataset.llmModel);
       setConfigDirty(true);
-      options.hidden = true;
+      setLlmModelsOpen(false);
     }));
     showToast(`已获取 ${models.length} 个模型`);
   } catch (error) { showToast(error.message); }
   finally { button.disabled = false; button.textContent = '获取模型'; }
 });
 document.addEventListener('click', event => {
-  if (!event.target.closest('.llm-model-control')) $('llm-model-options').hidden = true;
+  if (!event.target.closest('.llm-model-control')) setLlmModelsOpen(false);
 });
 
 const fields = {
@@ -311,6 +350,7 @@ const fields = {
   'auto-vision': ['vision.auto_screenshot', 'checked'],
   'user-name': ['subtitle_labels.user', 'value'], 'ai-name': ['subtitle_labels.ai', 'value'],
   'subtitle-enabled': ['subtitle_labels.enabled', 'checked'],
+  'auto-close-services': ['auto_close_services.enabled', 'checked'],
   'gateway-enabled': ['api_gateway.use_gateway', 'checked'], 'gateway-url': ['api_gateway.base_url', 'value'],
   'gateway-key': ['api_gateway.api_key', 'value'], 'cloud-provider': ['cloud.provider', 'value'],
   'cloud-key': ['cloud.api_key', 'value'], 'cloud-tts-enabled': ['cloud.tts.enabled', 'checked'],
@@ -387,7 +427,7 @@ function render() {
   for (const [id, [path, type]] of Object.entries(fields)) {
     const el = $(id);
     if (!el) continue;
-    const value = get(config, path, type === 'checked' ? false : '');
+    const value = get(config, path, id === 'auto-close-services' ? true : type === 'checked' ? false : '');
     if (type === 'checked') el.checked = Boolean(value);
     else el.value = value;
     if (id === 'tts-language') {

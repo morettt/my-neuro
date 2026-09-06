@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('controlApi', {
   environmentInfo: () => ipcRenderer.invoke('control:environment-info'),
   getPrompts: () => ipcRenderer.invoke('control:get-prompts'),
   fetchLlmModels: (apiUrl, apiKey) => ipcRenderer.invoke('control:fetch-llm-models', apiUrl, apiKey),
+  testLlmModel: (apiUrl, apiKey, model) => ipcRenderer.invoke('control:test-llm-model', apiUrl, apiKey, model),
   listMcpTools: () => ipcRenderer.invoke('control:list-mcp-tools'),
   toggleMcpTool: (type, key) => ipcRenderer.invoke('control:toggle-mcp-tool', type, key),
   getToolMarket: () => ipcRenderer.invoke('control:get-tool-market'),

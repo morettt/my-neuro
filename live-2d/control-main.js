@@ -275,9 +275,12 @@ function loadControlConfig() {
   const provider = providers.find(item => item.id === config.llm.provider_id)
     || providers.find(item => item.enabled !== false)
     || providers[0];
-  const model = provider?.models?.find(item => item.model_id === config.llm.model_id)
-    || provider?.models?.find(item => item.enabled !== false)
-    || provider?.models?.[0];
+  // An explicitly saved empty model is intentional; only legacy configs need a default.
+  const hasModelSelection = Object.prototype.hasOwnProperty.call(config.llm, 'model_id');
+  const model = hasModelSelection
+    ? provider?.models?.find(item => item.model_id === config.llm.model_id)
+    : provider?.models?.find(item => item.enabled !== false) || provider?.models?.[0];
+  if (hasModelSelection) config.llm.model = config.llm.model_id || '';
   if (provider) {
     config.llm.provider_id = provider.id;
     config.llm.api_key = provider.api_key || '';
@@ -292,9 +295,11 @@ function loadControlConfig() {
   config.vision ||= {};
   config.vision.vision_model ||= {};
   const visionProvider = providers.find(item => item.id === config.vision.provider_id);
-  const visionModel = visionProvider?.models?.find(item => item.model_id === config.vision.model_id)
-    || visionProvider?.models?.find(item => item.enabled !== false)
-    || visionProvider?.models?.[0];
+  const hasVisionModelSelection = Object.prototype.hasOwnProperty.call(config.vision, 'model_id');
+  const visionModel = hasVisionModelSelection
+    ? visionProvider?.models?.find(item => item.model_id === config.vision.model_id)
+    : visionProvider?.models?.find(item => item.enabled !== false) || visionProvider?.models?.[0];
+  if (hasVisionModelSelection) config.vision.vision_model.model = config.vision.model_id || '';
   if (visionProvider) {
     config.vision.vision_model.api_key = visionProvider.api_key || '';
     config.vision.vision_model.api_url = visionProvider.api_url || '';
@@ -620,7 +625,9 @@ function createControlWindow() {
       return;
     }
     closing = true;
-    Promise.all([fadeWindow(win.getOpacity(), 0, 260), stopLive2dProcess(), stopConfiguredServices()])
+    const autoCloseServices = readJson(configPath, {}).auto_close_services?.enabled ?? true;
+    Promise.all([fadeWindow(win.getOpacity(), 0, 260), stopLive2dProcess(),
+      autoCloseServices ? stopConfiguredServices() : Promise.resolve()])
       .finally(() => { if (!win.isDestroyed()) win.destroy(); });
   });
   win.loadFile('control.html');
@@ -941,6 +948,41 @@ ipcMain.handle('control:fetch-llm-models', async (_event, apiUrl, apiKey) => {
   const models = [...new Set(items.map(item => typeof item === 'object' ? (item.id || item.name) : item).filter(Boolean).map(String))].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' }));
   if (!models.length) throw new Error('接口返回成功，但模型列表为空');
   return models;
+});
+ipcMain.handle('control:test-llm-model', async (_event, apiUrl, apiKey, model) => {
+  let endpoint = String(apiUrl || '').trim().replace(/\/+$/, '');
+  if (!endpoint || !String(model || '').trim()) return { ok: false, message: '请先填写接口地址并选择模型' };
+  for (const suffix of ['/chat/completions', '/completions', '/responses', '/models']) {
+    if (endpoint.toLowerCase().endsWith(suffix)) { endpoint = endpoint.slice(0, -suffix.length).replace(/\/+$/, ''); break; }
+  }
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+  if (String(apiKey || '').trim()) headers.Authorization = `Bearer ${String(apiKey).trim()}`;
+  const started = performance.now();
+  const signal = AbortSignal.timeout(30000);
+  try {
+    const response = await net.fetch(`${endpoint}/chat/completions`, {
+      method: 'POST', headers, signal,
+      body: JSON.stringify({ model: String(model).trim(), messages: [{ role: 'user', content: '请只回复 OK' }], stream: false })
+    });
+    let payload;
+    try { payload = await response.json(); }
+    catch (error) {
+      if (signal.aborted) throw error;
+      return { ok: false, message: `返回格式异常（HTTP ${response.status}）` };
+    }
+    const elapsedMs = Math.round(performance.now() - started);
+    if (!response.ok || payload?.error) {
+      const detail = typeof payload?.error === 'string' ? payload.error : payload?.error?.message;
+      const message = String(detail || '模型请求失败').slice(0, 240);
+      const key = String(apiKey || '').trim();
+      return { ok: false, message: `HTTP ${response.status}：${key ? message.split(key).join('***') : message}` };
+    }
+    const content = payload?.choices?.[0]?.message?.content;
+    if (typeof content !== 'string' || !content.trim()) return { ok: false, message: '接口未返回有效的文本回复' };
+    return { ok: true, elapsedMs };
+  } catch {
+    return { ok: false, message: signal.aborted ? '测试超时（30秒），暂未确认可用' : '连接失败，请检查接口地址和网络' };
+  }
 });
 ipcMain.handle('control:list-mcp-tools', () => listMcpTools());
 ipcMain.handle('control:toggle-mcp-tool', (_event, type, key) => {
