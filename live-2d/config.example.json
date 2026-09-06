@@ -292,7 +292,7 @@
     "ai": "肥牛"
   },
   "auto_close_services": {
-    "enabled": false
+    "enabled": true
   },
   "version": "v6.5.4",
   "tools": {

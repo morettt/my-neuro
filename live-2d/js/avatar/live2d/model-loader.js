@@ -128,7 +128,7 @@ class Live2DModelLoader {
         model.scale.set(legacyScale / LEGACY_SCALE_RATIO);
 
         // 位置：0~1 相对值（与旧实现语义一致），双屏右扩展时用 x_dual/y_dual
-        const isDualRight = window.innerWidth > window.screen.width * 1.2 && config.ui?.screen_extend?.right;
+        const isDualRight = window.innerWidth > window.screen.width * 1.2 && config.ui?.screen_extend?.right !== false;
         const pos = prefs?.position || config.ui?.model_position || {};
         const relX = isDualRight ? (pos.x_dual ?? 0.825) : (pos.x ?? 0.65);
         const relY = isDualRight ? (pos.y_dual ?? 0.38) : (pos.y ?? 0.38);

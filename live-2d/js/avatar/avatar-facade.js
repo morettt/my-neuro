@@ -6,6 +6,7 @@
 // AI/TTS/插件层只跟门面（或 global 兼容别名）交互，对具体渲染栈无感知。
 const { ipcRenderer } = require('electron');
 const { logToTerminal } = require('../api-utils.js');
+const avatarTransition = require('./transition-overlay.js');
 
 const AVATAR_TYPES = ['live2d', 'vrm', 'mmd', 'pngtuber'];
 const IPC_RESULT_PHASES = new Set([
@@ -436,11 +437,13 @@ class AvatarFacade {
         ipcRenderer.on('avatar-switch-type', async (event, payload) => {
             const requestId = payload?.requestId;
             let res;
+            await avatarTransition.show('正在切换皮套');
             try {
                 res = await this.switchType(payload?.type);
             } catch (error) {
                 res = { success: false, message: `切换异常: ${error.message}` };
             }
+            if (!res?.reloadRequired) avatarTransition.hide();
             const summary = summarizeIPCResult(res);
             logToTerminal('info', `[AvatarFacade] IPC 切换结果: ${JSON.stringify(summary)}`);
             await reportIPCResult('avatar-switch-type-result', requestId, res);
@@ -448,6 +451,7 @@ class AvatarFacade {
         ipcRenderer.on('avatar-reload-model', async (event, payload) => {
             const requestId = payload?.requestId;
             let res;
+            await avatarTransition.show('正在切换皮套');
             try {
                 const patch = payload?.configKey
                     ? { [payload.configKey]: payload.configValue }
@@ -456,6 +460,7 @@ class AvatarFacade {
             } catch (error) {
                 res = { success: false, message: `重载异常: ${error.message}` };
             }
+            if (!res?.reloadRequired) avatarTransition.hide();
             logToTerminal('info', `[AvatarFacade] IPC 模型重载结果: ${JSON.stringify(summarizeIPCResult(res))}`);
             await reportIPCResult('avatar-reload-model-result', requestId, res);
         });

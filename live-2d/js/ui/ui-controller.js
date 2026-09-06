@@ -97,22 +97,37 @@ class UIController {
             textChatContainer.style.setProperty('opacity', '0', 'important');
         }
 
-        // 窗口只覆盖“当前显示器”，聊天框/字幕直接锚定到本窗口的右下角即可，
-        // 不再需要 get-screen-info-sync 把坐标换算到主屏（那是旧巨型跨屏窗口才需要的）。
-        textChatContainer.style.setProperty('left', 'auto', 'important');
-        textChatContainer.style.setProperty('right', '20px', 'important');
-        textChatContainer.style.setProperty('bottom', '50px', 'important');
+        // 巨窗覆盖多屏时，必须锚到主屏右下，不能锚整窗右下（否则对话框会跑到副屏最右侧）。
+        const screenInfo = ipcRenderer.sendSync('get-screen-info-sync');
+        if (screenInfo?.primaryDisplay && screenInfo?.windowBounds) {
+            const { primaryDisplay, windowBounds } = screenInfo;
+            const winX = windowBounds.x;
+            const winY = windowBounds.y;
+            const winH = windowBounds.height;
+            const primaryLeftOffset = primaryDisplay.bounds.x - winX;
+            const primaryTopOffset = primaryDisplay.bounds.y - winY;
+            const primaryBottomOffset = winH - (primaryTopOffset + primaryDisplay.bounds.height);
+            const rightPos = primaryLeftOffset + primaryDisplay.bounds.width - 350 - 20;
 
-        const subtitleContainer = document.getElementById('subtitle-container');
-        if (subtitleContainer) {
-            subtitleContainer.style.setProperty('position', 'fixed', 'important');
-            subtitleContainer.style.setProperty('left', 'auto', 'important');
-            subtitleContainer.style.setProperty('right', '20px', 'important');
-            subtitleContainer.style.setProperty('bottom', '20px', 'important');
-            subtitleContainer.style.setProperty('width', '400px', 'important');
-            subtitleContainer.style.setProperty('max-width', '400px', 'important');
-            subtitleContainer.style.setProperty('transform', 'none', 'important');
-            subtitleContainer.style.setProperty('display', 'block', 'important');
+            textChatContainer.style.setProperty('left', rightPos + 'px', 'important');
+            textChatContainer.style.setProperty('right', 'auto', 'important');
+            textChatContainer.style.setProperty('bottom', (primaryBottomOffset + 50) + 'px', 'important');
+
+            const subtitleContainer = document.getElementById('subtitle-container');
+            if (subtitleContainer) {
+                subtitleContainer.style.setProperty('position', 'fixed', 'important');
+                subtitleContainer.style.setProperty('left', (primaryLeftOffset + primaryDisplay.bounds.width - 800) + 'px', 'important');
+                subtitleContainer.style.setProperty('right', 'auto', 'important');
+                subtitleContainer.style.setProperty('bottom', (primaryBottomOffset + 20) + 'px', 'important');
+                subtitleContainer.style.setProperty('width', '400px', 'important');
+                subtitleContainer.style.setProperty('max-width', '400px', 'important');
+                subtitleContainer.style.setProperty('transform', 'none', 'important');
+                subtitleContainer.style.setProperty('display', 'block', 'important');
+            }
+        } else {
+            textChatContainer.style.setProperty('left', 'auto', 'important');
+            textChatContainer.style.setProperty('right', '20px', 'important');
+            textChatContainer.style.setProperty('bottom', '50px', 'important');
         }
 
         const setMousePassthrough = (ignore, forward = true) => {
@@ -198,7 +213,11 @@ class UIController {
             this.subtitleTimeout = null;
         }
 
-        subtitleText.textContent = text;
+        // 最终展示边界：情绪/动作标签只用于驱动皮套，绝不能显示给用户。
+        const displayText = String(text || '')
+            .replace(/<[^>]*>/g, '').replace(/<[^<>]*$/g, '')
+            .replace(/＜[^＞]*＞/g, '').replace(/＜[^＜＞]*$/g, '');
+        subtitleText.textContent = displayText;
         container.style.display = 'block';
         this.applySubtitlePosition();
         container.scrollTop = container.scrollHeight;
@@ -255,6 +274,30 @@ class UIController {
         return { x: modelX, y: modelY };
     }
 
+    _getModelScreenBounds() {
+        const { model } = this._getActiveAvatarState();
+        if (!model) return null;
+        let bounds = null;
+        try {
+            bounds = model.getScreenHitBox?.() || model.getBounds?.() || model.viewRect;
+        } catch (_) {
+            return null;
+        }
+        if (!bounds) return null;
+        let left = Number.isFinite(bounds.left) ? bounds.left : Number(bounds.x);
+        let top = Number.isFinite(bounds.top) ? bounds.top : Number(bounds.y);
+        let right = Number.isFinite(bounds.right) ? bounds.right : left + Number(bounds.width);
+        let bottom = Number.isFinite(bounds.bottom) ? bounds.bottom : top + Number(bounds.height);
+        if (![left, top, right, bottom].every(Number.isFinite) || right <= left || bottom <= top) return null;
+
+        const visibleLeft = Math.max(0, Math.min(window.innerWidth, left));
+        const visibleTop = Math.max(0, Math.min(window.innerHeight, top));
+        const visibleRight = Math.max(0, Math.min(window.innerWidth, right));
+        const visibleBottom = Math.max(0, Math.min(window.innerHeight, bottom));
+        if (visibleRight <= visibleLeft || visibleBottom <= visibleTop) return null;
+        return { left: visibleLeft, top: visibleTop, right: visibleRight, bottom: visibleBottom };
+    }
+
     // 更新气泡框位置，使其跟随模型
     updateBubblePosition() {
         const bubbleContainer = document.getElementById('bubble-container');
@@ -296,10 +339,24 @@ class UIController {
 
             // 更新工具气泡堆叠容器位置 (身体下方)
             if (toolBubblesContainer) {
-                const toolOffsetX = 100;   // 向右偏移
-                const toolOffsetY = 230;   // 向下大幅偏移,定位到身体/下方
-                const toolTargetX = screenX + toolOffsetX;
-                const toolTargetY = screenY + toolOffsetY;
+                const modelBounds = this._getModelScreenBounds();
+                const cardRect = toolBubblesContainer.getBoundingClientRect();
+                const cardWidth = cardRect.width || 360;
+                const cardHeight = cardRect.height || 80;
+                const edge = 12;
+                let toolTargetX;
+                let toolTargetY;
+                if (modelBounds) {
+                    const bodyCenterX = (modelBounds.left + modelBounds.right) / 2;
+                    const bodyCenterY = modelBounds.top + (modelBounds.bottom - modelBounds.top) * 0.42;
+                    toolTargetX = bodyCenterX - cardWidth / 2;
+                    toolTargetY = bodyCenterY - cardHeight / 2;
+                } else {
+                    toolTargetX = screenX - cardWidth / 2;
+                    toolTargetY = screenY - cardHeight / 2;
+                }
+                toolTargetX = Math.max(edge, Math.min(toolTargetX, window.innerWidth - cardWidth - edge));
+                toolTargetY = Math.max(edge, Math.min(toolTargetY, window.innerHeight - cardHeight - edge));
 
                 if (!this._toolBubblesInitialized) {
                     this.toolBubblesCurrentX = toolTargetX;
@@ -436,6 +493,9 @@ class UIController {
 
         // 添加到容器
         container.appendChild(bubble);
+
+        this._toolBubblesInitialized = false;
+        this.updateBubblePosition();
 
         // 记录工具名称到日志
         logToTerminal('info', `🔧 工具调用: ${toolName}${parameters ? ' 参数: ' + JSON.stringify(parameters) : ''}`);
@@ -599,11 +659,12 @@ class UIController {
 
     // 快捷设置面板（齿轮菜单）
     setupQuickPanel(voiceChat, config) {
+        const panel = document.getElementById('quick-settings');
         const gear = document.getElementById('quick-gear');
         const items = document.getElementById('quick-settings-items');
         const toggleModeBtn = document.getElementById('btn-toggle-mode');
         const toggleChatBtn = document.getElementById('btn-toggle-chat');
-        if (!gear || !items) return;
+        if (!panel || !items) return;
 
         let panelOpen = false;
 
@@ -615,20 +676,59 @@ class UIController {
         const chatVisible = chatContainer && window.getComputedStyle(chatContainer).display !== 'none';
         toggleChatBtn.classList.toggle('active', chatVisible);
 
-        gear.addEventListener('click', (e) => {
-            e.stopPropagation();
-            panelOpen = !panelOpen;
-            items.classList.toggle('expanded', panelOpen);
-            gear.classList.toggle('open', panelOpen);
+        const closePanel = () => {
+            panelOpen = false;
+            panel.classList.remove('context-open');
+            items.classList.remove('expanded');
+        };
+
+        const persistQuickSettings = (patch) => {
+            ipcRenderer.invoke('save-quick-settings', patch).then(result => {
+                if (!result?.success) console.error('保存皮套快捷设置失败:', result?.error || '未知错误');
+            }).catch(error => console.error('保存皮套快捷设置失败:', error));
+        };
+
+        const pointHitsModel = (x, y) => {
+            const controller = global.avatarFacade?.getController?.() || global.modelController;
+            if (typeof controller?.isPointOverModel === 'function') {
+                try { return Boolean(controller.isPointOverModel(x, y)); } catch (_) {}
+            }
+            const model = global.avatarFacade?.getModel?.() || global.currentModel;
+            try {
+                if (typeof model?.containsPoint === 'function') return Boolean(model.containsPoint({ x, y }));
+                const box = model?.getScreenHitBox?.() || model?.getBounds?.() || model?.viewRect;
+                if (box) {
+                    const left = Number.isFinite(box.left) ? box.left : box.x;
+                    const top = Number.isFinite(box.top) ? box.top : box.y;
+                    const right = Number.isFinite(box.right) ? box.right : left + box.width;
+                    const bottom = Number.isFinite(box.bottom) ? box.bottom : top + box.height;
+                    return x >= left && x <= right && y >= top && y <= bottom;
+                }
+            } catch (_) {}
+            return false;
+        };
+
+        document.addEventListener('contextmenu', (e) => {
+            if (!pointHitsModel(e.clientX, e.clientY)) {
+                closePanel();
+                return;
+            }
+            e.preventDefault();
+            panelOpen = true;
+            panel.classList.add('context-open');
+            items.classList.add('expanded');
+            // 先显示再测量，保证菜单不会超出窗口边缘。
+            const rect = panel.getBoundingClientRect();
+            const left = Math.max(8, Math.min(e.clientX, window.innerWidth - rect.width - 8));
+            const top = Math.max(8, Math.min(e.clientY, window.innerHeight - rect.height - 8));
+            panel.style.left = `${left}px`;
+            panel.style.top = `${top}px`;
         });
 
         document.addEventListener('click', (e) => {
-            if (panelOpen && !e.target.closest('#quick-settings')) {
-                panelOpen = false;
-                items.classList.remove('expanded');
-                gear.classList.remove('open');
-            }
+            if (panelOpen && !e.target.closest('#quick-settings')) closePanel();
         });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
 
         toggleChatBtn.addEventListener('click', () => {
             const chatContainer = document.getElementById('text-chat-container');
@@ -645,7 +745,11 @@ class UIController {
                 chatContainer.style.setProperty('opacity', '1', 'important');
                 chatContainer.style.setProperty('pointer-events', 'auto', 'important');
             }
+            config.ui = config.ui || {};
+            config.ui.show_chat_box = !visible;
+            persistQuickSettings({ show_chat_box: !visible });
             toggleChatBtn.classList.toggle('active', !visible);
+            closePanel();
         });
 
         // Live2D 视线跟随开关（VRM 模式下隐藏，VRM 有自己的 gaze 按钮）
@@ -695,7 +799,9 @@ class UIController {
             proc.pttModeEnabled = nextPTTMode;
             config.asr = config.asr || {};
             config.asr.ptt_enabled = proc.pttModeEnabled;
+            persistQuickSettings({ ptt_enabled: proc.pttModeEnabled });
             toggleModeBtn.classList.toggle('active', proc.pttModeEnabled);
+            closePanel();
         });
     }
 
@@ -1062,7 +1168,17 @@ class UIController {
         this.subtitleScale = 1;
 
         if (this.isAdjustingSubtitle) {
-            const tx = window.innerWidth * 0.7, ty = window.innerHeight - 80;
+            let tx = window.innerWidth * 0.7;
+            let ty = window.innerHeight - 80;
+            try {
+                const info = ipcRenderer.sendSync('get-screen-info-sync');
+                if (info?.primaryDisplay?.bounds && info?.windowBounds) {
+                    const left = info.primaryDisplay.bounds.x - info.windowBounds.x;
+                    const top = info.primaryDisplay.bounds.y - info.windowBounds.y;
+                    tx = left + info.primaryDisplay.bounds.width * 0.7;
+                    ty = top + info.primaryDisplay.bounds.height - 80;
+                }
+            } catch (_) { /* 单屏回退 */ }
             this._subtitleCenterX = tx; this._subtitleCenterY = ty;
             Object.assign(c.style, {
                 left: `${tx}px`, top: `${ty}px`,

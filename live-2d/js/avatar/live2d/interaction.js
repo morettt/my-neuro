@@ -11,8 +11,8 @@
 //   saveModelPosition()               - 持久化位置/缩放（存储用 legacy 语义）
 //   resetModelPosition()              - 复位（供 HTTP /reset-model-position）
 //   isPointOverInteractive(x, y)      - 供 ui-controller 鼠标穿透判定（client 坐标）
-//   checkAndSwitchDisplay(x, y)       - 松手跨屏判定（光标贴边 + 模型越界 → 整窗重定位）
-//   _bounceModelIntoWindow()          - 模型几乎出屏时平滑回弹（bounce_back 开关控制）
+//   checkAndSwitchDisplay(x, y)       - 已停用：6.55 巨窗下不再整窗切屏
+//   _bounceModelIntoWindow()          - 相对整块巨窗回弹（bounce_back 开关控制）
 const { ipcRenderer } = require('electron');
 const { LEGACY_SCALE_RATIO } = require('./core.js');
 let _logToTerminal;
@@ -139,18 +139,20 @@ class Live2DInteractionController {
 
         this._on(window, 'pointermove', (e) => {
             if (!this.isDragging || !this.model) return;
-            const newX = e.clientX - this.dragOffset.x;
-            const newY = e.clientY - this.dragOffset.y;
+            let newX = e.clientX - this.dragOffset.x;
+            let newY = e.clientY - this.dragOffset.y;
 
-            // 拖动期间模型自由跟随光标，允许超出当前窗口边缘（会被窗口裁切）；
-            // 跨屏判定推迟到松手时的 checkAndSwitchDisplay，不在拖动中限制范围。
-            // （旧 screen_extend 巨窗方案已废弃，主进程不再读取该配置，相应钳制一并移除。）
+            // 6.55：左扩模式下限制 x >= 0；右扩/多屏巨窗内自由移动。
+            const extend = this.config?.ui?.screen_extend;
+            if (extend?.extend && extend?.left && newX < 0) newX = 0;
+
             this.model.position.set(newX, newY);
             this.updateInteractionArea();
+            this._maybeExpandPetWindow(newX, newY);
             this._notifyActivity();
         });
 
-        this._on(window, 'pointerup', async (e) => {
+        this._on(window, 'pointerup', (e) => {
             if (!this.isDragging) return;
             this.isDragging = false;
 
@@ -166,12 +168,8 @@ class Live2DInteractionController {
                 }
             }
 
-            // 松手时若“光标拖到了窗口边缘 + 模型越过该边”，整窗重定位到那一侧的显示器；
-            // 未切屏时若模型越出窗口，平滑回弹到窗口内（两个分支内部各自负责保存位置）。
-            const switched = await this.checkAndSwitchDisplay(e.clientX, e.clientY);
-            if (!switched) {
-                this._bounceModelIntoWindow();
-            }
+            // 巨窗方案：松手不再整窗切屏。回弹按整块窗口判断，副屏画布区内的模型不会弹回主屏。
+            this._bounceModelIntoWindow();
 
             // 松手后若指针不在交互区上则恢复穿透
             setTimeout(() => {
@@ -294,84 +292,40 @@ class Live2DInteractionController {
 
     // ============ 跨屏 / 回弹（v2 坐标系：舞台坐标 = CSS 像素，无需缩放换算） ============
 
-    // 松手时若“光标拖到窗口边缘 + 模型越过该边”，整窗重定位到那一侧的显示器。
-    // 触发用“光标贴边(EDGE 内) 且 模型可见区也越过该边”双重确认：光标到边缘=明确要往那侧推出去，
-    // 松手在屏幕中间不会误触；光标永远能拖到边缘，故四向、任意抓取点都对称。
-    async checkAndSwitchDisplay(cursorX, cursorY) {
-        if (!window.electronScreen || !window.electronScreen.moveWindowToDisplay) return false;
-        if (!this.model) return false;
-        if (!Number.isFinite(cursorX) || !Number.isFinite(cursorY)) return false;
+    _isDualRightCanvas() {
+        return window.innerWidth > window.screen.width * 1.2 && this.config?.ui?.screen_extend?.right !== false;
+    }
 
+    _getPrimaryWindowOffset() {
         try {
-            const displays = await window.electronScreen.getAllDisplays();
-            if (!displays || displays.length <= 1) return false;
-            const currentDisplay = await window.electronScreen.getCurrentDisplay();
-            if (!currentDisplay) return false;
-
-            const W = window.innerWidth, H = window.innerHeight;
-            // 模型可见区域在当前窗口 CSS 像素下的边界（v2：getBounds 即 CSS 坐标）
-            const b = this.model.getBounds();
-            const vLeft = b.left, vRight = b.right, vTop = b.top, vBottom = b.bottom;
-
-            // 光标贴到哪条边(EDGE 内) 且 模型也越过该边，就在那侧“边外一点”探测目标显示器；另一轴用光标位置。
-            const EDGE = 10;
-            const sX = currentDisplay.screenX, sY = currentDisplay.screenY;
-            const probes = [];
-            if (cursorX <= EDGE && vLeft < 0)       probes.push({ x: sX - 1,      y: sY + cursorY });
-            if (cursorX >= W - EDGE && vRight > W)   probes.push({ x: sX + W + 1,  y: sY + cursorY });
-            if (cursorY <= EDGE && vTop < 0)        probes.push({ x: sX + cursorX, y: sY - 1 });
-            if (cursorY >= H - EDGE && vBottom > H)  probes.push({ x: sX + cursorX, y: sY + H + 1 });
-
-            let targetDisplay = null, probe = null;
-            for (const p of probes) {
-                for (const d of displays) {
-                    if (d.id === currentDisplay.id) continue;
-                    if (p.x >= d.screenX && p.x < d.screenX + d.width &&
-                        p.y >= d.screenY && p.y < d.screenY + d.height) {
-                        targetDisplay = d; probe = p; break;
-                    }
-                }
-                if (targetDisplay) break;
+            const info = ipcRenderer.sendSync('get-screen-info-sync');
+            if (info?.primaryDisplay?.bounds && info?.windowBounds) {
+                return {
+                    x: info.primaryDisplay.bounds.x - info.windowBounds.x,
+                    y: info.primaryDisplay.bounds.y - info.windowBounds.y,
+                    width: info.primaryDisplay.bounds.width,
+                    height: info.primaryDisplay.bounds.height
+                };
             }
-            if (!targetDisplay) return false;
+        } catch (_) { /* 主进程未就绪时退回整窗 */ }
+        return { x: 0, y: 0, width: window.innerWidth, height: window.innerHeight };
+    }
 
-            console.log('[Live2D] 光标拖到屏幕边缘，准备切换到屏幕:', targetDisplay.id);
+    _maybeExpandPetWindow(modelX, modelY) {
+        const now = Date.now();
+        if (this._lastWindowMoveAt && now - this._lastWindowMoveAt < 200) return;
+        const edge = 40;
+        const nearEdge = modelX < edge || modelY < edge ||
+            modelX > window.innerWidth - edge || modelY > window.innerHeight - edge;
+        if (!nearEdge) return;
+        this._lastWindowMoveAt = now;
+        ipcRenderer.send('window-move', { mouseX: 0, mouseY: 0 });
+    }
 
-            const result = await window.electronScreen.moveWindowToDisplay(probe.x, probe.y);
-            if (result && result.success && !result.sameDisplay) {
-                if (result.scaleRatio && result.scaleRatio !== 1) {
-                    console.log('[Live2D] 屏幕缩放比变化:', result.scaleRatio);
-                }
-
-                // 以探测点为视觉中心，夹住可见模型完整落入目标屏（目标屏 DIP 尺寸），用 delta 落位。
-                const tw = targetDisplay.width, th = targetDisplay.height;
-                const halfVisW = (vRight - vLeft) / 2;
-                const halfVisH = (vBottom - vTop) / 2;
-                const margin = 16;
-                let cx = probe.x - targetDisplay.screenX;
-                let cy = probe.y - targetDisplay.screenY;
-                const loX = margin + halfVisW, hiX = tw - margin - halfVisW;
-                const loY = margin + halfVisH, hiY = th - margin - halfVisH;
-                cx = hiX >= loX ? Math.min(Math.max(cx, loX), hiX) : tw / 2;
-                cy = hiY >= loY ? Math.min(Math.max(cy, loY), hiY) : th / 2;
-
-                const b2 = this.model.getBounds();
-                const curCenterX = (b2.left + b2.right) / 2;
-                const curCenterY = (b2.top + b2.bottom) / 2;
-                this.model.x += cx - curCenterX;
-                this.model.y += cy - curCenterY;
-                this.updateInteractionArea();
-
-                // 保存：用“目标显示器的 DIP 尺寸”算相对位置，避免依赖跨屏后尚未稳定的 innerWidth。
-                this.saveModelPosition(tw, th);
-                console.log('[Live2D] 跨屏切换完成，模型新位置:', this.model.x, this.model.y);
-                return true;
-            }
-            return false;
-        } catch (error) {
-            console.error('[Live2D] 跨屏检测/切换出错:', error);
-            return false;
-        }
+    // 6.55 巨窗下不再整窗切屏。保留空实现，避免旧调用把窗口缩回单屏。
+    async checkAndSwitchDisplay() {
+        console.log('[Live2D] 巨窗方案不再整窗切屏');
+        return false;
     }
 
     // 若模型中心越出当前窗口，吸回窗口内（保持中心位于窗口范围内）。
@@ -538,7 +492,7 @@ class Live2DInteractionController {
         const stageH = overrideHeight || window.innerHeight || 1;
         const relativeX = this.model.x / stageW;
         const relativeY = this.model.y / stageH;
-        const isDualRight = window.innerWidth > window.screen.width * 1.2 && this.config?.ui?.screen_extend?.right;
+        const isDualRight = this._isDualRightCanvas();
         // 存储用 legacy 语义（兼容 WebUI 直接读写 config.ui.model_scale）
         const legacyScale = this.model.scale.x * LEGACY_SCALE_RATIO;
 
@@ -579,16 +533,18 @@ class Live2DInteractionController {
     // 复位到默认位置与缩放（供 HTTP /reset-model-position）
     resetModelPosition() {
         if (!this.model) return { success: false };
-        const isDualRight = window.innerWidth > window.screen.width * 1.2 && this.config?.ui?.screen_extend?.right;
-        const relX = isDualRight ? 0.825 : 0.65;
-        const relY = 0.38;
+        const primary = this._getPrimaryWindowOffset();
         const legacyScale = 0.65;
-
-        this.model.x = relX * window.innerWidth;
-        this.model.y = relY * window.innerHeight;
+        this.model.x = primary.x + primary.width * 0.65;
+        this.model.y = primary.y + primary.height * 0.38;
         this.model.scale.set(legacyScale / LEGACY_SCALE_RATIO);
         this.updateInteractionArea();
 
+        const stageW = window.innerWidth || 1;
+        const stageH = window.innerHeight || 1;
+        const isDualRight = this._isDualRightCanvas();
+        const relX = this.model.x / stageW;
+        const relY = this.model.y / stageH;
         ipcRenderer.send('save-model-position', {
             x: relX, y: relY, scale: legacyScale, dual: isDualRight,
             modelName: this._currentModelName()

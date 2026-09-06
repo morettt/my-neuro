@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "control": "electron control-main.js",
     "start-server": "node server.js"
   },
   "dependencies": {

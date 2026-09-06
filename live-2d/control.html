@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My-Neuro 控制中心</title>
+  <link rel="stylesheet" href="css/control.css">
+  <link rel="stylesheet" href="css/control-simple.css">
+  <link rel="stylesheet" href="css/control-refined.css">
+  <style>
+    /* 可见边框贴合系统窗口边缘，确保无边框窗口可以从四周缩放。 */
+    body { padding: 0; background: transparent; }
+    .window-shell { border: 0; border-radius: 25px; box-shadow: none; }
+  </style>
+</head>
+<body>
+  <main class="window-shell">
+    <header class="titlebar">
+      <div class="brand"><span class="brand-dot"></span><span id="brand-title">My-Neuro</span></div>
+      <div class="title-actions">
+        <div class="tutorial-group">
+          <button data-go="tutorial" aria-label="使用教程" title="使用教程"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16ZM20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z"/></svg></button>
+          <span>使用教程</span>
+        </div>
+        <div class="qq-group">
+          <button id="qq-group-link" aria-label="QQ群" title="QQ群"><svg class="qq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.2 10.4C5.2 12.1 4 15 4.4 17.7c.1.8.8 1.1 1.4.5l1.5-1.5M16.8 10.4c2 1.7 3.2 4.6 2.8 7.3-.1.8-.8 1.1-1.4.5l-1.5-1.5"/><path d="M7.1 10.7C7.1 5 9 2.3 12 2.3s4.9 2.7 4.9 8.4c0 6.3-1.8 10.4-4.9 10.4s-4.9-4.1-4.9-10.4Z"/><path d="M8.1 14.2c1.2.8 2.5 1.1 3.9 1.1s2.7-.3 3.9-1.1M8 10.5c2.7.9 5.3.9 8 0"/><circle cx="10" cy="7.1" r=".7" fill="currentColor" stroke="none"/><circle cx="14" cy="7.1" r=".7" fill="currentColor" stroke="none"/><path d="m10.7 9 1.3.8 1.3-.8M8.5 21.1H6.8M15.5 21.1h1.7"/></svg></button>
+          <span>QQ群</span>
+        </div>
+        <div class="github-group">
+          <button id="github-link" aria-label="打开 GitHub" title="GitHub">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          </button>
+          <span>GitHub</span>
+        </div>
+        <div class="window-actions">
+        <button data-window="minimize" title="最小化" aria-label="最小化"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10h10"/></svg></button>
+        <button data-window="maximize" title="最大化" aria-label="最大化"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="1.5"/></svg></button>
+        <button class="close" data-window="close" title="关闭" aria-label="关闭"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8M14 6l-8 8"/></svg></button>
+        </div>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="sidebar">
+        <nav>
+          <button class="nav active" data-page="home"><span>⌂</span>启动</button>
+          <button class="nav" data-page="llm"><span>✦</span>模型配置</button>
+          <button class="nav" data-page="prompts"><span>◇</span>提示词广场</button>
+          <button class="nav" data-page="plugins"><span>⬡</span>插件</button>
+          <button class="nav" data-page="history"><span>◫</span>对话记录</button>
+          <button class="nav" data-page="chat"><span>◫</span>对话设置</button>
+          <button class="nav" data-page="animation"><span>♬</span>表情与动作</button>
+          <button class="nav" data-page="services"><span>⌘</span>终端控制室</button>
+          <button class="nav" data-page="tools"><span>◇</span>工具屋</button>
+          <button class="nav" data-page="cloud"><span>☁</span>云端配置</button>
+          <button class="nav" data-page="settings"><span>⚙</span>UI设置</button>
+        </nav>
+      </aside>
+
+      <section class="content">
+        <div class="page active" id="home">
+          <div class="page-head"><div><h1>启动</h1><p>桌宠控制与运行日志</p></div></div>
+          <div class="control-bar card">
+            <div class="model-field"><input id="live2d-model" type="hidden"><div class="dropdown"><input hidden class="sr-only" id="model-dropdown-state" type="checkbox"><label for="model-dropdown-state" class="trigger"><span id="model-menu-text">当前桌宠：加载中</span></label><ul id="model-submenu" class="list webkit-scrollbar" role="list"></ul></div></div>
+            <button id="start-live2d" class="primary">▶ 启动桌宠</button>
+          </div>
+          <div class="switch-row card">
+            <div class="switch-item"><span>开启 MCP</span><label class="switch"><input id="mcp-enabled" type="checkbox"><span class="slider"></span></label></div>
+            <div class="switch-item"><span>每次对话识图</span><label class="switch"><input id="auto-vision" type="checkbox"><span class="slider"></span></label></div>
+            <div class="switch-item"><span>开启语音打断</span><label class="switch"><input id="barge-enabled" type="checkbox"><span class="slider"></span></label></div>
+          </div>
+          <div class="log-grid"><section class="card log-panel"><header>桌宠日志</header><pre id="pet-log"></pre></section><section class="card log-panel"><header><span>工具日志</span><button id="clear-logs" class="log-trash" title="清空日志" aria-label="清空日志"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6.5 7l.8 13h9.4l.8-13M10 11v5M14 11v5"/></svg></button></header><pre id="tool-log"></pre></section></div>
+        </div>
+
+        <div class="page" id="llm"><div class="page-head"><div><p class="eyebrow">MODEL</p><h1>大语言模型</h1><p>连接兼容 OpenAI 格式的模型接口。</p></div></div><div class="card form-card llm-form"><label class="llm-row"><span>API KEY</span><input id="llm-key" type="password" placeholder="sk-..."></label><label class="llm-row"><span>API URL</span><input id="llm-url" placeholder="https://api.example.com/v1"></label><div class="llm-row"><span>模型名称</span><div class="llm-model-control"><input id="llm-model" placeholder="输入或获取模型名"><button id="fetch-llm-models" type="button">获取模型</button><div id="llm-model-options" class="llm-model-options" hidden></div></div></div><label class="llm-prompt-field">系统提示词<textarea id="llm-prompt" rows="9"></textarea></label></div></div>
+        <div class="page" id="chat">
+          <div class="page-head"><div><p class="eyebrow">CHAT</p><h1>对话设置</h1></div></div>
+          <div class="chat-tabs" role="tablist"><button class="active" data-chat-tab="basic">基础设置</button><button data-chat-tab="vision">辅助视觉</button></div>
+          <section class="chat-panel active" data-chat-panel="basic">
+          <div class="card form-card two-col">
+            <div class="model-field"><span>语音语言</span><input id="tts-language" type="hidden"><div class="dropdown"><input hidden class="sr-only" id="language-dropdown-state" type="checkbox"><label for="language-dropdown-state" class="trigger"><span class="dropdown-text">请选择语言</span></label><ul class="list webkit-scrollbar" role="list"><li class="listitem"><button class="article dropdown-option" type="button" data-target="tts-language" data-value="zh">中文</button></li><li class="listitem"><button class="article dropdown-option" type="button" data-target="tts-language" data-value="en">English</button></li><li class="listitem"><button class="article dropdown-option" type="button" data-target="tts-language" data-value="ja">日本語</button></li></ul></div></div>
+            <label class="check"><input id="text-input-enabled" type="checkbox"> 文字输入框（可打字交互）</label>
+            <label class="check"><input id="ptt-enabled" type="checkbox"> 键盘语音输入（按住V键录音）</label>
+            <div class="check settings-control"><span>启用上下文限制</span><button id="context-config" class="inline-config-button" type="button" hidden>配置</button><input id="context-limit" type="checkbox" aria-label="启用上下文限制"></div>
+            <label class="check"><input id="history-enabled" type="checkbox"> 启用对话历史记忆</label>
+            <div class="check settings-control"><span>启用温度</span><button id="temperature-config" class="inline-config-button" type="button" hidden>配置</button><input id="temperature-enabled" type="checkbox" aria-label="启用温度"></div>
+            <div class="hero-actions"><button id="reset-model-position" type="button">复位皮套位置</button><button id="adjust-subtitle-position" type="button">调整字幕位置</button></div>
+          </div>
+          </section>
+          <section class="chat-panel card form-card" data-chat-panel="vision"><h3>辅助视觉模型配置</h3><label class="check"><input id="vision-enabled" type="checkbox"> 启用辅助视觉模型</label><label>API KEY<input id="vision-key" type="password"></label><label>API URL<input id="vision-url"></label><label>模型名称<input id="vision-model"></label></section>
+        </div>
+        <div class="page" id="temperature-settings">
+          <div class="page-head"><div><p class="eyebrow">CHAT</p><h1>温度配置</h1><p>调整 AI 回答的随机性和创造性。</p></div><button type="button" data-go="chat">返回对话设置</button></div>
+          <div class="card form-card"><label>温度<input id="temperature" type="number" min="0" max="2" step="0.1"></label><p class="config-note">数值越低，回答越稳定；数值越高，回答越有变化。</p></div>
+        </div>
+        <div class="page" id="context-settings">
+          <div class="page-head"><div><p class="eyebrow">CHAT</p><h1>上下文配置</h1><p>设置每次请求 AI 时保留的近期消息数量。</p></div><button type="button" data-go="chat">返回对话设置</button></div>
+          <div class="card form-card"><label>最大消息数<input id="max-messages" type="number" min="1" step="1"></label><p class="config-note">系统提示词不计入此数量，工具调用会保持完整，不会从中间截断。</p></div>
+        </div>
+        <div class="page" id="plugins">
+          <div class="plugin-tabs" role="tablist"><button class="active" data-plugin-tab="builtIn">内置插件</button><button data-plugin-tab="community">社区插件</button><button data-plugin-tab="market">插件广场</button></div>
+          <section class="plugin-panel active" data-plugin-panel="builtIn"><div class="plugin-list" id="builtin-plugin-list"></div></section>
+          <section class="plugin-panel" data-plugin-panel="community"><div class="plugin-list" id="community-plugin-list"></div></section>
+          <section class="plugin-panel" data-plugin-panel="market"><div class="plugin-market-head"><span>从插件广场安装社区插件</span><button id="refresh-plugins">刷新列表</button></div><div class="plugin-list" id="market-plugin-list"></div></section>
+          <section class="plugin-detail card" id="plugin-detail" hidden><header><button id="plugin-detail-back" class="plugin-back-button" title="返回插件列表" aria-label="返回插件列表"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><strong id="plugin-detail-title"></strong><button id="plugin-readme" hidden>使用教程</button></header><div id="plugin-detail-content"></div></section>
+        </div>
+        <div class="page" id="animation">
+          <div class="motion-tabs" role="tablist"><button class="active" data-motion-tab="singing">唱歌控制</button><button data-motion-tab="vmc">VMC</button><button data-motion-tab="expressions">表情控制</button><button data-motion-tab="actions">动作控制</button></div>
+          <section class="motion-section motion-panel card active" data-motion-panel="singing"><h2>唱歌控制</h2><div class="motion-toolbar"><button class="primary" data-motion-trigger="唱歌">开始唱歌</button><button data-motion-trigger="停止">停止唱歌</button></div></section>
+          <section class="motion-section motion-panel card" data-motion-panel="vmc"><h2>VMC 协议目标设置</h2><div class="vmc-row"><label>目标地址<input id="vmc-host" value="127.0.0.1"></label><label>端口<input id="vmc-port" type="number" value="39539"></label><button id="apply-vmc">应用地址</button><small>启用或关闭 VMC 请使用桌宠上的 VMC 按钮</small></div></section>
+          <section class="motion-section motion-panel card" data-motion-panel="expressions"><div class="motion-title"><h2>表情控制</h2><button id="reset-expressions">一键还原表情</button></div><p>将下方表情拖到对应情绪区域；点击表情可以预览。</p><div class="emotion-grid" id="expression-bindings"></div><h3>可拖拽表情</h3><div class="motion-buttons" id="expression-buttons"></div></section>
+          <section class="motion-section motion-panel card" data-motion-panel="actions"><div class="motion-title"><h2>动作控制</h2><button id="reset-actions">一键还原动作</button></div><p>将下方动作拖到对应情绪分类；点击动作可以预览。</p><div class="emotion-grid" id="action-bindings"></div><h3>未分类动作</h3><div class="motion-buttons" id="action-buttons"></div><div class="motion-pagination" id="action-pagination"></div></section>
+        </div>
+        <div class="page" id="voice"><div class="page-head"><div><p class="eyebrow">VOICE</p><h1>声音克隆</h1><p>生成本地 GPT-SoVITS 启动脚本。</p></div></div><div class="upload-grid"><button id="select-voice-model" class="upload card" type="button"><b>＋</b><strong>选择模型文件</strong><small id="voice-model-status">.pth</small></button><button id="select-voice-audio" class="upload card" type="button"><b>♫</b><strong>选择参考音频</strong><small id="voice-audio-status">.wav</small></button></div><div class="card form-card"><label>角色名称<input id="voice-character-name"></label><label>参考文本<textarea id="voice-reference-text" rows="4"></textarea></label><label>语言<select id="voice-language"><option value="zh">中文</option><option value="en">English</option><option value="ja">日本語</option></select></label><button id="generate-voice-bat" type="button">生成声音克隆脚本</button><p id="voice-bat-status" class="config-note"></p></div></div>
+        <div class="page" id="services"><div class="cloud-tabs service-tabs" role="tablist"><button class="active" data-service-tab="tts">TTS</button><button data-service-tab="asr">ASR</button><button data-service-tab="bert">BERT</button></div><div class="service-room"><section class="service-list" id="service-list"></section><section class="service-console card"><div class="service-log-tabs"><strong id="service-log-title">TTS 日志</strong><button class="service-log-clear" id="clear-service-log" title="清空当前日志" aria-label="清空当前日志">清空</button></div><pre id="service-log-output"></pre></section></div></div>
+        <div class="page" id="tools"><div class="tool-tabs"><button class="active" data-tool-tab="installed">MCP Tools</button><button data-tool-tab="market">工具广场</button></div><section class="tool-panel active" data-tool-panel="installed"><div class="tool-panel-bar"><span>本地与外部 MCP 工具</span><button id="refresh-mcp-tools">刷新列表</button></div><div id="mcp-tool-list" class="tool-card-list"></div></section><section class="tool-panel" data-tool-panel="market"><div class="tool-panel-bar"><span>可下载工具</span><button id="refresh-tool-market">刷新工具列表</button></div><div id="tool-market-list" class="tool-card-list"></div></section></div>
+        <div class="page" id="cloud">
+          <div class="page-head"><div><p class="eyebrow">CLOUD</p><h1>云端配置</h1></div></div>
+          <div class="cloud-tabs" role="tablist"><button class="active" data-cloud-tab="gateway">云端肥牛</button><button data-cloud-tab="cloud-tts">云端 TTS</button><button data-cloud-tab="cloud-asr">云端 ASR</button></div>
+          <section class="cloud-panel active card form-card" data-cloud-panel="gateway"><label class="check"><input id="gateway-enabled" type="checkbox"> 启动全云端</label><input id="gateway-url" type="hidden"><label>肥牛密钥<input id="gateway-key" type="password"></label><button id="gateway-website" type="button">🔗 获取 API KEY - 前往云端肥牛官网</button></section>
+          <section class="cloud-panel card form-card" data-cloud-panel="cloud-tts"><label>TTS 平台<select id="cloud-tts-provider"><option value="aliyun">阿里云 TTS</option><option value="volcengine">字节 TTS</option><option value="siliconflow">SiliconFlow TTS</option></select></label><label class="check"><input id="cloud-tts-master-enabled" type="checkbox"> 启用云端 TTS</label><input id="aliyun-enabled" type="checkbox" hidden><input id="volc-enabled" type="checkbox" hidden><input id="cloud-tts-enabled" type="checkbox" hidden><div class="provider-panel" data-tts-provider="aliyun"><label>API Key<input id="aliyun-key" type="password"></label><label>模型<input id="aliyun-model"></label><label>音色<input id="aliyun-voice"></label></div><div class="provider-panel" data-tts-provider="volcengine"><label>APP ID<input id="volc-appid"></label><label>Access Token<input id="volc-token" type="password"></label><label>音色类型<select id="volc-voice">
+            <option value="zh_female_vv_uranus_bigtts">vivi 2.0</option>
+            <option value="saturn_zh_female_cancan_tob">知性灿灿</option>
+            <option value="saturn_zh_female_keainvsheng_tob">可爱女生</option>
+            <option value="saturn_zh_female_tiaopigongzhu_tob">调皮公主</option>
+            <option value="saturn_zh_male_shuanglangshaonian_tob">爽朗少年</option>
+            <option value="saturn_zh_male_tiancaitongzhuo_tob">天才同桌</option>
+            <option value="zh_female_xiaohe_uranus_bigtts">小何</option>
+            <option value="zh_male_m191_uranus_bigtts">云舟</option>
+            <option value="zh_male_taocheng_uranus_bigtts">小天</option>
+            <option value="zh_male_liufei_uranus_bigtts">刘飞 2.0</option>
+            <option value="zh_female_qingxinnvsheng_uranus_bigtts">清新女声 2.0</option>
+            <option value="zh_female_cancan_uranus_bigtts">知性灿灿 2.0</option>
+            <option value="zh_female_sajiaoxuemei_uranus_bigtts">撒娇学妹 2.0</option>
+            <option value="zh_female_tianmeixiaoyuan_uranus_bigtts">甜美小源 2.0</option>
+            <option value="zh_female_tianmeitaozi_uranus_bigtts">甜美桃子 2.0</option>
+            <option value="zh_female_shuangkuaisisi_uranus_bigtts">爽快思思 2.0</option>
+            <option value="zh_female_peiqi_uranus_bigtts">佩奇猪 2.0</option>
+            <option value="zh_female_linjianvhai_uranus_bigtts">邻家女孩 2.0</option>
+            <option value="zh_male_shaonianzixin_uranus_bigtts">少年梓辛/Brayan 2.0</option>
+            <option value="zh_male_sunwukong_uranus_bigtts">猴哥 2.0</option>
+            <option value="zh_female_yingyujiaoxue_uranus_bigtts">Tina老师 2.0</option>
+            <option value="zh_female_kefunvsheng_uranus_bigtts">暖阳女声 2.0</option>
+            <option value="zh_female_xiaoxue_uranus_bigtts">儿童绘本 2.0</option>
+            <option value="zh_male_dayi_uranus_bigtts">大壹 2.0</option>
+            <option value="zh_female_mizai_uranus_bigtts">黑猫侦探社咪仔 2.0</option>
+            <option value="zh_female_jitangnv_uranus_bigtts">鸡汤女 2.0</option>
+            <option value="zh_female_meilinvyou_uranus_bigtts">魅力女友 2.0</option>
+            <option value="zh_female_liuchangnv_uranus_bigtts">流畅女声 2.0</option>
+            <option value="zh_male_ruyayichen_uranus_bigtts">儒雅逸辰 2.0</option>
+            <option value="zh_female_wenroumama_uranus_bigtts">温柔妈妈 2.0</option>
+            <option value="zh_male_jieshuoxiaoming_uranus_bigtts">解说小明 2.0</option>
+            <option value="zh_female_tvbnv_uranus_bigtts">TVB女声 2.0</option>
+            <option value="zh_male_yizhipiannan_uranus_bigtts">译制片男 2.0</option>
+            <option value="zh_female_qiaopinv_uranus_bigtts">俏皮女声 2.0</option>
+            <option value="zh_female_zhishuaiyingzi_uranus_bigtts">直率英子 2.0</option>
+            <option value="zh_male_linjiananhai_uranus_bigtts">邻家男孩 2.0</option>
+            <option value="zh_male_silang_uranus_bigtts">四郎 2.0</option>
+            <option value="zh_male_ruyaqingnian_uranus_bigtts">儒雅青年 2.0</option>
+            <option value="zh_male_qingcang_uranus_bigtts">擎苍 2.0</option>
+            <option value="zh_male_xionger_uranus_bigtts">熊二 2.0</option>
+            <option value="zh_female_yingtaowanzi_uranus_bigtts">樱桃丸子 2.0</option>
+            <option value="zh_male_wennuanahu_uranus_bigtts">温暖阿虎/Alvin 2.0</option>
+            <option value="zh_male_naiqimengwa_uranus_bigtts">奶气萌娃 2.0</option>
+            <option value="zh_female_popo_uranus_bigtts">婆婆 2.0</option>
+            <option value="zh_female_gaolengyujie_uranus_bigtts">高冷御姐 2.0</option>
+            <option value="zh_male_aojiaobazong_uranus_bigtts">傲娇霸总 2.0</option>
+            <option value="zh_male_lanyinmianbao_uranus_bigtts">懒音绵宝 2.0</option>
+            <option value="zh_male_fanjuanqingnian_uranus_bigtts">反卷青年 2.0</option>
+            <option value="zh_female_wenroushunv_uranus_bigtts">温柔淑女 2.0</option>
+            <option value="zh_female_gufengshaoyu_uranus_bigtts">古风少御 2.0</option>
+            <option value="zh_male_huolixiaoge_uranus_bigtts">活力小哥 2.0</option>
+            <option value="zh_male_baqiqingshu_uranus_bigtts">霸气青叔 2.0</option>
+            <option value="zh_male_xuanyijieshuo_uranus_bigtts">悬疑解说 2.0</option>
+            <option value="zh_female_mengyatou_uranus_bigtts">萌丫头/Cutey 2.0</option>
+            <option value="zh_female_tiexinnvsheng_uranus_bigtts">贴心女声/Candy 2.0</option>
+            <option value="zh_female_jitangmei_uranus_bigtts">鸡汤妹妹/Hope 2.0</option>
+            <option value="zh_male_cixingjieshuonan_uranus_bigtts">磁性解说男声/Morgan 2.0</option>
+            <option value="zh_male_liangsangmengzai_uranus_bigtts">亮嗓萌仔 2.0</option>
+            <option value="zh_female_kailangjiejie_uranus_bigtts">开朗姐姐 2.0</option>
+            <option value="zh_male_gaolengchenwen_uranus_bigtts">高冷沉稳 2.0</option>
+            <option value="zh_male_shenyeboke_uranus_bigtts">深夜播客 2.0</option>
+            <option value="zh_male_lubanqihao_uranus_bigtts">鲁班七号 2.0</option>
+            <option value="zh_female_jiaochuannv_uranus_bigtts">娇喘女声 2.0</option>
+            <option value="zh_female_linxiao_uranus_bigtts">林潇 2.0</option>
+            <option value="zh_female_lingling_uranus_bigtts">玲玲姐姐 2.0</option>
+            <option value="zh_female_chunribu_uranus_bigtts">春日部姐姐 2.0</option>
+            <option value="zh_male_tangseng_uranus_bigtts">唐僧 2.0</option>
+            <option value="zh_male_zhuangzhou_uranus_bigtts">庄周 2.0</option>
+            <option value="zh_male_kailangdidi_uranus_bigtts">开朗弟弟 2.0</option>
+            <option value="zh_male_zhubajie_uranus_bigtts">猪八戒 2.0</option>
+            <option value="zh_female_ganmaodianyin_uranus_bigtts">感冒电音姐姐 2.0</option>
+            <option value="zh_female_chanmeinv_uranus_bigtts">谄媚女声 2.0</option>
+            <option value="zh_female_nvleishen_uranus_bigtts">女雷神 2.0</option>
+            <option value="zh_female_qinqienv_uranus_bigtts">亲切女声 2.0</option>
+            <option value="zh_male_kuailexiaodong_uranus_bigtts">快乐小东 2.0</option>
+            <option value="zh_male_kailangxuezhang_uranus_bigtts">开朗学长 2.0</option>
+            <option value="zh_male_youyoujunzi_uranus_bigtts">悠悠君子 2.0</option>
+            <option value="zh_female_wenjingmaomao_uranus_bigtts">文静毛毛 2.0</option>
+            <option value="zh_female_zhixingnv_uranus_bigtts">知性女声 2.0</option>
+            <option value="zh_male_qingshuangnanda_uranus_bigtts">清爽男大 2.0</option>
+            <option value="zh_male_yuanboxiaoshu_uranus_bigtts">渊博小叔 2.0</option>
+            <option value="zh_male_yangguangqingnian_uranus_bigtts">阳光青年 2.0</option>
+            <option value="zh_female_qingchezizi_uranus_bigtts">清澈梓梓 2.0</option>
+            <option value="zh_female_tianmeiyueyue_uranus_bigtts">甜美悦悦 2.0</option>
+            <option value="zh_female_xinlingjitang_uranus_bigtts">心灵鸡汤 2.0</option>
+            <option value="zh_male_wenrouxiaoge_uranus_bigtts">温柔小哥 2.0</option>
+            <option value="zh_female_roumeinvyou_uranus_bigtts">柔美女友 2.0</option>
+            <option value="zh_male_dongfanghaoran_uranus_bigtts">东方浩然 2.0</option>
+            <option value="zh_female_wenrouxiaoya_uranus_bigtts">温柔小雅 2.0</option>
+            <option value="zh_male_tiancaitongsheng_uranus_bigtts">天才童声 2.0</option>
+            <option value="zh_female_wuzetian_uranus_bigtts">武则天 2.0</option>
+            <option value="zh_female_gujie_uranus_bigtts">顾姐 2.0</option>
+            <option value="zh_male_guanggaojieshuo_uranus_bigtts">广告解说 2.0</option>
+            <option value="zh_female_shaoergushi_uranus_bigtts">少儿故事 2.0</option>
+            <option value="zh_female_sophie_uranus_bigtts">魅力苏菲 2.0</option>
+            <option value="saturn_zh_male_qingxinmumu_cs_tob">清新沐沐 2.0</option>
+          </select></label><button id="volcengine-tutorial" type="button">配置教程</button></div><div class="provider-panel" data-tts-provider="siliconflow"><label>API Key<input id="cloud-key" type="password"></label><label>音色<input id="cloud-tts-voice"></label><input id="cloud-provider" type="hidden" value="siliconflow"><input id="cloud-tts-url" type="hidden"><input id="cloud-tts-model" type="hidden"><input id="cloud-tts-format" type="hidden"><input id="cloud-tts-speed" type="hidden"></div></section>
+          <section class="cloud-panel card form-card" data-cloud-panel="cloud-asr"><label>ASR 平台<select id="cloud-asr-provider"><option value="siliconflow">SiliconFlow ASR</option></select></label><label class="check"><input id="cloud-asr-master-enabled" type="checkbox"> 启用云端 ASR</label><input id="cloud-asr-enabled" type="checkbox" hidden><input id="silicon-asr-enabled" type="checkbox" hidden><div hidden><input id="cloud-asr-url"><input id="cloud-asr-appid"><input id="cloud-asr-appkey" type="password"><input id="cloud-asr-pid"></div><div class="provider-panel" data-asr-provider="siliconflow"><input id="silicon-asr-api" type="hidden"><label>API Key<input id="silicon-asr-key" type="password"></label><label>模型<select id="silicon-asr-model"><option value="Qwen/Qwen3-ASR-1.7B">Qwen3-ASR-1.7B</option><option value="TeleAI/TeleSpeechASR">TeleSpeechASR</option><option value="XingChenAGI/XingChenASR-V3.2-Ultra">XingChenASR-V3.2-Ultra</option></select></label></div></section>
+        </div>
+        <div class="page" id="settings"><div class="page-head"><div><p class="eyebrow">UI</p><h1>UI界面设置</h1></div></div><div class="card form-card"><div class="edition-status"><span>当前版本</span><strong id="edition-status">检测中</strong></div><label>开场白<input id="opening-text"></label><label>用户显示名称<input id="user-name"></label><label>AI显示名称<input id="ai-name"></label><label class="check"><input id="subtitle-enabled" type="checkbox"> 启用字幕显示</label><label class="check"><input id="hide-model" type="checkbox"> 隐藏皮套</label><button id="toggle-edition-preview">预览本地样式</button></div></div>
+        <div class="page" id="tutorial"><div class="page-head"><div><h1>使用教程</h1></div><button data-go="home">返回</button></div><div id="tutorial-content" class="card form-card"></div></div>
+        <div class="page" id="prompts"><div class="prompt-market-bar"><button id="refresh-prompts" title="刷新提示词" aria-label="刷新提示词"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 11M5.5 15A7 7 0 0 0 18 17.5l2-4.5"/></svg></button></div><div id="prompt-market-status" class="market-status">进入页面后自动获取提示词</div><div id="prompt-market-list" class="prompt-market-list"></div></div>
+        <div class="page" id="history"><div id="history-list" class="history-list card"></div><nav id="history-pagination" class="history-pagination" aria-label="对话记录分页" hidden></nav></div>
+
+        <footer><button id="save-config" class="box-button"><span class="button-face"><span>保存配置</span></span></button></footer>
+      </section>
+    </div>
+  </main>
+  <div class="qq-modal" id="qq-modal" hidden role="dialog" aria-modal="true" aria-labelledby="qq-modal-title">
+    <div class="qq-dialog">
+      <header><strong id="qq-modal-title">QQ群二维码</strong><button id="qq-modal-close" aria-label="关闭">×</button></header>
+      <div class="qq-code"><img src="qt_ui/assets/qrcode.jpg" alt="QQ群二维码"></div>
+      <p>扫码加入 QQ 群 · 按 Esc 或点击 × 关闭</p>
+    </div>
+  </div>
+  <div class="history-image-modal" id="history-image-modal" hidden role="dialog" aria-modal="true" aria-label="截图大图预览">
+    <button id="history-image-close" type="button" aria-label="关闭大图">×</button>
+    <div class="history-image-viewport" id="history-image-viewport"><img id="history-image-preview" alt="对话截图大图" draggable="false"></div>
+    <div class="history-image-toolbar"><button id="history-image-zoom-out" type="button" aria-label="缩小">−</button><span id="history-image-zoom-value">100%</span><button id="history-image-zoom-in" type="button" aria-label="放大">+</button><button id="history-image-reset" type="button">重置</button></div>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="control-renderer.js"></script>
+</body>
+</html>

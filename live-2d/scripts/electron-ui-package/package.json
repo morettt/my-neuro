@@ -1,0 +1,8 @@
+{
+  "name": "feiniu-ui-build-tools",
+  "version": "1.0.0",
+  "private": true,
+  "devDependencies": {
+    "electron-builder": "25.1.8"
+  }
+}
