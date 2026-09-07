@@ -4,6 +4,16 @@ bar.querySelector('.window-close').addEventListener('click',()=>window.installer
 
 const edition='cloud';
 const next=document.querySelector('#next');
+const openFolder=document.querySelector('#open-folder');
+openFolder.addEventListener('click',async()=>{
+  openFolder.disabled=true;
+  try{
+    const result=await window.installer.openInstalledFolder();
+    if(!result.success)throw new Error(result.message);
+  }catch(error){
+    window.alert(`无法打开程序文件夹：${error.message}`);
+  }finally{openFolder.disabled=false}
+});
 const installDir=document.querySelector('#install-dir');
 // 本地版模块列表暂时停用，保留供以后恢复：
 // const modules=['live2d','bert','tts','asr'];
@@ -34,6 +44,6 @@ window.installer.onStatus(status=>{
   if(status.type==='progress'){const pct=Math.floor(status.overall);document.querySelector('#module-track').style.setProperty('--track-progress',`${Math.max(0,Math.min(100,status.overall))}%`);document.querySelector('#percent').textContent=`${pct}%`;document.querySelector('#task').textContent=status.label}
   if(status.type==='module-status'){const node=document.querySelector(`[data-module="${status.module}"]`);if(node){node.className=`module-node ${status.status}`;node.querySelector('small').textContent=status.status==='start'?'下载中':status.status==='done'?'已完成':'失败'}}
   if(status.type==='log'){const log=document.querySelector('#log');log.textContent+=status.message+'\n';log.scrollTop=log.scrollHeight}
-  if(status.type==='done'){document.querySelector('#done-message').textContent='打开 live-2d 文件夹，双击“肥牛.exe”即可使用。';next.textContent='关闭';next.hidden=false;show('done')}
-  if(status.type==='error'){document.querySelector('#done').classList.add('error');document.querySelector('#done-icon').textContent='×';document.querySelector('#done-title').textContent='安装失败';document.querySelector('#done-message').textContent=status.message;next.textContent='关闭';next.hidden=false;show('done')}
+  if(status.type==='done'){document.querySelector('#done-message').textContent='点击“打开程序文件夹”，双击“肥牛.exe”即可使用。';openFolder.hidden=false;next.textContent='关闭';next.hidden=false;show('done')}
+  if(status.type==='error'){openFolder.hidden=true;document.querySelector('#done').classList.add('error');document.querySelector('#done-icon').textContent='×';document.querySelector('#done-title').textContent='安装失败';document.querySelector('#done-message').textContent=status.message;next.textContent='关闭';next.hidden=false;show('done')}
 });
