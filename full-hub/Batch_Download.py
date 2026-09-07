@@ -135,13 +135,14 @@ def extract_7z(archive_file, target_folder):
                 print(f"下载7z失败: {e}")
                 return False
         print('正在解压TTS模型包，这可能需要几分钟时间.......')
-        cmd = f'"{local_7z}" x "{archive_file}" -o"{target_folder}" -y'
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        # Capture bytes: 7z output may use a Windows code page even with PYTHONUTF8=1.
+        cmd = [local_7z, "x", archive_file, f"-o{target_folder}", "-y"]
+        result = subprocess.run(cmd, capture_output=True)
         if result.returncode == 0:
             print("\n解压完成!")
             return True
         else:
-            print(f"\n解压失败: {result.stderr}")
+            print("\n解压失败: " + result.stderr.decode("utf-8", errors="replace"))
             return False
     except Exception as e:
         print(f"解压过程中出错: {e}")
