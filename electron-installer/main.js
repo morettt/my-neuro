@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const https = require('node:https');
@@ -72,6 +72,22 @@ async function resolveLatestLive2D(log, fetchPage = fetchReleasePage) {
 }
 let mainWindow;
 let installing = false;
+let completedProgramDir = null;
+
+async function openInstalledFolder() {
+  try {
+    if (!completedProgramDir) throw new Error('请等待安装成功后再打开程序文件夹');
+    if (!fs.existsSync(completedProgramDir)) throw new Error('程序文件夹不存在，可能已被移动或删除');
+    const executable = path.join(completedProgramDir, '肥牛.exe');
+    if (fs.existsSync(executable)) {
+      shell.showItemInFolder(executable);
+    } else {
+      const error = await shell.openPath(completedProgramDir);
+      if (error) throw new Error(error);
+    }
+    return {success:true};
+  } catch (error) { return {success:false,message:error.message}; }
+}
 
 function defaultInstallDir() {
   const localAppData = process.env.LOCALAPPDATA || path.join(app.getPath('home'), 'AppData', 'Local');
@@ -280,6 +296,7 @@ async function installLive2D(installDir, log, release) {
 }
 
 async function install(request) {
+  completedProgramDir = null;
   // 安装器现在固定使用云端版。旧版版本判断保留供以后恢复：
   // const edition = request?.edition === 'cloud' ? 'cloud' : 'local';
   // const components = Array.isArray(request?.components) ? request.components : [];
@@ -314,6 +331,7 @@ async function install(request) {
   await installLive2D(installDir, log, release);
   send({type:'progress',overall:100,label:'云端版安装完成'});
   log('云端版安装成功');
+  completedProgramDir = path.join(installDir, 'live-2d');
   send({type:'done',logPath});
   return;
 
@@ -446,6 +464,7 @@ ipcMain.handle('choose-install-dir', (_event, currentDir) => {
 });
 ipcMain.on('window-minimize', () => mainWindow?.minimize());
 ipcMain.on('window-close', () => mainWindow?.close());
+ipcMain.handle('open-installed-folder', openInstalledFolder);
 ipcMain.handle('start-install', async (_event, request) => {
   if (installing) return {accepted:false};
   installing = true;
