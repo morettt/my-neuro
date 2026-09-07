@@ -14,12 +14,62 @@ const APP_URLS = [
   'https://hk.gh-proxy.org/https://github.com/morettt/my-neuro/archive/refs/tags/vv1.0.zip',
   'https://github.com/morettt/my-neuro/archive/refs/tags/vv1.0.zip'
 ];
-const LIVE2D_VERSION = 'v6.6.2';
-const LIVE2D_URLS = [
-  `https://gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/${LIVE2D_VERSION}/live-2d.zip`,
-  `https://hk.gh-proxy.org/https://github.com/morettt/my-neuro/releases/download/${LIVE2D_VERSION}/live-2d.zip`,
-  `https://github.com/morettt/my-neuro/releases/download/${LIVE2D_VERSION}/live-2d.zip`
-];
+const RELEASES_API = 'https://api.github.com/repos/morettt/my-neuro/releases';
+
+function fetchReleasePage(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, {headers: {
+      'User-Agent': 'My-Neuro-Installer/1.0',
+      'Accept': 'application/vnd.github+json',
+      'Cache-Control': 'no-cache'
+    }}, response => {
+      if (response.statusCode !== 200) {
+        response.resume();
+        reject(new Error(`查询最新版本失败（HTTP ${response.statusCode}）${[403,429].includes(response.statusCode) ? '，GitHub 可能限制了请求频率，请稍后重试' : ''}`));
+        return;
+      }
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { body += chunk; });
+      response.on('error', reject);
+      response.on('aborted', () => reject(new Error('查询最新版本时连接中断')));
+      response.on('end', () => {
+        try {
+          const releases = JSON.parse(body);
+          if (!Array.isArray(releases)) throw new Error('发布列表格式错误');
+          resolve(releases);
+        } catch (error) { reject(new Error(`无法解析 GitHub 发布信息：${error.message}`)); }
+      });
+    });
+    const timer = setTimeout(() => req.destroy(new Error('查询最新版本超时，请检查网络后重试')), 20000);
+    req.on('close', () => clearTimeout(timer));
+    req.on('error', reject);
+  });
+}
+
+async function resolveLatestLive2D(log, fetchPage = fetchReleasePage) {
+  send({type:'progress',overall:0,label:'正在查询最新正式版本…'});
+  log('正在查询 GitHub 最新正式版本');
+  const candidates = [];
+  // 按发布时间选择，避免安装器 EXE、预发布以及列表排序影响结果。
+  for (let page = 1; ; page += 1) {
+    const releases = await fetchPage(`${RELEASES_API}?per_page=100&page=${page}&check=${Date.now()}`);
+    for (const release of releases) {
+      if (release.draft || release.prerelease || !release.tag_name || !Number.isFinite(Date.parse(release.published_at))) continue;
+      const asset = release.assets?.find(item => item.name === 'live-2d.zip' && item.state === 'uploaded' && item.size > 0);
+      if (!asset) continue;
+      const url = asset.browser_download_url;
+      if (typeof url !== 'string' || !url.startsWith('https://github.com/morettt/my-neuro/releases/download/')) continue;
+      candidates.push({version:release.tag_name, publishedAt:release.published_at, url});
+    }
+    if (releases.length < 100) break;
+  }
+  candidates.sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
+  const latest = candidates[0];
+  if (!latest) throw new Error('未找到包含 live-2d.zip 的正式发布，请确认发布附件已上传完成');
+  log(`最新正式版本：${latest.version}（${latest.publishedAt}）`);
+  return {...latest, urls:[`https://gh-proxy.org/${latest.url}`, `https://hk.gh-proxy.org/${latest.url}`, latest.url]};
+}
 let mainWindow;
 let installing = false;
 
@@ -190,7 +240,7 @@ async function deploySource(installDir, log) {
   log('程序源码部署完成');
 }
 
-async function installLive2D(installDir, log) {
+async function installLive2D(installDir, log, release) {
   const archive = path.join(installDir, 'live-2d.zip');
   const staging = path.join(installDir, 'live-2d-temp');
   const target = path.join(installDir, 'live-2d');
@@ -198,17 +248,17 @@ async function installLive2D(installDir, log) {
   let downloaded = false;
   try {
     send({type:'module-status',status:'start',module:'live2d'});
-    const live2dUrls = await rankDownloadUrls(LIVE2D_URLS, log, 'Live2D');
+    const live2dUrls = await rankDownloadUrls(release.urls, log, 'Live2D');
     for (let index = 0; index < live2dUrls.length; index += 1) {
       try {
         if (fs.existsSync(archive)) fs.rmSync(archive, {force:true});
-        const sourceNumber = LIVE2D_URLS.indexOf(live2dUrls[index]) + 1;
-        log(`正在从下载源 ${sourceNumber}/3 下载 Live2D ${LIVE2D_VERSION}`);
-        await download(live2dUrls[index], archive, {start:28,span:62,label:'下载 Live2D',timeoutMs:10000});
+        const sourceNumber = release.urls.indexOf(live2dUrls[index]) + 1;
+        log(`正在从下载源 ${sourceNumber}/3 下载 Live2D ${release.version}`);
+        await download(live2dUrls[index], archive, {start:28,span:62,label:`下载 Live2D ${release.version}`,timeoutMs:10000});
         downloaded = true;
         break;
       } catch (error) {
-        log(`Live2D 下载源 ${LIVE2D_URLS.indexOf(live2dUrls[index]) + 1} 失败: ${error.message}`);
+        log(`Live2D 下载源 ${release.urls.indexOf(live2dUrls[index]) + 1} 失败: ${error.message}`);
       }
     }
     if (!downloaded) throw new Error('所有 Live2D 下载源均失败');
@@ -218,7 +268,7 @@ async function installLive2D(installDir, log) {
     if (!fs.readdirSync(staging).length) throw new Error('Live2D 压缩包解压后为空');
     if (fs.existsSync(target)) fs.rmSync(target, {recursive:true,force:true});
     fs.renameSync(staging, target);
-    log(`Live2D ${LIVE2D_VERSION} 安装完成`);
+    log(`Live2D ${release.version} 安装完成`);
     send({type:'module-status',status:'done',module:'live2d'});
   } catch (error) {
     send({type:'module-status',status:'fail',module:'live2d'});
@@ -251,6 +301,7 @@ async function install(request) {
   log(`安装根目录: ${installDir}`);
   // 本地版日志，暂时停用：log(`模型保存目录: ${modelRoot}`);
 
+  const release = await resolveLatestLive2D(log);
   try {
     await deploySource(installDir, log);
   } catch (error) {
@@ -260,7 +311,7 @@ async function install(request) {
     if (fs.existsSync(sourceStaging)) fs.rmSync(sourceStaging, {recursive:true,force:true});
     throw error;
   }
-  await installLive2D(installDir, log);
+  await installLive2D(installDir, log, release);
   send({type:'progress',overall:100,label:'云端版安装完成'});
   log('云端版安装成功');
   send({type:'done',logPath});
