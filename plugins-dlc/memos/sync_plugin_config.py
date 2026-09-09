@@ -37,12 +37,29 @@ if llm:
         if llm.get(key):
             llm_config[key] = llm.get(key)
 
-# 同步 Embedding 配置
-backend.setdefault('embedding', {}).update({
-    'use_api':        get_val(cfg, 'use_api_embedding') is True,
-    'api_model':      get_val(cfg, 'api_embedding_model') or 'text-embedding-3-large',
-    'api_dimensions': get_val(cfg, 'api_embedding_dimensions') or 1024
-})
+# 同步 Embedding / 重排序提供方（与插件 index.js 的 buildBackendEmbeddingConfig 对齐）
+embedding_fields = get_fields(cfg, 'backend_embedding')
+if embedding_fields:
+    provider = 'api' if embedding_fields.get('provider') == 'api' else 'local'
+    base_url = (embedding_fields.get('api_base_url') or 'https://api.siliconflow.cn/v1').strip()
+    api_key = (embedding_fields.get('api_key') or '').strip()
+    embed_model = (embedding_fields.get('embedding_model') or 'BAAI/bge-m3').strip()
+    rerank_model = (embedding_fields.get('rerank_model') or 'BAAI/bge-reranker-v2-m3').strip()
+    embedding = backend.setdefault('embedding', {})
+    embedding['provider'] = provider
+    embedding['use_api'] = provider == 'api'
+    embedding['api_model'] = embed_model
+    embedding['api_dimensions'] = embedding.get('api_dimensions') or 1024
+    embedding_api = embedding.setdefault('api', {})
+    embedding_api['base_url'] = base_url
+    embedding_api['model'] = embed_model
+    embedding_api['api_key'] = api_key
+    search_cfg = backend.setdefault('search', {})
+    search_cfg['reranker_provider'] = provider
+    reranker_api = search_cfg.setdefault('reranker_api', {})
+    reranker_api['base_url'] = base_url
+    reranker_api['model'] = rerank_model
+    reranker_api['api_key'] = api_key
 
 # 同步检索配置
 search = get_fields(cfg, 'backend_search')

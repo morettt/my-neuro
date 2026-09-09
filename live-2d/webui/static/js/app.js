@@ -2331,6 +2331,17 @@ function createConfigField(key, field) {
             inputElement.type = 'checkbox';
             inputElement.checked = field.value !== undefined ? field.value : field.default;
             break;
+
+        case 'select':
+            inputElement = document.createElement('select');
+            (field.options || []).forEach((opt) => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.label || opt.value;
+                inputElement.appendChild(option);
+            });
+            inputElement.value = field.value !== undefined ? field.value : field.default;
+            break;
             
         case 'object':
             // 处理嵌套对象

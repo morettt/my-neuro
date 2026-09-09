@@ -34,6 +34,8 @@
 | 启用 BM25 混合检索 | 开启向量 + 关键词双路检索，提升召回率 |
 | BM25 权重 | BM25 在混合检索中的占比，默认 0.3 |
 | 启用知识图谱增强 | 利用实体关系图谱扩展检索结果 |
+| 运行方式（本地 / API） | 向量模型和重排序提供方。默认本地 bge-m3；选 API 时调用硅基流动同一模型，不占显存，需重启 `4.MEMOS-API.bat` |
+| API 地址 / Key / 模型名 | 仅 API 模式使用。默认地址 `https://api.siliconflow.cn/v1`，模型必须是 `BAAI/bge-m3`，一般不要改 |
 | 自动实体提取 | 添加记忆时提取人名、地点等实体到知识图谱 |
 | 图片记忆 | 启用图片上传、截图保存等功能 |
 | 图片自动描述 | 上传图片时自动用 LLM 生成描述文本 |
@@ -86,7 +88,7 @@ memos_system\start_memos.ps1
 - **向量存储**：Qdrant（本地嵌入式）
 - **知识图谱**：NetworkX（轻量图存储）
 - **混合检索**：向量相似度 + BM25 关键词 + 图谱增强
-- **Embedding**：SentenceTransformer（本地模型）
+- **Embedding**：默认本地 SentenceTransformer（`full-hub/rag-hub` 的 bge-m3）；也可在插件里改成硅基流动 API，模型仍是 `BAAI/bge-m3`，不用重建记忆库
 - **记忆处理**：LLM 自动总结、去重、合并、分类
 
 ### Web 管理界面

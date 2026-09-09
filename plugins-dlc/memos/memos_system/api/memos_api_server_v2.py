@@ -40,6 +40,12 @@ from datetime import datetime, timedelta
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
+_MEMOS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _MEMOS_ROOT not in sys.path:
+    sys.path.insert(0, _MEMOS_ROOT)
+
+from utils.embedding_provider import apply_embedding_env_overrides, build_embedder, redact_secret
+
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -164,6 +170,10 @@ def _apply_llm_env_overrides(loaded_config: Dict[str, Any]) -> Dict[str, Any]:
 
 # 全局变量
 embedding_model = None
+embedding_info = None
+embedding_env_overrides = []
+embedding_ready = False
+embedding_fingerprint_checked = False
 qdrant_client = None
 neo4j_client = None
 config = None
@@ -511,6 +521,7 @@ async def startup_event():
     global embedding_model, qdrant_client, neo4j_client, config
     global llm_config, full_config, bm25_searcher, memory_store_backup
     global reranker, memory_evolution, evolution_loop_task, last_evolution_completed_at
+    global embedding_info, embedding_env_overrides, embedding_ready, embedding_fingerprint_checked
 
     print("=" * 60)
     print("  [启动] MemOS 服务（完整集成版 v2.0）")
@@ -525,6 +536,7 @@ async def startup_event():
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
                 _apply_llm_env_overrides(config)
+                embedding_env_overrides = apply_embedding_env_overrides(config)
                 full_config = config
                 llm_config = config.get('llm', {}).get('config', {})
 
@@ -535,21 +547,65 @@ async def startup_event():
         else:
             print(f"[警告] 配置文件不存在，使用默认配置")
             config = {}
+            embedding_env_overrides = apply_embedding_env_overrides(config)
 
-        # 2. 加载 Embedding 模型
-        print("[加载] Embedding 模型...")
-        from sentence_transformers import SentenceTransformer
-        import torch
-
-        model_path = config.get('embedding', {}).get('model_path', '../full-hub/rag-hub')
-        model_path = _resolve_runtime_path(model_path)
-
-        embedding_model = SentenceTransformer(model_path)
-        if torch.cuda.is_available():
-            embedding_model = embedding_model.to('cuda')
-            print("[OK] Embedding 模型已加载 (GPU)")
+        # 2. 加载 Embedding 模型（本地 SentenceTransformer 或远程 API）
+        base_dir = str(MEMOS_SYSTEM_ROOT)
+        embedding_model, embedding_info = build_embedder(config, base_dir)
+        embedding_ready = embedding_model is not None
+        embedding_fingerprint_checked = False
+        if embedding_env_overrides:
+            print(f"[信息] 以下向量配置来自环境变量: {', '.join(embedding_env_overrides)}")
+        if embedding_info.get('provider') == 'api':
+            print(f"[加载] Embedding 提供方: api ({embedding_info.get('model')} @ {embedding_info.get('base_url')})")
         else:
-            print("[OK] Embedding 模型已加载 (CPU)")
+            print(f"[加载] Embedding 提供方: local ({embedding_info.get('model_path')})")
+            if embedding_info.get('device') == 'cuda':
+                print("[OK] Embedding 模型已加载 (GPU)")
+            else:
+                print("[OK] Embedding 模型已加载 (CPU)")
+        if embedding_info.get('configured_provider') == 'api' and embedding_info.get('provider') == 'local':
+            print("[警告] 向量提供方设为 api 但未配置密钥，本次按本地模型运行（会占用显存）。请在 MemOS 插件设置里填写 API Key 后重启 4.MEMOS-API.bat")
+
+        if getattr(embedding_model, 'provider', 'local') == 'api':
+            expected_dim = int((config.get('embedding') or {}).get('vector_size', 1024))
+            try:
+                probe = embedding_model.encode("启动自检")
+                probe_list = probe.tolist() if hasattr(probe, 'tolist') else list(probe)
+                if len(probe_list) != expected_dim:
+                    print(f"[错误] 远程向量维度 {len(probe_list)} 与配置 {expected_dim} 不一致，为保护现有记忆已禁用向量模型")
+                    embedding_model = None
+                    embedding_ready = False
+                else:
+                    print(f"[OK] Embedding API 自检通过，维度 {expected_dim}")
+                    api_cfg = (config.get('embedding') or {}).get('api') or {}
+                    if api_cfg.get('fingerprint_check', True):
+                        ref_path = os.path.join(base_dir, "data", "embedding_reference.json")
+                        if os.path.exists(ref_path):
+                            with open(ref_path, 'r', encoding='utf-8') as rf:
+                                ref = json.load(rf)
+                            min_cos = 1.0
+                            for item in ref.get('probes') or []:
+                                remote_vec = embedding_model.encode(item.get('text') or '')
+                                remote_list = remote_vec.tolist() if hasattr(remote_vec, 'tolist') else list(remote_vec)
+                                local_vec = item.get('vector') or []
+                                score = float(np.dot(remote_list, local_vec) / (
+                                    (np.linalg.norm(remote_list) * np.linalg.norm(local_vec)) or 1.0
+                                ))
+                                min_cos = min(min_cos, score)
+                            threshold = float(api_cfg.get('fingerprint_min_cosine', 0.98))
+                            embedding_fingerprint_checked = True
+                            if min_cos < threshold:
+                                print(f"[错误] 远程模型与本地向量空间不一致（最低余弦 {min_cos:.4f}），已禁用向量模型")
+                                embedding_model = None
+                                embedding_ready = False
+                            else:
+                                print(f"[OK] 向量空间指纹校验通过，最低余弦 {min_cos:.4f}")
+                        else:
+                            print("[警告] 未找到 data/embedding_reference.json，跳过向量空间指纹校验")
+            except Exception as e:
+                print(f"[警告] Embedding API 自检失败: {redact_secret(e)}")
+                embedding_ready = False
 
         # 3. 初始化 Qdrant
         print("[初始化] Qdrant 向量数据库...")
@@ -679,18 +735,37 @@ async def startup_event():
             print("[初始化] CrossEncoder 重排序器...")
             try:
                 from utils.search_utils import Reranker
-                reranker_path = _prepare_reranker_model(search_config)
-                if reranker_path:
-                    reranker = Reranker(reranker_path)
-                    if reranker.is_available():
-                        print(f"[OK] 重排序器已就绪: {reranker_path}")
+                shared_api_key = str(((config.get('embedding') or {}).get('api') or {}).get('api_key') or '')
+                reranker_provider = str(search_config.get('reranker_provider') or 'local').strip().lower()
+                wants_api = reranker_provider == 'api' or (
+                    getattr(embedding_model, 'provider', 'local') == 'api' and bool(shared_api_key)
+                )
+                if wants_api and shared_api_key:
+                    search_for_rerank = dict(search_config)
+                    search_for_rerank['reranker_provider'] = 'api'
+                    reranker = Reranker.from_config(
+                        search_for_rerank,
+                        str(MEMOS_SYSTEM_ROOT),
+                        shared_api_key=shared_api_key
+                    )
+                    if reranker and reranker.is_available():
+                        print(f"[OK] 重排序器已就绪: API ({((search_for_rerank.get('reranker_api') or {}).get('model')) or 'BAAI/bge-reranker-v2-m3'})")
                     else:
                         print("[警告] 重排序器不可用，检索将回退粗排")
                         reranker = None
                 else:
-                    reranker = None
+                    reranker_path = _prepare_reranker_model(search_config)
+                    if reranker_path:
+                        reranker = Reranker(reranker_path)
+                        if reranker.is_available():
+                            print(f"[OK] 重排序器已就绪: {reranker_path}")
+                        else:
+                            print("[警告] 重排序器不可用，检索将回退粗排")
+                            reranker = None
+                    else:
+                        reranker = None
             except Exception as e:
-                print(f"[警告] 重排序器初始化失败，回退粗排: {e}")
+                print(f"[警告] 重排序器初始化失败，回退粗排: {redact_secret(e)}")
                 reranker = None
         else:
             print("[信息] 重排序器未启用")
@@ -1017,6 +1092,17 @@ async def shutdown_event():
         except:
             pass
 
+    if embedding_model is not None and hasattr(embedding_model, 'close'):
+        try:
+            embedding_model.close()
+        except Exception:
+            pass
+    if reranker is not None and getattr(reranker, 'model', None) is not None and hasattr(reranker.model, 'close'):
+        try:
+            reranker.model.close()
+        except Exception:
+            pass
+
     print("[OK] MemOS 服务已关闭")
 
 
@@ -1124,6 +1210,76 @@ def encode_text(text: str) -> List[float]:
     if embedding_model:
         return embedding_model.encode([text])[0].tolist()
     return []
+
+
+async def encode_text_async(text: str) -> List[float]:
+    """API 模式下把同步网络调用放到线程池，避免堵住事件循环。"""
+    if getattr(embedding_model, 'provider', 'local') == 'api':
+        return await asyncio.to_thread(encode_text, text)
+    return encode_text(text)
+
+
+async def rerank_async(query: str, candidates: List[Dict[str, Any]], top_k: int):
+    if getattr(getattr(reranker, 'model', None), 'provider', 'local') == 'api':
+        return await asyncio.to_thread(reranker.rerank, query, candidates, 'content', top_k)
+    return reranker.rerank(query, candidates, top_k=top_k)
+
+
+def _embedding_health_payload() -> Dict[str, Any]:
+    info = embedding_info or {}
+    provider = info.get('provider') or getattr(embedding_model, 'provider', 'local')
+    snap = {}
+    if embedding_model is not None and hasattr(embedding_model, 'health_snapshot'):
+        try:
+            snap = embedding_model.health_snapshot() or {}
+        except Exception:
+            snap = {}
+    payload = {
+        "provider": provider,
+        "configured_provider": info.get('configured_provider', provider),
+        "warning": info.get('warning'),
+        "model": info.get('model') if provider == 'api' else info.get('model_path'),
+        "base_url": info.get('base_url') if provider == 'api' else None,
+        "dimension": int(((config or {}).get('embedding') or {}).get('vector_size', 1024)),
+        "ready": bool(embedding_ready and embedding_model is not None),
+        "fingerprint_checked": bool(embedding_fingerprint_checked),
+        "env_overrides": list(embedding_env_overrides or []),
+        "consecutive_failures": snap.get('consecutive_failures', 0),
+        "total_calls": snap.get('total_calls', 0),
+        "total_failures": snap.get('total_failures', 0),
+        "last_ok_at": snap.get('last_ok_at'),
+        "last_error": snap.get('last_error'),
+        "last_latency_ms": snap.get('last_latency_ms'),
+        "avg_latency_ms": snap.get('avg_latency_ms'),
+    }
+    return payload
+
+
+def _reranker_health_payload() -> Dict[str, Any]:
+    search = (config or {}).get('search') or {}
+    snap = {}
+    if reranker and getattr(reranker, 'model', None) is not None and hasattr(reranker.model, 'health_snapshot'):
+        try:
+            snap = reranker.model.health_snapshot() or {}
+        except Exception:
+            snap = {}
+    provider = getattr(reranker, 'provider', None) if reranker else None
+    model_name = None
+    if reranker:
+        if provider == 'api':
+            model_name = (search.get('reranker_api') or {}).get('model') or snap.get('model')
+        else:
+            model_name = reranker.model_path
+    return {
+        "enabled": bool(search.get('enable_reranker')),
+        "provider": provider,
+        "model": model_name,
+        "available": bool(reranker and reranker.is_available()),
+        "circuit_open": bool(snap.get('circuit_open', False)),
+        "consecutive_failures": snap.get('consecutive_failures', 0),
+        "total_calls": snap.get('total_calls', 0),
+        "total_failures": snap.get('total_failures', 0),
+    }
 
 
 def get_storage():
@@ -1654,7 +1810,9 @@ async def health_check():
         "model_loaded": embedding_model is not None,
         "qdrant_available": qdrant_client is not None and qdrant_client.is_available(),
         "neo4j_available": neo4j_client is not None and neo4j_client.is_available(),
-        "memory_count": memory_count
+        "memory_count": memory_count,
+        "embedding": _embedding_health_payload(),
+        "reranker": _reranker_health_payload(),
     }
 
 
@@ -1740,7 +1898,7 @@ async def add_memory(request: AddMemoryRequest):
                     continue
 
                 # 生成向量
-                vector = encode_text(content)
+                vector = await encode_text_async(content)
 
                 # 去重检查
                 if qdrant_client and qdrant_client.is_available():
@@ -1941,7 +2099,7 @@ async def add_memory_raw(request: AddRawMemoryRequest):
                 memory_type = "general"
 
             if content and len(content) > 5:
-                vector = encode_text(content)
+                vector = await encode_text_async(content)
 
                 # 去重
                 if qdrant_client and qdrant_client.is_available():
@@ -2004,6 +2162,22 @@ async def add_memory_raw(request: AddRawMemoryRequest):
 
 @app.post("/search")
 async def search_memory(request: SearchMemoryRequest):
+    """搜索记忆。API 模式下整次检索在线程里跑，避免堵住 /health。"""
+    if getattr(embedding_model, 'provider', 'local') == 'api':
+        try:
+            return await asyncio.to_thread(_search_memory_in_thread, request)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(redact_secret(e)))
+    return await _search_memory_core(request)
+
+
+def _search_memory_in_thread(request: SearchMemoryRequest):
+    return asyncio.run(_search_memory_core(request))
+
+
+async def _search_memory_core(request: SearchMemoryRequest):
     """搜索记忆
 
     支持功能：
@@ -2388,7 +2562,7 @@ async def search_memory(request: SearchMemoryRequest):
                         item['final_score'] = item['rerank_score']
                 reranker_used = True
             except Exception as e:
-                print(f"[警告] 重排序失败，回退粗排: {e}")
+                print(f"[警告] 重排序失败，回退粗排: {redact_secret(e)}")
                 results = results[:request.top_k]
         else:
             results = results[:request.top_k]
@@ -2592,6 +2766,8 @@ async def get_statistics():
             stats["deleted_count"] = qdrant_client.count_memories(status='deleted')
 
         stats["evolution"] = get_evolution_status_snapshot()
+        stats["embedding"] = _embedding_health_payload()
+        stats["reranker"] = _reranker_health_payload()
 
         if neo4j_client and neo4j_client.is_available():
             graph_stats = neo4j_client.get_stats()
