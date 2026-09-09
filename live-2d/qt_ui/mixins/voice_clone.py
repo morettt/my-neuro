@@ -76,14 +76,18 @@ class VoiceCloneMixin:
         platform_row = QHBoxLayout()
         platform_row.addWidget(QLabel("TTS 平台："))
         self.ui.comboBox_cloud_tts_provider = QComboBox()
-        self.ui.comboBox_cloud_tts_provider.addItem("阿里云 TTS", "aliyun")
-        self.ui.comboBox_cloud_tts_provider.addItem("字节 TTS", "volcengine")
+        self.ui.comboBox_cloud_tts_provider.addItem("阿里云", "aliyun")
+        self.ui.comboBox_cloud_tts_provider.addItem("字节", "volcengine")
         self.ui.comboBox_cloud_tts_provider.addItem("SiliconFlow TTS", "siliconflow")
+        # 保留平台索引和旧配置兼容，仅隐藏下拉入口并禁止键盘选择。
+        self.ui.comboBox_cloud_tts_provider.view().setRowHidden(2, True)
+        self.ui.comboBox_cloud_tts_provider.model().item(2).setEnabled(False)
         platform_row.addWidget(self.ui.comboBox_cloud_tts_provider, 1)
-        layout.addLayout(platform_row)
 
         self.ui.checkBox_cloud_tts_provider_enabled = QCheckBox("启用云端 TTS")
-        layout.addWidget(self.ui.checkBox_cloud_tts_provider_enabled)
+        platform_row.addSpacing(20)
+        platform_row.addWidget(self.ui.checkBox_cloud_tts_provider_enabled)
+        layout.addLayout(platform_row)
 
         self.ui.stackedWidget_cloud_tts_provider = QStackedWidget()
 
@@ -174,12 +178,13 @@ class VoiceCloneMixin:
         platform_row.addWidget(QLabel("ASR 平台："))
         self.ui.comboBox_cloud_asr_provider = QComboBox()
         self.ui.comboBox_cloud_asr_provider.addItem("百度流式 ASR", "baidu")
-        self.ui.comboBox_cloud_asr_provider.addItem("SiliconFlow ASR", "siliconflow")
+        self.ui.comboBox_cloud_asr_provider.addItem("硅基流动", "siliconflow")
         platform_row.addWidget(self.ui.comboBox_cloud_asr_provider, 1)
-        layout.addLayout(platform_row)
 
         self.ui.checkBox_cloud_asr_provider_enabled = QCheckBox("启用云端 ASR")
-        layout.addWidget(self.ui.checkBox_cloud_asr_provider_enabled)
+        platform_row.addSpacing(20)
+        platform_row.addWidget(self.ui.checkBox_cloud_asr_provider_enabled)
+        layout.addLayout(platform_row)
 
         self.ui.stackedWidget_cloud_asr_provider = QStackedWidget()
 
@@ -210,7 +215,7 @@ class VoiceCloneMixin:
         form.addRow("API Key：", self.ui.lineEdit_siliconflow_asr_key)
 
         self.ui.lineEdit_siliconflow_asr_model = QLineEdit()
-        self.ui.lineEdit_siliconflow_asr_model.setPlaceholderText("TeleAI/TeleSpeechASR")
+        self.ui.lineEdit_siliconflow_asr_model.setPlaceholderText("XingChenAGI/XingChenASR-V3.2-Ultra")
         form.addRow("模型：", self.ui.lineEdit_siliconflow_asr_model)
 
         self.ui.stackedWidget_cloud_asr_provider.addWidget(siliconflow_page)

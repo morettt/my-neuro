@@ -75,7 +75,7 @@ function cleanPetLog(line) {
   if (/插件热加载监听已启动|\[Plugin:core_memory_injector\].*(?:不存在，跳过加载|插件已启动)|\[Plugin:dawn_dusk_line\].*已启动|\[Plugin:user_profile\].*(?:插件已启动|MemOS 不可用)|\[MotionDirector\]\s*(?:body|face)\s*失败，保留本地编舞|对话模型[：:].*提供商|配置文件加载成功|AI回复中/.test(line)) return null;
   if (/已将内容发送给AI/.test(line)) return '消息已发送给 AI';
   const modelMatch = line.match(/已加载\s*\d+\s*个\s*LLM\s*提供商[^\n]*?当前模型[：:]\s*([^）)\s]+)/i);
-  return modelMatch ? `当前使用模型：${modelMatch[1]}` : line;
+  return modelMatch ? `当前使用模型：${modelMatch[1]}` : line.replace(/\[Plugin:[^\]\r\n]+\][ \t]*/g, '');
 }
 
 function pumpRuntimeLog(flush = false) {

@@ -369,7 +369,7 @@ function appendNewLogs(logType, newLogs) {
         const level = classifyLogLevel(log);
         const logEntry = document.createElement('div');
         logEntry.className = 'log-entry log-' + level;
-        logEntry.textContent = log;  // 直接使用日志内容，不添加额外时间戳
+        logEntry.textContent = String(log).replace(/\[Plugin:[^\]\r\n]+\][ \t]*/g, '');
         logOutput.appendChild(logEntry);
     });
 

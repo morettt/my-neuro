@@ -307,13 +307,11 @@ class SettingsMixin:
         self.ui.lineEdit_volcengine_tts_appid.setText(volcengine_tts.get('appid', ''))
         self.ui.lineEdit_volcengine_tts_access_token.setText(volcengine_tts.get('access_token', ''))
         self.ui.lineEdit_volcengine_tts_voice_type.setText(volcengine_tts.get('voice_type', 'saturn_zh_female_keainvsheng_tob'))
-        # 与实际运行优先级一致：字节 > 阿里云 > SiliconFlow。
+        # 界面仅展示可选平台，旧 SiliconFlow 配置仍由原控件保留。
         if volcengine_tts.get('enabled', False):
             tts_provider_index = 1
         elif aliyun_tts.get('enabled', False):
             tts_provider_index = 0
-        elif cloud_tts.get('enabled', False):
-            tts_provider_index = 2
         else:
             tts_provider_index = 0
         self.ui.comboBox_cloud_tts_provider.setCurrentIndex(tts_provider_index)
@@ -322,7 +320,6 @@ class SettingsMixin:
         self.ui.checkBox_cloud_tts_provider_enabled.setChecked(
             volcengine_tts.get('enabled', False)
             or aliyun_tts.get('enabled', False)
-            or cloud_tts.get('enabled', False)
         )
         self.ui.checkBox_cloud_tts_provider_enabled.blockSignals(False)
 
@@ -341,7 +338,7 @@ class SettingsMixin:
             'api', 'https://api.siliconflow.cn/v1/audio/transcriptions'))
         self.ui.lineEdit_siliconflow_asr_key.setText(siliconflow_asr.get('key', ''))
         self.ui.lineEdit_siliconflow_asr_model.setText(siliconflow_asr.get(
-            'model', 'TeleAI/TeleSpeechASR'))
+            'model') or 'XingChenAGI/XingChenASR-V3.2-Ultra')
         # 自动显示当前启用的平台；都未启用时默认显示百度。
         provider_index = 1 if siliconflow_asr.get('enabled', False) else 0
         self.ui.comboBox_cloud_asr_provider.setCurrentIndex(provider_index)
@@ -484,7 +481,7 @@ class SettingsMixin:
         current_config['cloud']['siliconflow_asr']['key'] = self.ui.lineEdit_siliconflow_asr_key.text().strip()
         current_config['cloud']['siliconflow_asr']['model'] = (
             self.ui.lineEdit_siliconflow_asr_model.text().strip()
-            or 'TeleAI/TeleSpeechASR'
+            or 'XingChenAGI/XingChenASR-V3.2-Ultra'
         )
 
         # 保存云端肥牛配置（API Gateway）
