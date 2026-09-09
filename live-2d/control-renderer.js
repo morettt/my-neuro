@@ -76,9 +76,7 @@ function updateSaveDirtyState() {
 }
 
 function applyEdition(edition = environment.edition) {
-  const label = edition === 'local' ? '本地' : '云端';
-  $('brand-title').textContent = `My-Neuro (${label})${environment.version ? `  ${environment.version}` : ''}`;
-  $('edition-status').textContent = `${label}版本${environment.version ? ` · ${environment.version}` : ''}`;
+  $('brand-title').textContent = `My-Neuro${environment.version ? `  ${environment.version}` : ''}`;
   if (edition === 'cloud' && $('voice').classList.contains('active')) {
     $('voice').classList.remove('active');
     $('home').classList.add('active');
@@ -160,7 +158,7 @@ document.querySelectorAll('.nav').forEach(button => {
   button.addEventListener('click', () => {
     if (button.hidden) return;
     switchPage(button.dataset.page, button);
-    if (button.dataset.page === 'prompts') refreshPrompts();
+    if (button.dataset.page === 'chat' && document.querySelector('[data-chat-tab="prompts"].active')) refreshPrompts();
     if (button.dataset.page === 'history') loadChatHistory();
   });
 });
@@ -208,6 +206,7 @@ function enhanceSelect(id) {
   const list = document.createElement('ul');
   list.className = 'list webkit-scrollbar';
   for (const option of select.options) {
+    if (option.hidden) continue;
     const item = document.createElement('li');
     item.className = 'listitem';
     const button = document.createElement('button');
@@ -251,15 +250,17 @@ document.querySelectorAll('[data-cloud-tab]').forEach(button => {
   });
 });
 
-function syncCloudProviders() {
+function syncCloudProviders(updateTts = true) {
   const ttsProvider = $('cloud-tts-provider')?.value || 'aliyun';
   const ttsText = $('cloud-tts-provider')?.nextElementSibling?.querySelector('.dropdown-text');
   if (ttsText) ttsText.textContent = $('cloud-tts-provider').options[$('cloud-tts-provider').selectedIndex]?.textContent || '请选择';
   document.querySelectorAll('[data-tts-provider]').forEach(panel => panel.classList.toggle('active', panel.dataset.ttsProvider === ttsProvider));
   const ttsEnabled = $('cloud-tts-master-enabled')?.checked === true;
-  if ($('aliyun-enabled')) $('aliyun-enabled').checked = ttsEnabled && ttsProvider === 'aliyun';
-  if ($('volc-enabled')) $('volc-enabled').checked = ttsEnabled && ttsProvider === 'volcengine';
-  if ($('cloud-tts-enabled')) $('cloud-tts-enabled').checked = ttsEnabled && ttsProvider === 'siliconflow';
+  if (updateTts) {
+    if ($('aliyun-enabled')) $('aliyun-enabled').checked = ttsEnabled && ttsProvider === 'aliyun';
+    if ($('volc-enabled')) $('volc-enabled').checked = ttsEnabled && ttsProvider === 'volcengine';
+    if ($('cloud-tts-enabled')) $('cloud-tts-enabled').checked = ttsEnabled && ttsProvider === 'siliconflow';
+  }
 
   const asrProvider = $('cloud-asr-provider')?.value || 'baidu';
   const asrText = $('cloud-asr-provider')?.nextElementSibling?.querySelector('.dropdown-text');
@@ -270,7 +271,7 @@ function syncCloudProviders() {
   if ($('silicon-asr-enabled')) $('silicon-asr-enabled').checked = asrEnabled && asrProvider === 'siliconflow';
 }
 
-['cloud-tts-provider','cloud-tts-master-enabled','cloud-asr-provider','cloud-asr-master-enabled'].forEach(id => $(id)?.addEventListener('change', syncCloudProviders));
+['cloud-tts-provider','cloud-tts-master-enabled','cloud-asr-provider','cloud-asr-master-enabled'].forEach(id => $(id)?.addEventListener('change', () => syncCloudProviders(id.startsWith('cloud-tts-'))));
 
 function setLlmModelsOpen(open) {
   $('llm-model-dropdown-state').checked = open;
@@ -381,6 +382,7 @@ document.querySelectorAll('[data-chat-tab]').forEach(button => {
     document.querySelector('[data-chat-panel].active')?.classList.remove('active');
     button.classList.add('active');
     document.querySelector(`[data-chat-panel="${button.dataset.chatTab}"]`)?.classList.add('active');
+    if (button.dataset.chatTab === 'prompts') refreshPrompts();
   });
 });
 
@@ -444,13 +446,14 @@ function render() {
     }
   }
   $('hide-model').checked = !Boolean(get(config, 'ui.show_model', true));
-  const ttsProvider = get(config, 'cloud.aliyun_tts.enabled', false) ? 'aliyun' : get(config, 'cloud.volcengine_tts.enabled', false) ? 'volcengine' : 'siliconflow';
+  const ttsProvider = get(config, 'cloud.volcengine_tts.enabled', false) ? 'volcengine' : 'aliyun';
   $('cloud-tts-provider').value = ttsProvider;
-  $('cloud-tts-master-enabled').checked = Boolean(get(config, 'cloud.aliyun_tts.enabled', false) || get(config, 'cloud.volcengine_tts.enabled', false) || get(config, 'cloud.tts.enabled', false));
+  $('cloud-tts-master-enabled').checked = Boolean(get(config, 'cloud.aliyun_tts.enabled', false) || get(config, 'cloud.volcengine_tts.enabled', false));
   const asrProvider = 'siliconflow';
+  $('silicon-asr-model').value = get(config, 'cloud.siliconflow_asr.model', '') || 'XingChenAGI/XingChenASR-V3.2-Ultra';
   $('cloud-asr-provider').value = asrProvider;
   $('cloud-asr-master-enabled').checked = Boolean(get(config, 'cloud.baidu_asr.enabled', false) || get(config, 'cloud.siliconflow_asr.enabled', false));
-  syncCloudProviders();
+  syncCloudProviders(false);
   ['volc-voice', 'silicon-asr-model'].forEach(id => $(id)?.dispatchEvent(new Event('change')));
   syncTemperatureField();
   syncContextConfig();
@@ -831,7 +834,7 @@ function showToast(message) {
 async function saveConfig() {
   if (pluginConfigDirty && !(await savePluginConfig())) return false;
   if (!configDirty) return true;
-  syncCloudProviders();
+  syncCloudProviders(false);
   for (const [id, [path, type]] of Object.entries(fields)) {
     const el = $(id);
     if (!el) continue;

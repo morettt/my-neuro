@@ -721,11 +721,11 @@ ipcMain.handle('siliconflow-asr-transcribe', async (event, audioBytes) => {
         }
 
         const audioSize = audioBytes?.byteLength || audioBytes?.length || 0;
-        logToTerminal('info', `【SiliconFlow ASR】开始上传录音（${audioSize} bytes，模型: ${asrConfig.model || 'TeleAI/TeleSpeechASR'}）`);
+        logToTerminal('info', `【SiliconFlow ASR】开始上传录音（${audioSize} bytes，模型: ${asrConfig.model || 'XingChenAGI/XingChenASR-V3.2-Ultra'}）`);
 
         const formData = new FormData();
         formData.append('file', new Blob([audioBytes], { type: 'audio/wav' }), 'recording.wav');
-        formData.append('model', asrConfig.model || 'TeleAI/TeleSpeechASR');
+        formData.append('model', asrConfig.model || 'XingChenAGI/XingChenASR-V3.2-Ultra');
 
         const response = await fetch(
             asrConfig.api || 'https://api.siliconflow.cn/v1/audio/transcriptions',
