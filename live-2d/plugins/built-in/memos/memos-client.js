@@ -23,7 +23,7 @@ class MemosClient {
                 top_k: topK || this.injectTopK,
                 user_id: 'feiniu_default',
                 similarity_threshold: this.similarityThreshold
-            }, { timeout: 3000 });
+            }, { timeout: 6000 });
 
             return response.data.memories || [];
         } catch (error) {

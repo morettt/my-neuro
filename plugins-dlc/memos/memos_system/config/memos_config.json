@@ -17,11 +17,17 @@
     }
   },
   "embedding": {
+    "provider": "local",
     "model_path": "../../../full-hub/rag-hub",
     "vector_size": 1024,
     "use_api": false,
-    "api_model": "text-embedding-3-large",
-    "api_dimensions": 1024
+    "api_model": "BAAI/bge-m3",
+    "api_dimensions": 1024,
+    "api": {
+      "base_url": "https://api.siliconflow.cn/v1",
+      "model": "BAAI/bge-m3",
+      "api_key": ""
+    }
   },
   "search": {
     "default_top_k": 5,
@@ -40,10 +46,16 @@
     },
     "recency_weight": 0.1,
     "frequency_weight": 0.1,
+    "reranker_provider": "local",
     "reranker_auto_download": true,
     "reranker_model_id": "BAAI/bge-reranker-v2-m3",
     "reranker_model_path": "../../../full-hub/reranker-hub",
-    "rerank_top_n": 20
+    "rerank_top_n": 20,
+    "reranker_api": {
+      "base_url": "https://api.siliconflow.cn/v1",
+      "model": "BAAI/bge-reranker-v2-m3",
+      "api_key": ""
+    }
   },
   "entity_extraction": {
     "enabled": true,

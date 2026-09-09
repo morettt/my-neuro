@@ -181,6 +181,58 @@
       }
     }
   },
+  "backend_embedding": {
+    "title": "后端向量模型与重排序器",
+    "description": "记忆检索用的两个模型怎么跑。本地模型：装在显卡里，占约 2GB+ 显存，检索毫秒级。API 调用：用硅基流动的 BAAI/bge-m3 与 BAAI/bge-reranker-v2-m3，不占显存，每次检索大约多 1 秒，记忆文本会发送到云端。两种方式是同一个模型，切换不需要重建记忆库。改完后请重新运行 4.MEMOS-API.bat 才生效。",
+    "type": "object",
+    "fields": {
+      "provider": {
+        "title": "运行方式",
+        "description": "本地模型 / API 调用。向量模型和重排序提供方一起切换；精排仍受上面的「启用 CrossEncoder 精排」开关控制。",
+        "type": "select",
+        "options": [
+          {
+            "value": "local",
+            "label": "本地模型（占显存，毫秒级）"
+          },
+          {
+            "value": "api",
+            "label": "API 调用（不占显存，慢约 1 秒）"
+          }
+        ],
+        "default": "local",
+        "value": "local"
+      },
+      "api_base_url": {
+        "title": "API 地址",
+        "description": "硅基流动国内节点 https://api.siliconflow.cn/v1（不要用 .com 国际节点）。只在「API 调用」时使用。",
+        "type": "string",
+        "default": "https://api.siliconflow.cn/v1",
+        "value": "https://api.siliconflow.cn/v1"
+      },
+      "api_key": {
+        "title": "API Key",
+        "description": "硅基流动的密钥。留空时即使选了 API 调用，记忆系统也会按本地模型启动并提示。",
+        "type": "string",
+        "default": "",
+        "value": ""
+      },
+      "embedding_model": {
+        "title": "向量模型名（一般不用改）",
+        "description": "必须与本地一致的 BAAI/bge-m3，否则新旧记忆的向量对不上。",
+        "type": "string",
+        "default": "BAAI/bge-m3",
+        "value": "BAAI/bge-m3"
+      },
+      "rerank_model": {
+        "title": "重排序模型名（一般不用改）",
+        "description": "与本地一致的 BAAI/bge-reranker-v2-m3。",
+        "type": "string",
+        "default": "BAAI/bge-reranker-v2-m3",
+        "value": "BAAI/bge-reranker-v2-m3"
+      }
+    }
+  },
   "backend_features": {
     "title": "后端功能开关",
     "description": "控制 MemOS 后端的高级功能",
