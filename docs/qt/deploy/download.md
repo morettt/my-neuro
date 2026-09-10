@@ -1,6 +1,6 @@
 # 下载与打开
 
-安装包怎么选、怎么解压，以 [官网教程](http://mynewbot.com/tutorials) 为准。本页只补打开肥牛.exe 之前要注意的几件事。
+安装包怎么选、怎么解压，以 [官网教程](http://mynewbot.com/tutorials) 为准。栏目对照见 [官网教程（补充）](/qt/guide/official)。本页只补打开肥牛.exe 之前要注意的几件事。
 
 ## 路径
 

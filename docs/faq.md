@@ -4,7 +4,7 @@
 
 ## 我该看本站还是官网？
 
-浏览器控制中心看本站；桌面上的 `肥牛.exe` 看 [肥牛.exe 教程](/qt/)；安装包和更旧截图看 [官网教程](http://mynewbot.com/tutorials)。对照 [三份文档怎么选](/guide/which-docs)。
+浏览器控制中心看本站；桌面上的 `肥牛.exe` 看 [肥牛.exe 教程](/qt/)；安装包和更旧截图看 [官网教程](http://mynewbot.com/tutorials)，栏目表在 [官网教程（补充）](/guide/official)。对照 [三份文档怎么选](/guide/which-docs)。
 
 ## 启动页只有一张卡，是不是不能用麦克风？
 

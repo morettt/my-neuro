@@ -12,6 +12,8 @@ const isQt = computed(() => localeIndex.value === 'qt')
     窗口标题类似 <code>My-Neuro (本地)</code>，左侧栏换页，底部保存按钮是「保存配置」。
     浏览器里的「My Neuro 控制中心」请看
     <a href="/">WebUI 文档</a>。
+    安装包和更旧截图见
+    <a href="http://mynewbot.com/tutorials" target="_blank" rel="noopener">官网教程</a>。
   </div>
   <div v-else class="webui-notice">
     <strong>本教程针对 WebUI 版本。</strong>

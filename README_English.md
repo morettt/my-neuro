@@ -20,7 +20,11 @@
 ## WebUI docs (control panel): run `打开教程网页.bat` at the repo root, or `npm run docs:dev` in `docs/`
 For the browser UI opened by `live-2d/启动 WebUI 控制面板.bat`.
 
-## Older website tutorials (`肥牛.exe` / legacy UI): [Official Website](http://mynewbot.com/tutorials)
+## 肥牛.exe tutorial: same docs site at `/qt/` (preview: `http://127.0.0.1:5173/qt/`)
+For the desktop `肥牛.exe` window.
+
+## Official website tutorials (supplement): [Official Website](http://mynewbot.com/tutorials)
+Installer screenshots and older arrow diagrams. Do not mix them with the two in-repo UI tutorials.
 
 ---
 

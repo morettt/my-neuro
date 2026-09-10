@@ -14,6 +14,9 @@ hero:
     - theme: alt
       text: WebUI 文档
       link: /
+    - theme: alt
+      text: 官网教程
+      link: http://mynewbot.com/tutorials
 features:
   - title: 左侧栏一页一事
     details: 启动、模型配置、提示词广场、插件、对话记录、对话设置、表情与动作、终端控制室、工具屋、云端配置、UI设置，点哪一栏就改哪一块。

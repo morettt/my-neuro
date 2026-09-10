@@ -35,7 +35,7 @@ export default defineConfig({
           { text: '插件', link: '/plugins/' },
           { text: '常见问题', link: '/faq' },
           { text: '肥牛.exe', link: '/qt/' },
-          { text: '官网旧教程', link: 'http://mynewbot.com/tutorials' }
+          { text: '官网教程', link: 'http://mynewbot.com/tutorials' }
         ],
         sidebar: {
           '/': [
@@ -44,7 +44,8 @@ export default defineConfig({
               items: [
                 { text: '介绍', link: '/guide/introduction' },
                 { text: '快速开始', link: '/guide/quick-start' },
-                { text: '三份文档怎么选', link: '/guide/which-docs' }
+                { text: '三份文档怎么选', link: '/guide/which-docs' },
+                { text: '官网教程（补充）', link: '/guide/official' }
               ]
             },
             {
@@ -86,7 +87,7 @@ export default defineConfig({
           ]
         },
         footer: {
-          message: '浏览器控制中心看本站；肥牛.exe 看肥牛.exe 教程。',
+          message: '浏览器控制中心看本站；肥牛.exe 看肥牛.exe 教程；安装包和更旧截图看官网教程。',
           copyright: 'my-neuro · MIT License'
         }
       }
@@ -105,6 +106,7 @@ export default defineConfig({
           { text: '配置', link: '/qt/config/open-qt' },
           { text: '插件', link: '/qt/plugins/' },
           { text: '常见问题', link: '/qt/faq' },
+          { text: '官网教程', link: 'http://mynewbot.com/tutorials' },
           { text: 'WebUI 文档', link: '/' }
         ],
         sidebar: {
@@ -114,7 +116,8 @@ export default defineConfig({
               items: [
                 { text: '介绍', link: '/qt/guide/introduction' },
                 { text: '快速开始', link: '/qt/guide/quick-start' },
-                { text: '三份文档怎么选', link: '/qt/guide/which-docs' }
+                { text: '三份文档怎么选', link: '/qt/guide/which-docs' },
+                { text: '官网教程（补充）', link: '/qt/guide/official' }
               ]
             },
             {
@@ -150,7 +153,7 @@ export default defineConfig({
           ]
         },
         footer: {
-          message: '本站针对肥牛.exe（Qt 桌面窗口）。浏览器控制中心请看 WebUI 文档。',
+          message: '本站针对肥牛.exe。浏览器控制中心看 WebUI 文档。安装包和更旧截图看官网教程。',
           copyright: 'my-neuro · MIT License'
         }
       }

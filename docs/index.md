@@ -17,6 +17,9 @@ hero:
     - theme: alt
       text: 肥牛.exe 教程
       link: /qt/
+    - theme: alt
+      text: 官网教程
+      link: http://mynewbot.com/tutorials
 features:
   - title: 听和说可以分开选
     details: 本地识别配云端发音、云端识别配本地声音，都是同一套界面里的勾选，按你装了什么来搭。

@@ -16,7 +16,7 @@
 
 ## 换声音、改用语种
 
-- **换音色**（已有本地 TTS 模型）：按 [官网教程](http://mynewbot.com/tutorials)
+- **换音色**（已有本地 TTS 模型）：按 [官网教程](http://mynewbot.com/tutorials)，栏目对照见 [官网教程（补充）](/qt/guide/official)
 - **没有本地 TTS 模型**：到 **云端配置** 的 **云端 TTS** 标签，平台下拉里有 **阿里云 TTS / 字节 TTS / SiliconFlow TTS**，选一个填 Key 启用。字节 TTS 的面板里还带一个「配置教程」按钮
 - **嘴里要外语、字幕要中文**：先在 **对话设置** 里把 **语音语言** 换成 English / 日本語，再启用同声传译插件并给翻译填一套模型 / URL / Key，见 [在肥牛.exe 里用插件](/qt/plugins/)
 

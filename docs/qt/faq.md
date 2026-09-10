@@ -1,6 +1,6 @@
 # 常见问题
 
-按现象找。按钮对不上时，先确认你打开的是 **肥牛.exe**（窗口标题 My-Neuro (本地)），不是浏览器控制中心。分流见 [三份文档怎么选](/qt/guide/which-docs)。
+按现象找。按钮对不上时，先确认你打开的是 **肥牛.exe**（窗口标题 My-Neuro (本地)），不是浏览器控制中心。分流见 [三份文档怎么选](/qt/guide/which-docs)。安装包和更旧截图看 [官网教程](http://mynewbot.com/tutorials)，栏目表在 [官网教程（补充）](/qt/guide/official)。
 
 ## 日志去哪看了
 
