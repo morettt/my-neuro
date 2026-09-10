@@ -1,0 +1,31 @@
+.webui-notice {
+  margin: 0 0 1.5rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--vp-c-brand-1);
+  border-radius: 8px;
+  background: var(--vp-c-brand-soft);
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+
+.webui-notice code {
+  font-size: 0.85em;
+}
+
+.VPHome .webui-notice {
+  max-width: 1152px;
+  margin: 24px auto 0;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.vp-doc img {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+}
+
+.vp-doc figcaption {
+  margin-top: 0.4rem;
+  color: var(--vp-c-text-2);
+  font-size: 0.85rem;
+}

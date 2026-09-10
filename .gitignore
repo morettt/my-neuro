@@ -24,6 +24,10 @@ live-2d/webui/__pycache__
 # 忽略所有 node_modules（无论在哪）
 **/node_modules/
 
+# VitePress
+docs/.vitepress/cache
+docs/.vitepress/dist
+
 # 忽略可执行文件
 *.exe
 *.zip
