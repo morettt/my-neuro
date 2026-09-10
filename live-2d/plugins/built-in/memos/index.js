@@ -1,6 +1,7 @@
 const { Plugin } = require('../../../js/core/plugin-base.js');
 const { MemosClient } = require('./memos-client.js');
 const { MemosTools } = require('./tools.js');
+const { buildBackendEmbeddingConfig } = require('./embedding-config.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -121,9 +122,15 @@ class MemosPlugin extends Plugin {
                 if (cfg.backend_search.enable_bm25 !== undefined) backendCfg.search.enable_bm25 = cfg.backend_search.enable_bm25;
                 if (cfg.backend_search.bm25_weight !== undefined) backendCfg.search.bm25_weight = cfg.backend_search.bm25_weight;
                 if (cfg.backend_search.enable_graph_query !== undefined) backendCfg.search.enable_graph_query = cfg.backend_search.enable_graph_query;
+                if (cfg.backend_search.enable_reranker !== undefined) backendCfg.search.enable_reranker = cfg.backend_search.enable_reranker;
+                if (cfg.backend_search.reranker_auto_download !== undefined) backendCfg.search.reranker_auto_download = cfg.backend_search.reranker_auto_download;
+                if (cfg.backend_search.reranker_model_id !== undefined) backendCfg.search.reranker_model_id = cfg.backend_search.reranker_model_id;
+                if (cfg.backend_search.reranker_model_path !== undefined) backendCfg.search.reranker_model_path = cfg.backend_search.reranker_model_path;
+                if (cfg.backend_search.rerank_top_n !== undefined) backendCfg.search.rerank_top_n = cfg.backend_search.rerank_top_n;
             }
             backendCfg.search = backendCfg.search || {};
             backendCfg.search.similarity_threshold = cfg.similarity_threshold ?? backendCfg.search.similarity_threshold ?? 0.5;
+            buildBackendEmbeddingConfig(cfg, backendCfg);
 
             // Features
             if (cfg.backend_features) {
@@ -153,3 +160,7 @@ class MemosPlugin extends Plugin {
 }
 
 module.exports = MemosPlugin;
+Object.defineProperty(module.exports, 'buildBackendEmbeddingConfig', {
+    value: buildBackendEmbeddingConfig,
+    enumerable: false
+});

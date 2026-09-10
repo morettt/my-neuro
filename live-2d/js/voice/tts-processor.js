@@ -5,6 +5,13 @@ const { TTSPlaybackEngine } = require('./tts-playback-engine.js');
 const { TTSRequestHandler } = require('./tts-request-handler.js');
 const { VolcengineStreamingSession } = require('./volcengine-streaming.js');
 
+function cleanDisplayText(text) {
+    return String(text || '')
+        .replace(/<[^>]*>/g, '').replace(/<[^<>]*$/g, '')
+        .replace(/＜[^＞]*＞/g, '').replace(/＜[^＜＞]*$/g, '')
+        .trim();
+}
+
 class EnhancedTextProcessor {
     constructor(ttsUrl, onAudioDataCallback, onStartCallback, onEndCallback, config = null) {
         this.config = config || {};
@@ -186,7 +193,7 @@ class EnhancedTextProcessor {
     appendFallbackText(segmentText) {
         // 把新文本追加到待显示队列
         if (!this._fallbackQueue) this._fallbackQueue = [];
-        this._fallbackQueue.push(...[...segmentText]);
+        this._fallbackQueue.push(...[...cleanDisplayText(segmentText)]);
 
         // 如果打字机已经在跑，新字符会自动被消费
         if (!this._fallbackTimer) {
@@ -286,7 +293,9 @@ class EnhancedTextProcessor {
         const chatMessages = document.getElementById('chat-messages');
         if (chatMessages) {
             const messageElement = document.createElement('div');
-            messageElement.innerHTML = `<strong>Fake Neuro:</strong> ${this.llmFullResponse}`;
+            const label = document.createElement('strong');
+            label.textContent = 'Fake Neuro:';
+            messageElement.append(label, document.createTextNode(` ${cleanDisplayText(this.llmFullResponse)}`));
             chatMessages.appendChild(messageElement);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }

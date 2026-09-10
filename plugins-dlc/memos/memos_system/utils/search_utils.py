@@ -4,6 +4,7 @@
 """
 
 import logging
+import os
 from typing import List, Dict, Any, Optional, Tuple
 from collections import defaultdict
 
@@ -425,21 +426,78 @@ class HybridSearcher:
 class Reranker:
     """重排序器（可选使用 Cross-Encoder）"""
     
-    def __init__(self, model_name_or_path: Optional[str] = None):
+    def __init__(self, model_name_or_path: Optional[str] = None, provider: str = "local", api_config: Optional[Dict[str, Any]] = None):
         """
         初始化重排序器
         
         Args:
             model_name_or_path: 模型名称或路径
+            provider: local 或 api
+            api_config: api 模式下的远程配置
         """
         self.model = None
         self.model_path = model_name_or_path
+        self.provider = str(provider or "local").strip().lower()
+        if self.provider != "api":
+            self.provider = "local"
+        self.api_config = api_config or {}
         
-        if model_name_or_path:
+        if self.provider == "api" or model_name_or_path:
             self._load_model()
+
+    @classmethod
+    def from_config(cls, search_config: Dict[str, Any], base_dir: str, shared_api_key: str = ""):
+        """按 search 配置构造 Reranker；无法构造时返回 None。"""
+        search_config = search_config or {}
+        raw_provider = str(search_config.get("reranker_provider") or "local").strip().lower()
+        provider = "api" if raw_provider == "api" else "local"
+        raw_path = search_config.get("reranker_model_path", "../../../full-hub/reranker-hub")
+        model_path = raw_path
+        if model_path and not os.path.isabs(model_path):
+            model_path = os.path.normpath(os.path.join(base_dir, model_path))
+        elif model_path:
+            model_path = os.path.normpath(model_path)
+        api_config = dict(search_config.get("reranker_api") or {})
+        api_key = str(api_config.get("api_key") or shared_api_key or "").strip()
+        if provider == "api" and not api_key:
+            provider = "local"
+            logger.warning("重排序器设为 api 但未配置密钥，回退本地")
+        if provider == "api":
+            api_config["api_key"] = api_key
+            inst = cls(model_name_or_path=None, provider="api", api_config=api_config)
+            if inst.model is None:
+                logger.warning("重排序器无可用来源，回退粗排")
+                return None
+            return inst
+        if not model_path or not os.path.exists(model_path):
+            if raw_provider == "api":
+                logger.warning("重排序器无可用来源，回退粗排")
+            return None
+        inst = cls(model_path, provider="local")
+        if inst.model is None:
+            return None
+        return inst
     
     def _load_model(self):
         """加载重排序模型"""
+        if getattr(self, "provider", "local") == "api":
+            try:
+                from utils.embedding_provider import DEFAULT_BASE_URL, DEFAULT_RERANK_MODEL, RemoteCrossEncoder
+                cfg = self.api_config or {}
+                self.model = RemoteCrossEncoder(
+                    base_url=str(cfg.get("base_url") or DEFAULT_BASE_URL),
+                    model=str(cfg.get("model") or DEFAULT_RERANK_MODEL),
+                    api_key=str(cfg.get("api_key") or ""),
+                    timeout_sec=float(cfg.get("timeout_sec") or 10),
+                    connect_timeout_sec=float(cfg.get("connect_timeout_sec") or 5),
+                    max_retries=int(cfg.get("max_retries") or 1),
+                    circuit_break_failures=int(cfg.get("circuit_break_failures") or 3),
+                    circuit_break_cooldown_sec=float(cfg.get("circuit_break_cooldown_sec") or 60),
+                )
+                logger.info(f"重排序模型加载成功: {cfg.get('model') or DEFAULT_RERANK_MODEL}")
+            except Exception as e:
+                logger.error(f"加载重排序模型失败: {e}")
+            return
         try:
             from sentence_transformers import CrossEncoder
             self.model = CrossEncoder(self.model_path)
@@ -492,4 +550,8 @@ class Reranker:
     
     def is_available(self) -> bool:
         """检查 Reranker 是否可用"""
-        return self.model is not None
+        if self.model is None:
+            return False
+        if getattr(self.model, "provider", "local") == "api" and hasattr(self.model, "is_open"):
+            return not self.model.is_open()
+        return True

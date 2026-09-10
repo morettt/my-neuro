@@ -14,6 +14,7 @@ const { Live2DRuntime } = require('./runtime.js');
 const { MusicPlayer } = require('../../services/music-player.js');
 const { logToTerminal } = require('../../api-utils.js');
 const { bindVoiceChatAvatar } = require('../avatar-voice-chat-binding.js');
+const avatarTransition = require('../transition-overlay.js');
 
 // 模块级单例（跨形态切换存活）
 let _stage = null;
@@ -59,6 +60,8 @@ class Live2DSetup {
             // switches so a resume cannot assemble the same model twice.
             notifyLoaded: false
         });
+        // 此时模型尺寸与保存位置均已应用，加载转圈才能准确落在皮套中心。
+        avatarTransition.reposition(model);
 
         // 4. 交互控制器
         modelController.init(model, _stage.app, config, { stage: _stage });
@@ -157,6 +160,7 @@ class Live2DSetup {
                     return;
                 }
                 const previousModel = _loader.currentModel;
+                await avatarTransition.show('正在切换皮套');
                 try {
                     logToTerminal('info', `[Live2DSetup] 热切换模型: ${modelName} (${nextPath})`);
                     const nextPrefs = getModelPrefs('live2d', modelName);
@@ -187,6 +191,7 @@ class Live2DSetup {
                         message: `模型切换失败: ${e.message}${restored ? '，已保留原模型' : ''}${suffix}`
                     };
                 }
+                avatarTransition.hide();
                 await reportResult();
             });
         }

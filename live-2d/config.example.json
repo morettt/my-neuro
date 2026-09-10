@@ -218,7 +218,7 @@
     },
     "live2d_model": "",
     "live2d_gaze_tracking": false,
-    "avatar_motion_mode": "legacy",
+    "avatar_motion_mode": "blend",
     "expression_engine": "au",
     "head_pat": {
       "enabled": true,
@@ -292,7 +292,7 @@
     "ai": "肥牛"
   },
   "auto_close_services": {
-    "enabled": false
+    "enabled": true
   },
   "version": "v6.5.4",
   "tools": {

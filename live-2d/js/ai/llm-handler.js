@@ -6,8 +6,19 @@ const { appState } = require('../core/app-state.js');
 const { LLMClient } = require('./llm-client.js');
 const { toolExecutor } = require('./tool-executor.js');
 const { getAvatarMotionMode } = require('../avatar/motion-mode.js');
-const { motionDirector } = require('./motion-director.js');
+const { motionDirector, isChoreographyConfigEnabled } = require('./motion-director.js');
 const { llmProviderManager } = require('../core/llm-provider.js');
+const fs = require('fs');
+const path = require('path');
+
+function saveScreenshotForHistory(base64Image) {
+    const recordsDir = path.join(__dirname, '..', '..', '..', 'AI记录室');
+    const screenshotDir = path.join(recordsDir, '对话截图');
+    fs.mkdirSync(screenshotDir, { recursive: true });
+    const filename = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}.jpg`;
+    fs.writeFileSync(path.join(screenshotDir, filename), Buffer.from(base64Image, 'base64'));
+    return `对话截图/${filename}`;
+}
 
 /**
  * 过滤模型思考内容，与 LLMClient._filterThinkingContent 保持一致
@@ -23,14 +34,18 @@ function filterThinkingContent(text) {
     return filtered.trim();
 }
 
-// 编舞会关闭流式 TTS 改走整段播放，因此必须显式开启；缺省配置一律保持原有流式行为。
-// paramDirector 只在 Live2D 运行时挂载，缺席时编舞不会产生任何效果，此时也不能牺牲流式。
+// 编舞会关闭流式 TTS 改走整段播放。动作模式选了 AI 编舞时开启；
+// 仓库里曾经把 enabled 默认写成 false，WebUI 又没有独立开关，所以不能再要求 enabled === true。
+function describeChoreographySkip(config = {}) {
+    if (config?.tts?.enabled === false) return 'tts-disabled';
+    if (config?.ui?.text_only_mode === true) return 'text-only';
+    if (!isChoreographyConfigEnabled(config)) return 'legacy-or-paths-disabled';
+    if (!global.paramDirector) return 'no-param-director';
+    return null;
+}
+
 function shouldRunMotionChoreography(config = {}) {
-    if (config?.tts?.enabled === false) return false;
-    if (config?.ui?.text_only_mode === true) return false;
-    if (getAvatarMotionMode(config) === 'legacy') return false;
-    if (!global.paramDirector) return false;
-    return config?.motion_director?.enabled === true;
+    return describeChoreographySkip(config) == null;
 }
 
 class LLMHandler {
@@ -193,6 +208,14 @@ class LLMHandler {
                             console.log("需要截图");
                             logToTerminal('info', "需要截图");
                             screenshotBase64 = await voiceChat.takeScreenshotBase64();
+                            const lastUserMessage = [...voiceChat.messages].reverse().find(message => message.role === 'user');
+                            if (lastUserMessage) {
+                                const screenshotPath = saveScreenshotForHistory(screenshotBase64);
+                                lastUserMessage.attachments = [
+                                    ...(Array.isArray(lastUserMessage.attachments) ? lastUserMessage.attachments : []),
+                                    { type: 'image', path: screenshotPath }
+                                ];
+                            }
                         } catch (error) {
                             console.error("截图处理失败:", error);
                             logToTerminal('error', `截图处理失败: ${error.message}`);
@@ -254,6 +277,7 @@ class LLMHandler {
                     }
                     // 准备发送给API的消息列表
                     let messagesForAPI = JSON.parse(JSON.stringify(voiceChat.messages));
+                    messagesForAPI.forEach(message => { delete message.attachments; });
 
                     // 模型不支持图片时，在最后一条用户消息后追加一条说明，让 AI 用自己的语气告知用户
                     if (hasRetriedWithoutImage && iteration === 0) {
@@ -784,6 +808,7 @@ class LLMHandler {
 
                     // ===== 保存对话历史 =====
                     voiceChat.saveConversationHistory();
+                    logToTerminal('info', 'AI 已回复');
                     // MemOS 保存由 memos 插件的 onLLMResponse 钩子处理
 
                     // 🎙️ 播放最终回复的TTS（统一在这里播放，参考旧版本的设计）
@@ -826,7 +851,17 @@ class LLMHandler {
                                 new Promise(resolve => setTimeout(resolve, waitMs))
                             ]);
                         }
-                        choreographyWork.catch(() => {});
+                        choreographyWork.catch((error) => {
+                            logToTerminal(
+                                'warn',
+                                `[MotionDirector] 编舞失败，继续播放 TTS: ${String(error && error.message || error).slice(0, 240)}`
+                            );
+                        });
+                    } else if (responseObj.text && responseObj.text.trim()) {
+                        const skipReason = describeChoreographySkip(config);
+                        if (skipReason) {
+                            logToTerminal('info', `[MotionDirector] 本轮跳过编舞: ${skipReason}`);
+                        }
                     }
 
                     if (iteration === 0 && isStreamingToTTS && !waitForChoreography) {
@@ -990,5 +1025,6 @@ class LLMHandler {
 module.exports = {
     LLMHandler,
     filterThinkingContent,
-    shouldRunMotionChoreography
+    shouldRunMotionChoreography,
+    describeChoreographySkip
 };

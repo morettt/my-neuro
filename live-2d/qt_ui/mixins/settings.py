@@ -36,6 +36,76 @@ from ..widgets.title_bar import CustomTitleBar  # noqa: F401
 class SettingsMixin:
     """设置页：配置读写、LLM 模型拉取、API Key 可见性。"""
 
+    def _resolved_llm_config(self):
+        """兼容旧版内联 LLM 配置与新版 llm_providers.json 通讯录。"""
+        llm = dict(self.config.get('llm') or {})
+        provider_file = os.path.join(get_app_path(), 'llm_providers.json')
+        try:
+            with open(provider_file, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            providers = raw if isinstance(raw, list) else raw.get('providers', [])
+            provider_id = llm.get('provider_id')
+            provider = next((p for p in providers if p.get('id') == provider_id), None)
+            if provider is None:
+                provider = next((p for p in providers if p.get('enabled', True)), None)
+            if provider:
+                llm['provider_id'] = provider.get('id', '')
+                llm['api_key'] = provider.get('api_key', '')
+                llm['api_url'] = provider.get('api_url', '')
+                models = provider.get('models') or []
+                model_id = llm.get('model_id')
+                model = next((m for m in models if m.get('model_id') == model_id), None)
+                if model is None:
+                    model = next((m for m in models if m.get('enabled', True)), None)
+                if model:
+                    llm['model_id'] = model.get('model_id', '')
+                    llm['model'] = model.get('model_id', '')
+                    llm['temperature'] = model.get('temperature', llm.get('temperature', 1.0))
+                    llm['temperature_enabled'] = model.get(
+                        'temperature_enabled', llm.get('temperature_enabled', False))
+        except (OSError, ValueError, TypeError):
+            pass
+        return llm
+
+    def _save_llm_provider_config(self, current_config, ui_llm):
+        """把 PyQt 编辑结果写回新版通讯录，并只在 config 中保留选择引用。"""
+        provider_file = os.path.join(get_app_path(), 'llm_providers.json')
+        try:
+            with open(provider_file, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+        except (OSError, ValueError, TypeError):
+            raw = {'providers': []}
+        providers = raw if isinstance(raw, list) else raw.get('providers', [])
+        if not isinstance(providers, list):
+            providers = []
+
+        llm_ref = current_config.setdefault('llm', {})
+        provider_id = llm_ref.get('provider_id') or 'main'
+        provider = next((p for p in providers if p.get('id') == provider_id), None)
+        if provider is None:
+            provider = {'id': provider_id, 'name': '主模型', 'enabled': True, 'models': []}
+            providers.append(provider)
+        provider['api_key'] = ui_llm['api_key']
+        provider['api_url'] = ui_llm['api_url']
+        models = provider.setdefault('models', [])
+        model_id = ui_llm['model'].strip()
+        model = next((m for m in models if m.get('model_id') == model_id), None)
+        if model_id and model is None:
+            model = {'model_id': model_id, 'name': model_id, 'enabled': True}
+            models.append(model)
+        if model:
+            model['temperature'] = ui_llm['temperature']
+            model['temperature_enabled'] = ui_llm['temperature_enabled']
+
+        with open(provider_file, 'w', encoding='utf-8') as f:
+            json.dump({'providers': providers}, f, ensure_ascii=False, indent=2)
+            f.write('\n')
+        llm_ref['provider_id'] = provider_id
+        llm_ref['model_id'] = model_id
+        llm_ref['system_prompt'] = ui_llm['system_prompt']
+        for key in ('api_key', 'api_url', 'model', 'temperature', 'temperature_enabled'):
+            llm_ref.pop(key, None)
+
     def set_btu(self):
         self.ui.pushButton.clicked.connect(lambda: self.ui.stackedWidget.setCurrentIndex(1))
         self.ui.pushButton.clicked.connect(self._tutorial_on_llm_clicked)
@@ -162,12 +232,13 @@ class SettingsMixin:
 
     def set_config(self):
         self._loading_config_ui = True
-        self.ui.lineEdit.setText(self.config['llm']['api_key'])
-        self.ui.lineEdit_2.setText(self.config['llm']['api_url'])
-        self.ui.comboBox_llm_model.setEditText(self.config['llm']['model'])
-        self.ui.textEdit_3.setPlainText(self.config['llm']['system_prompt'])
-        self.ui.doubleSpinBox_temperature.setValue(self.config['llm'].get('temperature', 1.0))
-        self.ui.checkBox_temperature_enabled.setChecked(self.config['llm'].get('temperature_enabled', False))
+        llm_config = self._resolved_llm_config()
+        self.ui.lineEdit.setText(llm_config.get('api_key', ''))
+        self.ui.lineEdit_2.setText(llm_config.get('api_url', ''))
+        self.ui.comboBox_llm_model.setEditText(llm_config.get('model', llm_config.get('model_id', '')))
+        self.ui.textEdit_3.setPlainText(llm_config.get('system_prompt', ''))
+        self.ui.doubleSpinBox_temperature.setValue(llm_config.get('temperature', 1.0))
+        self.ui.checkBox_temperature_enabled.setChecked(llm_config.get('temperature_enabled', False))
         self.ui.lineEdit_4.setText(self.config['ui']['intro_text'])
         self.ui.lineEdit_5.setText(str(self.config['context']['max_messages']))
         self.ui.checkBox_mcp_enable.setChecked(self.config.get('mcp', {}).get('enabled', True))
@@ -236,13 +307,11 @@ class SettingsMixin:
         self.ui.lineEdit_volcengine_tts_appid.setText(volcengine_tts.get('appid', ''))
         self.ui.lineEdit_volcengine_tts_access_token.setText(volcengine_tts.get('access_token', ''))
         self.ui.lineEdit_volcengine_tts_voice_type.setText(volcengine_tts.get('voice_type', 'saturn_zh_female_keainvsheng_tob'))
-        # 与实际运行优先级一致：字节 > 阿里云 > SiliconFlow。
+        # 界面仅展示可选平台，旧 SiliconFlow 配置仍由原控件保留。
         if volcengine_tts.get('enabled', False):
             tts_provider_index = 1
         elif aliyun_tts.get('enabled', False):
             tts_provider_index = 0
-        elif cloud_tts.get('enabled', False):
-            tts_provider_index = 2
         else:
             tts_provider_index = 0
         self.ui.comboBox_cloud_tts_provider.setCurrentIndex(tts_provider_index)
@@ -251,7 +320,6 @@ class SettingsMixin:
         self.ui.checkBox_cloud_tts_provider_enabled.setChecked(
             volcengine_tts.get('enabled', False)
             or aliyun_tts.get('enabled', False)
-            or cloud_tts.get('enabled', False)
         )
         self.ui.checkBox_cloud_tts_provider_enabled.blockSignals(False)
 
@@ -270,7 +338,7 @@ class SettingsMixin:
             'api', 'https://api.siliconflow.cn/v1/audio/transcriptions'))
         self.ui.lineEdit_siliconflow_asr_key.setText(siliconflow_asr.get('key', ''))
         self.ui.lineEdit_siliconflow_asr_model.setText(siliconflow_asr.get(
-            'model', 'TeleAI/TeleSpeechASR'))
+            'model') or 'XingChenAGI/XingChenASR-V3.2-Ultra')
         # 自动显示当前启用的平台；都未启用时默认显示百度。
         provider_index = 1 if siliconflow_asr.get('enabled', False) else 0
         self.ui.comboBox_cloud_asr_provider.setCurrentIndex(provider_index)
@@ -317,7 +385,7 @@ class SettingsMixin:
 
         current_config = self.load_config()
 
-        current_config['llm'] = {
+        ui_llm = {
             "api_key": self.ui.lineEdit.text(),
             "api_url": self.ui.lineEdit_2.text(),
             "model": self.ui.comboBox_llm_model.currentText().strip(),
@@ -325,6 +393,7 @@ class SettingsMixin:
             "temperature": self.ui.doubleSpinBox_temperature.value(),
             "system_prompt": self.ui.textEdit_3.toPlainText()
         }
+        self._save_llm_provider_config(current_config, ui_llm)
 
         current_config["ui"]["intro_text"] = self.ui.lineEdit_4.text()
         current_config['context']['max_messages'] = int(self.ui.lineEdit_5.text())
@@ -412,7 +481,7 @@ class SettingsMixin:
         current_config['cloud']['siliconflow_asr']['key'] = self.ui.lineEdit_siliconflow_asr_key.text().strip()
         current_config['cloud']['siliconflow_asr']['model'] = (
             self.ui.lineEdit_siliconflow_asr_model.text().strip()
-            or 'TeleAI/TeleSpeechASR'
+            or 'XingChenAGI/XingChenASR-V3.2-Ultra'
         )
 
         # 保存云端肥牛配置（API Gateway）

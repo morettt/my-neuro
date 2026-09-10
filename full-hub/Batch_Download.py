@@ -14,11 +14,13 @@ import subprocess
 
 system = platform.system()
 
-version_tag = "v6.6.2"
+version_tag = "v6.7"
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
+current_dir = os.environ.get('MY_NEURO_FULL_HUB_DIR') or os.path.dirname(os.path.abspath(__file__))
+current_dir = os.path.abspath(current_dir)
+os.makedirs(current_dir, exist_ok=True)
 
 MAX_RETRY = 3
 RETRY_WAIT = 5
@@ -133,13 +135,14 @@ def extract_7z(archive_file, target_folder):
                 print(f"下载7z失败: {e}")
                 return False
         print('正在解压TTS模型包，这可能需要几分钟时间.......')
-        cmd = f'"{local_7z}" x "{archive_file}" -o"{target_folder}" -y'
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        # Capture bytes: 7z output may use a Windows code page even with PYTHONUTF8=1.
+        cmd = [local_7z, "x", archive_file, f"-o{target_folder}", "-y"]
+        result = subprocess.run(cmd, capture_output=True)
         if result.returncode == 0:
             print("\n解压完成!")
             return True
         else:
-            print(f"\n解压失败: {result.stderr}")
+            print("\n解压失败: " + result.stderr.decode("utf-8", errors="replace"))
             return False
     except Exception as e:
         print(f"解压过程中出错: {e}")
@@ -431,16 +434,28 @@ if __name__ == '__main__':
     run_all = args.all or not any([args.live2d, args.bert, args.tts, args.rag, args.asr])
 
     results = {}
+
+    def run_module(name, action):
+        print(f"@@MODULE_START:{name}", flush=True)
+        try:
+            ok = bool(action())
+        except Exception as exc:
+            print(f"@@MODULE_FAIL:{name}", flush=True)
+            print(f"{name} 下载异常: {exc}", flush=True)
+            return False
+        print(f"@@MODULE_{'DONE' if ok else 'FAIL'}:{name}", flush=True)
+        return ok
+
     if run_all or args.live2d:
-        results['live-2d'] = download_live2d(force=args.force_live2d)
+        results['live2d'] = run_module('live2d', lambda: download_live2d(force=args.force_live2d))
     if run_all or args.bert:
-        results['bert'] = download_bert()
+        results['bert'] = run_module('bert', download_bert)
     if run_all or args.tts:
-        results['tts'] = download_tts(args.gpu)
+        results['tts'] = run_module('tts', lambda: download_tts(args.gpu))
     if run_all or args.rag:
-        results['rag'] = download_rag()
+        results['rag'] = run_module('rag', download_rag)
     if run_all or args.asr:
-        results['asr'] = download_asr()
+        results['asr'] = run_module('asr', download_asr)
 
     failed = [name for name, ok in results.items() if not ok]
     if failed:

@@ -363,6 +363,7 @@ class MotionExpressionMixin:
         singing_layout.addWidget(separator1)
         
         main_layout.addWidget(singing_section)
+        singing_section.hide()
         
         # === VMC协议控制区域（仅设置目标地址与端口，启用/关闭由桌宠按钮控制） ===
         vmc_section = QWidget()
@@ -412,6 +413,7 @@ class MotionExpressionMixin:
         vmc_layout.addWidget(vmc_separator)
         
         main_layout.addWidget(vmc_section)
+        vmc_section.hide()
         
         # === 第二部分：表情区块 ===
         expression_section = QWidget()

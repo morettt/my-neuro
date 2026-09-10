@@ -7,6 +7,7 @@ const { logToTerminal } = require('./js/api-utils.js');
 const { AppInitializer } = require('./js/app-initializer.js');
 const { eventBus } = require('./js/core/event-bus.js');
 const { Events } = require('./js/core/events.js');
+const avatarTransition = require('./js/avatar/transition-overlay.js');
 
 // 初始化状态管理器（自动通过事件管理状态）
 require('./js/core/app-state.js');
@@ -118,6 +119,7 @@ function enhanceSystemPrompt() {
 
 // 主初始化函数
 (async function main() {
+    avatarTransition.show('正在加载皮套');
     try {
         // 创建应用初始化器
         const appInitializer = new AppInitializer(
@@ -134,8 +136,10 @@ function enhanceSystemPrompt() {
         voiceChat = modules.voiceChat;
         ttsProcessor = modules.ttsProcessor;
         barrageManager = modules.barrageManager;
+        avatarTransition.hide();
 
     } catch (error) {
+        avatarTransition.hide();
         console.error("加载模型错误:", error);
         console.error("错误详情:", error.message);
         logToTerminal('error', `加载模型错误: ${error.message}`);

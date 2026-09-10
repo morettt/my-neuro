@@ -34,7 +34,146 @@ from ..widgets.title_bar import CustomTitleBar  # noqa: F401
 
 
 class ServicesMixin:
-    """本地服务进程管理：TTS/ASR/BERT/RAG/终端/Minecraft 启停与状态检测。"""
+    """本地服务进程管理与按需模块下载。"""
+
+    _module_install_checks = {
+        'tts': (
+            'tts-hub/GPT-SoVITS-Bundle/runtime',
+            'tts-hub/GPT-SoVITS-Bundle/GPT_SoVITS',
+        ),
+        'asr': (
+            'asr-hub/model/torch_hub/snakers4_silero-vad_master',
+            'asr-hub/model/asr/models/iic/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch/config.yaml',
+            'asr-hub/model/asr/models/iic/punc_ct-transformer_cn-en-common-vocab471067-large/config.yaml',
+            'asr-hub/model/asr/models/iic/punc_ct-transformer_cn-en-common-vocab471067-large/model.pt',
+        ),
+        'bert': (
+            'bert-hub/config.json', 'bert-hub/model.safetensors', 'bert-hub/vocab.txt',
+        ),
+        'rag': (
+            'rag-hub/config.json', 'rag-hub/model.safetensors', 'rag-hub/tokenizer.json',
+        ),
+    }
+
+    def setup_module_download_controls(self):
+        """Add on-demand model downloads to the existing service control room."""
+        self._module_download_processes = {}
+        self.ui.label_tts_service.setText('TTS 语音合成')
+        self.ui.label_asr_service.setText('ASR 语音识别')
+        self.ui.label_bert_service.setText('BERT 模型服务')
+
+        for widget in (
+            self.ui.label_rag_service,
+            self.ui.label_rag_status_indicator,
+            self.ui.label_rag_status,
+            self.ui.pushButton_start_rag,
+            self.ui.pushButton_stop_rag,
+        ):
+            widget.hide()
+        rag_log_index = self.ui.tabWidget_logs.indexOf(self.ui.tab_rag_log)
+        if rag_log_index >= 0:
+            self.ui.tabWidget_logs.setTabVisible(rag_log_index, False)
+
+        layouts = {
+            'tts': self.ui.horizontalLayout_12,
+            'asr': self.ui.horizontalLayout_13,
+            'bert': self.ui.horizontalLayout_14,
+        }
+        for module, layout in layouts.items():
+            button = QPushButton(self.ui.control_panel_frame)
+            button.setObjectName(f'pushButton_download_{module}')
+            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+            button.clicked.connect(
+                lambda _checked=False, name=module: self.download_local_module(name)
+            )
+            layout.addWidget(button)
+            setattr(self.ui, button.objectName(), button)
+        self.refresh_module_download_controls()
+
+    def is_local_module_installed(self, module):
+        hub_dir = Path(get_base_path()) / 'full-hub'
+        checks = self._module_install_checks.get(module, ())
+        return bool(checks) and all((hub_dir / item).exists() for item in checks)
+
+    def refresh_module_download_controls(self):
+        service_buttons = {
+            'tts': (self.ui.pushButton_start_terminal, self.ui.pushButton_stop_terminal),
+            'asr': (self.ui.pushButton_start_asr, self.ui.pushButton_stop_asr),
+            'bert': (self.ui.pushButton_start_bert, self.ui.pushButton_stop_bert),
+        }
+        status_labels = {
+            'tts': self.ui.label_terminal_status,
+            'asr': self.ui.label_asr_status,
+            'bert': self.ui.label_bert_status,
+        }
+        for module in ('tts', 'asr', 'bert'):
+            button = getattr(self.ui, f'pushButton_download_{module}', None)
+            installed = self.is_local_module_installed(module)
+            downloading = module in self._module_download_processes
+            start_button, stop_button = service_buttons[module]
+            start_button.setVisible(installed)
+            stop_button.setVisible(installed)
+            button.setVisible(not installed)
+            if not installed and not downloading:
+                status_labels[module].setText('状态：模块未安装')
+                self.update_status_indicator(module, False)
+            if button and not downloading:
+                button.setEnabled(True)
+                button.setText(f'下载 {module.upper()}')
+
+    def download_local_module(self, module):
+        if module in self._module_download_processes:
+            return
+        script = Path(get_base_path()) / 'full-hub' / 'Batch_Download.py'
+        if not script.is_file():
+            self.toast.show_message(f'找不到下载脚本：{script}', 3000)
+            return
+
+        button = getattr(self.ui, f'pushButton_download_{module}')
+        button.setEnabled(False)
+        button.setText('下载中...')
+        self.update_service_log(module, f'开始下载 {module.upper()} 模块...')
+
+        process = QProcess(self)
+        process.setWorkingDirectory(str(script.parent))
+        process.setProcessChannelMode(QProcess.MergedChannels)
+        process.readyReadStandardOutput.connect(
+            lambda name=module, proc=process: self._read_module_download_output(name, proc)
+        )
+        process.finished.connect(
+            lambda code, _status, name=module: self._module_download_finished(name, code)
+        )
+        process.errorOccurred.connect(
+            lambda _error, name=module: self._module_download_start_failed(name)
+        )
+        self._module_download_processes[module] = process
+        process.start(sys.executable, ['-u', str(script), f'--{module}'])
+
+    def _read_module_download_output(self, module, process):
+        output = bytes(process.readAllStandardOutput()).decode('utf-8', errors='replace')
+        for line in output.replace('\r', '\n').splitlines():
+            if line.strip():
+                self.update_service_log(module, line.strip())
+
+    def _module_download_finished(self, module, exit_code):
+        process = self._module_download_processes.pop(module, None)
+        if process:
+            process.deleteLater()
+        success = exit_code == 0 and self.is_local_module_installed(module)
+        message = f'{module.upper()} 模块下载完成' if success else f'{module.upper()} 模块下载失败，请查看日志'
+        self.update_service_log(module, message)
+        self.toast.show_message(message, 3000)
+        self.refresh_module_download_controls()
+
+    def _module_download_start_failed(self, module):
+        process = self._module_download_processes.pop(module, None)
+        if not process:
+            return
+        error = process.errorString()
+        process.deleteLater()
+        self.update_service_log(module, f'无法启动下载进程：{error}')
+        self.toast.show_message(f'{module.upper()} 下载进程启动失败', 3000)
+        self.refresh_module_download_controls()
 
     def scan_voice_models(self):
         """扫描当前目录下的pth模型文件"""
@@ -602,6 +741,10 @@ class ServicesMixin:
 
     def check_service_status(self, service_name, port, status_label):
         """检查单个服务状态"""
+        if not self.is_local_module_installed(service_name):
+            getattr(self.ui, status_label).setText("状态：模块未安装")
+            self.update_status_indicator(service_name, False)
+            return
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(0.5)  # 优化: 从1秒减少到0.5秒
