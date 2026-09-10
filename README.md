@@ -22,11 +22,8 @@
 ## WebUI 教程（控制中心）：双击仓库根目录 `打开教程网页.bat`，或在 `docs/` 下执行 `npm run docs:dev`
 适用：用 `live-2d/启动 WebUI 控制面板.bat` 打开的浏览器界面。
 
-## 肥牛.exe 教程：同一文档站的 `/qt/`（预览时是 `http://127.0.0.1:5173/qt/`）
-适用：桌面上的 `肥牛.exe`。
-
-## 官网教程（补充）：[点我进官网](http://mynewbot.com/tutorials)
-安装包箭头图和更旧截图看这里，不和本站两套界面教程混用。
+## 官网旧教程（肥牛.exe / 旧界面）：[点我进官网](http://mynewbot.com/tutorials)
+官网教程会继续保留，不和 WebUI 新站混用。
 
 ## 肥牛部署新人整合包（文件路径不能有中文空格括号等字符）：[点我下载](https://pan.baidu.com/s/1kohirTKi_0NGmjL9O5LeNQ?pwd=6666)
 针对新手小白特化的一键解压包，解压即用，记得阅读整合包内的教程
