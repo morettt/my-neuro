@@ -20,8 +20,6 @@
 
 
 ## 本项目部署流程请看官网：[点我进官网](http://mynewbot.com/tutorials)
-## 肥牛部署新人整合包（文件路径不能有中文空格括号等字符）：[点我下载](https://pan.baidu.com/s/1kohirTKi_0NGmjL9O5LeNQ?pwd=6666)
-针对新手小白特化的一键解压包，解压即用，记得阅读整合包内的教程
 
 
 
