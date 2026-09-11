@@ -9,6 +9,7 @@ from pathlib import Path
 
 from flask import Blueprint, request, jsonify
 from .state_io import atomic_write_json, resource_lock
+from .utils import logger
 
 # 设置项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent.absolute()
