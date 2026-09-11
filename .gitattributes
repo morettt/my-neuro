@@ -1,0 +1,4 @@
+# Preserve CRLF in Windows launchers, including raw-file and source-archive downloads.
+"/打开教程网页.bat" -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+docs/scripts/open-tutorial.cmd -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+docs/scripts/open-tutorial.vbs -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
