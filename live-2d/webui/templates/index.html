@@ -224,6 +224,26 @@
                         <input type="number" id="temperature" min="0" max="2" step="0.1" data-i18n-placeholder="llm_config.temperature_placeholder" placeholder="0.9">
                     </div>
                 </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="llm-provider-toggle" for="reasoning-enabled">
+                            <input type="checkbox" id="reasoning-enabled" onchange="syncLegacyReasoningEffortEnabled()">
+                            <span data-i18n="llm_config.reasoning_enabled">启用思考模式（默认关闭）</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="reasoning-effort" data-i18n="llm_config.reasoning_effort">思考档位</label>
+                        <select id="reasoning-effort" disabled>
+                            <option value="minimal">minimal - 最低</option>
+                            <option value="low">low - 低</option>
+                            <option value="medium" selected>medium - 中</option>
+                            <option value="high">high - 高</option>
+                            <option value="xhigh">xhigh - 超高（extra high，部分模型支持）</option>
+                            <option value="max">max - 最大（部分模型支持）</option>
+                        </select>
+                    </div>
+                </div>
+                <p class="info-tip" data-i18n="llm_config.reasoning_hint">未勾选时会明确关闭思考，不使用模型默认值</p>
                 <div class="form-group">
                     <label for="system-prompt" data-i18n="llm_config.system_prompt">AI 人设</label>
                     <textarea id="system-prompt" class="system-prompt-textarea" data-i18n-placeholder="llm_config.system_prompt_placeholder" placeholder="在这里输入 AI 人设..."></textarea>

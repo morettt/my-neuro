@@ -171,6 +171,7 @@ class set_pyqt(VoiceCloneMixin, MotionExpressionMixin, Live2DControlMixin, LogsM
 
         # 加载原始UI文件
         self.ui = uic.loadUi('test222.ui')
+        self._ensure_reasoning_mode_widgets()
 
         # 云端配置：补充 SiliconFlow ASR 子标签
         self.setup_cloud_tts_provider_tab()

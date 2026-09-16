@@ -1,6 +1,7 @@
 // llm-client.js - 统一的LLM API客户端
 const { logToTerminal, handleAPIError } = require('../api-utils.js');
 const { sanitizeToolMessageSequence } = require('./tool-message-utils.js');
+const { applyReasoningToRequestBody } = require('./reasoning-request.js');
 
 /**
  * 统一的LLM客户端
@@ -21,6 +22,9 @@ class LLMClient {
         this.providerId = llmConfig.id || llmConfig.provider_id || '';
         this.temperature = llmConfig.temperature || 1.0;
         this.temperatureEnabled = llmConfig.temperature_enabled ?? false;
+        // 思考模式默认关闭：只有显式 reasoning_enabled === true 才开启
+        this.reasoningEnabled = llmConfig.reasoning_enabled === true;
+        this.reasoningEffort = llmConfig.reasoning_effort || null;
     }
 
     /**
@@ -53,6 +57,8 @@ class LLMClient {
         if (this.temperatureEnabled) {
             requestBody.temperature = this.temperature;
         }
+
+        applyReasoningToRequestBody(requestBody, this);
 
         // 添加工具列表(如果提供)
         if (tools && tools.length > 0) {
@@ -519,6 +525,12 @@ class LLMClient {
             this.model = newConfig.llm.model || this.model;
             this.temperature = newConfig.llm.temperature !== undefined ? newConfig.llm.temperature : this.temperature;  // 🔥 支持temperature更新
             this.temperatureEnabled = newConfig.llm.temperature_enabled !== undefined ? newConfig.llm.temperature_enabled : this.temperatureEnabled;
+            this.reasoningEnabled = newConfig.llm.reasoning_enabled !== undefined
+                ? newConfig.llm.reasoning_enabled === true
+                : this.reasoningEnabled;
+            this.reasoningEffort = newConfig.llm.reasoning_effort !== undefined
+                ? newConfig.llm.reasoning_effort
+                : this.reasoningEffort;
             logToTerminal('info', 'LLM客户端配置已更新');
         }
     }

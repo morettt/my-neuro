@@ -2323,7 +2323,7 @@ function createModelParamsPanel(model) {
 
     const hint = document.createElement('div');
     hint.className = 'llm-provider-param-hint';
-    hint.textContent = '未勾选的参数不会发送给 API（使用模型默认值）。参数跟随模型，切换对话模型时自动生效。';
+    hint.textContent = '思考模式默认关闭。未勾选时会明确要求模型不要思考，以降低延迟和 token。勾选后按右侧档位发送，仅对支持思考的模型生效。温度未勾选时仍不发送该参数。';
     panel.appendChild(hint);
     return panel;
 }
