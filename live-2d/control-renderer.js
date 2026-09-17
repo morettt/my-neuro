@@ -312,7 +312,7 @@ $('fetch-llm-models').addEventListener('click', async () => {
       try {
         const result = await window.controlApi.testLlmModel($('llm-url').value, $('llm-key').value, testButton.dataset.testModel);
         status.classList.add(result.ok ? 'success' : 'failure');
-        status.textContent = result.ok ? `可用 · 响应耗时 ${result.elapsedMs} ms（完整回复）` : `测试失败 · ${result.message}`;
+        status.textContent = result.ok ? `可用 · 首字延迟 ${result.elapsedMs} ms（流式 · 思考模式已关）` : `测试失败 · ${result.message}`;
       } catch {
         status.classList.add('failure');
         status.textContent = '测试失败，请重试';

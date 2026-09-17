@@ -16,6 +16,20 @@ const runtimeLogPath = path.join(__dirname, 'runtime.log');
 let runtimeLogSender = null;
 let runtimeLogLength = 0;
 let runtimeLogRemainder = '';
+let controlWindow = null;
+
+// 🔥 单实例锁：反复双击 肥牛.exe 之前会一直开新窗口/新进程，
+// 拿不到锁就直接退出，并把已有窗口拉到前台。
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+app.on('second-instance', () => {
+  if (!controlWindow || controlWindow.isDestroyed()) return;
+  if (controlWindow.isMinimized()) controlWindow.restore();
+  controlWindow.show();
+  controlWindow.focus();
+});
 let selectedVoiceModelPath = '';
 let selectedVoiceAudioPath = '';
 let avatarLoadingWindow = null;
@@ -577,7 +591,7 @@ function listMcpTools() {
 }
 
 function createControlWindow() {
-  const win = new BrowserWindow({
+  const win = controlWindow = new BrowserWindow({
     width: 1080,
     height: 760,
     minWidth: 860,
@@ -591,7 +605,9 @@ function createControlWindow() {
       preload: path.join(__dirname, 'control-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      spellcheck: false
+      spellcheck: false,
+      // 全屏透明的桌宠窗口抢鼠标时，系统会误判面板被完全遮挡而停止绘制，日志收到了也不刷新
+      backgroundThrottling: false
     }
   });
   const fadeWindow = (from, to, duration = 320) => new Promise(resolve => {
@@ -960,26 +976,55 @@ ipcMain.handle('control:test-llm-model', async (_event, apiUrl, apiKey, model) =
   const started = performance.now();
   const signal = AbortSignal.timeout(30000);
   try {
+    // 🔥 默认关闭思考模式，避免测出来的延迟被思考过程拉高
+    const requestBody = {
+      model: String(model).trim(),
+      messages: [{ role: 'user', content: '请只回复 OK' }],
+      stream: true,
+      thinking: { type: 'disabled' }
+    };
     const response = await net.fetch(`${endpoint}/chat/completions`, {
       method: 'POST', headers, signal,
-      body: JSON.stringify({ model: String(model).trim(), messages: [{ role: 'user', content: '请只回复 OK' }], stream: false })
+      body: JSON.stringify(requestBody)
     });
-    let payload;
-    try { payload = await response.json(); }
-    catch (error) {
-      if (signal.aborted) throw error;
-      return { ok: false, message: `返回格式异常（HTTP ${response.status}）` };
-    }
-    const elapsedMs = Math.round(performance.now() - started);
-    if (!response.ok || payload?.error) {
-      const detail = typeof payload?.error === 'string' ? payload.error : payload?.error?.message;
+    if (!response.ok) {
+      let detail;
+      try { detail = (await response.json())?.error?.message; } catch { /* 忽略非 JSON 错误体 */ }
       const message = String(detail || '模型请求失败').slice(0, 240);
       const key = String(apiKey || '').trim();
       return { ok: false, message: `HTTP ${response.status}：${key ? message.split(key).join('***') : message}` };
     }
-    const content = payload?.choices?.[0]?.message?.content;
-    if (typeof content !== 'string' || !content.trim()) return { ok: false, message: '接口未返回有效的文本回复' };
-    return { ok: true, elapsedMs };
+
+    // 🔥 实际对话走的是流式响应，这里测的也应是首个正文 token 的到达时间（TTFT），
+    // 而不是等完整回复——开了思考模式的模型完整回复耗时会被思考过程严重拉高，
+    // 跟用户真实感知到的延迟对不上。
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let firstTokenMs = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === 'data: [DONE]' || trimmed === 'data:[DONE]' || !trimmed.startsWith('data:')) continue;
+        const jsonStr = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed.slice(5);
+        let chunk;
+        try { chunk = JSON.parse(jsonStr); } catch { continue; }
+        if (chunk?.choices?.[0]?.delta?.content) {
+          firstTokenMs = Math.round(performance.now() - started);
+          break;
+        }
+      }
+      if (firstTokenMs !== null) { try { await reader.cancel(); } catch { /* 已拿到结果，忽略取消失败 */ } break; }
+    }
+
+    if (firstTokenMs === null) return { ok: false, message: '接口未返回有效的文本回复' };
+    return { ok: true, elapsedMs: firstTokenMs };
   } catch {
     return { ok: false, message: signal.aborted ? '测试超时（30秒），暂未确认可用' : '连接失败，请检查接口地址和网络' };
   }
