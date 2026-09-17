@@ -16,6 +16,20 @@ const runtimeLogPath = path.join(__dirname, 'runtime.log');
 let runtimeLogSender = null;
 let runtimeLogLength = 0;
 let runtimeLogRemainder = '';
+let controlWindow = null;
+
+// 🔥 单实例锁：反复双击 肥牛.exe 之前会一直开新窗口/新进程，
+// 拿不到锁就直接退出，并把已有窗口拉到前台。
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+app.on('second-instance', () => {
+  if (!controlWindow || controlWindow.isDestroyed()) return;
+  if (controlWindow.isMinimized()) controlWindow.restore();
+  controlWindow.show();
+  controlWindow.focus();
+});
 let selectedVoiceModelPath = '';
 let selectedVoiceAudioPath = '';
 let avatarLoadingWindow = null;
@@ -577,7 +591,7 @@ function listMcpTools() {
 }
 
 function createControlWindow() {
-  const win = new BrowserWindow({
+  const win = controlWindow = new BrowserWindow({
     width: 1080,
     height: 760,
     minWidth: 860,
