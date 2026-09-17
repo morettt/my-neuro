@@ -6,6 +6,7 @@ const path = require('path');
 const { eventBus } = require('./event-bus.js');
 const { llmProviderManager } = require('./llm-provider.js');
 const { createRequestDeadline } = require('./request-deadline.js');
+const { applyReasoningToRequestBody } = require('../ai/reasoning-request.js');
 
 class PluginStorage {
     constructor(pluginName) {
@@ -190,10 +191,9 @@ class PluginContext {
         }
         if (
             !Object.prototype.hasOwnProperty.call(requestOptions, 'reasoning_effort') &&
-            resolvedProvider && resolvedProvider.reasoning_enabled === true &&
-            resolvedProvider.reasoning_effort
+            !Object.prototype.hasOwnProperty.call(requestOptions, 'thinking')
         ) {
-            requestBody.reasoning_effort = resolvedProvider.reasoning_effort;
+            applyReasoningToRequestBody(requestBody, resolvedProvider || {});
         }
 
         const timeoutMs = Number(requestedTimeoutMs);

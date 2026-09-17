@@ -133,6 +133,8 @@ class ConfigTrackingMixin:
             self.ui.textEdit_3,
             self.ui.doubleSpinBox_temperature,
             self.ui.checkBox_temperature_enabled,
+            getattr(self.ui, 'checkBox_reasoning_enabled', None),
+            getattr(self.ui, 'comboBox_reasoning_effort', None),
             self.ui.lineEdit_4,
             self.ui.lineEdit_5,
             self.ui.checkBox_mcp_enable,
@@ -196,6 +198,8 @@ class ConfigTrackingMixin:
             ])
 
         for widget in self._config_dirty_widgets:
+            if widget is None:
+                continue
             try:
                 if isinstance(widget, QLineEdit):
                     widget.textChanged.connect(self._mark_config_dirty)

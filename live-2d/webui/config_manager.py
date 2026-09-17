@@ -725,11 +725,13 @@ def apply_legacy_vision_model_to_providers(config, providers, vm):
     return changed
 
 
-def apply_legacy_temperature_to_model(provider, model_id, data):
-    """把旧版 LLM POST 的 temperature 写进当前选中模型条目。"""
+def apply_legacy_model_params(provider, model_id, data):
+    """把旧版 LLM POST 的温度/思考参数写进当前选中模型条目。"""
     if not isinstance(provider, dict) or not model_id:
         return
-    if 'temperature' not in data and 'temperature_enabled' not in data:
+    if not any(key in data for key in (
+        'temperature', 'temperature_enabled', 'reasoning_enabled', 'reasoning_effort'
+    )):
         return
     ensure_selected_model_present(provider, model_id)
     for model in provider.setdefault('models', []):
@@ -742,7 +744,18 @@ def apply_legacy_temperature_to_model(provider, model_id, data):
                 pass
         if 'temperature_enabled' in data:
             model['temperature_enabled'] = bool(data.get('temperature_enabled'))
+        if 'reasoning_enabled' in data:
+            model['reasoning_enabled'] = bool(data.get('reasoning_enabled'))
+        if 'reasoning_effort' in data:
+            effort = str(data.get('reasoning_effort') or '').strip()
+            if effort:
+                model['reasoning_effort'] = effort
         break
+
+
+def apply_legacy_temperature_to_model(provider, model_id, data):
+    """兼容旧名：温度和思考参数都写入当前模型。"""
+    apply_legacy_model_params(provider, model_id, data)
 
 
 def ensure_provider_store(config, persist=True):
@@ -851,10 +864,14 @@ def handle_llm_config():
         # 旧 temperature 已迁到模型级：从当前选中模型的条目回填（旧前端只读展示）
         legacy_temperature = llm_config.get('temperature', 0.9)
         legacy_temperature_enabled = llm_config.get('temperature_enabled', False)
+        legacy_reasoning_enabled = False
+        legacy_reasoning_effort = 'medium'
         for _m in (current_provider.get('models') or []):
             if _m.get('model_id') == legacy_model:
                 legacy_temperature = _m.get('temperature', legacy_temperature)
                 legacy_temperature_enabled = _m.get('temperature_enabled', legacy_temperature_enabled)
+                legacy_reasoning_enabled = bool(_m.get('reasoning_enabled', False))
+                legacy_reasoning_effort = _m.get('reasoning_effort') or legacy_reasoning_effort
                 break
         return jsonify({
             # 旧字段（旧前端三格）
@@ -863,6 +880,8 @@ def handle_llm_config():
             'model': legacy_model,
             'temperature': legacy_temperature,
             'temperature_enabled': legacy_temperature_enabled,
+            'reasoning_enabled': legacy_reasoning_enabled,
+            'reasoning_effort': legacy_reasoning_effort,
             # 新字段（通讯录）
             'providers': providers,
             'provider_id': current_provider_id,
@@ -882,7 +901,10 @@ def handle_llm_config():
                 providers = normalize_providers_data(data['providers'])
                 if not providers and current_providers:
                     return jsonify({'error': '不能用空通讯录覆盖已有提供商数据'}), 400
-            elif any(k in data for k in ('api_key', 'api_url', 'model', 'temperature', 'temperature_enabled')):
+            elif any(k in data for k in (
+                'api_key', 'api_url', 'model', 'temperature', 'temperature_enabled',
+                'reasoning_enabled', 'reasoning_effort'
+            )):
                 # 旧前端三格：写进当前 provider（没有则创建 main），并更新选中 model
                 providers = current_providers
                 llm_sel = config.setdefault('llm', {})
@@ -903,7 +925,7 @@ def handle_llm_config():
                     if model_name:
                         llm_sel['model_id'] = model_name
                 selected_model_id = str(llm_sel.get('model_id') or '').strip()
-                apply_legacy_temperature_to_model(target, selected_model_id, data)
+                apply_legacy_model_params(target, selected_model_id, data)
             else:
                 providers = current_providers
 

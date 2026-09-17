@@ -1074,6 +1074,12 @@ async function saveLLMConfig() {
         api_url: document.getElementById('api-url').value,
         model: document.getElementById('model').value,
         temperature: parseFloat(document.getElementById('temperature').value),
+        reasoning_enabled: document.getElementById('reasoning-enabled')
+            ? document.getElementById('reasoning-enabled').checked
+            : false,
+        reasoning_effort: document.getElementById('reasoning-effort')
+            ? document.getElementById('reasoning-effort').value
+            : 'medium',
         system_prompt: document.getElementById('system-prompt').value
     };
     try {
@@ -1107,6 +1113,7 @@ async function loadLLMConfig() {
             _setVal('api-url', data.api_url || '');
             _setVal('model', data.model || '');
             _setVal('temperature', data.temperature || 0.9);
+            applyLegacyReasoningFields(data);
             _setVal('system-prompt', data.system_prompt || '');
         }
     } catch (error) {
@@ -1872,6 +1879,30 @@ function addToolLog(toolName, result) {
 function _setVal(id, value) { const el = document.getElementById(id); if (el) el.value = value; }
 function _setChk(id, value) { const el = document.getElementById(id); if (el) el.checked = value; }
 
+function syncLegacyReasoningEffortEnabled() {
+    const enabledEl = document.getElementById('reasoning-enabled');
+    const effortEl = document.getElementById('reasoning-effort');
+    if (!effortEl) return;
+    effortEl.disabled = !(enabledEl && enabledEl.checked);
+}
+
+function applyLegacyReasoningFields(data) {
+    const enabled = data && data.reasoning_enabled === true;
+    _setChk('reasoning-enabled', enabled);
+    const effortEl = document.getElementById('reasoning-effort');
+    if (effortEl) {
+        const effort = (data && data.reasoning_effort) || 'medium';
+        if (![...effortEl.options].some(option => option.value === effort)) {
+            const opt = document.createElement('option');
+            opt.value = effort;
+            opt.textContent = effort + '（自定义）';
+            effortEl.appendChild(opt);
+        }
+        effortEl.value = effort;
+    }
+    syncLegacyReasoningEffortEnabled();
+}
+
 // 加载 LLM 基础配置（仅供内部使用）
 async function loadConfigs() {
     try {
@@ -1882,6 +1913,7 @@ async function loadConfigs() {
             _setVal('api-url', config.api_url || '');
             _setVal('model', config.model || '');
             _setVal('temperature', config.temperature || 0.9);
+            applyLegacyReasoningFields(config);
             _setVal('system-prompt', config.system_prompt || '');
         }
     } catch (error) {

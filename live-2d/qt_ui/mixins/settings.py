@@ -32,9 +32,105 @@ from ..workers import (  # noqa: F401
 from ..widgets.toast import ToastNotification  # noqa: F401
 from ..widgets.title_bar import CustomTitleBar  # noqa: F401
 
+REASONING_EFFORT_CHOICES = (
+    ('minimal', 'minimal - 最低'),
+    ('low', 'low - 低'),
+    ('medium', 'medium - 中'),
+    ('high', 'high - 高'),
+    ('xhigh', 'xhigh - 超高（extra high，部分模型支持）'),
+    ('max', 'max - 最大（部分模型支持）'),
+)
+
 
 class SettingsMixin:
     """设置页：配置读写、LLM 模型拉取、API Key 可见性。"""
+
+    def _ensure_reasoning_mode_widgets(self):
+        """在温度行下方插入思考开关和档位，避免大改 test222.ui。"""
+        if hasattr(self.ui, 'checkBox_reasoning_enabled'):
+            return
+
+        checkbox = QCheckBox('启用思考模式（默认关闭）')
+        checkbox.setObjectName('checkBox_reasoning_enabled')
+        checkbox.setFont(self.ui.checkBox_temperature_enabled.font())
+        checkbox.setChecked(False)
+
+        combo = QComboBox()
+        combo.setObjectName('comboBox_reasoning_effort')
+        combo.setFont(self.ui.checkBox_temperature_enabled.font())
+        combo.setMinimumHeight(35)
+        combo.setEnabled(False)
+        for value, label in REASONING_EFFORT_CHOICES:
+            combo.addItem(label, value)
+        combo.setCurrentIndex(2)
+
+        label = QLabel('思考档位：')
+        label.setObjectName('label_reasoning_effort')
+        label.setFont(self.ui.label_temperature.font())
+
+        row = QHBoxLayout()
+        row.setObjectName('horizontalLayout_reasoning')
+        row.addWidget(checkbox)
+        row.addWidget(label)
+        row.addWidget(combo)
+        row.addStretch(1)
+
+        inserted = False
+        temp_layout = getattr(self.ui, 'horizontalLayout_temperature', None)
+        parent_widget = temp_layout.parent() if temp_layout is not None else None
+
+        def _insert_after(layout):
+            for i in range(layout.count()):
+                item = layout.itemAt(i)
+                child = item.layout()
+                if child is temp_layout:
+                    layout.insertLayout(i + 1, row)
+                    return True
+                if child is not None and _insert_after(child):
+                    return True
+            return False
+
+        if parent_widget is not None and parent_widget.layout() is not None:
+            inserted = _insert_after(parent_widget.layout())
+        if not inserted and temp_layout is not None:
+            temp_layout.addWidget(checkbox)
+            temp_layout.addWidget(label)
+            temp_layout.addWidget(combo)
+
+        self.ui.checkBox_reasoning_enabled = checkbox
+        self.ui.comboBox_reasoning_effort = combo
+        self.ui.label_reasoning_effort = label
+        checkbox.stateChanged.connect(lambda *_: self._sync_reasoning_effort_enabled())
+        self._sync_reasoning_effort_enabled()
+
+    def _sync_reasoning_effort_enabled(self):
+        combo = getattr(self.ui, 'comboBox_reasoning_effort', None)
+        checkbox = getattr(self.ui, 'checkBox_reasoning_enabled', None)
+        if combo is None or checkbox is None:
+            return
+        combo.setEnabled(checkbox.isChecked())
+
+    def _reasoning_effort_value(self):
+        combo = getattr(self.ui, 'comboBox_reasoning_effort', None)
+        if combo is None:
+            return 'medium'
+        data = combo.currentData()
+        if isinstance(data, str) and data.strip():
+            return data.strip()
+        text = combo.currentText().split(' - ', 1)[0].strip()
+        return text or 'medium'
+
+    def _set_reasoning_effort_value(self, value):
+        combo = getattr(self.ui, 'comboBox_reasoning_effort', None)
+        if combo is None:
+            return
+        effort = str(value or 'medium').strip() or 'medium'
+        for index in range(combo.count()):
+            if combo.itemData(index) == effort or combo.itemText(index).startswith(effort):
+                combo.setCurrentIndex(index)
+                return
+        combo.addItem(f'{effort}（自定义）', effort)
+        combo.setCurrentIndex(combo.count() - 1)
 
     def _resolved_llm_config(self):
         """兼容旧版内联 LLM 配置与新版 llm_providers.json 通讯录。"""
@@ -63,6 +159,10 @@ class SettingsMixin:
                     llm['temperature'] = model.get('temperature', llm.get('temperature', 1.0))
                     llm['temperature_enabled'] = model.get(
                         'temperature_enabled', llm.get('temperature_enabled', False))
+                    llm['reasoning_enabled'] = model.get(
+                        'reasoning_enabled', llm.get('reasoning_enabled', False))
+                    llm['reasoning_effort'] = model.get(
+                        'reasoning_effort', llm.get('reasoning_effort', 'medium'))
         except (OSError, ValueError, TypeError):
             pass
         return llm
@@ -96,6 +196,10 @@ class SettingsMixin:
         if model:
             model['temperature'] = ui_llm['temperature']
             model['temperature_enabled'] = ui_llm['temperature_enabled']
+            model['reasoning_enabled'] = bool(ui_llm.get('reasoning_enabled', False))
+            effort = str(ui_llm.get('reasoning_effort') or '').strip()
+            if effort:
+                model['reasoning_effort'] = effort
 
         with open(provider_file, 'w', encoding='utf-8') as f:
             json.dump({'providers': providers}, f, ensure_ascii=False, indent=2)
@@ -103,7 +207,10 @@ class SettingsMixin:
         llm_ref['provider_id'] = provider_id
         llm_ref['model_id'] = model_id
         llm_ref['system_prompt'] = ui_llm['system_prompt']
-        for key in ('api_key', 'api_url', 'model', 'temperature', 'temperature_enabled'):
+        for key in (
+            'api_key', 'api_url', 'model', 'temperature', 'temperature_enabled',
+            'reasoning_enabled', 'reasoning_effort'
+        ):
             llm_ref.pop(key, None)
 
     def set_btu(self):
@@ -239,6 +346,10 @@ class SettingsMixin:
         self.ui.textEdit_3.setPlainText(llm_config.get('system_prompt', ''))
         self.ui.doubleSpinBox_temperature.setValue(llm_config.get('temperature', 1.0))
         self.ui.checkBox_temperature_enabled.setChecked(llm_config.get('temperature_enabled', False))
+        if hasattr(self.ui, 'checkBox_reasoning_enabled'):
+            self.ui.checkBox_reasoning_enabled.setChecked(llm_config.get('reasoning_enabled') is True)
+            self._set_reasoning_effort_value(llm_config.get('reasoning_effort', 'medium'))
+            self._sync_reasoning_effort_enabled()
         self.ui.lineEdit_4.setText(self.config['ui']['intro_text'])
         self.ui.lineEdit_5.setText(str(self.config['context']['max_messages']))
         self.ui.checkBox_mcp_enable.setChecked(self.config.get('mcp', {}).get('enabled', True))
@@ -391,6 +502,11 @@ class SettingsMixin:
             "model": self.ui.comboBox_llm_model.currentText().strip(),
             "temperature_enabled": self.ui.checkBox_temperature_enabled.isChecked(),
             "temperature": self.ui.doubleSpinBox_temperature.value(),
+            "reasoning_enabled": (
+                self.ui.checkBox_reasoning_enabled.isChecked()
+                if hasattr(self.ui, 'checkBox_reasoning_enabled') else False
+            ),
+            "reasoning_effort": self._reasoning_effort_value(),
             "system_prompt": self.ui.textEdit_3.toPlainText()
         }
         self._save_llm_provider_config(current_config, ui_llm)
