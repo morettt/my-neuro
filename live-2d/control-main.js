@@ -591,7 +591,9 @@ function createControlWindow() {
       preload: path.join(__dirname, 'control-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      spellcheck: false
+      spellcheck: false,
+      // 全屏透明的桌宠窗口抢鼠标时，系统会误判面板被完全遮挡而停止绘制，日志收到了也不刷新
+      backgroundThrottling: false
     }
   });
   const fadeWindow = (from, to, duration = 320) => new Promise(resolve => {
