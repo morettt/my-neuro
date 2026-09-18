@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script>(function(){try{var t=localStorage.getItem('webui-theme');if(t==='cyber'||t==='galgame'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();</script>
     <link rel="stylesheet" href="/static/new/css/themes.css?v=20260819">
-    <link rel="stylesheet" href="/static/new/css/style.css?v=20260819">
+    <link rel="stylesheet" href="/static/new/css/style.css?v=20260919-plugin-market">
     <!-- i18next 国际化支持 -->
     <script src="/static/new/js/libs/i18next.min.js"></script>
     <script src="/static/new/js/libs/i18nextHttpBackend.min.js"></script>
@@ -839,7 +839,52 @@
             <div id="plugin-market-panel" class="market-panel">
                 <div class="market-header">
                     <button onclick="refreshPluginMarket()" class="btn-start">🔄 刷新插件列表</button>
+                    <button id="plugin-market-settings-btn" onclick="togglePluginMarketSettings()" class="btn-sm">⚙ 下载设置</button>
                 </div>
+
+                <!-- 下载设置（GitHub 镜像 / pip / npm / 插件源） -->
+                <div id="plugin-market-settings" class="market-settings-panel is-hidden">
+                    <div id="plugin-market-tools" class="market-settings-tools">正在检测本机工具...</div>
+                    <div class="market-settings-grid">
+                        <label>GitHub 下载加速
+                            <select id="pm-mirror-mode" onchange="onPluginMarketMirrorModeChange()">
+                                <option value="auto">自动：直连优先，失败后依次尝试镜像（推荐）</option>
+                                <option value="direct">仅直连 GitHub</option>
+                                <option value="custom">自定义镜像前缀…</option>
+                            </select>
+                        </label>
+                        <label id="pm-mirror-custom-wrap" class="is-hidden">自定义镜像前缀
+                            <input id="pm-mirror-custom" type="text" placeholder="例：https://your-mirror.example（只填主机名，不带路径）">
+                        </label>
+                        <label>pip 镜像地址
+                            <input id="pm-pip-index" type="text" placeholder="留空用 PyPI 官方源；国内可填 https://pypi.tuna.tsinghua.edu.cn/simple">
+                        </label>
+                        <label>npm registry
+                            <input id="pm-npm-registry" type="text" placeholder="留空用 npm 官方源；默认 https://registry.npmmirror.com/">
+                        </label>
+                        <label>插件源地址
+                            <input id="pm-hub-url" type="text" placeholder="留空用官方 plugin_hub.json；可填自建索引的 https 地址">
+                        </label>
+                    </div>
+                    <div class="market-settings-actions">
+                        <span class="market-settings-hint">镜像站由第三方提供。国内网络建议 GitHub 加速、pip、npm 三处都换成国内源，插件才能"直接下、直接装"。</span>
+                        <button class="btn-sm" onclick="savePluginMarketSettings()">💾 保存设置</button>
+                    </div>
+                </div>
+
+                <!-- 从仓库地址安装 / 上传 zip 安装 -->
+                <div class="market-install-tools">
+                    <div class="market-install-row">
+                        <input id="pm-repo-url" type="text" placeholder="粘贴任意公开 GitHub 插件仓库地址，例：https://github.com/作者/my-neuro-plugin-xxx">
+                        <button class="btn-sm" onclick="previewPluginFromUrl()">🔍 预览并安装</button>
+                        <label class="btn-sm market-upload-label" title="上传本地插件 zip（根目录需有 metadata.json）">📦 上传 zip 安装
+                            <input id="pm-upload-file" type="file" accept=".zip,application/zip" onchange="uploadPluginZip(this)" hidden>
+                        </label>
+                    </div>
+                    <div id="pm-url-preview" class="is-hidden"></div>
+                    <div id="pm-upload-status" class="is-hidden"></div>
+                </div>
+
                 <div id="plugin-market-update-toolbar" class="market-update-toolbar is-hidden">
                     <span id="plugin-market-update-count" class="market-update-count">暂无可更新插件</span>
                     <button id="plugin-market-update-all-btn" onclick="updateAllPlugins()" class="btn-sm is-hidden">⬆ 全部更新</button>
@@ -1311,7 +1356,7 @@
     <script src="/static/new/js/galgame-deco.js?v=20260819"></script>
     <script src="/static/new/js/libs/chart.umd.min.js?v=20260819"></script>
     <script src="/static/new/js/overview.js?v=20260819"></script>
-    <script src="/static/new/js/app.js?v=20260819-plugin-btn-theme"></script>
+    <script src="/static/new/js/app.js?v=20260919-plugin-market"></script>
     <script src="/static/new/js/releases.js?v=20260820"></script>
     <script>
         function switchWebuiFlavor(flavor) {

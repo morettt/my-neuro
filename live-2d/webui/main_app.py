@@ -23,6 +23,16 @@ def create_app():
                 template_folder=str(PROJECT_ROOT / 'webui' / 'templates'),
                 static_folder=str(PROJECT_ROOT / 'webui' / 'static'))
 
+    # 插件 zip 上传上限（比 marketplace_updater.MAX_PLUGIN_ARCHIVE_BYTES 略大，留出表单开销）
+    app.config['MAX_CONTENT_LENGTH'] = 320 * 1024 * 1024
+
+    @app.errorhandler(413)
+    def _payload_too_large(_error):
+        return jsonify({
+            'success': False,
+            'error': '上传文件超过 320 MB 上限，请精简插件包（如去掉 node_modules 里的开发依赖）后重试',
+        }), 413
+
     # 注册各个功能蓝图
     from .service_controller import service_bp
     from .config_manager import config_bp

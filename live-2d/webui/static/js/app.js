@@ -3507,43 +3507,118 @@ function restoreInstallButton(pluginName, text) {
     if (progressDiv) progressDiv.style.display = 'none';
 }
 
-// 轮询检测插件是否已安装（检测目录存在）
-async function pollPluginInstalled(pluginName) {
-    const maxAttempts = 180;  // 最多轮询 180 次（约 3 分钟）
+// 安装任务各阶段的文案（状态值由后端 install-status 返回）
+const PLUGIN_INSTALL_STAGE_KEYS = {
+    queued: 'market.status_queued',
+    downloading: 'market.status_downloading',
+    validating: 'market.status_validating',
+    extracting: 'market.status_extracting',
+    installing_deps: 'market.status_installing_deps',
+    installing_node_deps: 'market.status_installing_node_deps',
+    enabling: 'market.status_enabling',
+    updating: 'market.status_updating'
+};
+
+// 安装完成后的提示：是否已启用、桌宠是否会立刻加载、是否经镜像
+function describePluginInstallResult(data) {
+    let text = data.enabled ? t('market.result_installed_enabled') : t('market.result_installed_not_enabled');
+    if (data.enabled) {
+        if (data.live2d_running === true) {
+            text += t('market.result_live2d_running');
+        } else if (data.live2d_running === false) {
+            text += t('market.result_live2d_stopped');
+        } else {
+            text += t('market.result_live2d_unknown');
+        }
+    }
+    if (data.source_used && data.source_used !== 'direct' && data.source_used !== 'upload') {
+        text += t('market.result_via_mirror', { source: data.source_used });
+    }
+    return text;
+}
+
+function handlePluginInstallCompleted(pluginName, data, progressFill, progressText) {
+    if (progressFill) progressFill.style.width = '100%';
+    if (progressText) progressText.textContent = describePluginInstallResult(data);
+
+    const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+    warnings.forEach((warning) => showWarning(warning, 9000));
+    if (data.enabled) {
+        showSuccess(t('market.toast_installed_enabled', { name: pluginName }));
+    } else if (!warnings.length) {
+        showWarning(t('market.toast_enable_manually', { name: pluginName }), 9000);
+    }
+    if (data.enabled && data.live2d_running === true) {
+        showInfo(t('market.toast_check_log'), 8000);
+    }
+
+    // 延迟刷新列表，让后端有时间清理任务状态；插件管理页列表也同步刷新
+    setTimeout(() => refreshPluginMarket(), 500);
+    if (typeof loadPlugins === 'function') {
+        Promise.resolve(loadPlugins()).catch(() => {});
+    }
+}
+
+// 轮询后端的安装任务状态（install-status），能看到失败原因、依赖安装阶段和是否已自动启用。
+// options.progressEl：地址安装 / 上传安装时进度块不在市场卡片里，由调用方传入。
+// options.onFail：失败时的恢复动作（默认恢复市场卡片按钮）。
+async function pollPluginInstalled(pluginName, options = {}) {
+    // pip 与 npm 各有 600 秒超时，轮询上限放到 15 分钟
+    const maxAttempts = 900;
     let attempts = 0;
-    
+    const onFail = options.onFail || (() => restoreInstallButton(pluginName, t('market.plugin_install')));
+
     const poll = async () => {
         try {
-            // 直接检查插件目录是否存在
-            const response = await fetch(`/api/market/plugins/check-installed/${pluginName}`);
+            const response = await fetch(
+                `/api/market/plugins/install-status/${encodeURIComponent(pluginName)}`
+            );
             const data = await response.json();
-            
-            const progressDiv = document.getElementById(`progress-${pluginName}`);
+
+            const progressDiv = options.progressEl || document.getElementById(`progress-${pluginName}`);
             const progressFill = progressDiv ? progressDiv.querySelector('.progress-fill') : null;
             const progressText = progressDiv ? progressDiv.querySelector('.progress-text') : null;
-            
-            if (data.installed) {
-                // 插件已安装，成功！
-                if (progressFill) progressFill.style.width = '100%';
-                if (progressText) progressText.textContent = t('market.progress_done');
-                // 延迟刷新列表，让后端有时间清理任务状态
-                setTimeout(() => refreshPluginMarket(), 500);
+
+            if (!response.ok || data.success === false) {
+                throw new Error(data.error || t('market.status_read_failed'));
+            }
+
+            if (data.status === 'failed') {
+                const errorMessage = data.error || t('common.unknown_error');
+                if (progressText) progressText.textContent = t('market.install_failed') + '：' + errorMessage;
+                showError(t('market.install_failed') + '：' + errorMessage, 12000);
+                onFail();
                 return;
             }
-            
-            // 还未安装，进度条动画
-            if (progressFill) {
-                const progress = (attempts % 50) * 2;  // 0-100 循环动画
-                progressFill.style.width = progress + '%';
+
+            if (data.status === 'completed' || (data.installed && !data.installing)) {
+                handlePluginInstallCompleted(pluginName, data, progressFill, progressText);
+                return;
             }
-            
+
+            if (progressFill) {
+                const progress = Number(data.progress);
+                progressFill.style.width = (
+                    Number.isFinite(progress) ? Math.max(0, Math.min(99, progress)) : 0
+                ) + '%';
+            }
+            if (progressText) {
+                const key = PLUGIN_INSTALL_STAGE_KEYS[data.status];
+                progressText.textContent = key ? t(key) : t('market.status_generic');
+            }
+
+            if (!data.installing && !data.status) {
+                showError(t('market.task_lost'));
+                onFail();
+                return;
+            }
+
             attempts++;
             if (attempts < maxAttempts) {
-                setTimeout(poll, 1000);  // 每秒检查一次
+                setTimeout(poll, 1000);
             } else {
-                // 超时
                 if (progressText) progressText.textContent = t('market.progress_timeout');
-                restoreInstallButton(pluginName, t('market.plugin_install'));
+                onFail();
             }
         } catch (error) {
             console.error('轮询安装状态失败:', error);
@@ -3551,12 +3626,337 @@ async function pollPluginInstalled(pluginName) {
             if (attempts < maxAttempts) {
                 setTimeout(poll, 1000);
             } else {
-                restoreInstallButton(pluginName, t('market.plugin_install'));
+                showError(t('market.status_read_failed') + '：' + error.message);
+                onFail();
             }
         }
     };
-    
+
     poll();
+}
+
+// ============ 插件广场：下载设置 ============
+
+let pluginMarketSettingsLoaded = false;
+let pluginMarketBuiltinMirrors = [];
+
+function togglePluginMarketSettings() {
+    const panel = document.getElementById('plugin-market-settings');
+    if (!panel) return;
+    const willShow = panel.classList.contains('is-hidden');
+    panel.classList.toggle('is-hidden', !willShow);
+    if (willShow && !pluginMarketSettingsLoaded) {
+        loadPluginMarketSettings();
+    }
+}
+
+function renderPluginMarketMirrorOptions(mirrors) {
+    const select = document.getElementById('pm-mirror-mode');
+    if (!select) return;
+    select.querySelectorAll('option[data-mirror]').forEach((option) => option.remove());
+    const customOption = select.querySelector('option[value="custom"]');
+    mirrors.forEach((mirror) => {
+        const option = document.createElement('option');
+        option.value = `fixed:${mirror}`;
+        option.dataset.mirror = mirror;
+        let host = mirror;
+        try { host = new URL(mirror).host; } catch (_error) { /* 保持原样 */ }
+        option.textContent = t('market.settings_mirror_fixed', { host });
+        select.insertBefore(option, customOption);
+    });
+}
+
+function applyPluginMarketSettingsToForm(settings) {
+    const select = document.getElementById('pm-mirror-mode');
+    if (!select) return;
+    const mode = settings.github_mirror_mode || 'auto';
+    const mirror = settings.github_mirror || '';
+    if (mode === 'fixed' && mirror) {
+        const known = pluginMarketBuiltinMirrors.includes(mirror);
+        select.value = known ? `fixed:${mirror}` : 'custom';
+    } else {
+        select.value = mode === 'direct' ? 'direct' : 'auto';
+    }
+    document.getElementById('pm-mirror-custom').value = mirror;
+    document.getElementById('pm-pip-index').value = settings.pip_index_url || '';
+    document.getElementById('pm-npm-registry').value = settings.npm_registry || '';
+    document.getElementById('pm-hub-url').value = settings.hub_url || '';
+    onPluginMarketMirrorModeChange();
+}
+
+function onPluginMarketMirrorModeChange() {
+    const select = document.getElementById('pm-mirror-mode');
+    const wrap = document.getElementById('pm-mirror-custom-wrap');
+    if (!select || !wrap) return;
+    wrap.classList.toggle('is-hidden', select.value !== 'custom');
+}
+
+function renderPluginMarketTools(tools) {
+    const el = document.getElementById('plugin-market-tools');
+    if (!el) return;
+    // 内容已由脚本生成，不再让语言切换把它覆盖回"正在检测"
+    el.removeAttribute('data-i18n');
+    const npmText = tools.npm
+        ? escapeHtml(t('market.settings_npm_found', { path: tools.npm_path || '' }))
+        : escapeHtml(t('market.settings_npm_missing'));
+    const pyText = escapeHtml(t('market.settings_python', { path: tools.python_path || '-' }));
+    el.innerHTML = `${npmText}<br>${pyText}`;
+    el.classList.toggle('warn', !tools.npm);
+}
+
+async function loadPluginMarketSettings() {
+    try {
+        const response = await fetch('/api/market/settings');
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || t('market.settings_load_failed'));
+        }
+        pluginMarketBuiltinMirrors = Array.isArray(data.builtin_mirrors) ? data.builtin_mirrors : [];
+        renderPluginMarketMirrorOptions(pluginMarketBuiltinMirrors);
+        applyPluginMarketSettingsToForm(data.settings || {});
+        renderPluginMarketTools(data.tools || {});
+        pluginMarketSettingsLoaded = true;
+    } catch (error) {
+        showError(t('market.settings_load_failed') + '：' + error.message);
+    }
+}
+
+function collectPluginMarketSettingsFromForm() {
+    const selectValue = document.getElementById('pm-mirror-mode').value;
+    let github_mirror_mode = 'auto';
+    let github_mirror = '';
+    if (selectValue === 'direct') {
+        github_mirror_mode = 'direct';
+    } else if (selectValue.startsWith('fixed:')) {
+        github_mirror_mode = 'fixed';
+        github_mirror = selectValue.slice('fixed:'.length);
+    } else if (selectValue === 'custom') {
+        github_mirror_mode = 'fixed';
+        github_mirror = document.getElementById('pm-mirror-custom').value.trim();
+    }
+    return {
+        github_mirror_mode,
+        github_mirror,
+        pip_index_url: document.getElementById('pm-pip-index').value.trim(),
+        npm_registry: document.getElementById('pm-npm-registry').value.trim(),
+        hub_url: document.getElementById('pm-hub-url').value.trim()
+    };
+}
+
+async function savePluginMarketSettings() {
+    try {
+        const response = await fetch('/api/market/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(collectPluginMarketSettingsFromForm())
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showError(t('market.settings_save_failed') + '：' + (data.error || t('common.unknown_error')));
+            return;
+        }
+        applyPluginMarketSettingsToForm(data.settings || {});
+        showSuccess(t('market.settings_saved'));
+    } catch (error) {
+        showError(t('market.settings_save_error') + '：' + error.message);
+    }
+}
+
+// ============ 插件广场：从仓库地址安装 ============
+
+function renderPluginPreviewCard(info) {
+    const container = document.getElementById('pm-url-preview');
+    if (!container) return null;
+    const meta = info.metadata || {};
+    const name = meta.name || info.dir_name || '';
+    const repoHref = getSafeExternalHref(info.repo);
+    const badges = [
+        meta.version ? `<span class="version-badge">${escapeHtml(t('market.badge_version', { version: meta.version }))}</span>` : '',
+        `<span class="version-badge">${escapeHtml(meta.lang === 'python' ? t('market.lang_python') : t('market.lang_js'))}</span>`,
+        info.source_used ? `<span class="version-badge market-source-badge">${escapeHtml(t('market.badge_source', { source: info.source_used }))}</span>` : '',
+        info.compatible === false
+            ? `<span class="version-badge market-incompatible-badge" title="${escapeAttribute(info.compatibility_message || '')}">${escapeHtml(t('market.incompatible_badge'))}</span>`
+            : ''
+    ].join('');
+
+    let buttonHtml;
+    if (info.conflict) {
+        buttonHtml = `<button class="btn-sm market-action-btn" style="margin-top: 10px;" disabled>${escapeHtml(info.conflict)}</button>`;
+    } else if (info.compatible === false) {
+        buttonHtml = `<button class="btn-sm market-action-btn" style="margin-top: 10px;" data-i18n="market.install_ignore_compat" onclick="installPluginFromUrl('${escapeJsString(info.repo)}', true)">${escapeHtml(t('market.install_ignore_compat'))}</button>`;
+    } else {
+        buttonHtml = `<button class="btn-sm market-action-btn" style="margin-top: 10px;" data-i18n="market.install_and_enable" onclick="installPluginFromUrl('${escapeJsString(info.repo)}', false)">${escapeHtml(t('market.install_and_enable'))}</button>`;
+    }
+
+    const metaBlock = repoHref
+        ? `<div class="market-card-meta">
+            <span class="market-card-author">${t('plugins.author')}${escapeHtml(meta.author || '')}</span>
+            <a class="market-card-source-link" href="${escapeAttribute(repoHref)}" target="_blank" rel="noopener noreferrer">📎 ${escapeHtml(t('market.view_source'))}</a>
+           </div>`
+        : `<p class="market-card-author">${t('plugins.author')}${escapeHtml(meta.author || '')}</p>`;
+
+    container.innerHTML = `<div class="market-card market-preview-card" data-preview-plugin="${escapeAttribute(name)}">
+        <div class="market-card-header">
+            <h4 class="market-card-title">🧩 ${escapeHtml(meta.displayName || name)}</h4>
+            ${metaBlock}
+            <div class="market-card-versions">${badges}</div>
+            <p class="market-card-summary">${escapeHtml(meta.description || '')}</p>
+            ${info.compatible === false && info.compatibility_message ? `<p class="market-card-summary">${escapeHtml(info.compatibility_message)}</p>` : ''}
+            <div class="install-progress" style="display: none;">
+                <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
+                <span class="progress-text">${escapeHtml(t('market.progress_ready'))}</span>
+            </div>
+        </div>
+        ${buttonHtml}
+    </div>`;
+    container.classList.remove('is-hidden');
+    return container;
+}
+
+async function previewPluginFromUrl() {
+    const input = document.getElementById('pm-repo-url');
+    const repo = input ? input.value.trim() : '';
+    if (!repo) {
+        showError(t('market.url_required'));
+        return;
+    }
+    const container = document.getElementById('pm-url-preview');
+    if (container) {
+        container.innerHTML = `<div class="log-entry log-info">${escapeHtml(t('market.url_loading'))}</div>`;
+        container.classList.remove('is-hidden');
+    }
+    try {
+        const response = await fetch('/api/market/plugins/inspect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repo })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || t('market.preview_failed'));
+        }
+        renderPluginPreviewCard(data);
+    } catch (error) {
+        if (container) {
+            container.innerHTML = `<div class="log-entry log-error">${escapeHtml(error.message)}</div>`;
+        }
+        showError(t('market.preview_failed') + '：' + error.message);
+    }
+}
+
+async function installPluginFromUrl(repo, ignoreCompat) {
+    const container = document.getElementById('pm-url-preview');
+    const card = container ? container.querySelector('.market-preview-card') : null;
+    const btn = card ? card.querySelector('.market-action-btn') : null;
+    const progressEl = card ? card.querySelector('.install-progress') : null;
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = t('market.plugin_installing');
+        btn.setAttribute('data-i18n', 'market.plugin_installing');
+        btn.classList.add('btn-installing');
+    }
+    if (progressEl) progressEl.style.display = 'block';
+
+    const restore = () => {
+        if (btn) {
+            const key = ignoreCompat ? 'market.install_ignore_compat' : 'market.install_and_enable';
+            btn.disabled = false;
+            btn.textContent = t(key);
+            btn.setAttribute('data-i18n', key);
+            btn.classList.remove('btn-installing');
+        }
+    };
+
+    try {
+        const response = await fetch('/api/market/plugins/install-from-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repo, ignore_compat: !!ignoreCompat })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showError(t('market.install_failed') + '：' + (data.error || t('common.unknown_error')), 10000);
+            restore();
+            return;
+        }
+        pluginMarketRefreshSeq++;
+        pollPluginInstalled(data.plugin_name, {
+            progressEl,
+            onFail: restore
+        });
+    } catch (error) {
+        showError(t('market.install_error') + '：' + error.message);
+        restore();
+    }
+}
+
+// ============ 插件广场：上传 zip 安装 ============
+
+const PLUGIN_UPLOAD_MAX_BYTES = 300 * 1024 * 1024;
+
+function renderPluginUploadStatus(html, showProgress) {
+    const box = document.getElementById('pm-upload-status');
+    if (!box) return null;
+    box.innerHTML = `<div class="market-upload-status">
+        <div>${html}</div>
+        <div class="install-progress" style="display: ${showProgress ? 'block' : 'none'};">
+            <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
+            <span class="progress-text">${escapeHtml(t('market.progress_ready'))}</span>
+        </div>
+    </div>`;
+    box.classList.remove('is-hidden');
+    return box.querySelector('.install-progress');
+}
+
+async function uploadPluginZip(input) {
+    const file = input && input.files ? input.files[0] : null;
+    if (!file) return;
+    input.value = '';
+
+    const sizeMb = (file.size / 1024 / 1024).toFixed(1);
+    if (file.size > PLUGIN_UPLOAD_MAX_BYTES) {
+        showError(t('market.upload_too_large', { name: file.name, size: sizeMb }));
+        return;
+    }
+
+    const progressEl = renderPluginUploadStatus(
+        escapeHtml(t('market.upload_uploading', { name: file.name, size: sizeMb })),
+        true
+    );
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+
+    try {
+        const response = await fetch('/api/market/plugins/install-upload', {
+            method: 'POST',
+            body: formData
+        });
+        let data;
+        try {
+            data = await response.json();
+        } catch (_error) {
+            data = { success: false, error: t('market.upload_server_status', { status: response.status }) };
+        }
+        if (!response.ok || !data.success) {
+            renderPluginUploadStatus(`<span class="log-error">✗ ${escapeHtml(data.error || t('market.upload_failed'))}</span>`, false);
+            showError(t('market.upload_failed') + '：' + (data.error || t('common.unknown_error')), 10000);
+            return;
+        }
+        const label = data.display_name || data.plugin_name;
+        const versionSuffix = data.version ? ` v${data.version}` : '';
+        const progress = renderPluginUploadStatus(
+            escapeHtml(t('market.upload_installing', { name: `${label}${versionSuffix}` })),
+            true
+        );
+        pluginMarketRefreshSeq++;
+        pollPluginInstalled(data.plugin_name, {
+            progressEl: progress || progressEl,
+            onFail: () => {}
+        });
+    } catch (error) {
+        renderPluginUploadStatus(`<span class="log-error">✗ ${escapeHtml(error.message)}</span>`, false);
+        showError(t('market.upload_error') + '：' + error.message);
+    }
 }
 
 // 更新单个插件
