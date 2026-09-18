@@ -1450,6 +1450,128 @@ h4 { font-size: 15px; color: var(--text-secondary); }
 .btn-installing { background: linear-gradient(135deg, #f59e0b, #d97706) !important; cursor: wait; }
 .btn-installed { background: linear-gradient(135deg, var(--green), #16a34a) !important; cursor: default; }
 
+/* ---- 插件广场：下载设置 / 仓库地址安装 / 上传安装 ---- */
+.market-settings-panel {
+    margin: 0 10px 16px;
+    padding: 14px 16px;
+    background: var(--bg-solid-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.market-settings-tools {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    line-height: 1.6;
+    word-break: break-all;
+}
+
+.market-settings-tools.warn {
+    color: var(--yellow);
+}
+
+.market-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px 16px;
+}
+
+.market-settings-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.market-settings-grid input,
+.market-settings-grid select,
+.market-install-row input {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 13px;
+    color: var(--text-primary);
+    background: var(--bg-solid-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    outline: none;
+    box-sizing: border-box;
+}
+
+.market-settings-grid input:focus,
+.market-settings-grid select:focus,
+.market-install-row input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.market-settings-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.market-settings-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    flex: 1;
+    min-width: 200px;
+}
+
+.market-install-tools {
+    margin: 0 10px 12px;
+}
+
+.market-install-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.market-install-row input {
+    flex: 1;
+    min-width: 260px;
+}
+
+.market-upload-label {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+}
+
+.market-preview-card {
+    margin-top: 12px;
+    max-width: 560px;
+}
+
+.market-source-badge {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.market-incompatible-badge {
+    color: var(--red, #f87171);
+    background: rgba(248, 113, 113, 0.12);
+    border-color: rgba(248, 113, 113, 0.3);
+}
+
+.market-upload-status {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: var(--bg-solid-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
 .market-card-warning {
     font-size: 12px;
     color: var(--yellow);

@@ -17,6 +17,7 @@ from .marketplace_updater import (
     check_framework_compatibility,
     check_updates_for_plugins,
 )
+from .state_io import atomic_write_json, resource_lock
 
 # 创建插件管理蓝图
 plugin_bp = Blueprint('plugin', __name__)
@@ -95,6 +96,29 @@ def save_enabled_plugins(enabled_list):
     except Exception as e:
         logger.error(f'保存 enabled_plugins.json 失败：{e}')
         return False
+
+
+def enable_plugin_path(plugin_path):
+    """把 category/dir 写进 enabled_plugins.json，已存在则不动。返回是否发生了写入。
+
+    供插件广场"安装即启用"调用：跨进程锁 + 原子写，Electron 侧监听到文件变化后会热加载。
+    写入失败直接抛异常，由调用方决定是否只当作警告。
+    """
+    plugin_path = str(plugin_path).replace('\\', '/').strip()
+    if '/' not in plugin_path:
+        raise ValueError('插件路径应为 category/name 格式')
+    category, dir_name = plugin_path.split('/', 1)
+    if category not in ('built-in', 'community') or not dir_name:
+        raise ValueError('无效的插件类别')
+
+    enabled_path = PROJECT_ROOT / 'plugins' / 'enabled_plugins.json'
+    with resource_lock(enabled_path):
+        enabled = list(load_enabled_plugins())
+        if plugin_path in enabled:
+            return False
+        enabled.append(plugin_path)
+        atomic_write_json(enabled_path, {'plugins': enabled})
+        return True
 
 
 def scan_plugins_directory():

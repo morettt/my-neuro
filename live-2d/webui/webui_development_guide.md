@@ -210,8 +210,13 @@ my-neuro-main/
 | `/api/plugins/list` | GET | 获取插件列表 |
 | `/api/plugins/<name>/toggle` | POST | 切换插件状态 |
 | `/api/market/plugins` | GET | 获取插件广场列表 |
-| `/api/market/plugins/download` | POST | 下载插件（异步安装） |
+| `/api/market/plugins/download` | POST | 从插件广场安装（异步：下载、校验、装依赖、自动启用） |
+| `/api/market/plugins/inspect` | POST | 安装前预览仓库里的 `metadata.json`（`{repo}`） |
+| `/api/market/plugins/install-from-url` | POST | 从任意公开 GitHub 仓库安装（目录名取 `metadata.name`，`ignore_compat` 可跳过框架版本检查） |
+| `/api/market/plugins/install-upload` | POST | 上传 zip 安装（`multipart/form-data`，字段 `file`；上限 320 MB） |
+| `/api/market/plugins/install-status/<name>` | GET | 轮询安装任务；返回 `status/progress/error/warnings/enabled/source_used/live2d_running` |
 | `/api/market/plugins/check-installed/<name>` | GET | 检查插件是否已安装 |
+| `/api/market/settings` | GET/POST | 插件广场下载设置（GitHub 镜像模式、pip 镜像、npm registry、自定义插件源），存于 `live-2d/.runtime/plugin_market_settings.json` |
 
 ### 日志系统
 

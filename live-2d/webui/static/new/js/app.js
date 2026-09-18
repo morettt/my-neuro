@@ -5509,10 +5509,64 @@ function restoreInstallButton(pluginName, text) {
     if (progressDiv) progressDiv.style.display = 'none';
 }
 
+const PLUGIN_INSTALL_STAGE_LABELS = {
+    queued: '等待安装...',
+    downloading: '正在下载插件包...',
+    validating: '正在校验插件包...',
+    extracting: '正在解压...',
+    installing_deps: '正在安装 Python 依赖...',
+    installing_node_deps: '正在安装 Node 依赖...',
+    enabling: '正在启用插件...',
+    updating: '正在更新...'
+};
+
+// 安装完成后的提示：是否已启用、桌宠是否会立刻加载、是否有警告
+function describePluginInstallResult(data) {
+    let text = data.enabled ? '✓ 已安装并启用' : '✓ 已安装（未自动启用）';
+    if (data.enabled) {
+        if (data.live2d_running === true) {
+            text += '，桌宠运行中，已自动加载';
+        } else if (data.live2d_running === false) {
+            text += '，下次启动桌宠时生效';
+        } else {
+            text += '，若桌宠正在运行会自动加载';
+        }
+    }
+    if (data.source_used && data.source_used !== 'direct' && data.source_used !== 'upload') {
+        text += `（经 ${data.source_used} 镜像）`;
+    }
+    return text;
+}
+
+function handlePluginInstallCompleted(pluginName, data, progressFill, progressText) {
+    if (progressFill) progressFill.style.width = '100%';
+    if (progressText) progressText.textContent = describePluginInstallResult(data);
+
+    const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+    warnings.forEach((warning) => showWarning(warning, 9000));
+    if (data.enabled) {
+        showSuccess(`插件 ${pluginName} 已安装并启用`);
+    } else if (!warnings.length) {
+        showWarning(`插件 ${pluginName} 已安装，但未能自动启用，请到「插件管理」手动开启`, 9000);
+    }
+    if (data.enabled && data.live2d_running === true) {
+        showInfo('若桌宠日志出现该插件的加载错误，请到「插件管理」关闭它', 8000);
+    }
+
+    setTimeout(() => refreshPluginMarket(), 500);
+    if (typeof loadPlugins === 'function') {
+        loadPlugins().catch(() => {});
+    }
+}
+
 // Poll the durable install task so asynchronous failures surface immediately.
-async function pollPluginInstalled(pluginName) {
-    const maxAttempts = 180;
+// options.progressEl：URL/上传安装时进度块不在市场卡片里，由调用方传入。
+// options.onFail：失败时的恢复动作（默认恢复市场卡片按钮）。
+async function pollPluginInstalled(pluginName, options = {}) {
+    // pip 与 npm 各有 600 秒超时，轮询上限放到 15 分钟
+    const maxAttempts = 900;
     let attempts = 0;
+    const onFail = options.onFail || (() => restoreInstallButton(pluginName, '⬇ 安装'));
 
     const poll = async () => {
         try {
@@ -5521,7 +5575,7 @@ async function pollPluginInstalled(pluginName) {
             );
             const data = await response.json();
 
-            const progressDiv = document.getElementById(`progress-${pluginName}`);
+            const progressDiv = options.progressEl || document.getElementById(`progress-${pluginName}`);
             const progressFill = progressDiv ? progressDiv.querySelector('.progress-fill') : null;
             const progressText = progressDiv ? progressDiv.querySelector('.progress-text') : null;
 
@@ -5531,16 +5585,14 @@ async function pollPluginInstalled(pluginName) {
 
             if (data.status === 'failed') {
                 const errorMessage = data.error || '未知错误';
-                if (progressText) progressText.textContent = '安装失败';
-                showError('安装失败：' + errorMessage);
-                restoreInstallButton(pluginName, '⬇ 安装');
+                if (progressText) progressText.textContent = '安装失败：' + errorMessage;
+                showError('安装失败：' + errorMessage, 12000);
+                onFail();
                 return;
             }
 
-            if (data.status === 'completed' || data.installed) {
-                if (progressFill) progressFill.style.width = '100%';
-                if (progressText) progressText.textContent = '✓ 安装完成';
-                setTimeout(() => refreshPluginMarket(), 500);
+            if (data.status === 'completed' || (data.installed && !data.installing)) {
+                handlePluginInstallCompleted(pluginName, data, progressFill, progressText);
                 return;
             }
 
@@ -5551,18 +5603,12 @@ async function pollPluginInstalled(pluginName) {
                 ) + '%';
             }
             if (progressText) {
-                const labels = {
-                    queued: '等待安装...',
-                    downloading: '正在下载...',
-                    extracting: '正在解压...',
-                    installing_deps: '正在安装依赖...'
-                };
-                progressText.textContent = labels[data.status] || '正在安装...';
+                progressText.textContent = PLUGIN_INSTALL_STAGE_LABELS[data.status] || '正在安装...';
             }
 
             if (!data.installing && !data.status) {
                 showError('安装任务已丢失，请重试');
-                restoreInstallButton(pluginName, '⬇ 安装');
+                onFail();
                 return;
             }
 
@@ -5571,7 +5617,7 @@ async function pollPluginInstalled(pluginName) {
                 setTimeout(poll, 1000);
             } else {
                 if (progressText) progressText.textContent = '安装超时，请重试';
-                restoreInstallButton(pluginName, '⬇ 安装');
+                onFail();
             }
         } catch (error) {
             console.error('轮询安装状态失败:', error);
@@ -5580,12 +5626,318 @@ async function pollPluginInstalled(pluginName) {
                 setTimeout(poll, 1000);
             } else {
                 showError('读取安装状态失败：' + error.message);
-                restoreInstallButton(pluginName, '⬇ 安装');
+                onFail();
             }
         }
     };
 
     poll();
+}
+
+// ============ 插件广场：下载设置 ============
+
+let pluginMarketSettingsLoaded = false;
+let pluginMarketBuiltinMirrors = [];
+
+function togglePluginMarketSettings() {
+    const panel = document.getElementById('plugin-market-settings');
+    if (!panel) return;
+    const willShow = panel.classList.contains('is-hidden');
+    panel.classList.toggle('is-hidden', !willShow);
+    if (willShow && !pluginMarketSettingsLoaded) {
+        loadPluginMarketSettings();
+    }
+}
+
+function renderPluginMarketMirrorOptions(mirrors) {
+    const select = document.getElementById('pm-mirror-mode');
+    if (!select) return;
+    select.querySelectorAll('option[data-mirror]').forEach((option) => option.remove());
+    const customOption = select.querySelector('option[value="custom"]');
+    mirrors.forEach((mirror) => {
+        const option = document.createElement('option');
+        option.value = `fixed:${mirror}`;
+        option.dataset.mirror = mirror;
+        let host = mirror;
+        try { host = new URL(mirror).host; } catch (_error) { /* 保持原样 */ }
+        option.textContent = `固定使用镜像 ${host}`;
+        select.insertBefore(option, customOption);
+    });
+}
+
+function applyPluginMarketSettingsToForm(settings) {
+    const select = document.getElementById('pm-mirror-mode');
+    if (!select) return;
+    const mode = settings.github_mirror_mode || 'auto';
+    const mirror = settings.github_mirror || '';
+    if (mode === 'fixed' && mirror) {
+        const known = pluginMarketBuiltinMirrors.includes(mirror);
+        select.value = known ? `fixed:${mirror}` : 'custom';
+    } else {
+        select.value = mode === 'direct' ? 'direct' : 'auto';
+    }
+    document.getElementById('pm-mirror-custom').value = mirror;
+    document.getElementById('pm-pip-index').value = settings.pip_index_url || '';
+    document.getElementById('pm-npm-registry').value = settings.npm_registry || '';
+    document.getElementById('pm-hub-url').value = settings.hub_url || '';
+    onPluginMarketMirrorModeChange();
+}
+
+function onPluginMarketMirrorModeChange() {
+    const select = document.getElementById('pm-mirror-mode');
+    const wrap = document.getElementById('pm-mirror-custom-wrap');
+    if (!select || !wrap) return;
+    wrap.classList.toggle('is-hidden', select.value !== 'custom');
+}
+
+function renderPluginMarketTools(tools) {
+    const el = document.getElementById('plugin-market-tools');
+    if (!el) return;
+    const npmText = tools.npm
+        ? `npm：已找到（${escapeHtml(tools.npm_path || '')}）`
+        : 'npm：未找到，含 Node 依赖且未自带 node_modules 的插件将无法自动补齐依赖，请安装 Node.js';
+    const pyText = `Python：${escapeHtml(tools.python_path || '未知')}`;
+    el.innerHTML = `${npmText}<br>${pyText}`;
+    el.classList.toggle('warn', !tools.npm);
+}
+
+async function loadPluginMarketSettings() {
+    try {
+        const response = await fetch('/api/market/settings');
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || '读取设置失败');
+        }
+        pluginMarketBuiltinMirrors = Array.isArray(data.builtin_mirrors) ? data.builtin_mirrors : [];
+        renderPluginMarketMirrorOptions(pluginMarketBuiltinMirrors);
+        applyPluginMarketSettingsToForm(data.settings || {});
+        renderPluginMarketTools(data.tools || {});
+        pluginMarketSettingsLoaded = true;
+    } catch (error) {
+        showError('读取下载设置失败：' + error.message);
+    }
+}
+
+function collectPluginMarketSettingsFromForm() {
+    const selectValue = document.getElementById('pm-mirror-mode').value;
+    let github_mirror_mode = 'auto';
+    let github_mirror = '';
+    if (selectValue === 'direct') {
+        github_mirror_mode = 'direct';
+    } else if (selectValue.startsWith('fixed:')) {
+        github_mirror_mode = 'fixed';
+        github_mirror = selectValue.slice('fixed:'.length);
+    } else if (selectValue === 'custom') {
+        github_mirror_mode = 'fixed';
+        github_mirror = document.getElementById('pm-mirror-custom').value.trim();
+    }
+    return {
+        github_mirror_mode,
+        github_mirror,
+        pip_index_url: document.getElementById('pm-pip-index').value.trim(),
+        npm_registry: document.getElementById('pm-npm-registry').value.trim(),
+        hub_url: document.getElementById('pm-hub-url').value.trim()
+    };
+}
+
+async function savePluginMarketSettings() {
+    try {
+        const response = await fetch('/api/market/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(collectPluginMarketSettingsFromForm())
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showError('保存设置失败：' + (data.error || '未知错误'));
+            return;
+        }
+        applyPluginMarketSettingsToForm(data.settings || {});
+        showSuccess('下载设置已保存，之后的安装与更新都会按新设置走');
+    } catch (error) {
+        showError('保存设置出错：' + error.message);
+    }
+}
+
+// ============ 插件广场：从仓库地址安装 ============
+
+function renderPluginPreviewCard(info) {
+    const container = document.getElementById('pm-url-preview');
+    if (!container) return null;
+    const meta = info.metadata || {};
+    const name = meta.name || info.dir_name || '';
+    const badges = [
+        meta.version ? `<span class="version-badge">版本 ${escapeHtml(meta.version)}</span>` : '',
+        `<span class="version-badge">${escapeHtml(meta.lang === 'python' ? 'Python 插件' : 'JS 插件')}</span>`,
+        info.source_used ? `<span class="version-badge market-source-badge">来源 ${escapeHtml(info.source_used)}</span>` : '',
+        info.compatible === false
+            ? `<span class="version-badge market-incompatible-badge" title="${escapeAttribute(info.compatibility_message || '')}">与当前框架版本不兼容</span>`
+            : ''
+    ].join('');
+
+    let buttonHtml;
+    if (info.conflict) {
+        buttonHtml = `<button class="btn-sm market-action-btn" style="margin-top: 10px;" disabled>${escapeHtml(info.conflict)}</button>`;
+    } else if (info.compatible === false) {
+        buttonHtml = `<button class="btn-sm market-action-btn" style="margin-top: 10px;" onclick="installPluginFromUrl('${escapeJsString(info.repo)}', true)">⚠ 无视兼容性警告继续安装</button>`;
+    } else {
+        buttonHtml = `<button class="btn-sm market-action-btn" style="margin-top: 10px;" onclick="installPluginFromUrl('${escapeJsString(info.repo)}', false)">⬇ 安装并启用</button>`;
+    }
+
+    container.innerHTML = `<div class="market-card market-preview-card" data-preview-plugin="${escapeAttribute(name)}">
+        <div class="market-card-header">
+            <h4 class="market-card-title">🧩 ${escapeHtml(meta.displayName || name)}</h4>
+            <div class="market-card-meta">
+                <span class="market-card-author">👤 作者：${escapeHtml(meta.author || '未知作者')}</span>
+                <a class="market-card-source-link" href="${escapeAttribute(info.repo || '')}" target="_blank" rel="noopener noreferrer">📎 查看来源</a>
+            </div>
+            <div class="market-card-versions">${badges}</div>
+            <p class="market-card-summary">${escapeHtml(meta.description || '无描述')}</p>
+            ${info.compatible === false && info.compatibility_message ? `<p class="market-card-summary">${escapeHtml(info.compatibility_message)}</p>` : ''}
+            <div class="install-progress" style="display: none;">
+                <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
+                <span class="progress-text">准备中...</span>
+            </div>
+        </div>
+        ${buttonHtml}
+    </div>`;
+    container.classList.remove('is-hidden');
+    return container;
+}
+
+async function previewPluginFromUrl() {
+    const input = document.getElementById('pm-repo-url');
+    const repo = input ? input.value.trim() : '';
+    if (!repo) {
+        showError('请先粘贴 GitHub 仓库地址');
+        return;
+    }
+    const container = document.getElementById('pm-url-preview');
+    if (container) {
+        container.innerHTML = '<div class="log-entry log-info">正在读取仓库里的 metadata.json...</div>';
+        container.classList.remove('is-hidden');
+    }
+    try {
+        const response = await fetch('/api/market/plugins/inspect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repo })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || '读取仓库信息失败');
+        }
+        renderPluginPreviewCard(data);
+    } catch (error) {
+        if (container) {
+            container.innerHTML = `<div class="log-entry log-error">${escapeHtml(error.message)}</div>`;
+        }
+        showError('预览失败：' + error.message);
+    }
+}
+
+async function installPluginFromUrl(repo, ignoreCompat) {
+    const container = document.getElementById('pm-url-preview');
+    const card = container ? container.querySelector('.market-preview-card') : null;
+    const btn = card ? card.querySelector('.market-action-btn') : null;
+    const progressEl = card ? card.querySelector('.install-progress') : null;
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ 安装中...';
+        btn.classList.add('btn-installing');
+    }
+    if (progressEl) progressEl.style.display = 'block';
+
+    const restore = () => {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = ignoreCompat ? '⚠ 无视兼容性警告继续安装' : '⬇ 安装并启用';
+            btn.classList.remove('btn-installing');
+        }
+    };
+
+    try {
+        const response = await fetch('/api/market/plugins/install-from-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repo, ignore_compat: !!ignoreCompat })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            showError('安装失败：' + (data.error || '未知错误'), 10000);
+            restore();
+            return;
+        }
+        pluginMarketRefreshSeq++;
+        pollPluginInstalled(data.plugin_name, {
+            progressEl,
+            onFail: restore
+        });
+    } catch (error) {
+        showError('安装时出错：' + error.message);
+        restore();
+    }
+}
+
+// ============ 插件广场：上传 zip 安装 ============
+
+const PLUGIN_UPLOAD_MAX_BYTES = 300 * 1024 * 1024;
+
+function renderPluginUploadStatus(html, showProgress) {
+    const box = document.getElementById('pm-upload-status');
+    if (!box) return null;
+    box.innerHTML = `<div class="market-upload-status">
+        <div>${html}</div>
+        <div class="install-progress" style="display: ${showProgress ? 'block' : 'none'};">
+            <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
+            <span class="progress-text">准备中...</span>
+        </div>
+    </div>`;
+    box.classList.remove('is-hidden');
+    return box.querySelector('.install-progress');
+}
+
+async function uploadPluginZip(input) {
+    const file = input && input.files ? input.files[0] : null;
+    if (!file) return;
+    input.value = '';
+
+    if (file.size > PLUGIN_UPLOAD_MAX_BYTES) {
+        showError(`文件 ${file.name} 有 ${(file.size / 1024 / 1024).toFixed(1)} MB，超过 300 MB 上限`);
+        return;
+    }
+
+    const progressEl = renderPluginUploadStatus(`📦 正在上传 ${escapeHtml(file.name)}（${(file.size / 1024 / 1024).toFixed(1)} MB）...`, true);
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+
+    try {
+        const response = await fetch('/api/market/plugins/install-upload', {
+            method: 'POST',
+            body: formData
+        });
+        let data;
+        try {
+            data = await response.json();
+        } catch (_error) {
+            data = { success: false, error: `服务器返回 ${response.status}` };
+        }
+        if (!response.ok || !data.success) {
+            renderPluginUploadStatus(`<span class="log-error">✗ ${escapeHtml(data.error || '上传失败')}</span>`, false);
+            showError('上传安装失败：' + (data.error || '未知错误'), 10000);
+            return;
+        }
+        const label = data.display_name || data.plugin_name;
+        const progress = renderPluginUploadStatus(`🧩 ${escapeHtml(label)}${data.version ? ` v${escapeHtml(data.version)}` : ''} 正在安装...`, true);
+        pluginMarketRefreshSeq++;
+        pollPluginInstalled(data.plugin_name, {
+            progressEl: progress || progressEl,
+            onFail: () => {}
+        });
+    } catch (error) {
+        renderPluginUploadStatus(`<span class="log-error">✗ ${escapeHtml(error.message)}</span>`, false);
+        showError('上传时出错：' + error.message);
+    }
 }
 
 // ============ 初始化 ============

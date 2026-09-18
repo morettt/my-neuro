@@ -1,19 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""插件市场更新辅助函数。
+"""插件市场安装/更新辅助函数。
 
 这里尽量只放纯逻辑和文件操作，Flask 路由留在 marketplace.py。
+
+主要分四块：
+1. 下载来源：GitHub 直连 / 镜像前缀、候选 URL、快速探测、大小上限。
+2. 插件包校验：zip 或目录里必须有合法的 metadata.json 与入口文件。
+3. 依赖安装：pip（预检只装缺失）+ npm（缺 node_modules 时自动装）。
+4. 安装与更新：暂存目录、持久化数据保留、备份与回滚。
 """
 
+import importlib.metadata
 import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,20 +30,51 @@ from io import BytesIO
 from pathlib import Path
 
 try:
+    from packaging.requirements import InvalidRequirement, Requirement
     from packaging.specifiers import InvalidSpecifier, SpecifierSet
+    from packaging.utils import canonicalize_name
     from packaging.version import InvalidVersion, Version
 except ImportError:  # pragma: no cover - packaging 通常由依赖链提供
+    InvalidRequirement = ValueError
+    Requirement = None
     InvalidSpecifier = ValueError
-    InvalidVersion = ValueError
     SpecifierSet = None
+    InvalidVersion = ValueError
     Version = None
 
+    def canonicalize_name(name):
+        return re.sub(r"[-_.]+", "-", str(name)).lower()
+
+from .market_settings import BUILTIN_GITHUB_MIRRORS, DEFAULTS as DEFAULT_MARKET_SETTINGS, normalize_settings
+from .utils import PROJECT_ROOT
+
 GITHUB_REPO_RE = re.compile(
-    r"^https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)"
+    r"^https://(?:www\.)?github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)"
     r"(?:\.git)?(?:/tree/([A-Za-z0-9_.\-/]+))?/?$"
 )
+# 镜像前缀只对 GitHub 自家域名有意义；api.github.com 镜像站普遍不代理，所以不在列。
+MIRRORABLE_HOSTS = {
+    "github.com",
+    "www.github.com",
+    "raw.githubusercontent.com",
+    "codeload.github.com",
+    "objects.githubusercontent.com",
+}
 
+USER_AGENT = "my-neuro-plugin-market/2.0"
 DEFAULT_TIMEOUT = 12
+METADATA_TIMEOUT = 8
+API_TIMEOUT = 5
+PROBE_TIMEOUT = 8
+PROBE_TOTAL_BUDGET = 20
+DOWNLOAD_TIMEOUT = 120
+DOWNLOAD_CHUNK = 256 * 1024
+DEPENDENCY_TIMEOUT = 600
+MAX_PLUGIN_ARCHIVE_BYTES = 300 * 1024 * 1024
+
+PLUGIN_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+ALLOWED_PLUGIN_LANGS = ("js", "python")
+
 PERSISTENCE_MANIFEST_NAME = "plugin_persistence.json"
 DEFAULT_PERSISTENT_PATHS = (
     "plugin_config.json",
@@ -72,72 +112,296 @@ PERSISTENT_FILE_TOKENS = {
 MAX_RETAINED_UPDATE_BACKUPS = 3
 
 
-def parse_github_repo(repo_url):
-    """解析 GitHub 仓库 URL，返回 (owner, repo)。"""
+class PluginValidationError(ValueError):
+    """插件包 / 插件目录不符合肥牛插件格式。"""
+
+
+class ArchiveTooLargeError(PluginValidationError):
+    """插件压缩包超过大小上限。"""
+
+
+class DownloadError(RuntimeError):
+    """所有下载来源都失败。"""
+
+
+class DependencyInstallError(RuntimeError):
+    """pip / npm 依赖安装失败。"""
+
+
+# ============ GitHub 地址解析 ============
+
+def parse_github_repo_ref(repo_url):
+    """解析 GitHub 仓库 URL，返回 (owner, repo, branch)；没有 /tree/<branch> 时 branch 为 None。"""
     if not repo_url:
         raise ValueError("插件仓库地址为空")
 
-    match = GITHUB_REPO_RE.match(repo_url.strip())
+    match = GITHUB_REPO_RE.match(str(repo_url).strip())
     if not match:
         raise ValueError(f"无效的 GitHub 仓库地址：{repo_url}")
 
-    owner, repo = match.group(1), match.group(2)
-    return owner, repo.removesuffix(".git")
+    owner, repo, branch = match.group(1), match.group(2), match.group(3)
+    repo = repo.removesuffix(".git")
+    branch = branch.strip("/") if branch else None
+    return owner, repo, branch or None
 
 
-def _read_url_bytes(url, timeout=DEFAULT_TIMEOUT):
-    request = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": "my-neuro-plugin-market/1.0",
-            "Accept": "application/json,*/*",
-        },
-    )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+def parse_github_repo(repo_url):
+    """解析 GitHub 仓库 URL，返回 (owner, repo)。"""
+    owner, repo, _branch = parse_github_repo_ref(repo_url)
+    return owner, repo
+
+
+def normalize_repo_url(repo_url):
+    owner, repo, branch = parse_github_repo_ref(repo_url)
+    base = f"https://github.com/{owner}/{repo}"
+    return f"{base}/tree/{branch}" if branch else base
+
+
+# ============ 下载来源：镜像与候选地址 ============
+
+def apply_mirror(url, mirror):
+    """给 GitHub 域名的 URL 加镜像前缀；mirror 为空或 URL 不是 GitHub 域名时原样返回。"""
+    if not mirror:
+        return url
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    if host not in MIRRORABLE_HOSTS:
+        return url
+    return f"{mirror.rstrip('/')}/{url}"
+
+
+def source_label(mirror):
+    if not mirror:
+        return "direct"
+    return urllib.parse.urlsplit(mirror).hostname or mirror
+
+
+def _settings_or_default(settings):
+    if settings is None:
+        return dict(DEFAULT_MARKET_SETTINGS)
+    return normalize_settings(settings)
+
+
+def github_source_plan(settings=None):
+    """按设置返回来源尝试顺序：None 表示直连，字符串表示镜像前缀。"""
+    resolved = _settings_or_default(settings)
+    mode = resolved.get("github_mirror_mode", "auto")
+    mirror = resolved.get("github_mirror", "")
+
+    if mode == "direct":
+        return [None]
+    if mode == "fixed":
+        plan = [mirror or None, None]
+    else:
+        plan = [None, *BUILTIN_GITHUB_MIRRORS]
+
+    ordered = []
+    for item in plan:
+        if item not in ordered:
+            ordered.append(item)
+    return ordered
+
+
+def archive_candidates(repo_url):
+    """zip 包候选地址。HEAD.zip 直接对应默认分支，不需要先查 API。"""
+    owner, repo, branch = parse_github_repo_ref(repo_url)
+    base = f"https://github.com/{owner}/{repo}/archive"
+    if branch:
+        return [f"{base}/refs/heads/{branch}.zip"]
+    return [
+        f"{base}/HEAD.zip",
+        f"{base}/refs/heads/main.zip",
+        f"{base}/refs/heads/master.zip",
+    ]
+
+
+def raw_metadata_candidates(repo_url):
+    owner, repo, branch = parse_github_repo_ref(repo_url)
+    refs = [branch] if branch else ["HEAD", "main", "master"]
+    return [
+        f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/metadata.json"
+        for ref in refs
+    ]
+
+
+# ============ HTTP 层（opener 可注入，便于测试） ============
+
+def _build_request(url, method="GET", headers=None):
+    merged = {"User-Agent": USER_AGENT, "Accept": "application/json,*/*"}
+    if headers:
+        merged.update(headers)
+    return urllib.request.Request(url, headers=merged, method=method)
+
+
+def default_opener(request, timeout):
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
+def _response_ok(response):
+    status = getattr(response, "status", None)
+    if status is None:
+        return True
+    return 200 <= int(status) < 400
+
+
+def _read_url_bytes(url, timeout=DEFAULT_TIMEOUT, opener=None):
+    opener = opener or default_opener
+    with opener(_build_request(url), timeout) as response:
         return response.read()
 
 
-def _read_json_url(url, timeout=DEFAULT_TIMEOUT):
-    return json.loads(_read_url_bytes(url, timeout=timeout).decode("utf-8-sig"))
+def _read_json_url(url, timeout=DEFAULT_TIMEOUT, opener=None):
+    return json.loads(_read_url_bytes(url, timeout=timeout, opener=opener).decode("utf-8-sig"))
 
 
-def fetch_remote_metadata(repo_url, timeout=8):
-    """从插件仓库抓取远程 metadata.json。
+def probe_url(url, opener=None, timeout=PROBE_TIMEOUT, total_budget=PROBE_TOTAL_BUDGET):
+    """快速探测地址是否可达：先 HEAD，被拒绝时改用 Range GET。只返回 True/False。"""
+    opener = opener or default_opener
+    started = time.monotonic()
+    try:
+        with opener(_build_request(url, method="HEAD"), timeout) as response:
+            return _response_ok(response)
+    except urllib.error.HTTPError as exc:
+        if exc.code not in (403, 405, 501):
+            return False
+    except (urllib.error.URLError, socket.timeout, OSError, ValueError):
+        return False
 
-    优先尝试 raw.githubusercontent.com 的 HEAD 伪分支，然后回退 main/master。
-    若仍失败，再通过 GitHub API 查询默认分支。
+    if time.monotonic() - started > total_budget:
+        return False
+    try:
+        with opener(_build_request(url, headers={"Range": "bytes=0-0"}), timeout) as response:
+            return _response_ok(response)
+    except Exception:
+        return False
+
+
+def _download_bytes(url, opener, timeout, max_bytes, progress=None):
+    with opener(_build_request(url), timeout) as response:
+        headers = getattr(response, "headers", None)
+        length_header = headers.get("Content-Length") if headers else None
+        total = int(length_header) if length_header and str(length_header).isdigit() else None
+        if total is not None and total > max_bytes:
+            raise ArchiveTooLargeError(
+                f"插件压缩包 {total / 1024 / 1024:.1f} MB，超过上限 {max_bytes // 1024 // 1024} MB"
+            )
+
+        buffer = BytesIO()
+        downloaded = 0
+        while True:
+            chunk = response.read(DOWNLOAD_CHUNK)
+            if not chunk:
+                break
+            downloaded += len(chunk)
+            if downloaded > max_bytes:
+                raise ArchiveTooLargeError(
+                    f"插件压缩包超过上限 {max_bytes // 1024 // 1024} MB"
+                )
+            buffer.write(chunk)
+            if progress:
+                progress(downloaded, total)
+        return buffer.getvalue()
+
+
+def download_archive(
+    repo_url,
+    settings=None,
+    timeout=DOWNLOAD_TIMEOUT,
+    opener=None,
+    progress=None,
+    probe_timeout=PROBE_TIMEOUT,
+    max_bytes=MAX_PLUGIN_ARCHIVE_BYTES,
+):
+    """下载插件源码 zip，返回 (字节, 来源标签)。
+
+    按来源计划（直连 / 镜像）× 候选地址依次尝试；每个地址先用短超时探测，
+    探测通过才用长超时正式下载，这样直连不通的用户能在几十秒内切到镜像。
     """
-    owner, repo = parse_github_repo(repo_url)
-    tried = []
+    opener = opener or default_opener
+    candidates = archive_candidates(repo_url)
+    errors = []
 
-    for branch in ["HEAD", "main", "master"]:
-        url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/metadata.json"
-        tried.append(url)
-        try:
-            return _read_json_url(url, timeout=timeout)
-        except Exception:
-            continue
+    for mirror in github_source_plan(settings):
+        label = source_label(mirror)
+        for candidate in candidates:
+            url = apply_mirror(candidate, mirror)
+            if not probe_url(url, opener=opener, timeout=probe_timeout):
+                errors.append(f"[{label}] {candidate} 不可达")
+                continue
+            try:
+                data = _download_bytes(url, opener, timeout, max_bytes, progress)
+            except ArchiveTooLargeError:
+                raise
+            except (urllib.error.HTTPError, urllib.error.URLError, socket.timeout, OSError, ValueError) as exc:
+                errors.append(f"[{label}] {candidate} 下载失败：{exc}")
+                continue
+            if not data:
+                errors.append(f"[{label}] {candidate} 返回空内容")
+                continue
+            return data, label
+
+    detail = errors[-1] if errors else "没有可用的下载地址"
+    raise DownloadError(
+        f"所有下载来源均失败（共尝试 {len(errors)} 次）。最后一次：{detail}。"
+        "可在「下载设置」里切换镜像后重试。"
+    )
+
+
+def get_default_branch(repo_url, timeout=API_TIMEOUT, opener=None):
+    owner, repo, _branch = parse_github_repo_ref(repo_url)
+    info = _read_json_url(
+        f"https://api.github.com/repos/{owner}/{repo}",
+        timeout=timeout,
+        opener=opener,
+    )
+    return info.get("default_branch") or "main"
+
+
+def fetch_remote_metadata_with_source(repo_url, timeout=METADATA_TIMEOUT, settings=None, opener=None):
+    """抓取远程 metadata.json，返回 (metadata, 来源标签)。
+
+    先按来源计划遍历 raw 地址（HEAD/main/master 或指定分支），全部失败后才用
+    api.github.com 查默认分支兜底（短超时，失败不影响错误信息）。
+    """
+    candidates = raw_metadata_candidates(repo_url)
+    plan = github_source_plan(settings)
+    tried = 0
+    last_error = None
+
+    for mirror in plan:
+        for candidate in candidates:
+            tried += 1
+            try:
+                return _read_json_url(apply_mirror(candidate, mirror), timeout=timeout, opener=opener), source_label(mirror)
+            except Exception as exc:
+                last_error = exc
 
     try:
-        info = _read_json_url(
-            f"https://api.github.com/repos/{owner}/{repo}",
-            timeout=timeout,
-        )
-        default_branch = info.get("default_branch")
-        if default_branch and default_branch not in {"HEAD", "main", "master"}:
-            url = (
-                f"https://raw.githubusercontent.com/"
-                f"{owner}/{repo}/{default_branch}/metadata.json"
-            )
-            tried.append(url)
-            return _read_json_url(url, timeout=timeout)
+        owner, repo, branch = parse_github_repo_ref(repo_url)
+        if not branch:
+            default_branch = get_default_branch(repo_url, timeout=API_TIMEOUT, opener=opener)
+            if default_branch and default_branch not in {"HEAD", "main", "master"}:
+                candidate = f"https://raw.githubusercontent.com/{owner}/{repo}/{default_branch}/metadata.json"
+                for mirror in plan:
+                    tried += 1
+                    try:
+                        return _read_json_url(apply_mirror(candidate, mirror), timeout=timeout, opener=opener), source_label(mirror)
+                    except Exception as exc:
+                        last_error = exc
     except Exception as exc:
-        raise RuntimeError(
-            f"无法读取远程 metadata.json，已尝试 {len(tried)} 个地址"
-        ) from exc
+        last_error = last_error or exc
 
-    raise RuntimeError(f"无法读取远程 metadata.json，已尝试 {len(tried)} 个地址")
+    raise RuntimeError(f"无法读取远程 metadata.json，已尝试 {tried} 个地址（{last_error}）")
 
+
+def fetch_remote_metadata(repo_url, timeout=METADATA_TIMEOUT, settings=None, opener=None):
+    """从插件仓库抓取远程 metadata.json（兼容旧调用方，只返回字典）。"""
+    metadata, _source = fetch_remote_metadata_with_source(
+        repo_url, timeout=timeout, settings=settings, opener=opener
+    )
+    return metadata
+
+
+# ============ 版本比较与更新检查 ============
 
 def _normalize_version(version):
     return str(version or "").strip().lstrip("vV")
@@ -243,52 +507,57 @@ def check_updates_for_plugins(
     return results
 
 
-def _download_first_available(urls, timeout=120):
-    last_error = None
-    for url in urls:
-        try:
-            return _read_url_bytes(url, timeout=timeout)
-        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
-            last_error = exc
-            continue
-    if last_error:
-        raise last_error
-    raise RuntimeError("没有可用的下载地址")
+# ============ 插件包校验 ============
+
+def resolve_entry_file(metadata):
+    """与 Electron 侧 plugin-manager.js 的入口解析规则保持一致。"""
+    lang = metadata.get("lang") or "js"
+    main = metadata.get("main") or "index.js"
+    if main != "index.js":
+        return main
+    return "index.py" if lang == "python" else "index.js"
 
 
-def get_default_branch(repo_url, timeout=DEFAULT_TIMEOUT):
-    owner, repo = parse_github_repo(repo_url)
-    info = _read_json_url(f"https://api.github.com/repos/{owner}/{repo}", timeout=timeout)
-    return info.get("default_branch") or "main"
+def validate_plugin_metadata(metadata):
+    """校验 metadata.json 内容，返回归一化后的 {name, version, lang, entry}。"""
+    if not isinstance(metadata, dict):
+        raise PluginValidationError("metadata.json 必须是 JSON 对象")
 
-
-def download_archive(repo_url, timeout=120):
-    """下载插件源码压缩包，自动处理 main/master/default_branch。"""
-    owner, repo = parse_github_repo(repo_url)
-    urls = [
-        f"https://github.com/{owner}/{repo}/archive/refs/heads/main.zip",
-        f"https://github.com/{owner}/{repo}/archive/refs/heads/master.zip",
-    ]
-
-    try:
-        default_branch = get_default_branch(repo_url, timeout=DEFAULT_TIMEOUT)
-        default_url = (
-            f"https://github.com/{owner}/{repo}/archive/refs/heads/{default_branch}.zip"
+    name = metadata.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise PluginValidationError("metadata.json 缺少 name，或 name 为空")
+    name = name.strip()
+    if not PLUGIN_NAME_RE.match(name):
+        raise PluginValidationError(
+            f'插件 name "{name}" 不合法：只能包含字母、数字、点、下划线、连字符，'
+            "以字母或数字开头，最长 64 个字符"
         )
-        if default_url not in urls:
-            urls.append(default_url)
-    except Exception:
-        pass
 
-    return _download_first_available(urls, timeout=timeout)
+    version = metadata.get("version")
+    if not isinstance(version, str) or not version.strip():
+        raise PluginValidationError("metadata.json 缺少 version，或 version 为空")
 
+    lang = metadata.get("lang")
+    if lang is not None and lang not in ALLOWED_PLUGIN_LANGS:
+        raise PluginValidationError(f"metadata.json 的 lang 只能是 js 或 python，当前为 {lang!r}")
 
-def _safe_destination(base_dir, relative_path):
-    destination = (base_dir / relative_path).resolve()
-    base_resolved = base_dir.resolve()
-    if os.path.commonpath([str(base_resolved), str(destination)]) != str(base_resolved):
-        raise ValueError(f"压缩包包含不安全路径：{relative_path}")
-    return destination
+    main = metadata.get("main")
+    if main is not None:
+        normalized_main = str(main).replace("\\", "/") if isinstance(main, str) else ""
+        if (
+            not normalized_main.strip()
+            or normalized_main.startswith("/")
+            or ".." in normalized_main.split("/")
+            or re.match(r"^[A-Za-z]:", normalized_main)
+        ):
+            raise PluginValidationError("metadata.json 的 main 不合法：必须是插件目录内的相对路径")
+
+    return {
+        "name": name,
+        "version": version.strip(),
+        "lang": lang or "js",
+        "entry": resolve_entry_file(metadata),
+    }
 
 
 def _strip_archive_root(names):
@@ -299,6 +568,67 @@ def _strip_archive_root(names):
     if first_parts and len(set(first_parts)) == 1:
         return True, first_parts[0]
     return False, ""
+
+
+def inspect_plugin_archive_bytes(archive_bytes, max_bytes=MAX_PLUGIN_ARCHIVE_BYTES):
+    """校验 zip 是否为合法肥牛插件包，返回 {metadata, info, root}。"""
+    if not archive_bytes:
+        raise PluginValidationError("插件压缩包为空")
+    if len(archive_bytes) > max_bytes:
+        raise ArchiveTooLargeError(
+            f"插件压缩包 {len(archive_bytes) / 1024 / 1024:.1f} MB，超过上限 {max_bytes // 1024 // 1024} MB"
+        )
+
+    try:
+        archive = zipfile.ZipFile(BytesIO(archive_bytes), "r")
+    except zipfile.BadZipFile as exc:
+        raise PluginValidationError("文件不是合法的 zip 压缩包") from exc
+
+    with archive:
+        names = [name.replace("\\", "/") for name in archive.namelist()]
+        should_strip, root_name = _strip_archive_root(names)
+        prefix = f"{root_name}/" if should_strip else ""
+        metadata_entry = f"{prefix}metadata.json"
+        if metadata_entry not in names:
+            raise PluginValidationError("压缩包根目录没有 metadata.json，这不是肥牛插件包")
+
+        raw_entry = archive.namelist()[names.index(metadata_entry)]
+        try:
+            metadata = json.loads(archive.read(raw_entry).decode("utf-8-sig"))
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise PluginValidationError(f"metadata.json 无法解析：{exc}") from exc
+
+        info = validate_plugin_metadata(metadata)
+        entry_name = f"{prefix}{info['entry']}"
+        if entry_name not in names:
+            raise PluginValidationError(f"压缩包缺少入口文件 {info['entry']}")
+
+    return {"metadata": metadata, "info": info, "root": root_name if should_strip else ""}
+
+
+def validate_plugin_directory(plugin_dir):
+    """校验解压后的插件目录，返回 {metadata, info}。"""
+    plugin_path = Path(plugin_dir)
+    metadata_path = plugin_path / "metadata.json"
+    if not metadata_path.is_file():
+        raise PluginValidationError("插件目录没有 metadata.json")
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as exc:
+        raise PluginValidationError(f"metadata.json 无法解析：{exc}") from exc
+
+    info = validate_plugin_metadata(metadata)
+    if not (plugin_path / info["entry"]).is_file():
+        raise PluginValidationError(f"插件缺少入口文件 {info['entry']}")
+    return {"metadata": metadata, "info": info}
+
+
+def _safe_destination(base_dir, relative_path):
+    destination = (base_dir / relative_path).resolve()
+    base_resolved = base_dir.resolve()
+    if os.path.commonpath([str(base_resolved), str(destination)]) != str(base_resolved):
+        raise ValueError(f"压缩包包含不安全路径：{relative_path}")
+    return destination
 
 
 def extract_archive_strip_root(archive_bytes, target_dir):
@@ -325,18 +655,156 @@ def extract_archive_strip_root(archive_bytes, target_dir):
                 shutil.copyfileobj(source, target)
 
 
-def pip_install_requirements_cmd(plugin_dir):
-    """构造安装插件 requirements 的 pip 命令行。
+# ============ 依赖安装：Python（pip） ============
+
+def resolve_plugin_python():
+    """Python 插件桥（python-plugin-bridge.js）用的解释器：优先项目自带 env/python.exe。"""
+    project_python = PROJECT_ROOT.parent / "env" / "python.exe"
+    if os.name == "nt" and project_python.is_file():
+        return str(project_python)
+    return sys.executable
+
+
+def _same_interpreter(python_exe):
+    try:
+        return Path(python_exe).resolve() == Path(sys.executable).resolve()
+    except OSError:
+        return False
+
+
+_LIST_DISTRIBUTIONS_SCRIPT = (
+    "import json,importlib.metadata as m;"
+    "print(json.dumps({d.metadata['Name']:d.version for d in m.distributions() if d.metadata['Name']}))"
+)
+
+
+def list_installed_distributions(python_exe=None, runner=subprocess.run):
+    """返回目标解释器已安装分发 {规范化名: 版本}；拿不到时返回 None（调用方退回全量安装）。"""
+    python_exe = python_exe or resolve_plugin_python()
+    try:
+        if _same_interpreter(python_exe):
+            installed = {}
+            for dist in importlib.metadata.distributions():
+                dist_name = dist.metadata["Name"] if dist.metadata else None
+                if dist_name:
+                    installed[canonicalize_name(dist_name)] = dist.version
+            return installed
+
+        result = runner(
+            [python_exe, "-c", _LIST_DISTRIBUTIONS_SCRIPT],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+        data = json.loads(result.stdout.strip().splitlines()[-1])
+        return {canonicalize_name(name): version for name, version in data.items()}
+    except Exception:
+        return None
+
+
+def _requirement_lines(text):
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        # pip 把 " #" 视为行内注释起点
+        yield stripped.split(" #", 1)[0].strip()
+
+
+def plan_requirements_install(requirements_path, installed, python_is_current=True):
+    """决定 requirements.txt 该怎么装：skip（都装好了）/ partial（只装缺的）/ full（全量）。
+
+    任何解析不确定的情况都返回 full，只会多装不会少装。
+    """
+    path = Path(requirements_path)
+    if not path.is_file():
+        return {"mode": "skip", "missing": [], "lines": [], "reason": "no requirements.txt"}
+
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except OSError as exc:
+        return {"mode": "full", "missing": [], "lines": [], "reason": f"read failed: {exc}"}
+    lines = list(_requirement_lines(text))
+
+    def full(reason):
+        return {"mode": "full", "missing": list(lines), "lines": lines, "reason": reason}
+
+    if not lines:
+        return {"mode": "skip", "missing": [], "lines": [], "reason": "empty requirements"}
+    if installed is None:
+        return full("installed distributions unknown")
+    if Requirement is None or Version is None:
+        return full("packaging unavailable")
+
+    missing = []
+    for line in lines:
+        if line.startswith("-") or "://" in line or "@" in line:
+            return full(f"unsupported line: {line}")
+        if line.endswith("\\") or line.startswith((".", "/", "\\")) or re.match(r"^[A-Za-z]:[\\/]", line):
+            return full(f"unsupported line: {line}")
+        try:
+            requirement = Requirement(line)
+        except InvalidRequirement:
+            return full(f"unparseable line: {line}")
+        if requirement.url:
+            return full(f"direct reference: {line}")
+        if requirement.marker is not None:
+            if not python_is_current:
+                return full(f"marker on foreign interpreter: {line}")
+            try:
+                if not requirement.marker.evaluate():
+                    continue
+            except Exception:
+                return full(f"marker evaluation failed: {line}")
+        if requirement.extras:
+            return full(f"extras cannot be verified: {line}")
+
+        current = installed.get(canonicalize_name(requirement.name))
+        if current is None:
+            missing.append(line)
+            continue
+        if not str(requirement.specifier):
+            continue
+        try:
+            if requirement.specifier.contains(Version(current), prereleases=True):
+                continue
+        except InvalidVersion:
+            return full(f"installed version unparseable: {requirement.name}={current}")
+        missing.append(line)
+
+    if not missing:
+        return {"mode": "skip", "missing": [], "lines": lines, "reason": "all satisfied"}
+    return {"mode": "partial", "missing": missing, "lines": lines, "reason": f"{len(missing)} missing"}
+
+
+def pip_install_requirements_cmd(plugin_dir, settings=None, plan=None, python_exe=None, requirements_file=None):
+    """构造安装插件 requirements 的 pip 命令行；没有可装的内容时返回 None。
 
     若插件目录下存在 ``vendor/*.whl``，则附加 ``--no-index --find-links=vendor``，
-    优先仅从本地 wheel 安装（开箱离线、无需访问 PyPI）。无 vendor 时行为与原先一致。
+    优先仅从本地 wheel 安装（开箱离线、无需访问 PyPI）。此时不再附加 pip 镜像参数。
     """
     plugin_path = Path(plugin_dir)
-    requirements_path = plugin_path / "requirements.txt"
+    requirements_path = Path(requirements_file) if requirements_file else plugin_path / "requirements.txt"
     if not requirements_path.is_file():
         return None
-    cmd = [sys.executable, "-m", "pip", "install", "-r", str(requirements_path)]
+    if plan and plan.get("mode") == "skip":
+        return None
+
+    cmd = [
+        python_exe or resolve_plugin_python(),
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+        "-r",
+        str(requirements_path),
+    ]
+
     vendor_dir = plugin_path / "vendor"
+    uses_vendor = False
     if vendor_dir.is_dir():
         has_wheel = any(
             p.is_file() and p.suffix.lower() == ".whl" and not p.name.startswith(".")
@@ -344,21 +812,195 @@ def pip_install_requirements_cmd(plugin_dir):
         )
         if has_wheel:
             cmd.extend(["--no-index", "--find-links", str(vendor_dir)])
+            uses_vendor = True
+
+    resolved = _settings_or_default(settings)
+    index_url = resolved.get("pip_index_url", "")
+    if index_url and not uses_vendor:
+        cmd.extend(["-i", index_url])
     return cmd
 
 
-def install_requirements_if_present(plugin_dir):
-    cmd = pip_install_requirements_cmd(plugin_dir)
-    if not cmd:
-        return
-    subprocess.run(
-        cmd,
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
+# ============ 依赖安装：Node（npm） ============
 
+def npm_command_prefix():
+    """找到 npm。优先 ``node npm-cli.js``（避开 .cmd 批处理的引号问题），否则用 npm/npm.cmd。"""
+    candidates = ["npm.cmd", "npm"] if os.name == "nt" else ["npm"]
+    npm_path = None
+    for candidate in candidates:
+        npm_path = shutil.which(candidate)
+        if npm_path:
+            break
+    if not npm_path:
+        return None
+
+    npm_dir = Path(npm_path).parent
+    node_name = "node.exe" if os.name == "nt" else "node"
+    node_path = npm_dir / node_name
+    cli_path = npm_dir / "node_modules" / "npm" / "bin" / "npm-cli.js"
+    if node_path.is_file() and cli_path.is_file():
+        return [str(node_path), str(cli_path)]
+    return [npm_path]
+
+
+def node_install_plan(plugin_dir):
+    """判断插件是否需要 npm install：有 package.json、声明了 dependencies、且没有 node_modules。"""
+    plugin_path = Path(plugin_dir)
+    package_json = plugin_path / "package.json"
+    if not package_json.is_file():
+        return {"needed": False, "reason": "no package.json"}
+
+    try:
+        data = json.loads(package_json.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as exc:
+        return {"needed": False, "reason": f"package.json 无法解析：{exc}", "warning": True}
+
+    dependencies = data.get("dependencies") if isinstance(data, dict) else None
+    if not isinstance(dependencies, dict) or not dependencies:
+        return {"needed": False, "reason": "no dependencies"}
+    if (plugin_path / "node_modules").is_dir():
+        return {"needed": False, "reason": "node_modules already present"}
+    return {
+        "needed": True,
+        "reason": f"{len(dependencies)} dependencies declared",
+        "dependencies": sorted(dependencies),
+    }
+
+
+def npm_install_cmd(plugin_dir, settings=None, npm_prefix=None):
+    """构造 npm install 命令；找不到 npm 时返回 None。"""
+    prefix = npm_prefix if npm_prefix is not None else npm_command_prefix()
+    if not prefix:
+        return None
+    cmd = [*prefix, "install", "--omit=dev", "--no-audit", "--no-fund", "--loglevel=error"]
+    resolved = _settings_or_default(settings)
+    registry = resolved.get("npm_registry", "")
+    if registry:
+        cmd.extend(["--registry", registry])
+    return cmd
+
+
+# ============ 统一依赖安装器 ============
+
+def _tail_text(text, limit=2000):
+    text = (text or "").strip()
+    return text[-limit:]
+
+
+def _run_dependency_command(cmd, *, runner, timeout, label, cwd=None, env=None):
+    try:
+        result = runner(
+            cmd,
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise DependencyInstallError(f"{label} 安装超时（超过 {timeout} 秒）") from exc
+    except OSError as exc:
+        raise DependencyInstallError(f"{label} 安装命令无法启动：{exc}") from exc
+
+    if result.returncode != 0:
+        detail = _tail_text(result.stderr) or _tail_text(result.stdout) or f"退出码 {result.returncode}"
+        raise DependencyInstallError(f"{label} 安装失败：{detail}")
+    return result
+
+
+def install_dependencies(
+    plugin_dir,
+    settings=None,
+    report=None,
+    runner=subprocess.run,
+    python_exe=None,
+    npm_prefix=None,
+    installed_lookup=None,
+    timeout=DEPENDENCY_TIMEOUT,
+):
+    """先装 Python 依赖再装 Node 依赖。返回警告列表；失败抛 DependencyInstallError。
+
+    report(stage, detail) 可选，stage 取值：installing_deps / deps_skipped / installing_node_deps。
+    规则：找不到 npm 只警告不失败；找到 npm 但安装失败按失败处理。
+    """
+    warnings = []
+    notify = report or (lambda stage, detail=None: None)
+    plugin_path = Path(plugin_dir)
+    resolved = _settings_or_default(settings)
+
+    requirements_path = plugin_path / "requirements.txt"
+    if requirements_path.is_file():
+        python_exe = python_exe or resolve_plugin_python()
+        lookup = installed_lookup or list_installed_distributions
+        installed = lookup(python_exe)
+        plan = plan_requirements_install(
+            requirements_path,
+            installed,
+            python_is_current=_same_interpreter(python_exe),
+        )
+        if plan["mode"] == "skip":
+            notify("deps_skipped", plan.get("reason"))
+        else:
+            notify("installing_deps", plan.get("reason"))
+            temp_requirements = None
+            try:
+                requirements_file = requirements_path
+                if plan["mode"] == "partial":
+                    with tempfile.NamedTemporaryFile(
+                        "w", suffix="_plugin_requirements.txt", delete=False, encoding="utf-8"
+                    ) as handle:
+                        handle.write("\n".join(plan["missing"]) + "\n")
+                        temp_requirements = Path(handle.name)
+                    requirements_file = temp_requirements
+                cmd = pip_install_requirements_cmd(
+                    plugin_path,
+                    settings=resolved,
+                    plan=plan,
+                    python_exe=python_exe,
+                    requirements_file=requirements_file,
+                )
+                if cmd:
+                    _run_dependency_command(cmd, runner=runner, timeout=timeout, label="Python 依赖（pip）")
+            finally:
+                if temp_requirements is not None:
+                    try:
+                        temp_requirements.unlink()
+                    except OSError:
+                        pass
+
+    node_plan = node_install_plan(plugin_path)
+    if node_plan.get("warning"):
+        warnings.append(f"已跳过 Node 依赖安装：{node_plan['reason']}")
+    if node_plan.get("needed"):
+        cmd = npm_install_cmd(plugin_path, settings=resolved, npm_prefix=npm_prefix)
+        if not cmd:
+            warnings.append(
+                "未找到 npm，已跳过 Node 依赖安装；若插件仓库未自带 node_modules，该插件可能无法运行。"
+                "安装 Node.js 后重新安装插件即可补齐依赖。"
+            )
+        else:
+            notify("installing_node_deps", node_plan.get("reason"))
+            env = dict(os.environ)
+            env["NO_UPDATE_NOTIFIER"] = "1"
+            env["npm_config_update_notifier"] = "false"
+            _run_dependency_command(
+                cmd,
+                runner=runner,
+                timeout=timeout,
+                label="Node 依赖（npm）",
+                cwd=str(plugin_path),
+                env=env,
+            )
+    return warnings
+
+
+def install_requirements_if_present(plugin_dir, settings=None):
+    """兼容旧名字的入口：现在等价于 install_dependencies（pip + npm）。"""
+    return install_dependencies(plugin_dir, settings=settings)
+
+
+# ============ 持久化数据保留、备份与回滚 ============
 
 def _normalize_persistent_path(value):
     if not isinstance(value, str):
@@ -480,17 +1122,50 @@ def _prune_old_backups(backup_path, keep=MAX_RETAINED_UPDATE_BACKUPS):
         shutil.rmtree(stale, ignore_errors=True)
 
 
+# ============ 安装与更新 ============
+
+def _normalize_download_result(result):
+    """注入的下载器可以返回 bytes 或 (bytes, 来源标签)。"""
+    if isinstance(result, tuple) and len(result) == 2:
+        data, source = result
+    else:
+        data, source = result, ""
+    if not isinstance(data, (bytes, bytearray)) or not data:
+        raise DownloadError("下载到的插件压缩包为空")
+    return bytes(data), str(source or "")
+
+
+def _resolve_dependency_installer(dependency_installer, requirements_installer):
+    if dependency_installer is not None:
+        return dependency_installer
+    if requirements_installer is not None:
+        return requirements_installer
+    return install_dependencies
+
+
+def _run_dependency_installer(installer, plugin_dir):
+    result = installer(plugin_dir)
+    if isinstance(result, (list, tuple)):
+        return [str(item) for item in result if item]
+    return []
+
+
 def update_plugin_safe(
     plugin_dir,
     plugin_name,
     repo_url,
     archive_downloader=download_archive,
-    requirements_installer=install_requirements_if_present,
+    requirements_installer=None,
+    dependency_installer=None,
+    on_stage=None,
 ):
     """Stage an update, preserve plugin-owned state, and retain rollback data."""
     plugin_path = Path(plugin_dir)
     if not plugin_path.exists():
         raise FileNotFoundError(f"插件目录不存在：{plugin_path}")
+
+    stage = on_stage or (lambda name: None)
+    installer = _resolve_dependency_installer(dependency_installer, requirements_installer)
 
     backup_path = None
     staged_path = Path(
@@ -501,11 +1176,15 @@ def update_plugin_safe(
     )
     old_directory_moved = False
     try:
-        archive_bytes = archive_downloader(repo_url)
-        if not archive_bytes:
-            raise RuntimeError("下载到的插件压缩包为空")
+        stage("downloading")
+        archive_bytes, source_used = _normalize_download_result(archive_downloader(repo_url))
 
+        stage("validating")
+        inspect_plugin_archive_bytes(archive_bytes)
+
+        stage("extracting")
         extract_archive_strip_root(archive_bytes, staged_path)
+        validate_plugin_directory(staged_path)
         persistent_paths = _discover_persistent_paths(plugin_path, staged_path)
         preserved_paths = [
             relative.as_posix()
@@ -513,7 +1192,7 @@ def update_plugin_safe(
             if _copy_persistent_path(plugin_path, staged_path, relative)
         ]
 
-        requirements_installer(staged_path)
+        warnings = _run_dependency_installer(installer, staged_path)
         metadata = get_local_metadata(staged_path)
 
         backup_path = _unique_backup_path(plugin_path, plugin_name)
@@ -528,6 +1207,8 @@ def update_plugin_safe(
             "plugin_dir": str(plugin_path),
             "preserved_paths": preserved_paths,
             "backup_path": str(backup_path),
+            "source_used": source_used,
+            "warnings": warnings,
         }
     except Exception:
         if old_directory_moved and backup_path is not None:
@@ -542,20 +1223,41 @@ def install_plugin_from_archive(
     plugin_dir,
     repo_url,
     archive_downloader=download_archive,
-    requirements_installer=install_requirements_if_present,
+    requirements_installer=None,
+    dependency_installer=None,
+    expected_name=None,
+    on_stage=None,
 ):
-    """安装新插件，失败时不留下空目录。"""
+    """安装新插件：下载 → 校验 → 解压到暂存目录 → 装依赖 → 原子就位。失败不留下空目录。"""
     plugin_path = Path(plugin_dir)
     if plugin_path.exists() and any(plugin_path.iterdir()):
         raise FileExistsError(f"插件目录已存在：{plugin_path}")
 
-    archive_bytes = archive_downloader(repo_url)
+    stage = on_stage or (lambda name: None)
+    installer = _resolve_dependency_installer(dependency_installer, requirements_installer)
+
+    stage("downloading")
+    archive_bytes, source_used = _normalize_download_result(archive_downloader(repo_url))
+
+    stage("validating")
+    inspection = inspect_plugin_archive_bytes(archive_bytes)
+    warnings = []
+    actual_name = inspection["info"]["name"]
+    if expected_name and actual_name != expected_name:
+        warnings.append(
+            f'插件包内 metadata.name 为 "{actual_name}"，与安装目录名 "{expected_name}" 不一致，'
+            "已按目录名安装；插件管理里显示的是 metadata 里的名字。"
+        )
+
+    plugin_path.parent.mkdir(parents=True, exist_ok=True)
     temp_dir = Path(
         tempfile.mkdtemp(prefix=f".{plugin_path.name}.install-", dir=str(plugin_path.parent))
     )
     try:
+        stage("extracting")
         extract_archive_strip_root(archive_bytes, temp_dir)
-        requirements_installer(temp_dir)
+        validate_plugin_directory(temp_dir)
+        warnings.extend(_run_dependency_installer(installer, temp_dir))
         if plugin_path.exists():
             shutil.rmtree(plugin_path)
         temp_dir.rename(plugin_path)
@@ -564,6 +1266,8 @@ def install_plugin_from_archive(
             "name": metadata.get("name", plugin_path.name),
             "version": metadata.get("version", ""),
             "plugin_dir": str(plugin_path),
+            "source_used": source_used,
+            "warnings": warnings,
         }
     except Exception:
         shutil.rmtree(temp_dir, ignore_errors=True)

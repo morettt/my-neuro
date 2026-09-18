@@ -5,6 +5,7 @@ WebUI 模块化重构 - 广场与资源模块
 负责提示词广场、插件广场、工具广场的下载功能
 """
 
+import functools
 import json
 import os
 import zipfile
@@ -15,19 +16,39 @@ import shutil
 import time
 import urllib.request
 import urllib.error
+import uuid
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Blueprint, request, jsonify
 
+from . import market_settings
 from . import marketplace_stats
 from .utils import PROJECT_ROOT, logger
 from .marketplace_updater import (
+    ArchiveTooLargeError,
+    DependencyInstallError,
+    DownloadError,
+    MAX_PLUGIN_ARCHIVE_BYTES,
+    PluginValidationError,
+    apply_mirror,
+    check_framework_compatibility,
     check_updates_for_plugins,
+    download_archive,
+    fetch_remote_metadata,
+    fetch_remote_metadata_with_source,
     get_local_metadata,
+    github_source_plan,
+    inspect_plugin_archive_bytes,
+    install_dependencies,
     install_plugin_from_archive,
-    pip_install_requirements_cmd,
+    normalize_repo_url,
+    npm_command_prefix,
+    resolve_plugin_python,
+    source_label,
     update_plugin_safe,
+    validate_plugin_metadata,
 )
+from .plugin_manager import PLUGIN_FRAMEWORK_VERSION, enable_plugin_path
 from .state_io import (
     delete_resource_state,
     read_resource_state,
@@ -60,6 +81,35 @@ PLUGIN_HUB_RAW_URL = (
     'https://raw.githubusercontent.com/morettt/my-neuro/main/'
     'live-2d/plugins/plugin-house/plugin_hub.json'
 )
+PLUGIN_HUB_TIMEOUT = 15
+UPLOAD_DIR_NAME = '.uploads'
+INSTALL_STAGE_PROGRESS = {
+    'queued': 0,
+    'downloading': 15,
+    'validating': 40,
+    'extracting': 50,
+    'installing_deps': 70,
+    'installing_node_deps': 80,
+    'enabling': 95,
+    'completed': 100,
+}
+
+
+def _community_root():
+    return PROJECT_ROOT / 'plugins' / 'community'
+
+
+def _builtin_root():
+    return PROJECT_ROOT / 'plugins' / 'built-in'
+
+
+def _live2d_running():
+    """桌宠是否正在由 WebUI 托管运行；无法判断时返回 None。"""
+    try:
+        from .service_controller import _get_service_state
+        return bool(_get_service_state('live2d').get('started'))
+    except Exception:
+        return None
 
 
 def _task_is_active(task):
@@ -118,6 +168,9 @@ def _reserve_install_task(plugin_name, status, progress, operation):
             'created_at': now,
             'updated_at': now,
             'error': '',
+            'warnings': [],
+            'enabled': False,
+            'source_used': '',
             'webui_pid': os.getpid(),
         }
         write_resource_state(resource, task)
@@ -142,6 +195,9 @@ def _update_install_task(plugin_name, **changes):
                 'operation': 'install',
                 'created_at': now,
                 'error': '',
+                'warnings': [],
+                'enabled': False,
+                'source_used': '',
                 'webui_pid': os.getpid(),
             }
         )
@@ -155,45 +211,96 @@ def _update_install_task(plugin_name, **changes):
         return dict(task)
 
 
-def load_plugin_hub_catalog():
-    """优先从 GitHub Raw 拉取 plugin_hub.json，失败则读取本地（与桌面版逻辑一致）。"""
-    plugin_hub_path = PROJECT_ROOT / 'plugins' / 'plugin-house' / 'plugin_hub.json'
-    remote_err = None
+def _append_task_warnings(plugin_name, warnings):
+    warnings = [str(item) for item in (warnings or []) if item]
+    if not warnings:
+        return
+    task = _get_install_task(plugin_name) or {}
+    merged = list(task.get('warnings') or [])
+    for item in warnings:
+        if item not in merged:
+            merged.append(item)
+    _update_install_task(plugin_name, warnings=merged)
 
-    if HAS_REQUESTS:
-        try:
-            resp = requests.get(PLUGIN_HUB_RAW_URL, timeout=15)
-            resp.raise_for_status()
-            return resp.json()
-        except Exception as e:
-            remote_err = str(e)
-            logger.warning('远程 plugin_hub.json 拉取失败，将尝试本地：%s', e)
+
+def _set_task_stage(plugin_name, stage):
+    progress = INSTALL_STAGE_PROGRESS.get(stage)
+    if progress is None:
+        _update_install_task(plugin_name, status=stage)
     else:
+        _update_install_task(plugin_name, status=stage, progress=progress)
+
+
+def _validate_hub_catalog(data, source_desc):
+    """plugin_hub.json 的格式：{ key: {display_name, desc, author, repo} }。"""
+    if not isinstance(data, dict) or not data:
+        raise ValueError(f'{source_desc} 不是插件索引对象')
+    for key, value in data.items():
+        if not isinstance(key, str) or not isinstance(value, dict):
+            raise ValueError(f'{source_desc} 中条目 {key!r} 格式不正确')
+        if not isinstance(value.get('repo', ''), str):
+            raise ValueError(f'{source_desc} 中条目 {key!r} 的 repo 不是字符串')
+    return data
+
+
+def _fetch_hub_catalog(hub_url, settings):
+    """按来源计划抓取索引 JSON，非 GitHub 域名的地址只会直连一次。"""
+    last_error = None
+    for mirror in github_source_plan(settings):
+        url = apply_mirror(hub_url, mirror)
+        if mirror and url == hub_url:
+            continue
         try:
-            req = urllib.request.Request(PLUGIN_HUB_RAW_URL)
-            with urllib.request.urlopen(req, timeout=15) as response:
-                return json.loads(response.read().decode('utf-8'))
-        except Exception as e:
-            remote_err = str(e)
-            logger.warning('远程 plugin_hub.json 拉取失败，将尝试本地：%s', e)
+            req = urllib.request.Request(url, headers={'User-Agent': 'my-neuro-plugin-market/2.0'})
+            with urllib.request.urlopen(req, timeout=PLUGIN_HUB_TIMEOUT) as response:
+                data = json.loads(response.read().decode('utf-8-sig'))
+            return _validate_hub_catalog(data, hub_url), source_label(mirror)
+        except Exception as exc:
+            last_error = exc
+    raise RuntimeError(f'索引 {hub_url} 不可用：{last_error}')
+
+
+def load_plugin_hub_catalog(settings=None):
+    """优先拉取远程 plugin_hub.json（自定义源 → 默认源，均可走镜像），失败则读取本地副本。"""
+    settings = settings or market_settings.load_settings()
+    plugin_hub_path = PROJECT_ROOT / 'plugins' / 'plugin-house' / 'plugin_hub.json'
+    errors = []
+
+    hub_urls = []
+    custom_url = settings.get('hub_url', '')
+    if custom_url:
+        hub_urls.append(custom_url)
+    hub_urls.append(PLUGIN_HUB_RAW_URL)
+
+    for hub_url in hub_urls:
+        try:
+            catalog, _source = _fetch_hub_catalog(hub_url, settings)
+            return catalog
+        except ValueError as exc:
+            errors.append(f'自定义源格式不正确：{exc}' if hub_url == custom_url else str(exc))
+            logger.warning('插件索引格式不正确，将尝试下一来源：%s', exc)
+        except Exception as exc:
+            errors.append(str(exc))
+            logger.warning('远程插件索引拉取失败，将尝试下一来源：%s', exc)
 
     if plugin_hub_path.exists():
-        with open(plugin_hub_path, 'r', encoding='utf-8') as f:
+        with open(plugin_hub_path, 'r', encoding='utf-8-sig') as f:
             return json.load(f)
 
     raise FileNotFoundError(
-        f'无法加载插件商店：远程不可用 ({remote_err})，且本地不存在 {plugin_hub_path}'
+        f'无法加载插件商店：远程不可用 ({"; ".join(errors)})，且本地不存在 {plugin_hub_path}'
     )
 
 
 def _get_market_plugin_dir(plugin_name):
     """插件广场只安装到 community 目录。"""
-    return PROJECT_ROOT / 'plugins' / 'community' / plugin_name
+    return _community_root() / plugin_name
 
 
-def _build_market_plugin_items(check_updates=True):
+def _build_market_plugin_items(check_updates=True, settings=None):
     """读取插件广场列表，并补充本地安装状态与版本更新信息。"""
-    plugins_data = load_plugin_hub_catalog()
+    settings = settings or market_settings.load_settings()
+    plugins_data = load_plugin_hub_catalog(settings)
     plugins = []
 
     for key, value in plugins_data.items():
@@ -226,7 +333,10 @@ def _build_market_plugin_items(check_updates=True):
         })
 
     if check_updates and plugins:
-        update_info = check_updates_for_plugins(plugins)
+        update_info = check_updates_for_plugins(
+            plugins,
+            fetch_metadata=functools.partial(fetch_remote_metadata, settings=settings),
+        )
         for plugin in plugins:
             info = update_info.get(plugin['name'])
             if not info:
@@ -260,25 +370,101 @@ def _find_market_plugin(plugin_name):
     return None
 
 
-def _install_requirements_with_task_status(plugin_name):
+def _dependency_installer_for_task(plugin_name, settings):
+    """把 pip/npm 安装进度写进任务状态；返回的警告由调用方收集。"""
+    def _report(stage, detail=None):
+        if stage in INSTALL_STAGE_PROGRESS:
+            _set_task_stage(plugin_name, stage)
+
     def _installer(plugin_dir):
-        cmd = pip_install_requirements_cmd(plugin_dir)
-        if not cmd:
-            return
-        _update_install_task(
-            plugin_name,
-            status='installing_deps',
-            progress=75,
-        )
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=300
-        )
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr or '插件依赖安装失败')
+        return install_dependencies(plugin_dir, settings=settings, report=_report)
     return _installer
+
+
+def _archive_downloader_for_task(plugin_name, settings):
+    """按设置下载 zip，并把实际使用的来源（直连/镜像）记进任务。"""
+    def _downloader(repo_url):
+        data, source_used = download_archive(repo_url, settings=settings)
+        _update_install_task(plugin_name, source_used=source_used)
+        return data, source_used
+    return _downloader
+
+
+def _stage_reporter(plugin_name):
+    def _on_stage(stage):
+        _set_task_stage(plugin_name, stage)
+    return _on_stage
+
+
+def _plugin_dir_conflict(dir_name):
+    """URL/zip 安装的目录名不能撞上已有的 community 或 built-in 目录。"""
+    community_dir = _community_root() / dir_name
+    if community_dir.exists() and any(community_dir.iterdir()):
+        return f'插件 {dir_name} 已安装，请使用更新'
+    if (_builtin_root() / dir_name).exists():
+        return f'目录名 {dir_name} 与内置插件冲突，无法安装'
+    return ''
+
+
+def _compatibility_of(metadata):
+    framework_version = metadata.get('framework_version', '') if isinstance(metadata, dict) else ''
+    compatible, message = check_framework_compatibility(framework_version, PLUGIN_FRAMEWORK_VERSION)
+    return framework_version, compatible, message
+
+
+def _describe_remote_plugin(repo_url, settings):
+    """预览远程插件：拉 metadata.json、校验、给出目录名与兼容性。"""
+    normalized_url = normalize_repo_url(repo_url)
+    metadata, source_used = fetch_remote_metadata_with_source(normalized_url, settings=settings)
+    info = validate_plugin_metadata(metadata)
+    framework_version, compatible, compatibility_message = _compatibility_of(metadata)
+    dir_name = info['name']
+    return {
+        'repo': normalized_url,
+        'metadata': {
+            'name': info['name'],
+            'displayName': metadata.get('displayName') or metadata.get('display_name') or info['name'],
+            'version': info['version'],
+            'author': metadata.get('author', ''),
+            'description': metadata.get('description') or metadata.get('desc') or '',
+            'lang': info['lang'],
+            'framework_version': framework_version,
+            'repo': metadata.get('repo') or normalized_url,
+        },
+        'dir_name': dir_name,
+        'already_installed': (_community_root() / dir_name).exists()
+        and any((_community_root() / dir_name).iterdir()),
+        'conflict': _plugin_dir_conflict(dir_name),
+        'compatible': compatible,
+        'compatibility_message': compatibility_message,
+        'source_used': source_used,
+    }
+
+
+def _start_install_task(plugin_name, plugin_url, plugin_dir, settings, archive_downloader=None,
+                        expected_name=None, cleanup_path=None):
+    """占位 + 启动后台安装线程。返回 (ok, error_message, http_status)。"""
+    _community_root().mkdir(parents=True, exist_ok=True)
+    if not _reserve_install_task(plugin_name, status='queued', progress=0, operation='install'):
+        return False, '该插件正在安装中', 409
+
+    thread = threading.Thread(
+        target=_install_plugin_worker,
+        args=(plugin_name, plugin_url, plugin_dir),
+        kwargs={
+            'settings': settings,
+            'archive_downloader': archive_downloader,
+            'expected_name': expected_name,
+            'cleanup_path': cleanup_path,
+        },
+        daemon=True,
+    )
+    try:
+        thread.start()
+    except Exception as exc:
+        _update_install_task(plugin_name, status='failed', progress=0, error=str(exc))
+        return False, str(exc), 500
+    return True, '', 200
 
 
 # ============ 提示词广场 ============
@@ -344,9 +530,9 @@ def get_plugin_market():
 
 @market_bp.route('/api/market/plugins/download', methods=['POST'])
 def download_plugin():
-    """下载插件（异步，自动解压和安装依赖）"""
+    """从插件广场安装插件（异步：下载、校验、解压、装依赖、自动启用）"""
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         plugin_name = data.get('plugin_name', '')
         plugin_url = data.get('repo') or data.get('download_url', '')
 
@@ -356,86 +542,239 @@ def download_plugin():
 
         if not plugin_name or not plugin_url:
             return jsonify({'success': False, 'error': '缺少参数'}), 400
+        if '/' in plugin_name or '\\' in plugin_name or '..' in plugin_name:
+            return jsonify({'success': False, 'error': '无效的插件名称'}), 400
 
-        # 检查是否已安装
-        community_path = PROJECT_ROOT / 'plugins' / 'community'
-        plugin_dir = community_path / plugin_name
+        plugin_dir = _get_market_plugin_dir(plugin_name)
         if plugin_dir.exists() and any(plugin_dir.iterdir()):
             return jsonify({'success': False, 'error': '插件已安装'}), 400
 
-        # 只创建父目录。插件目录由安装成功后原子落盘，避免失败留下空壳。
-        community_path.mkdir(parents=True, exist_ok=True)
-
-        if not _reserve_install_task(
-            plugin_name,
-            status='queued',
-            progress=0,
-            operation='install',
-        ):
-            return jsonify({'success': False, 'error': '该插件正在安装中'}), 409
-
-        # 启动后台线程进行下载和安装
-        thread = threading.Thread(
-            target=_install_plugin_worker,
-            args=(plugin_name, plugin_url, plugin_dir),
-            daemon=True
+        settings = market_settings.load_settings()
+        ok, error, status = _start_install_task(
+            plugin_name, plugin_url, plugin_dir, settings, expected_name=plugin_name
         )
-        try:
-            thread.start()
-        except Exception as exc:
-            _update_install_task(
-                plugin_name,
-                status='failed',
-                progress=0,
-                error=str(exc),
-            )
-            raise
+        if not ok:
+            return jsonify({'success': False, 'error': error}), status
 
         return jsonify({
             'success': True,
+            'plugin_name': plugin_name,
             'message': f'插件 {plugin_name} 开始安装，请稍候...'
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-def _install_plugin_worker(plugin_name, plugin_url, plugin_dir):
-    """后台安装插件的工作线程"""
+def _install_plugin_worker(plugin_name, plugin_url, plugin_dir, settings=None,
+                           archive_downloader=None, expected_name=None, cleanup_path=None):
+    """后台安装插件的工作线程（市场 / 仓库地址 / 上传 zip 三条路径共用）"""
+    settings = settings or market_settings.load_settings()
+    plugin_dir = Path(plugin_dir)
     try:
-        _update_install_task(
-            plugin_name,
-            status='downloading',
-            progress=0,
-            operation='install',
-            error='',
-        )
-        logger.info(f'开始下载插件：{plugin_name}')
+        _update_install_task(plugin_name, status='downloading', progress=0, operation='install', error='')
+        logger.info(f'开始安装插件：{plugin_name}')
 
-        # 下载、解压、依赖安装都在辅助模块中完成；它会自动处理 main/master/default_branch。
-        _update_install_task(plugin_name, status='downloading', progress=20)
-        _update_install_task(plugin_name, status='extracting', progress=50)
-        install_plugin_from_archive(
+        result = install_plugin_from_archive(
             plugin_dir,
             plugin_url,
-            requirements_installer=_install_requirements_with_task_status(plugin_name),
+            archive_downloader=archive_downloader or _archive_downloader_for_task(plugin_name, settings),
+            dependency_installer=_dependency_installer_for_task(plugin_name, settings),
+            expected_name=expected_name,
+            on_stage=_stage_reporter(plugin_name),
         )
+        _append_task_warnings(plugin_name, result.get('warnings'))
+        if result.get('source_used'):
+            _update_install_task(plugin_name, source_used=result['source_used'])
 
-        _update_install_task(
-            plugin_name,
-            status='completed',
-            progress=100,
-            error='',
-        )
+        # 安装即启用：写入 enabled_plugins.json，Electron 侧 fs.watch 会随即热加载。
+        _set_task_stage(plugin_name, 'enabling')
+        enabled = False
+        try:
+            enable_plugin_path(f'community/{plugin_dir.name}')
+            enabled = True
+        except Exception as exc:
+            logger.warning('插件 %s 已安装但自动启用失败：%s', plugin_name, exc)
+            _append_task_warnings(
+                plugin_name,
+                [f'插件已安装但自动启用失败：{exc}，请到「插件管理」手动开启'],
+            )
+
+        _update_install_task(plugin_name, status='completed', progress=100, error='', enabled=enabled)
         marketplace_stats.increment_download(plugin_name)
-        logger.info(f'插件安装完成：{plugin_name}')
+        logger.info(f'插件安装完成：{plugin_name}（自动启用：{enabled}）')
 
-    except Exception as e:
+    except (DownloadError, PluginValidationError, DependencyInstallError) as e:
         logger.error(f'插件安装失败：{plugin_name}, {str(e)}')
-        _update_install_task(
-            plugin_name,
-            status='failed',
-            error=str(e),
-        )
+        _update_install_task(plugin_name, status='failed', error=str(e))
+    except Exception as e:
+        logger.error(f'插件安装失败：{plugin_name}, {str(e)}', exc_info=True)
+        _update_install_task(plugin_name, status='failed', error=str(e))
+    finally:
+        if cleanup_path:
+            try:
+                Path(cleanup_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+# ============ 下载设置 / 仓库地址安装 / 上传安装 ============
+
+@market_bp.route('/api/market/settings', methods=['GET'])
+def get_market_settings():
+    """读取插件广场的下载与依赖设置，并附带本机工具探测结果。"""
+    try:
+        npm_prefix = npm_command_prefix()
+        return jsonify({
+            'success': True,
+            'settings': market_settings.load_settings(),
+            'builtin_mirrors': list(market_settings.BUILTIN_GITHUB_MIRRORS),
+            'mirror_modes': list(market_settings.MIRROR_MODES),
+            'tools': {
+                'npm': bool(npm_prefix),
+                'npm_path': npm_prefix[0] if npm_prefix else '',
+                'python_path': resolve_plugin_python(),
+            },
+            'max_archive_bytes': MAX_PLUGIN_ARCHIVE_BYTES,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@market_bp.route('/api/market/settings', methods=['POST'])
+def save_market_settings():
+    """保存设置；校验失败返回 400 并说明字段。"""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'success': False, 'error': '无效的请求数据'}), 400
+    try:
+        saved = market_settings.save_settings(data)
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'success': False, 'error': f'保存失败：{exc}'}), 500
+    return jsonify({'success': True, 'settings': saved})
+
+
+@market_bp.route('/api/market/plugins/inspect', methods=['POST'])
+def inspect_plugin_repository():
+    """安装前预览仓库里的 metadata.json。"""
+    data = request.get_json(silent=True) or {}
+    repo_url = (data.get('repo') or '').strip()
+    if not repo_url:
+        return jsonify({'success': False, 'error': '请填写 GitHub 仓库地址'}), 400
+    try:
+        settings = market_settings.load_settings()
+        described = _describe_remote_plugin(repo_url, settings)
+        return jsonify({'success': True, **described})
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'success': False, 'error': f'读取仓库信息失败：{exc}'}), 502
+
+
+@market_bp.route('/api/market/plugins/install-from-url', methods=['POST'])
+def install_plugin_from_url():
+    """从任意公开 GitHub 仓库安装插件（目录名取 metadata.name）。"""
+    data = request.get_json(silent=True) or {}
+    repo_url = (data.get('repo') or '').strip()
+    ignore_compat = bool(data.get('ignore_compat'))
+    if not repo_url:
+        return jsonify({'success': False, 'error': '请填写 GitHub 仓库地址'}), 400
+    try:
+        settings = market_settings.load_settings()
+        described = _describe_remote_plugin(repo_url, settings)
+    except ValueError as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'success': False, 'error': f'读取仓库信息失败：{exc}'}), 502
+
+    if described['conflict']:
+        return jsonify({'success': False, 'error': described['conflict']}), 409
+    if not described['compatible'] and not ignore_compat:
+        return jsonify({
+            'success': False,
+            'error': described['compatibility_message'] or '插件与当前框架版本不兼容',
+            'compatibility_error': True,
+        }), 409
+
+    dir_name = described['dir_name']
+    ok, error, status = _start_install_task(
+        dir_name,
+        described['repo'],
+        _community_root() / dir_name,
+        settings,
+        expected_name=dir_name,
+    )
+    if not ok:
+        return jsonify({'success': False, 'error': error}), status
+    return jsonify({
+        'success': True,
+        'plugin_name': dir_name,
+        'display_name': described['metadata']['displayName'],
+        'message': f'插件 {dir_name} 开始安装，请稍候...',
+    })
+
+
+@market_bp.route('/api/market/plugins/install-upload', methods=['POST'])
+def install_plugin_upload():
+    """上传本地 zip 安装插件：同步校验 zip，通过后转后台任务。"""
+    uploaded = request.files.get('file')
+    if uploaded is None or not uploaded.filename:
+        return jsonify({'success': False, 'error': '请选择要上传的 zip 文件'}), 400
+    ignore_compat = str(request.form.get('ignore_compat', '')).lower() in ('1', 'true', 'yes', 'on')
+
+    upload_dir = _community_root() / UPLOAD_DIR_NAME
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    upload_path = upload_dir / f'{uuid.uuid4().hex}.zip'
+    try:
+        uploaded.save(str(upload_path))
+        archive_bytes = upload_path.read_bytes()
+        inspection = inspect_plugin_archive_bytes(archive_bytes)
+    except ArchiveTooLargeError as exc:
+        upload_path.unlink(missing_ok=True)
+        return jsonify({'success': False, 'error': str(exc)}), 413
+    except PluginValidationError as exc:
+        upload_path.unlink(missing_ok=True)
+        return jsonify({'success': False, 'error': str(exc)}), 400
+    except Exception as exc:
+        upload_path.unlink(missing_ok=True)
+        return jsonify({'success': False, 'error': f'读取上传文件失败：{exc}'}), 500
+
+    metadata = inspection['metadata']
+    dir_name = inspection['info']['name']
+    conflict = _plugin_dir_conflict(dir_name)
+    if conflict:
+        upload_path.unlink(missing_ok=True)
+        return jsonify({'success': False, 'error': conflict}), 409
+    _framework_version, compatible, compatibility_message = _compatibility_of(metadata)
+    if not compatible and not ignore_compat:
+        upload_path.unlink(missing_ok=True)
+        return jsonify({
+            'success': False,
+            'error': compatibility_message or '插件与当前框架版本不兼容',
+            'compatibility_error': True,
+        }), 409
+
+    settings = market_settings.load_settings()
+    ok, error, status = _start_install_task(
+        dir_name,
+        f'upload:{uploaded.filename}',
+        _community_root() / dir_name,
+        settings,
+        archive_downloader=lambda *_args, _data=archive_bytes: (_data, 'upload'),
+        expected_name=dir_name,
+        cleanup_path=upload_path,
+    )
+    if not ok:
+        upload_path.unlink(missing_ok=True)
+        return jsonify({'success': False, 'error': error}), status
+    return jsonify({
+        'success': True,
+        'plugin_name': dir_name,
+        'display_name': metadata.get('displayName') or dir_name,
+        'version': inspection['info']['version'],
+        'message': f'插件 {dir_name} 开始安装，请稍候...',
+    })
 
 
 @market_bp.route('/api/market/plugins/update', methods=['POST'])
@@ -467,19 +806,27 @@ def update_market_plugin():
             operation='update',
         ):
             return jsonify({'success': False, 'error': '该插件正在安装或更新中'}), 409
+        settings = market_settings.load_settings()
         result = update_plugin_safe(
             plugin_dir,
             plugin_name,
             repo_url,
-            requirements_installer=_install_requirements_with_task_status(plugin_name),
+            archive_downloader=_archive_downloader_for_task(plugin_name, settings),
+            dependency_installer=_dependency_installer_for_task(plugin_name, settings),
         )
+        _append_task_warnings(plugin_name, result.get('warnings'))
         _update_install_task(
             plugin_name,
             status='completed',
             progress=100,
             error='',
         )
-        return jsonify({'success': True, 'message': '插件更新完成', 'result': result})
+        return jsonify({
+            'success': True,
+            'message': '插件更新完成',
+            'result': result,
+            'warnings': result.get('warnings', []),
+        })
     except Exception as e:
         logger.error(f'插件更新失败：{str(e)}', exc_info=True)
         if (
@@ -504,9 +851,10 @@ def update_all_market_plugins():
         if not isinstance(plugin_names, list) or not plugin_names:
             return jsonify({'success': False, 'error': '插件列表不能为空'}), 400
 
+        settings = market_settings.load_settings()
         market_plugins = {
             plugin['name']: plugin
-            for plugin in _build_market_plugin_items(check_updates=False)
+            for plugin in _build_market_plugin_items(check_updates=False, settings=settings)
         }
 
         def _update_one(name):
@@ -530,15 +878,17 @@ def update_all_market_plugins():
                     _get_market_plugin_dir(name),
                     name,
                     repo_url,
-                    requirements_installer=_install_requirements_with_task_status(name),
+                    archive_downloader=_archive_downloader_for_task(name, settings),
+                    dependency_installer=_dependency_installer_for_task(name, settings),
                 )
+                _append_task_warnings(name, result.get('warnings'))
                 _update_install_task(
                     name,
                     status='completed',
                     progress=100,
                     error='',
                 )
-                return {'name': name, 'success': True, 'result': result}
+                return {'name': name, 'success': True, 'result': result, 'warnings': result.get('warnings', [])}
             except Exception as exc:
                 logger.error(f'批量更新插件失败 {name}: {exc}', exc_info=True)
                 _update_install_task(name, status='failed', error=str(exc))
@@ -592,33 +942,38 @@ def check_market_plugin_updates():
 @market_bp.route('/api/market/plugins/install-status/<plugin_name>', methods=['GET'])
 def get_install_status(plugin_name):
     """获取插件安装状态"""
+    if '/' in plugin_name or '\\' in plugin_name or '..' in plugin_name:
+        return jsonify({'success': False, 'error': '无效的插件名称'}), 400
+
+    plugin_dir = _get_market_plugin_dir(plugin_name)
+    is_installed = plugin_dir.exists() and any(plugin_dir.iterdir())
     task = _get_install_task(plugin_name)
     if task:
         status = task.get('status', 'unknown')
         terminal = status in TERMINAL_INSTALL_STATUSES
-        community_path = PROJECT_ROOT / 'plugins' / 'community'
-        plugin_dir = community_path / plugin_name
-        is_installed = plugin_dir.exists() and any(plugin_dir.iterdir())
         return jsonify({
             'success': True,
             'installing': not terminal,
             'terminal': terminal,
             'installed': is_installed,
             'status': status,
+            'operation': task.get('operation', 'install'),
             'progress': task.get('progress', 0),
-            'error': task.get('error', '')
+            'error': task.get('error', ''),
+            'warnings': list(task.get('warnings') or []),
+            'enabled': bool(task.get('enabled')),
+            'source_used': task.get('source_used', ''),
+            'live2d_running': _live2d_running() if terminal else None,
         })
-    else:
-        # 检查是否已安装完成
-        community_path = PROJECT_ROOT / 'plugins' / 'community'
-        plugin_dir = community_path / plugin_name
-        is_installed = plugin_dir.exists() and any(plugin_dir.iterdir())
-        
-        return jsonify({
-            'success': True,
-            'installing': False,
-            'installed': is_installed
-        })
+
+    return jsonify({
+        'success': True,
+        'installing': False,
+        'installed': is_installed,
+        'warnings': [],
+        'enabled': False,
+        'live2d_running': None,
+    })
 
 
 @market_bp.route('/api/market/plugins/check-installed/<plugin_name>', methods=['GET'])

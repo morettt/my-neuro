@@ -332,6 +332,24 @@ class MyPlugin(Plugin):
 
 ---
 
+## 依赖声明与安装器行为
+
+用户在 WebUI「广场 → 插件广场」里安装插件（市场卡片、粘贴仓库地址、上传 zip 三种方式），安装器会按下面的规则处理你的插件目录：
+
+**插件包必须长这样**：根目录（或 GitHub zip 的顶层目录壳之内）要有 `metadata.json`，`name` 非空且只含字母、数字、点、下划线、连字符，`version` 非空，入口文件（`main` 指定的文件，默认 `index.js`，Python 插件默认 `index.py`）必须存在。不满足会在安装前被拒绝，并提示缺了哪一项。
+
+**Python 依赖**：写在 `requirements.txt`。安装器会先检查目标解释器（优先项目自带的 `env/python.exe`，和运行 Python 插件的解释器一致）里已经装了什么，只安装缺失或版本不满足的包，全都满足时直接跳过 pip。用户可以在「下载设置」里配置 pip 镜像。带 `-e`、URL、extras 等复杂写法的行会退回全量安装。`vendor/*.whl` 离线安装的规则不变。
+
+**Node 依赖**：写在 `package.json` 的 `dependencies` 里。如果插件目录里没有 `node_modules/`，安装器会在插件目录执行 `npm install --omit=dev`（registry 默认 `https://registry.npmmirror.com/`，可在「下载设置」里改）。用户机器上没有 npm 时只会给出警告，插件仍会安装并启用——所以**仍然建议社区插件把 `node_modules` 一起提交到仓库**，照顾没有 Node.js 的用户；两种方式同时用也没问题，已有 `node_modules` 时安装器不会再跑 npm。
+
+**框架版本**：`metadata.json` 里可选 `framework_version`（PEP 440 写法，如 `">=1.0.0,<2"`）。不满足时市场卡片会标记不兼容，粘贴地址/上传 zip 安装会先拦下并允许用户选择"无视兼容性警告继续安装"。
+
+**安装即启用**：安装成功后插件会被自动写进 `plugins/enabled_plugins.json`，桌宠正在运行时会立刻热加载并调用 `onStart()`，所以 `onInit` / `onStart` 要能在没有任何用户配置的情况下安全跑完（缺配置时打日志、不要抛异常）。
+
+**下载来源**：插件 zip 从 GitHub 下载，默认"直连优先、失败后自动换镜像"，用户也可以固定镜像或自定义前缀；`plugin_hub.json` 索引和远程 `metadata.json` 也走同样的镜像规则。
+
+---
+
 ## 参考示例
 
 - `plugins/built-in/` 里的内置插件，每个都是完整的例子
