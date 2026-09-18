@@ -7,6 +7,7 @@ const { pipeline } = require('node:stream/promises');
 const http = require('http');
 const nodeNet = require('node:net');
 const { scanLive2DModels, resolveLive2DModel, scanVRMModels } = require('./js/avatar/model-registry');
+const { EMOTIONS: motionEmotions, mergeExpressionConfig, mergeActionConfig, isLive2DModelDir } = require('./js/avatar/model-defaults');
 const { loadProvidersFromStore, saveProviders } = require('./js/core/llm-provider-store');
 
 const configPath = path.join(__dirname, 'config.json');
@@ -550,13 +551,57 @@ function postDesktop(route, payload, timeout = 2500) {
   });
 }
 
+const motionFile = kind => path.join(__dirname, kind === 'actions' ? 'emotion_actions.json' : 'emotion_expressions.json');
+const motionRootKey = kind => kind === 'actions' ? 'emotion_actions' : 'emotion_expressions';
+const mergeMotionConfig = (kind, character, existing) => (kind === 'actions' ? mergeActionConfig : mergeExpressionConfig)(character, existing);
+// WebUI 保存过的模型会有 per-model sidecar（2D/<模型>/emotion_mapping.json），桌宠优先读它而不是中央配置；
+// 面板必须同样以它为准读写，否则这里的改动桌宠看不到。
+const sidecarPath = character => path.join(__dirname, '2D', character, 'emotion_mapping.json');
+const sidecarKeys = kind => kind === 'actions' ? { list: 'motions', named: 'actions' } : { list: 'expressions', named: 'expressions_named' };
+
+function readMotionConfig(character, kind) {
+  const sidecar = readJson(sidecarPath(character), null);
+  if (!sidecar || typeof sidecar !== 'object') return readJson(motionFile(kind), {})[character]?.[motionRootKey(kind)];
+  const { list, named } = sidecarKeys(kind);
+  const config = {};
+  for (const [emotion, entry] of Object.entries(sidecar.emotions || {})) if (Array.isArray(entry?.[list])) config[emotion] = entry[list];
+  for (const [name, files] of Object.entries(sidecar[named] || {})) if (Array.isArray(files)) config[name] = files;
+  return config;
+}
+
+function writeMotionConfig(character, kind, values) {
+  const file = motionFile(kind);
+  const all = readJson(file, {});
+  all[character] ||= {};
+  all[character][motionRootKey(kind)] = values;
+  fs.writeFileSync(file, `${JSON.stringify(all, null, 2)}\n`, 'utf8');
+  const sidecar = readJson(sidecarPath(character), null);
+  if (!sidecar || typeof sidecar !== 'object') return;
+  const { list, named } = sidecarKeys(kind);
+  sidecar.emotions ||= {};
+  sidecar[named] = {};
+  for (const [key, files] of Object.entries(values)) {
+    if (motionEmotions.includes(key)) (sidecar.emotions[key] ||= {})[list] = files;
+    else sidecar[named][key] = files;
+  }
+  fs.writeFileSync(sidecarPath(character), `${JSON.stringify(sidecar, null, 2)}\n`, 'utf8');
+}
+
+// 桌宠运行中时让它重读表情/动作配置；未运行则静默忽略（下次启动自然生效）
+const notifyDesktopReload = () => postDesktop('/reload-config', {}, 3000);
+
+// 面板展示的配置以模型目录为准：没有条目就按目录生成，有条目就补齐新增文件、剔除已删除的文件。
+// 这样用户直接把模型丢进 2D/ 就能用，不再依赖手动运行 AI_set_live2d.py。
+function syncedMotionConfig(character, kind) {
+  const { config, changed } = mergeMotionConfig(kind, character, readMotionConfig(character, kind));
+  if (changed) { writeMotionConfig(character, kind, config); notifyDesktopReload(); }
+  return config;
+}
+
 function motionData(character) {
-  if (String(character || '').startsWith('[VRM] ')) return { character, actions: {}, expressions: {} };
-  const actionsAll = readJson(path.join(__dirname, 'emotion_actions.json'), {});
-  const expressionsAll = readJson(path.join(__dirname, 'emotion_expressions.json'), {});
-  const candidates = [character, ...(Object.keys(actionsAll))].filter(Boolean);
-  const selected = candidates.find(name => actionsAll[name] || expressionsAll[name]) || '';
-  return { character: selected, actions: actionsAll[selected]?.emotion_actions || {}, expressions: expressionsAll[selected]?.emotion_expressions || {} };
+  const name = String(character || '');
+  if (!name || name.startsWith('[VRM] ') || !isLive2DModelDir(name)) return { character: name, actions: {}, expressions: {} };
+  return { character: name, actions: syncedMotionConfig(name, 'actions'), expressions: syncedMotionConfig(name, 'expressions') };
 }
 
 function environmentInfo() {
@@ -1111,27 +1156,22 @@ ipcMain.handle('control:select-live2d-model', async (_event, name) => {
   return { ok: true, hotReloaded: false, message: `已选择 ${name}，桌宠未运行，将在下次启动时生效` };
 });
 ipcMain.handle('control:load-motion-data', (_event, character) => motionData(character));
-ipcMain.handle('control:save-motion-data', (_event, character, kind, values) => {
+ipcMain.handle('control:save-motion-data', async (_event, character, kind, values) => {
   if (!character || !['actions', 'expressions'].includes(kind)) throw new Error('动作配置无效');
-  const fileName = kind === 'actions' ? 'emotion_actions.json' : 'emotion_expressions.json';
-  const rootKey = kind === 'actions' ? 'emotion_actions' : 'emotion_expressions';
-  const file = path.join(__dirname, fileName);
-  const all = readJson(file, {});
-  all[character] ||= {};
-  all[character][rootKey] = values;
-  fs.writeFileSync(file, `${JSON.stringify(all, null, 2)}\n`, 'utf8');
+  writeMotionConfig(character, kind, values);
+  await notifyDesktopReload();
   return { ok: true };
 });
-ipcMain.handle('control:reset-motion-data', (_event, character, kind) => {
+ipcMain.handle('control:reset-motion-data', async (_event, character, kind) => {
+  if (!['actions', 'expressions'].includes(kind) || !isLive2DModelDir(character)) return { ok: false, message: '当前模型没有可还原的配置' };
+  // AI_set_live2d.py 写表情备份时用的键名是 original_config1，动作备份才是 original_config
   const backupFile = kind === 'actions' ? 'character_backups.json' : 'character_backups1.json';
-  const backup = readJson(path.join(__dirname, backupFile), {});
-  const original = backup[character]?.original_config;
-  if (!original) return { ok: false, message: `角色 ${character} 没有备份配置` };
-  const fileName = kind === 'actions' ? 'emotion_actions.json' : 'emotion_expressions.json';
-  const all = readJson(path.join(__dirname, fileName), {});
-  all[character] = original;
-  fs.writeFileSync(path.join(__dirname, fileName), `${JSON.stringify(all, null, 2)}\n`, 'utf8');
-  return { ok: true, message: '已还原原始配置' };
+  const backupKey = kind === 'actions' ? 'original_config' : 'original_config1';
+  const original = readJson(path.join(__dirname, backupFile), {})[character]?.[backupKey]?.[motionRootKey(kind)];
+  // 没有备份（例如手动放进来的新模型）时，直接按模型目录重新生成默认配置；有备份也过一遍合并，剔除已不存在的文件
+  writeMotionConfig(character, kind, mergeMotionConfig(kind, character, original || {}).config);
+  await notifyDesktopReload();
+  return { ok: true, message: original ? '已还原原始配置' : '没有找到备份，已按模型文件重新生成默认配置' };
 });
 ipcMain.handle('control:trigger-motion', (_event, name) => postDesktop('/control-motion', { action: 'trigger_emotion', emotion_name: name }));
 ipcMain.handle('control:trigger-expression', (_event, name) => postDesktop('/control-expression', { action: 'trigger_expression', expression_name: name }));
