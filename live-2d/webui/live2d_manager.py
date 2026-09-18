@@ -826,55 +826,46 @@ def save_expressions():
 
 @live2d_bp.route('/api/live2d/expressions/reset', methods=['POST'])
 def reset_expressions():
-    """重置 Live2D 表情配置（从 character_backups.json 恢复）"""
+    """重置 Live2D 表情配置：优先用 character_backups1.json 的原始备份，没有备份则按模型文件重新生成默认配置"""
     try:
-        # 获取当前模型
         current_model = get_current_model_for_expressions()
-        
-        backup_path = PROJECT_ROOT / 'character_backups.json'
-        config_path = PROJECT_ROOT / 'emotion_expressions.json'
-        
-        if backup_path.exists():
-            with open(backup_path, 'r', encoding='utf-8') as f:
-                backup = json.load(f)
-            
-            # 读取现有配置（保留其他模型的数据）
-            existing_config = {}
-            if config_path.exists():
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    existing_config = json.load(f)
-            
-            # 从备份中提取当前模型的表情配置
-            if current_model in backup:
-                model_backup = backup[current_model]
-                if 'original_config' in model_backup:
-                    emotion_expressions = model_backup['original_config'].get('emotion_expressions', {})
-                    existing_config[current_model] = {
-                        'emotion_expressions': emotion_expressions
-                    }
-                else:
-                    # 兼容旧格式
-                    existing_config[current_model] = model_backup
-                
-                # 保存配置
-                with open(config_path, 'w', encoding='utf-8') as f:
-                    json.dump(existing_config, f, indent=2, ensure_ascii=False)
-                reset_expressions_data = existing_config.get(current_model, {}).get('emotion_expressions', {})
-                expression_emotions, named_expressions = _split_named_and_emotions(reset_expressions_data)
-                _write_profile(
-                    current_model,
-                    expression_emotions=expression_emotions,
-                    named_expressions=named_expressions
-                )
-                
-                logger.info(f'表情配置已从备份恢复（模型：{current_model}）')
-                return jsonify({'success': True, 'message': '表情配置已重置'})
-            else:
-                logger.warning(f'备份中没有模型 {current_model} 的数据')
-                return jsonify({'success': False, 'error': '备份中没有该模型的数据'})
+
+        # 表情备份由 AI_set_live2d.py 写在 character_backups1.json，键名是 original_config1（动作备份才是 original_config）
+        backup = _read_json(PROJECT_ROOT / 'character_backups1.json', {}).get(current_model) or {}
+        original = (backup.get('original_config1') or backup.get('original_config') or {}).get('emotion_expressions')
+        restored_from_backup = isinstance(original, dict) and bool(original)
+
+        if restored_from_backup:
+            expression_emotions, named_expressions = _split_named_and_emotions(original)
+            expression_emotions = _filter_existing_files(expression_emotions, current_model)
+            named_expressions = {
+                key: files for key, files in _filter_existing_files(named_expressions, current_model).items() if files
+            }
         else:
-            logger.error(f'备份文件不存在：{backup_path}')
-            return jsonify({'success': False, 'error': '备份文件不存在'})
+            expression_emotions = _empty_emotion_map()
+            named_expressions = {}
+        # 备份可能落后于模型目录（用户后来增删过表情文件），统一补齐磁盘上实际存在的表情
+        for key, files in _default_expression_names(current_model).items():
+            named_expressions.setdefault(key, files)
+
+        config_path = PROJECT_ROOT / 'emotion_expressions.json'
+        existing_config = _read_json(config_path, {})
+        existing_config[current_model] = {
+            'emotion_expressions': {**expression_emotions, **named_expressions}
+        }
+        _write_json(config_path, existing_config)
+        _write_profile(
+            current_model,
+            expression_emotions=expression_emotions,
+            named_expressions=named_expressions
+        )
+        _notify_runtime_config_reload()
+
+        if restored_from_backup:
+            logger.info(f'表情配置已从备份恢复（模型：{current_model}）')
+            return jsonify({'success': True, 'message': '表情配置已重置'})
+        logger.info(f'模型 {current_model} 没有表情备份，已按模型文件重新生成默认配置')
+        return jsonify({'success': True, 'message': '没有找到备份，已按模型文件重新生成默认表情配置'})
     except Exception as e:
         logger.error(f'重置表情配置失败：{str(e)}')
         return jsonify({'success': False, 'error': str(e)}), 500
