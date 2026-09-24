@@ -76,7 +76,7 @@ TERMINAL_INSTALL_STATUSES = {'completed', 'failed'}
 
 PLUGIN_UPDATE_CONCURRENCY = 3
 
-# 与桌面版 test.py.refresh_plugin_market 一致：上游插件目录索引
+# 上游插件目录索引
 PLUGIN_HUB_RAW_URL = (
     'https://raw.githubusercontent.com/morettt/my-neuro/main/'
     'live-2d/plugins/plugin-house/plugin_hub.json'
@@ -1052,7 +1052,7 @@ def get_tool_market():
 
 @market_bp.route('/api/market/tools/download', methods=['POST'])
 def download_tool():
-    """下载工具到 mcp/tools 目录（参考 test.py 实现）"""
+    """下载工具到 mcp/tools 目录。"""
     try:
         data = request.get_json()
         tool_name = data.get('tool_name', '')
@@ -1161,7 +1161,7 @@ def get_fc_market():
 
 @market_bp.route('/api/market/fc-tools/download', methods=['POST'])
 def download_fc_tool():
-    """下载 FC 工具（参考 test.py 实现）"""
+    """下载 FC 工具。"""
     try:
         data = request.get_json()
         tool_name = data.get('tool_name', '')
