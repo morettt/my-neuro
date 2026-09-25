@@ -1,9 +1,9 @@
 {
   "name": "bilibili-live",
   "displayName": "B站直播弹幕",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": "official",
-  "description": "监听B站直播间弹幕，自动读取并让AI回应",
+  "description": "实时监听B站直播间弹幕、礼物、醒目留言和上舰事件，并让AI自然互动",
   "framework_version": ">=1.0.0",
   "main": "index.js",
   "lang": "js"

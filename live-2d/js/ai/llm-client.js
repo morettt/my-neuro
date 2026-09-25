@@ -69,7 +69,6 @@ class LLMClient {
             logToTerminal('info', `本次调用未传递工具列表 (tools=${tools ? '[]' : 'null'})`);
         }
 
-        logToTerminal('info', `已将内容发送给AI..`);
 
         // 🔥 调试：在发送前验证JSON格式
         try {
