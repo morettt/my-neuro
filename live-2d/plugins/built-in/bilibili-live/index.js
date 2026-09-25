@@ -19,12 +19,18 @@ class BilibiliLivePlugin extends Plugin {
 
         this._liveStreamModule = new LiveStreamModule({
             roomId: pluginConfig.roomId || 30230160,
-            checkInterval: pluginConfig.checkInterval || 5000,
-            maxMessages: pluginConfig.maxMessages || 50,
-            apiUrl: pluginConfig.apiUrl || 'http://api.live.bilibili.com/ajax/msg',
             onNewMessage: (message) => {
-                logToTerminal('info', `收到弹幕: ${message.nickname}: ${message.text}`);
                 barrageManager.addToQueue(message.nickname, message.text);
+            },
+            onEvent: (event) => {
+                if (event.type === 'danmaku') return;
+                logToTerminal('info', `收到直播事件[${event.type}]: ${event.nickname}: ${event.text}`);
+                barrageManager.addToQueue(event.nickname, `[${event.type}] ${event.text}`);
+            },
+            onStatus: (status) => {
+                const detail = status.realRoomId ? `，真实房间 ${status.realRoomId}` : '';
+                if (status.phase === 'connected') logToTerminal('info', `B站直播实时连接成功${detail}`);
+                else if (status.phase === 'retrying') logToTerminal('warning', `B站直播连接中断，正在重连：${status.error}`);
             }
         });
 

@@ -36,14 +36,6 @@ eventBus.on(Events.TTS_INTERRUPTED, () => {
 //     logToTerminal('info', '✅ 用户输入结束');
 // });
 
-eventBus.on(Events.BARRAGE_START, () => {
-    logToTerminal('info', '💬 弹幕处理开始');
-});
-
-eventBus.on(Events.BARRAGE_END, () => {
-    logToTerminal('info', '📝 弹幕处理结束');
-});
-
 // 加载配置文件
 let config;
 try {

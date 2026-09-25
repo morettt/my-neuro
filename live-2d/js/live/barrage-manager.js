@@ -47,8 +47,7 @@ class BarrageManager {
     // 添加弹幕到队列
     addToQueue(nickname, text) {
         this.normalQueue.push({ nickname, text });
-        console.log(`弹幕入队: ${nickname}: ${text} (队列长度: ${this.normalQueue.length})`);
-        logToTerminal('info', `弹幕入队: ${nickname}: ${text}`);
+        logToTerminal('info', `弹幕：${nickname}：${text}`);
         // 不再手动调用processNext，由队列处理循环自动处理
     }
 
@@ -102,9 +101,6 @@ class BarrageManager {
                 eventBus.emit(Events.BARRAGE_START);
 
                 try {
-                    console.log(`处理弹幕: ${barrage.nickname}: ${barrage.text}`);
-                    logToTerminal('info', `处理弹幕: ${barrage.nickname}: ${barrage.text}`);
-
                     // 执行弹幕消息处理
                     await this.executeBarrage(barrage.nickname, barrage.text);
 

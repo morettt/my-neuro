@@ -1,148 +1,84 @@
+const { BilibiliLiveClient } = require('./bilibili-live-client.js');
+const { normalizeBilibiliEvent } = require('./bilibili-events.js');
+
+/** B站实时直播模块。保留旧版 onNewMessage，并通过 onEvent 输出付费和房间事件。 */
 class LiveStreamModule {
-    constructor(config) {
-        // 配置参数
-        this.roomId = config.roomId || '30230160'; // 默认房间ID
-        this.checkInterval = config.checkInterval || 5000; // 轮询间隔，默认5秒
-        this.maxMessages = config.maxMessages || 50; // 最大缓存消息数
-        this.apiUrl = config.apiUrl || 'http://api.live.bilibili.com/ajax/msg'; // 弹幕API地址
-        this.onNewMessage = config.onNewMessage || null; // 新消息回调函数
-        
-        // 状态变量
-        this.lastCheckedTimestamp = Date.now() / 1000; // 上次检查的时间戳
-        this.isRunning = false; // 模块是否运行中
-        this.checkTimer = null; // 轮询定时器
-        this.messageCache = []; // 消息缓存
-    }
-
-    // 启动直播模块
-    start() {
-        if (this.isRunning) return false;
-        
-        this.isRunning = true;
-        this.fetchBarrage(); // 立即获取一次
-        
-        // 设置定时获取
-        this.checkTimer = setInterval(() => {
-            this.fetchBarrage();
-        }, this.checkInterval);
-        
-        console.log(`直播模块已启动，监听房间: ${this.roomId}`);
-        return true;
-    }
-
-    // 停止直播模块
-    stop() {
-        if (!this.isRunning) return false;
-        
-        clearInterval(this.checkTimer);
-        this.checkTimer = null;
-        this.isRunning = false;
-        
-        console.log('直播模块已停止');
-        return true;
-    }
-
-    // 获取弹幕
-    async fetchBarrage() {
-        try {
-            // 构建API请求URL
-            const url = `${this.apiUrl}?roomid=${this.roomId}`;
-            
-            const response = await fetch(url, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`获取弹幕失败：HTTP状态码 ${response.status}`);
-            }
-            
-            const data = await response.json();
-            
-            if (!data || !data.data || !data.data.room) {
-                throw new Error('API返回数据格式错误');
-            }
-            
-            const messages = data.data.room;
-            
-            // 过滤出新消息
-            const newMessages = messages.filter(message => {
-                const messageTime = new Date(message.timeline).getTime() / 1000;
-                return messageTime > this.lastCheckedTimestamp;
-            });
-            
-            // 只有在有新消息时更新时间戳
-            if (newMessages.length > 0) {
-                this.lastCheckedTimestamp = Date.now() / 1000;
-                
-                // 更新消息缓存
-                this.messageCache = [...this.messageCache, ...newMessages];
-                
-                // 如果超过最大缓存数量，裁剪旧消息
-                if (this.messageCache.length > this.maxMessages) {
-                    this.messageCache = this.messageCache.slice(-this.maxMessages);
-                }
-                
-                // 处理每条新消息
-                for (const message of newMessages) {
-                    if (this.onNewMessage) {
-                        this.onNewMessage(message);
-                    }
-                }
-            }
-        } catch (error) {
-            console.error('获取弹幕出错:', error);
-        }
-    }
-
-    // 获取缓存的所有消息
-    getMessages() {
-        return [...this.messageCache];
-    }
-
-    // 清除消息缓存
-    clearMessages() {
+    constructor(config = {}) {
+        this.roomId = Number(config.roomId || 30230160);
+        this.onNewMessage = config.onNewMessage || null;
+        this.onEvent = config.onEvent || null;
+        this.onStatus = config.onStatus || null;
+        this.client = null;
         this.messageCache = [];
+        this.maxMessages = Number(config.maxMessages || 50);
+        this.recentDanmaku = new Map();
     }
 
-    // 修改房间ID
+    start() {
+        if (this.client) return false;
+        this.client = new BilibiliLiveClient({
+            roomId: this.roomId,
+            onCommand: command => this.handleCommand(command),
+            onStatus: status => this.onStatus?.(status),
+            log: { info: message => console.log(message), warn: message => console.warn(message) }
+        });
+        try {
+            this.client.start();
+            console.log(`B站实时直播模块启动，监听房间: ${this.roomId}`);
+            return true;
+        } catch (error) {
+            this.client = null;
+            throw error;
+        }
+    }
+
+    stop() {
+        if (!this.client) return false;
+        this.client.stop();
+        this.client = null;
+        console.log('B站实时直播模块已停止');
+        return true;
+    }
+
+    handleCommand(command) {
+        const event = normalizeBilibiliEvent(command, message => console.warn(message));
+        if (!event) return;
+        if (event.type === 'danmaku') {
+            const key = `${event.nickname}\u0000${event.text}`;
+            const now = Date.now();
+            const lastSeen = this.recentDanmaku.get(key) || 0;
+            if (now - lastSeen < 2000) return;
+            this.recentDanmaku.set(key, now);
+            if (this.recentDanmaku.size > 200) {
+                for (const [recentKey, seenAt] of this.recentDanmaku) {
+                    if (now - seenAt >= 2000) this.recentDanmaku.delete(recentKey);
+                }
+            }
+            const message = { nickname: event.nickname, text: event.text };
+            this.messageCache.push(message);
+            if (this.messageCache.length > this.maxMessages) this.messageCache.splice(0, this.messageCache.length - this.maxMessages);
+            this.onNewMessage?.(message);
+        }
+        this.onEvent?.(event);
+    }
+
+    getMessages() { return [...this.messageCache]; }
+    clearMessages() { this.messageCache = []; this.recentDanmaku.clear(); }
     setRoomId(roomId) {
-        if (!roomId) return false;
-        
-        this.roomId = roomId;
-        
-        // 如果正在运行，重启以应用新的房间ID
-        if (this.isRunning) {
-            this.stop();
-            this.start();
-        }
-        
+        const next = Number(roomId);
+        if (!Number.isInteger(next) || next <= 0) return false;
+        const running = Boolean(this.client);
+        if (running) this.stop();
+        this.roomId = next;
+        if (running) this.start();
         return true;
     }
-
-    // 修改轮询间隔
-    setCheckInterval(interval) {
-        if (!interval || interval < 1000) return false; // 至少1秒
-        
-        this.checkInterval = interval;
-        
-        // 如果正在运行，重启以应用新的轮询间隔
-        if (this.isRunning) {
-            this.stop();
-            this.start();
-        }
-        
-        return true;
-    }
-
-    // 获取模块当前状态
     getStatus() {
         return {
-            isRunning: this.isRunning,
+            isRunning: Boolean(this.client && this.client.phase !== 'stopped'),
+            phase: this.client?.phase || 'stopped',
             roomId: this.roomId,
-            checkInterval: this.checkInterval,
-            lastCheckedTimestamp: this.lastCheckedTimestamp,
+            realRoomId: this.client?.realRoomId || null,
             messageCount: this.messageCache.length
         };
     }

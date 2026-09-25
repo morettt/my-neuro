@@ -973,7 +973,13 @@ function selectPluginTab(name) {
 
 function bindPluginCards() {
   document.querySelectorAll('[data-plugin-enabled]').forEach(input => input.addEventListener('change', async () => {
-    try { await window.controlApi.setPluginEnabled(input.dataset.pluginEnabled, input.checked); showToast(input.checked ? '插件已启用' : '插件已停用'); }
+    try {
+      await window.controlApi.setPluginEnabled(input.dataset.pluginEnabled, input.checked);
+      const plugin = [...pluginData.builtIn, ...pluginData.community].find(item => item.relPath === input.dataset.pluginEnabled);
+      if (plugin) plugin.enabled = input.checked;
+      showToast(input.checked ? '插件已启用' : '插件已停用');
+      renderPlugins();
+    }
     catch (error) { input.checked = !input.checked; showToast(error.message); }
   }));
   document.querySelectorAll('[data-plugin-config]').forEach(button => button.addEventListener('click', () => {
@@ -1016,13 +1022,22 @@ function bindPluginCards() {
 
 function renderPlugins() {
   const marketIds = new Set(pluginData.market.map(plugin => plugin.id));
-  const standaloneCommunityPlugins = pluginData.community.filter(plugin => !marketIds.has(plugin.name));
+  const enabledFirst = plugins => plugins
+    .map((plugin, index) => ({ plugin, index }))
+    .sort((left, right) => Number(right.plugin.enabled) - Number(left.plugin.enabled) || left.index - right.index)
+    .map(item => item.plugin);
+  const sortedBuiltInPlugins = enabledFirst(pluginData.builtIn);
+  const standaloneCommunityPlugins = enabledFirst(pluginData.community.filter(plugin => !marketIds.has(plugin.name)));
   const installedCommunityIds = new Set(pluginData.community.map(plugin => plugin.name));
+  const enabledCommunityIds = new Set(pluginData.community.filter(plugin => plugin.enabled).map(plugin => plugin.name));
   const sortedMarketPlugins = pluginData.market
     .map((plugin, index) => ({ plugin, index }))
-    .sort((left, right) => Number(installedCommunityIds.has(right.plugin.id)) - Number(installedCommunityIds.has(left.plugin.id)) || left.index - right.index)
+    .sort((left, right) => {
+      const rank = plugin => enabledCommunityIds.has(plugin.id) ? 2 : installedCommunityIds.has(plugin.id) ? 1 : 0;
+      return rank(right.plugin) - rank(left.plugin) || left.index - right.index;
+    })
     .map(item => item.plugin);
-  $('builtin-plugin-list').innerHTML = pluginData.builtIn.map(pluginCard).join('') || '<div class="empty card">暂无内置插件</div>';
+  $('builtin-plugin-list').innerHTML = sortedBuiltInPlugins.map(pluginCard).join('') || '<div class="empty card">暂无内置插件</div>';
   $('community-plugin-list').innerHTML = standaloneCommunityPlugins.map(pluginCard).join('') || '<div class="empty card">暂无独立安装的社区插件</div>';
   $('market-plugin-list').innerHTML = sortedMarketPlugins.map(marketCard).join('') || '<div class="empty card">插件广场暂无内容</div>';
   bindPluginCards();
