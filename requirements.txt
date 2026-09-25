@@ -23,8 +23,7 @@ pyautogui
 sentence-transformers
 watchdog
 
-#打包exe
-PyQt5
+#安装器及网络请求
 requests
 pyinstaller
 

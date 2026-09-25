@@ -68,11 +68,10 @@ cd mcp
 npm install
 ```
 
-## 打包exe文件
+## 启动 Electron 界面
 
-
-#### 双击live-2d文件夹下面的：一键打包QT.bat 
-#### 这一步是打包适合用户操作的UI界面，执行完了会在live-2d文件夹生成一个：肥牛.exe 的文件
+在 `live-2d` 目录运行 `npm start` 启动桌宠，运行 `npm run control` 启动控制面板。
+Electron 打包请使用 `live-2d/一键打包Electron.bat`。
 
 上述操作完成后，就可以开始修改代码加功能、修bug等操作了,如果是增加功能，那一次建议只更改一个功能。不要在一次提交中包含多个功能。这是为了防止后续如果出问题，排查困难。
 

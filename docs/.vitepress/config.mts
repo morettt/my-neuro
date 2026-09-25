@@ -97,7 +97,7 @@ export default defineConfig({
       lang: 'zh-CN',
       link: '/qt/',
       title: '肥牛.exe',
-      description: 'my-neuro 肥牛.exe（Qt）使用文档',
+      description: 'my-neuro 肥牛.exe（Electron）使用文档',
       themeConfig: {
         siteTitle: '肥牛.exe',
         nav: [
