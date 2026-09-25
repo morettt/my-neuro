@@ -945,7 +945,21 @@ function pluginCard(plugin) {
 }
 
 function marketCard(plugin) {
-  return `<article class="plugin-card card"><div class="plugin-summary"><strong>${escapeHtml(plugin.display_name || plugin.id)}</strong><p>${escapeHtml(plugin.desc || '暂无说明')}</p><small>${escapeHtml(plugin.author || '')}</small></div><div class="plugin-actions"><button type="button" data-plugin-repo="${escapeHtml(plugin.repo || '')}">仓库</button><button type="button" class="primary" data-plugin-install="${escapeHtml(plugin.id)}" ${plugin.installed ? 'disabled' : ''}>${plugin.installed ? '已安装' : '安装'}</button></div></article>`;
+  const installed = pluginData.community.find(item => item.name === plugin.id);
+  if (!installed) {
+    return `<article class="plugin-card card" data-market-plugin-card="${escapeHtml(plugin.id)}"><div class="plugin-summary"><strong>${escapeHtml(plugin.display_name || plugin.id)}</strong><p>${escapeHtml(plugin.desc || '暂无说明')}</p><small>${escapeHtml(plugin.author || '')}</small></div><div class="plugin-actions"><button type="button" data-plugin-repo="${escapeHtml(plugin.repo || '')}">仓库</button><button type="button" class="primary" data-plugin-install="${escapeHtml(plugin.id)}">安装</button></div></article>`;
+  }
+
+  const dlcInstalled = !installed.downloadDlc || installed.dlcInstalled;
+  return `<article class="plugin-card card" data-plugin-card="${escapeHtml(installed.relPath)}" data-market-plugin-card="${escapeHtml(plugin.id)}">
+    <div class="plugin-summary"><strong>${escapeHtml(installed.displayName || plugin.display_name || plugin.id)}</strong><p>${escapeHtml(installed.description || plugin.desc || '暂无说明')}</p><small>${escapeHtml([installed.author || plugin.author, installed.version, installed.relPath].filter(Boolean).join(' · '))}</small></div>
+    <div class="plugin-actions">
+      ${installed.downloadDlc && !dlcInstalled ? `<button type="button" class="primary" data-plugin-dlc="${escapeHtml(installed.relPath)}">安装 DLC</button>` : ''}
+      ${installed.bat && dlcInstalled ? `<button type="button" data-plugin-launch="${escapeHtml(installed.relPath)}">启动</button>` : ''}
+      ${installed.hasConfig ? `<button type="button" data-plugin-config="${escapeHtml(installed.relPath)}">配置</button>` : ''}
+      ${dlcInstalled ? `<label class="plugin-switch"><span>启用</span><input type="checkbox" data-plugin-enabled="${escapeHtml(installed.relPath)}" ${installed.enabled ? 'checked' : ''}><i></i></label>` : ''}
+    </div>
+  </article>`;
 }
 
 function selectPluginTab(name) {
@@ -989,9 +1003,8 @@ function bindPluginCards() {
     showToast(result.message);
     await loadPlugins();
     if (result.ok) {
-      selectPluginTab('community');
       requestAnimationFrame(() => {
-        const card = document.querySelector(`[data-plugin-card="community/${CSS.escape(plugin.id)}"]`);
+        const card = document.querySelector(`[data-market-plugin-card="${CSS.escape(plugin.id)}"]`);
         if (!card) return;
         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
         card.classList.add('just-installed');
@@ -1002,9 +1015,16 @@ function bindPluginCards() {
 }
 
 function renderPlugins() {
+  const marketIds = new Set(pluginData.market.map(plugin => plugin.id));
+  const standaloneCommunityPlugins = pluginData.community.filter(plugin => !marketIds.has(plugin.name));
+  const installedCommunityIds = new Set(pluginData.community.map(plugin => plugin.name));
+  const sortedMarketPlugins = pluginData.market
+    .map((plugin, index) => ({ plugin, index }))
+    .sort((left, right) => Number(installedCommunityIds.has(right.plugin.id)) - Number(installedCommunityIds.has(left.plugin.id)) || left.index - right.index)
+    .map(item => item.plugin);
   $('builtin-plugin-list').innerHTML = pluginData.builtIn.map(pluginCard).join('') || '<div class="empty card">暂无内置插件</div>';
-  $('community-plugin-list').innerHTML = pluginData.community.map(pluginCard).join('') || '<div class="empty card">暂无社区插件</div>';
-  $('market-plugin-list').innerHTML = pluginData.market.map(marketCard).join('') || '<div class="empty card">插件广场暂无内容</div>';
+  $('community-plugin-list').innerHTML = standaloneCommunityPlugins.map(pluginCard).join('') || '<div class="empty card">暂无独立安装的社区插件</div>';
+  $('market-plugin-list').innerHTML = sortedMarketPlugins.map(marketCard).join('') || '<div class="empty card">插件广场暂无内容</div>';
   bindPluginCards();
 }
 
