@@ -114,10 +114,12 @@
           <div class="card form-card"><label>最大消息数<input id="max-messages" type="number" min="1" step="1"></label><p class="config-note">系统提示词不计入此数量，工具调用会保持完整，不会从中间截断。</p></div>
         </div>
         <div class="page" id="plugins">
-          <div class="plugin-tabs" role="tablist"><button class="active" data-plugin-tab="builtIn">内置插件</button><button data-plugin-tab="community">社区插件</button><button data-plugin-tab="market">插件广场</button></div>
-          <section class="plugin-panel active" data-plugin-panel="builtIn"><div class="plugin-list" id="builtin-plugin-list"></div></section>
-          <section class="plugin-panel" data-plugin-panel="community"><div class="plugin-list" id="community-plugin-list"></div></section>
-          <section class="plugin-panel" data-plugin-panel="market"><div class="plugin-market-head"><span>在插件广场安装、配置和启用插件</span><button id="refresh-plugins">刷新列表</button></div><div class="plugin-list" id="market-plugin-list"></div></section>
+          <div class="plugin-tabs-row">
+            <div class="plugin-tabs" role="tablist"><button class="active" data-plugin-tab="installed">当前插件</button><button data-plugin-tab="market">插件广场</button></div>
+            <button id="refresh-plugins" class="plugin-refresh-button" type="button" title="刷新插件广场" aria-label="刷新插件广场"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 11"/><path d="M5.5 15A7 7 0 0 0 18 17.5l2-4.5"/></svg></button>
+          </div>
+          <section class="plugin-panel active" data-plugin-panel="installed"><div class="plugin-list" id="installed-plugin-list"></div></section>
+          <section class="plugin-panel" data-plugin-panel="market"><div class="plugin-list" id="market-plugin-list"></div></section>
           <section class="plugin-detail card" id="plugin-detail" hidden><header><button id="plugin-detail-back" class="plugin-back-button" title="返回插件列表" aria-label="返回插件列表"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><strong id="plugin-detail-title"></strong><button id="plugin-readme" hidden>使用教程</button></header><div id="plugin-detail-content"></div></section>
         </div>
         <div class="page" id="animation">

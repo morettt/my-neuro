@@ -711,7 +711,7 @@ function renderHistoryPage() {
     buttons.push(`<button type="button" data-history-page="${page}" class="${page === historyPage ? 'active' : ''}" ${page === historyPage ? 'aria-current="page"' : ''}>${page}</button>`);
     previous = page;
   }
-  pagination.innerHTML = `<button type="button" data-history-page="${historyPage - 1}" ${historyPage === 1 ? 'disabled' : ''} aria-label="上一页">‹</button>${buttons.join('')}<button type="button" data-history-page="${historyPage + 1}" ${historyPage === totalPages ? 'disabled' : ''} aria-label="下一页">›</button><span class="history-page-summary">共 ${historyRounds.length} 对</span>`;
+  pagination.innerHTML = `<button type="button" class="history-pagination-trigger" aria-label="打开翻页菜单，第 ${historyPage} 页，共 ${totalPages} 页" title="第 ${historyPage} / ${totalPages} 页"><span>${historyPage}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 14 4-4 4 4"/></svg></button><div class="history-pagination-menu">${buttons.join('')}</div>`;
 }
 
 function closeHistoryImagePreview() {
@@ -929,12 +929,13 @@ window.controlApi.onLive2dState(running => {
 
 let pluginData = { builtIn: [], community: [], market: [] };
 let editingPlugin = null;
+let recentlyInstalledPluginPath = null;
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char]);
 
 function pluginCard(plugin) {
   const dlcInstalled = !plugin.downloadDlc || plugin.dlcInstalled;
   return `<article class="plugin-card card" data-plugin-card="${escapeHtml(plugin.relPath)}">
-    <div class="plugin-summary"><strong>${escapeHtml(plugin.displayName)}</strong><p>${escapeHtml(plugin.description || '暂无说明')}</p><small>${escapeHtml([plugin.author, plugin.version, plugin.relPath].filter(Boolean).join(' · '))}</small></div>
+    <div class="plugin-summary"><strong>${escapeHtml(plugin.displayName)}</strong><p>${escapeHtml(plugin.description || '暂无说明')}</p><small>${escapeHtml(plugin.author || '')}</small></div>
     <div class="plugin-actions">
       ${plugin.downloadDlc && !dlcInstalled ? `<button type="button" class="primary" data-plugin-dlc="${escapeHtml(plugin.relPath)}">安装 DLC</button>` : ''}
       ${plugin.bat && dlcInstalled ? `<button type="button" data-plugin-launch="${escapeHtml(plugin.relPath)}">启动</button>` : ''}
@@ -950,20 +951,17 @@ function marketCard(plugin) {
     return `<article class="plugin-card card" data-market-plugin-card="${escapeHtml(plugin.id)}"><div class="plugin-summary"><strong>${escapeHtml(plugin.display_name || plugin.id)}</strong><p>${escapeHtml(plugin.desc || '暂无说明')}</p><small>${escapeHtml(plugin.author || '')}</small></div><div class="plugin-actions"><button type="button" data-plugin-repo="${escapeHtml(plugin.repo || '')}">仓库</button><button type="button" class="primary" data-plugin-install="${escapeHtml(plugin.id)}">安装</button></div></article>`;
   }
 
-  const dlcInstalled = !installed.downloadDlc || installed.dlcInstalled;
   return `<article class="plugin-card card" data-plugin-card="${escapeHtml(installed.relPath)}" data-market-plugin-card="${escapeHtml(plugin.id)}">
-    <div class="plugin-summary"><strong>${escapeHtml(installed.displayName || plugin.display_name || plugin.id)}</strong><p>${escapeHtml(installed.description || plugin.desc || '暂无说明')}</p><small>${escapeHtml([installed.author || plugin.author, installed.version, installed.relPath].filter(Boolean).join(' · '))}</small></div>
+    <div class="plugin-summary"><strong>${escapeHtml(installed.displayName || plugin.display_name || plugin.id)}</strong><p>${escapeHtml(installed.description || plugin.desc || '暂无说明')}</p><small>${escapeHtml(installed.author || plugin.author || '')}</small></div>
     <div class="plugin-actions">
-      ${installed.downloadDlc && !dlcInstalled ? `<button type="button" class="primary" data-plugin-dlc="${escapeHtml(installed.relPath)}">安装 DLC</button>` : ''}
-      ${installed.bat && dlcInstalled ? `<button type="button" data-plugin-launch="${escapeHtml(installed.relPath)}">启动</button>` : ''}
-      ${installed.hasConfig ? `<button type="button" data-plugin-config="${escapeHtml(installed.relPath)}">配置</button>` : ''}
-      ${dlcInstalled ? `<label class="plugin-switch"><span>启用</span><input type="checkbox" data-plugin-enabled="${escapeHtml(installed.relPath)}" ${installed.enabled ? 'checked' : ''}><i></i></label>` : ''}
+      ${plugin.repo ? `<button type="button" data-plugin-repo="${escapeHtml(plugin.repo)}">仓库</button>` : ''}
+      <button type="button" class="plugin-installed-badge" disabled>已安装</button>
     </div>
   </article>`;
 }
 
 function selectPluginTab(name) {
-  document.querySelectorAll('#plugins > .plugin-tabs, #plugins > .plugin-panel').forEach(element => { element.hidden = false; });
+  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-panel').forEach(element => { element.hidden = false; });
   $('plugin-detail').hidden = true;
   document.querySelector('[data-plugin-tab].active')?.classList.remove('active');
   document.querySelector('[data-plugin-panel].active')?.classList.remove('active');
@@ -1009,8 +1007,14 @@ function bindPluginCards() {
     showToast(result.message);
     await loadPlugins();
     if (result.ok) {
+      const installed = pluginData.community.find(item => item.name === plugin.id);
+      recentlyInstalledPluginPath = installed?.relPath || null;
+      renderPlugins();
+      selectPluginTab('installed');
       requestAnimationFrame(() => {
-        const card = document.querySelector(`[data-market-plugin-card="${CSS.escape(plugin.id)}"]`);
+        const card = recentlyInstalledPluginPath
+          ? document.querySelector(`[data-plugin-card="${CSS.escape(recentlyInstalledPluginPath)}"]`)
+          : null;
         if (!card) return;
         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
         card.classList.add('just-installed');
@@ -1021,24 +1025,25 @@ function bindPluginCards() {
 }
 
 function renderPlugins() {
-  const marketIds = new Set(pluginData.market.map(plugin => plugin.id));
   const enabledFirst = plugins => plugins
     .map((plugin, index) => ({ plugin, index }))
-    .sort((left, right) => Number(right.plugin.enabled) - Number(left.plugin.enabled) || left.index - right.index)
+    .sort((left, right) => Number(right.plugin.enabled) - Number(left.plugin.enabled)
+      || Number(right.plugin.relPath === recentlyInstalledPluginPath) - Number(left.plugin.relPath === recentlyInstalledPluginPath)
+      || String(left.plugin.displayName || left.plugin.name).localeCompare(
+        String(right.plugin.displayName || right.plugin.name),
+        'zh-CN'
+      )
+      || left.index - right.index)
     .map(item => item.plugin);
-  const sortedBuiltInPlugins = enabledFirst(pluginData.builtIn);
-  const standaloneCommunityPlugins = enabledFirst(pluginData.community.filter(plugin => !marketIds.has(plugin.name)));
+  const installedPlugins = enabledFirst([...pluginData.builtIn, ...pluginData.community]);
   const installedCommunityIds = new Set(pluginData.community.map(plugin => plugin.name));
-  const enabledCommunityIds = new Set(pluginData.community.filter(plugin => plugin.enabled).map(plugin => plugin.name));
   const sortedMarketPlugins = pluginData.market
-    .map((plugin, index) => ({ plugin, index }))
-    .sort((left, right) => {
-      const rank = plugin => enabledCommunityIds.has(plugin.id) ? 2 : installedCommunityIds.has(plugin.id) ? 1 : 0;
-      return rank(right.plugin) - rank(left.plugin) || left.index - right.index;
-    })
-    .map(item => item.plugin);
-  $('builtin-plugin-list').innerHTML = sortedBuiltInPlugins.map(pluginCard).join('') || '<div class="empty card">暂无内置插件</div>';
-  $('community-plugin-list').innerHTML = standaloneCommunityPlugins.map(pluginCard).join('') || '<div class="empty card">暂无独立安装的社区插件</div>';
+    .sort((left, right) => Number(installedCommunityIds.has(right.id)) - Number(installedCommunityIds.has(left.id))
+      || String(left.display_name || left.id).localeCompare(
+        String(right.display_name || right.id),
+        'zh-CN'
+      ));
+  $('installed-plugin-list').innerHTML = installedPlugins.map(pluginCard).join('') || '<div class="empty card">暂无已安装插件</div>';
   $('market-plugin-list').innerHTML = sortedMarketPlugins.map(marketCard).join('') || '<div class="empty card">插件广场暂无内容</div>';
   bindPluginCards();
 }
@@ -1073,7 +1078,7 @@ function configFields(config, prefix = '') {
 
 function openPluginDetail(plugin) {
   editingPlugin = plugin;
-  document.querySelectorAll('#plugins > .plugin-tabs, #plugins > .plugin-panel').forEach(element => element.hidden = true);
+  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-panel').forEach(element => element.hidden = true);
   $('plugin-detail').hidden = false;
   $('plugin-detail-title').textContent = plugin.displayName;
   $('plugin-readme').hidden = !plugin.hasReadme;
@@ -1082,7 +1087,7 @@ function openPluginDetail(plugin) {
 
 $('plugin-detail-back').addEventListener('click', () => {
   $('plugin-detail').hidden = true;
-  document.querySelectorAll('#plugins > .plugin-tabs, #plugins > .plugin-panel').forEach(element => element.hidden = false);
+  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-panel').forEach(element => element.hidden = false);
 });
 $('plugin-readme').addEventListener('click', async () => {
   if (!editingPlugin) return;
@@ -1203,13 +1208,19 @@ document.querySelectorAll('[data-plugin-tab]').forEach(button => button.addEvent
 }));
 $('refresh-plugins').addEventListener('click', async () => {
   const button = $('refresh-plugins');
-  button.disabled = true; button.textContent = '刷新中…';
+  button.disabled = true;
+  button.classList.add('is-loading');
+  button.title = '正在刷新插件广场';
   try {
     pluginData = await window.controlApi.refreshPluginMarket();
     renderPlugins();
     showToast(`插件广场已更新，共 ${pluginData.market.length} 个插件`);
   } catch (error) { showToast(error.message); }
-  finally { button.disabled = false; button.textContent = '刷新列表'; }
+  finally {
+    button.disabled = false;
+    button.classList.remove('is-loading');
+    button.title = '刷新插件广场';
+  }
 });
 window.controlApi.onPluginsChanged(() => loadPlugins());
 
