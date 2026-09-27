@@ -16,6 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const { logToTerminal } = require('../../api-utils.js');
 const { shouldUseLegacyEmotionLogic } = require('../motion-mode.js');
+const { mergeExpressionConfig, mergeActionConfig } = require('../model-defaults.js');
 
 const APP_ROOT = path.join(__dirname, '..', '..', '..');
 const EMOTION_WHITELIST = ['开心', '生气', '难过', '惊讶', '害羞', '俏皮'];
@@ -187,22 +188,23 @@ class EmotionEngine {
             }
             if (typeof sidecar.idle?.expression === 'string') this.idleExpression = sidecar.idle.expression;
             if (sidecar.motion_group) this.currentMotionGroup = sidecar.motion_group;
+            // sidecar 可能落后于模型目录（之后新增/删除过文件），同样按目录补齐，保证控制面板发来的 表情N/动作N 都能找到
+            this.motionConfig = mergeActionConfig(this.currentCharacter, this.motionConfig).config;
+            this.expressionConfig = mergeExpressionConfig(this.currentCharacter, this.expressionConfig).config;
             logToTerminal('info', `[EmotionEngine] 使用 per-model 配置: ${this._sidecarPath}`);
             return;
         }
 
-        // 2) 旧版中央配置（WebUI 的编辑目标，保持兼容）
+        // 2) 旧版中央配置（控制面板 / WebUI 的编辑目标，保持兼容）
+        //    与 control-main.js 走同一套 model-defaults 合并：没有条目的新模型按目录生成 表情N/动作N，
+        //    有条目的补齐新增文件、剔除已删除的文件，保证面板上点的键名在这里一定能找到。
         const legacyActions = _readJson(path.join(APP_ROOT, 'emotion_actions.json'));
         const actionEntry = legacyActions?.[this.currentCharacter]?.emotion_actions;
-        if (actionEntry && typeof actionEntry === 'object') {
-            this.motionConfig = { ...emptyEmotions(), ...actionEntry };
-        }
+        this.motionConfig = mergeActionConfig(this.currentCharacter, actionEntry).config;
 
         const legacyExpr = _readJson(path.join(APP_ROOT, 'emotion_expressions.json'));
         const exprEntry = legacyExpr?.[this.currentCharacter]?.emotion_expressions;
-        if (exprEntry && typeof exprEntry === 'object') {
-            this.expressionConfig = { ...emptyEmotions(), ...exprEntry };
-        }
+        this.expressionConfig = mergeExpressionConfig(this.currentCharacter, exprEntry).config;
 
         const motionCount = Object.values(this.motionConfig).flat().length;
         const exprCount = Object.values(this.expressionConfig).flat().length;

@@ -178,14 +178,17 @@ class HttpServer {
                 return res.json({ success: false, message: '应用窗口未找到' });
             }
 
-            // 调用前端的配置重新加载函数
+            // 重载 config.json，同时让情绪引擎重读表情/动作绑定（控制面板 / WebUI 保存后调用，无需重启桌宠）
             const jsCode = `
-                if (global.reloadConfig) {
-                    global.reloadConfig();
-                    "配置已重新加载";
-                } else {
-                    "配置重新加载函数未找到";
-                }
+                (async () => {
+                    const reloaded = global.reloadConfig ? global.reloadConfig() : false;
+                    const engines = new Set();
+                    for (const mapper of [global.emotionMapper, global.expressionMapper]) {
+                        if (mapper && typeof mapper.reloadConfig === 'function') engines.add(mapper._engine || mapper);
+                    }
+                    for (const engine of engines) await engine.reloadConfig();
+                    return reloaded ? "配置已重新加载" : "配置重新加载函数未找到";
+                })()
             `;
 
             mainWindow.webContents.executeJavaScript(jsCode)

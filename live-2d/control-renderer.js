@@ -1292,9 +1292,24 @@ let currentMotion = { character: '', actions: {}, expressions: {} };
 let actionPage = 0;
 const actionPageSize = 18;
 
+const motionDisplayName = file => file.split(/[\\/]/).pop().replace(/\.(motion3|exp3)\.json$/i, '');
+
 function bindingCard(emotion, values, kind) {
-  const names = (values || []).map(file => file.split(/[\\/]/).pop().replace(/\.(motion3|exp3)\.json$/i, ''));
-  return `<div class="emotion-binding" data-drop-kind="${kind}" data-emotion="${emotion}"><strong>${emotion}</strong><span>${names.length ? `${names.length} 个：${names.slice(0, 2).map(escapeHtml).join('、')}${names.length > 2 ? '…' : ''}` : '拖拽到这里绑定'}</span></div>`;
+  const chips = (values || []).map((file, index) => `<i class="binding-chip" title="${escapeHtml(file)}"><span>${escapeHtml(motionDisplayName(file))}</span><button type="button" data-unbind-kind="${kind}" data-unbind-emotion="${emotion}" data-unbind-index="${index}" title="解除绑定" aria-label="解除绑定">×</button></i>`);
+  return `<div class="emotion-binding" data-drop-kind="${kind}" data-emotion="${emotion}"><strong>${emotion}</strong>${chips.length ? `<div class="binding-chips">${chips.join('')}</div>` : '<span>拖拽到这里绑定</span>'}</div>`;
+}
+
+async function unbindMotion(kind, emotion, index) {
+  const bound = currentMotion[kind][emotion];
+  const file = Array.isArray(bound) ? bound.splice(index, 1)[0] : undefined;
+  if (!file) return;
+  // 动作绑定时会把源键从“未分类动作”移走，解绑后若已无任何键引用该文件，就放回未分类让它重新可拖
+  if (kind === 'actions' && !Object.values(currentMotion.actions).some(files => files?.includes(file))) {
+    let n = 1; while (currentMotion.actions[`动作${n}`]) n++;
+    currentMotion.actions[`动作${n}`] = [file];
+  }
+  await window.controlApi.saveMotionData(currentMotion.character, kind, currentMotion[kind]);
+  renderMotionPage(); showToast(`已从「${emotion}」解除绑定`);
 }
 
 function motionButton(name, kind) {
@@ -1304,7 +1319,7 @@ function motionButton(name, kind) {
 function renderMotionPage() {
   $('expression-bindings').innerHTML = motionEmotions.map(name => bindingCard(name, currentMotion.expressions[name], 'expressions')).join('');
   $('action-bindings').innerHTML = motionEmotions.map(name => bindingCard(name, currentMotion.actions[name], 'actions')).join('');
-  const expressions = Object.keys(currentMotion.expressions).filter(name => !motionEmotions.includes(name) && name !== '默认表情');
+  const expressions = Object.keys(currentMotion.expressions).filter(name => !motionEmotions.includes(name) && name !== '默认表情' && currentMotion.expressions[name]?.length);
   $('expression-buttons').innerHTML = expressions.map(name => motionButton(name, 'expressions')).join('') || '<span class="motion-empty">未找到可用表情</span>';
   const actions = Object.keys(currentMotion.actions).filter(name => !motionEmotions.includes(name) && currentMotion.actions[name]?.length);
   const pages = Math.max(1, Math.ceil(actions.length / actionPageSize));
@@ -1312,6 +1327,7 @@ function renderMotionPage() {
   $('action-buttons').innerHTML = actions.slice(actionPage * actionPageSize, (actionPage + 1) * actionPageSize).map(name => motionButton(name, 'actions')).join('') || '<span class="motion-empty">暂无未分类动作</span>';
   $('action-pagination').innerHTML = pages > 1 ? `<button data-action-page="prev" ${actionPage === 0 ? 'disabled' : ''}>上一页</button><span>${actionPage + 1} / ${pages}</span><button data-action-page="next" ${actionPage === pages - 1 ? 'disabled' : ''}>下一页</button>` : '';
   document.querySelectorAll('[data-action-page]').forEach(button => button.addEventListener('click', () => { actionPage += button.dataset.actionPage === 'next' ? 1 : -1; renderMotionPage(); }));
+  document.querySelectorAll('[data-unbind-kind]').forEach(button => button.addEventListener('click', () => unbindMotion(button.dataset.unbindKind, button.dataset.unbindEmotion, Number(button.dataset.unbindIndex))));
   document.querySelectorAll('[data-motion-name]').forEach(button => {
     button.addEventListener('dragstart', event => event.dataTransfer.setData('application/json', JSON.stringify({ kind: button.dataset.dragKind, name: button.dataset.motionName })));
     button.addEventListener('click', async () => {

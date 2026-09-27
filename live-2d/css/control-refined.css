@@ -413,6 +413,11 @@ footer { position:fixed; left:180px; right:0; bottom:0; z-index:150; display:fle
 .emotion-binding strong { color:#544d43; }
 .emotion-binding span { color:#8a8175; font-size:11px; overflow-wrap:anywhere; }
 .emotion-binding.drag-over { border-color:#f2ad3f; background:#fff3d9; transform:translateY(-2px); }
+.binding-chips { display:flex; flex-wrap:wrap; justify-content:center; gap:4px; }
+.binding-chip { display:inline-flex; align-items:center; gap:2px; max-width:100%; padding:2px 3px 2px 8px; border:1px solid #e2dbcf; border-radius:999px; background:#fff; color:#6f675b; font-size:11px; font-style:normal; }
+.binding-chip span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.binding-chip button { width:16px; height:16px; min-height:0; padding:0; border:none; border-radius:50%; background:transparent; color:#a1978a; font-size:13px; line-height:16px; }
+.binding-chip button:hover { background:#f2ad3f; color:#fff; }
 .motion-buttons { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:7px; min-height:45px; padding:10px; border:1px solid #e2dbcf; border-radius:10px; background:#faf8f4; }
 .motion-buttons button { min-width:0; padding:7px 8px; overflow:hidden; text-overflow:ellipsis; }
 .motion-empty { grid-column:1/-1; align-self:center; color:#9a9185; text-align:center; }
