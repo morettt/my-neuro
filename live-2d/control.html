@@ -13,11 +13,10 @@
     .window-shell { border: 0; border-radius: 25px; box-shadow: none; }
     #settings .ui-position-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     #settings .ui-position-actions button { width: 100%; min-height: 46px; }
-    #chat .chat-tabs { grid-template-columns: repeat(3, 1fr); }
-    #chat .chat-tabs::after { width: calc((100% - 6px) / 3); }
+    #chat .chat-tabs { grid-template-columns: repeat(2, 1fr); }
+    #chat .chat-tabs::after { width: calc((100% - 6px) / 2); }
     #chat .chat-tabs:has([data-chat-tab="basic"].active) { --active: 0; }
     #chat .chat-tabs:has([data-chat-tab="vision"].active) { --active: 1; }
-    #chat .chat-tabs:has([data-chat-tab="prompts"].active) { --active: 2; }
     .motion-tabs { grid-template-columns: repeat(2, 1fr); }
     .motion-tabs::after { width: calc((100% - 6px) / 2); }
     #animation .motion-tabs:has([data-motion-tab="expressions"].active) { --active: 0; }
@@ -36,7 +35,7 @@
       <div class="brand"><span class="brand-dot"></span><span id="brand-title">My-Neuro</span></div>
       <div class="title-actions">
         <div class="tutorial-group">
-          <button data-go="tutorial" aria-label="使用教程" title="使用教程"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16ZM20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z"/></svg></button>
+          <button id="tutorial-picker-open" aria-label="使用教程" title="使用教程"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16ZM20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z"/></svg></button>
           <span>使用教程</span>
         </div>
         <div class="qq-group">
@@ -88,10 +87,10 @@
           <div class="log-grid"><section class="card log-panel"><header>桌宠日志</header><pre id="pet-log"></pre></section><section class="card log-panel"><header><span>工具日志</span><button id="clear-logs" class="log-trash" title="清空日志" aria-label="清空日志"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6.5 7l.8 13h9.4l.8-13M10 11v5M14 11v5"/></svg></button></header><pre id="tool-log"></pre></section></div>
         </div>
 
-        <div class="page" id="llm"><div class="page-head"><div><p class="eyebrow">MODEL</p><h1>大语言模型</h1><p>连接兼容 OpenAI 格式的模型接口。</p></div></div><div class="card form-card llm-form"><label class="llm-row"><span>API KEY</span><input id="llm-key" type="password" placeholder="填写模型平台提供的 API 密钥"></label><label class="llm-row"><span>API URL</span><input id="llm-url" placeholder="填写模型平台提供的接口地址"></label><div class="llm-row"><span>模型名称</span><div class="llm-model-control"><div class="dropdown llm-model-dropdown"><input hidden class="sr-only" id="llm-model-dropdown-state" type="checkbox"><div class="trigger"><button id="toggle-llm-models" type="button" aria-label="展开模型列表" aria-expanded="false" aria-controls="llm-model-options">›</button><input id="llm-model" placeholder="输入或获取模型名" aria-label="模型名称"></div><ul id="llm-model-options" class="list webkit-scrollbar" role="list"></ul></div><button id="fetch-llm-models" type="button">获取模型</button></div></div><label class="llm-prompt-field">系统提示词<textarea id="llm-prompt" rows="9"></textarea></label></div></div>
+        <div class="page" id="llm"><div class="page-head"><div><p class="eyebrow">MODEL</p><h1>大语言模型</h1><p>连接兼容 OpenAI 格式的模型接口。</p></div></div><div class="card form-card llm-form"><label class="llm-row"><span>API KEY</span><input id="llm-key" type="password" placeholder="填写模型平台提供的 API 密钥"></label><div class="llm-row"><span>API URL</span><div class="dropdown llm-url-dropdown"><input hidden class="sr-only" id="llm-url-dropdown-state" type="checkbox"><div class="trigger"><button id="toggle-llm-urls" type="button" aria-label="展开 API 平台列表" aria-expanded="false" aria-controls="llm-url-options">›</button><input id="llm-url" placeholder="选择平台或手动输入接口地址" autocomplete="off" aria-label="API URL"></div><ul id="llm-url-options" class="list webkit-scrollbar" role="list"><li class="listitem"><button class="article" type="button" data-llm-url="https://api.zhizengzeng.com/v1">智增增</button></li><li class="listitem"><button class="article" type="button" data-llm-url="https://api.siliconflow.cn/v1">硅基流动</button></li></ul></div></div><div class="llm-row"><span>模型名称</span><div class="llm-model-control"><div class="dropdown llm-model-dropdown"><input hidden class="sr-only" id="llm-model-dropdown-state" type="checkbox"><div class="trigger"><button id="toggle-llm-models" type="button" aria-label="展开模型列表" aria-expanded="false" aria-controls="llm-model-options">›</button><input id="llm-model" placeholder="输入或获取模型名" aria-label="模型名称"></div><ul id="llm-model-options" class="list webkit-scrollbar" role="list"></ul></div><button id="fetch-llm-models" type="button">获取模型</button></div></div><label class="llm-prompt-field"><span class="llm-prompt-heading"><span>系统提示词</span><button id="open-prompt-market" type="button">提示词广场</button></span><textarea id="llm-prompt" rows="9"></textarea></label></div><section id="prompts" class="llm-prompt-market" hidden><div class="llm-prompt-market-head"><button id="close-prompt-market" type="button">返回模型配置</button><strong>提示词广场</strong><button id="refresh-prompts" title="刷新提示词" aria-label="刷新提示词"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 11M5.5 15A7 7 0 0 0 18 17.5l2-4.5"/></svg></button></div><div id="prompt-market-status" class="market-status">进入页面后自动获取提示词</div><div id="prompt-market-list" class="prompt-market-list"></div></section></div>
         <div class="page" id="chat">
           <div class="page-head"><div><p class="eyebrow">CHAT</p><h1>对话设置</h1></div></div>
-          <div class="chat-tabs" role="tablist"><button class="active" data-chat-tab="basic">基础设置</button><button data-chat-tab="vision">辅助视觉</button><button data-chat-tab="prompts">提示词广场</button></div>
+          <div class="chat-tabs" role="tablist"><button class="active" data-chat-tab="basic">基础设置</button><button data-chat-tab="vision">辅助视觉</button></div>
           <section class="chat-panel active" data-chat-panel="basic">
           <div class="card form-card two-col">
             <div class="model-field"><span>语音语言</span><input id="tts-language" type="hidden"><div class="dropdown"><input hidden class="sr-only" id="language-dropdown-state" type="checkbox"><label for="language-dropdown-state" class="trigger"><span class="dropdown-text">请选择语言</span></label><ul class="list webkit-scrollbar" role="list"><li class="listitem"><button class="article dropdown-option" type="button" data-target="tts-language" data-value="zh">中文</button></li><li class="listitem"><button class="article dropdown-option" type="button" data-target="tts-language" data-value="en">English</button></li><li class="listitem"><button class="article dropdown-option" type="button" data-target="tts-language" data-value="ja">日本語</button></li></ul></div></div>
@@ -103,7 +102,6 @@
           </div>
           </section>
           <section class="chat-panel card form-card" data-chat-panel="vision"><h3>辅助视觉模型配置</h3><label class="check"><input id="vision-enabled" type="checkbox"> 启用辅助视觉模型</label><label>API KEY<input id="vision-key" type="password"></label><label>API URL<input id="vision-url"></label><label>模型名称<input id="vision-model"></label></section>
-        <div class="chat-panel" id="prompts" data-chat-panel="prompts"><div class="prompt-market-bar"><button id="refresh-prompts" title="刷新提示词" aria-label="刷新提示词"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 11M5.5 15A7 7 0 0 0 18 17.5l2-4.5"/></svg></button></div><div id="prompt-market-status" class="market-status">进入页面后自动获取提示词</div><div id="prompt-market-list" class="prompt-market-list"></div></div>
         </div>
         <div class="page" id="temperature-settings">
           <div class="page-head"><div><p class="eyebrow">CHAT</p><h1>温度配置</h1><p>调整 AI 回答的随机性和创造性。</p></div><button type="button" data-go="chat">返回对话设置</button></div>
@@ -130,7 +128,7 @@
           <section class="motion-section motion-panel card" data-motion-panel="actions"><div class="motion-title"><h2>动作控制</h2><button id="reset-actions">一键还原动作</button></div><p>将下方动作拖到对应情绪分类；点击动作可以预览。</p><div class="emotion-grid" id="action-bindings"></div><h3>未分类动作</h3><div class="motion-buttons" id="action-buttons"></div><div class="motion-pagination" id="action-pagination"></div></section>
         </div>
         <div class="page" id="voice"><div class="page-head"><div><p class="eyebrow">VOICE</p><h1>声音克隆</h1><p>生成本地 GPT-SoVITS 启动脚本。</p></div></div><div class="upload-grid"><button id="select-voice-model" class="upload card" type="button"><b>＋</b><strong>选择模型文件</strong><small id="voice-model-status">.pth</small></button><button id="select-voice-audio" class="upload card" type="button"><b>♫</b><strong>选择参考音频</strong><small id="voice-audio-status">.wav</small></button></div><div class="card form-card"><label>角色名称<input id="voice-character-name"></label><label>参考文本<textarea id="voice-reference-text" rows="4"></textarea></label><label>语言<select id="voice-language"><option value="zh">中文</option><option value="en">English</option><option value="ja">日本語</option></select></label><button id="generate-voice-bat" type="button">生成声音克隆脚本</button><p id="voice-bat-status" class="config-note"></p></div></div>
-        <div class="page" id="services"><div class="cloud-tabs service-tabs" role="tablist"><button class="active" data-service-tab="tts">TTS</button><button data-service-tab="asr">ASR</button><button data-service-tab="bert">BERT</button></div><div class="service-room"><section class="service-list" id="service-list"></section><section class="service-console card"><div class="service-log-tabs"><strong id="service-log-title">TTS 日志</strong><button class="service-log-clear" id="clear-service-log" title="清空当前日志" aria-label="清空当前日志">清空</button></div><pre id="service-log-output"></pre></section></div></div>
+        <div class="page" id="services"><div class="cloud-tabs service-tabs" role="tablist"><button class="active" data-service-tab="tts">TTS</button><button data-service-tab="asr">ASR</button><button data-service-tab="bert">BERT</button></div><div class="service-room"><section class="service-list" id="service-list"></section><section class="service-console card"><div class="service-log-tabs"><strong id="service-log-title">TTS 日志</strong><button class="service-log-clear" id="clear-service-log" title="清空当前日志" aria-label="清空当前日志"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6.5 7l.8 13h9.4l.8-13M10 11v5M14 11v5"/></svg></button></div><pre id="service-log-output"></pre></section></div></div>
         <div class="page" id="tools"><div class="tool-tabs"><button class="active" data-tool-tab="installed">MCP Tools</button><button data-tool-tab="market">工具广场</button></div><section class="tool-panel active" data-tool-panel="installed"><div class="tool-panel-bar"><span>本地与外部 MCP 工具</span><button id="refresh-mcp-tools">刷新列表</button></div><div id="mcp-tool-list" class="tool-card-list"></div></section><section class="tool-panel" data-tool-panel="market"><div class="tool-panel-bar"><span>可下载工具</span><button id="refresh-tool-market">刷新工具列表</button></div><div id="tool-market-list" class="tool-card-list"></div></section></div>
         <div class="page" id="cloud">
           <div class="page-head"><div><p class="eyebrow">CLOUD</p><h1>云端配置</h1></div></div>
@@ -236,7 +234,7 @@
           </select></label><button id="volcengine-tutorial" type="button">配置教程</button></div><div class="provider-panel" data-tts-provider="siliconflow"><label>API Key<input id="cloud-key" type="password"></label><label>音色<input id="cloud-tts-voice"></label><input id="cloud-provider" type="hidden" value="siliconflow"><input id="cloud-tts-url" type="hidden"><input id="cloud-tts-model" type="hidden"><input id="cloud-tts-format" type="hidden"><input id="cloud-tts-speed" type="hidden"></div></section>
           <section class="cloud-panel card form-card" data-cloud-panel="cloud-asr"><div class="cloud-platform-row"><label>ASR 平台<select id="cloud-asr-provider"><option value="siliconflow">硅基流动</option></select></label><label class="check"><input id="cloud-asr-master-enabled" type="checkbox"> 启用云端 ASR</label></div><input id="cloud-asr-enabled" type="checkbox" hidden><input id="silicon-asr-enabled" type="checkbox" hidden><div hidden><input id="cloud-asr-url"><input id="cloud-asr-appid"><input id="cloud-asr-appkey" type="password"><input id="cloud-asr-pid"></div><div class="provider-panel" data-asr-provider="siliconflow"><input id="silicon-asr-api" type="hidden"><label>API Key<input id="silicon-asr-key" type="password"></label><label>模型<select id="silicon-asr-model"><option value="Qwen/Qwen3-ASR-1.7B">Qwen3-ASR-1.7B</option><option value="TeleAI/TeleSpeechASR">TeleSpeechASR</option><option value="XingChenAGI/XingChenASR-V3.2-Ultra" selected>XingChenASR-V3.2-Ultra</option></select></label></div></section>
         </div>
-        <div class="page" id="settings"><div class="page-head"><div><p class="eyebrow">UI</p><h1>UI界面设置</h1></div></div><div class="card form-card"><label>开场白<input id="opening-text"></label><label>用户显示名称<input id="user-name"></label><label>AI显示名称<input id="ai-name"></label><label class="check"><input id="subtitle-enabled" type="checkbox"> 启用字幕显示</label><label class="check"><input id="hide-model" type="checkbox"> 隐藏皮套</label><label class="check"><input id="auto-close-services" type="checkbox"> 关闭UI时自动关闭所有服务</label><div class="ui-position-actions"><button id="reset-model-position" type="button">复位皮套位置</button><button id="adjust-subtitle-position" type="button">调整字幕位置</button></div><button id="toggle-edition-preview">预览本地样式</button></div></div>
+        <div class="page" id="settings"><div class="page-head"><div><p class="eyebrow">UI</p><h1>UI界面设置</h1></div></div><div class="card form-card"><label>开场白<input id="opening-text"></label><label>用户显示名称<input id="user-name"></label><label>AI显示名称<input id="ai-name"></label><label class="check"><input id="subtitle-enabled" type="checkbox"> 启用字幕显示</label><label class="check"><input id="hide-model" type="checkbox"> 隐藏皮套</label><label class="check"><input id="auto-close-services" type="checkbox"> 关闭UI时自动关闭所有服务</label><div class="ui-position-actions"><button id="reset-model-position" type="button">复位皮套位置</button><button id="adjust-subtitle-position" type="button">调整字幕位置</button></div></div></div>
         <div class="page" id="tutorial"><div class="page-head"><div><h1>使用教程</h1></div><button data-go="home">返回</button></div><div id="tutorial-content" class="card form-card"></div></div>
         <div class="page" id="history"><div id="history-list" class="history-list card"></div><nav id="history-pagination" class="history-pagination" aria-label="对话记录分页" hidden></nav></div>
 
@@ -244,6 +242,23 @@
       </section>
     </div>
   </main>
+  <div class="cloud-tour" id="cloud-tour" hidden aria-live="polite">
+    <div class="cloud-tour-frame" id="cloud-tour-frame" hidden></div>
+    <div class="cloud-tour-tip" id="cloud-tour-tip">
+      <strong id="cloud-tour-title"></strong>
+      <p id="cloud-tour-text"></p>
+      <button id="cloud-tour-done" type="button" hidden>我知道了</button>
+    </div>
+  </div>
+  <div class="tutorial-picker-modal" id="tutorial-picker-modal" hidden role="dialog" aria-modal="true" aria-labelledby="tutorial-picker-title">
+    <div class="tutorial-picker-dialog">
+      <header><div><strong id="tutorial-picker-title">选择使用教程</strong><span>请选择与你使用的版本对应的教程</span></div><button id="tutorial-picker-close" aria-label="关闭">×</button></header>
+      <div class="tutorial-picker-options">
+        <button type="button" data-tutorial-edition="cloud"><span class="tutorial-option-icon">☁</span><span><strong>云端版本</strong><small>在线模型与云端服务配置</small></span><span class="tutorial-option-arrow">›</span></button>
+        <button type="button" data-tutorial-edition="local"><span class="tutorial-option-icon">⌂</span><span><strong>本地版本</strong><small>本地模型与离线服务配置</small></span><span class="tutorial-option-arrow">›</span></button>
+      </div>
+    </div>
+  </div>
   <div class="qq-modal" id="qq-modal" hidden role="dialog" aria-modal="true" aria-labelledby="qq-modal-title">
     <div class="qq-dialog">
       <header><strong id="qq-modal-title">QQ群二维码</strong><button id="qq-modal-close" aria-label="关闭">×</button></header>
