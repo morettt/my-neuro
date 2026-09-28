@@ -83,17 +83,10 @@ function applyEdition(edition = environment.edition) {
     document.querySelector('.nav.active')?.classList.remove('active');
     document.querySelector('[data-page="home"]').classList.add('active');
   }
-  $('toggle-edition-preview').textContent = edition === 'local' ? '切回云端样式' : '预览本地样式';
   $('tutorial-content').innerHTML = edition === 'cloud'
     ? '<h2>云端版本教程</h2><p>云端版本教程还没有制作好，请耐心等待。</p>'
     : '<h2>首次使用</h2><p>在“模型配置”填写 API KEY、API URL，点击“获取模型”选择模型并保存。</p><p>回到“启动”选择 Live2D 或 VRM 角色，然后点击“启动桌宠”。</p><h2>语音功能</h2><p>在“对话设置”启用 ASR、TTS，并在“终端控制室”启动对应服务。</p><h2>插件与工具</h2><p>插件在“插件”页面启用和配置；MCP 工具在“工具屋”启用。</p>';
 }
-
-$('toggle-edition-preview').addEventListener('click', () => {
-  const shown = previewEdition || environment.edition;
-  previewEdition = shown === 'local' ? 'cloud' : 'local';
-  applyEdition(previewEdition);
-});
 
 document.querySelectorAll('#cloud h3, #cloud button').forEach(element => {
   element.childNodes.forEach(node => {
@@ -148,11 +141,99 @@ function switchPage(pageId, navButton = null) {
   });
 }
 
+let cloudTourStage = 0;
+function clearCloudTourHighlights() {
+  document.querySelectorAll('.cloud-tour-target').forEach(element => element.classList.remove('cloud-tour-target'));
+  $('cloud-tour-frame').hidden = true;
+}
+
+function positionCloudTour() {
+  if ($('cloud-tour').hidden) return;
+  const tip = $('cloud-tour-tip');
+  if (cloudTourStage === 1) {
+    const target = document.querySelector('[data-page="llm"]');
+    const rect = target.getBoundingClientRect();
+    tip.className = 'cloud-tour-tip points-left';
+    tip.style.left = `${Math.min(rect.right + 22, window.innerWidth - 330)}px`;
+    tip.style.top = `${Math.max(16, rect.top + rect.height / 2 - 45)}px`;
+  } else if (cloudTourStage === 2) {
+    const firstRect = $('llm-key').closest('.llm-row').getBoundingClientRect();
+    const lastRect = $('llm-model').closest('.llm-row').getBoundingClientRect();
+    const rect = { left: Math.min(firstRect.left, lastRect.left), top: firstRect.top, right: Math.max(firstRect.right, lastRect.right), bottom: lastRect.bottom };
+    const frame = $('cloud-tour-frame');
+    frame.hidden = false;
+    frame.style.left = `${rect.left - 7}px`;
+    frame.style.top = `${rect.top - 7}px`;
+    frame.style.width = `${rect.right - rect.left + 14}px`;
+    frame.style.height = `${rect.bottom - rect.top + 14}px`;
+    tip.className = 'cloud-tour-tip points-up';
+    tip.style.left = `${Math.min(Math.max(20, rect.left), window.innerWidth - 370)}px`;
+    tip.style.top = `${Math.min(rect.bottom + 18, window.innerHeight - 150)}px`;
+  }
+}
+
+function showCloudTourFields() {
+  cloudTourStage = 2;
+  clearCloudTourHighlights();
+  $('cloud-tour-title').textContent = '填写模型连接信息';
+  $('cloud-tour-text').textContent = '请依次填写 API Key、API URL 和模型名称。这三项都是连接云端模型所必需的。';
+  $('cloud-tour-done').hidden = false;
+  positionCloudTour();
+}
+
+function startCloudTour() {
+  cloudTourStage = 1;
+  clearCloudTourHighlights();
+  const target = document.querySelector('[data-page="llm"]');
+  target.classList.add('cloud-tour-target');
+  $('cloud-tour-title').textContent = '第一步：打开模型配置';
+  $('cloud-tour-text').textContent = '点击左侧的“模型配置”继续。';
+  $('cloud-tour-done').hidden = true;
+  $('cloud-tour').hidden = false;
+  positionCloudTour();
+}
+
+function endCloudTour() {
+  cloudTourStage = 0;
+  clearCloudTourHighlights();
+  $('cloud-tour').hidden = true;
+}
+
+$('cloud-tour-done').addEventListener('click', endCloudTour);
+window.addEventListener('resize', positionCloudTour);
+
 function closeQqModal() { $('qq-modal').hidden = true; }
 $('qq-group-link').addEventListener('click', () => { $('qq-modal').hidden = false; $('qq-modal-close').focus(); });
 $('qq-modal-close').addEventListener('click', closeQqModal);
 $('qq-modal').addEventListener('click', event => { if (event.target === $('qq-modal')) closeQqModal(); });
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('qq-modal').hidden) closeQqModal(); });
+
+function closeTutorialPicker() { $('tutorial-picker-modal').hidden = true; }
+$('tutorial-picker-open').addEventListener('click', () => {
+  $('tutorial-picker-modal').hidden = false;
+  document.querySelector('[data-tutorial-edition]')?.focus();
+});
+$('tutorial-picker-close').addEventListener('click', closeTutorialPicker);
+$('tutorial-picker-modal').addEventListener('click', event => {
+  if (event.target === $('tutorial-picker-modal')) closeTutorialPicker();
+});
+document.querySelectorAll('[data-tutorial-edition]').forEach(button => {
+  button.addEventListener('click', () => {
+    closeTutorialPicker();
+    if (button.dataset.tutorialEdition === 'cloud') {
+      startCloudTour();
+      return;
+    }
+    previewEdition = 'local';
+    applyEdition(previewEdition);
+    switchPage('tutorial');
+  });
+});
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return;
+  if (!$('tutorial-picker-modal').hidden) closeTutorialPicker();
+  else if (!$('cloud-tour').hidden) endCloudTour();
+});
 
 document.querySelectorAll('.nav').forEach(button => {
   button.addEventListener('click', () => {
@@ -160,6 +241,7 @@ document.querySelectorAll('.nav').forEach(button => {
     switchPage(button.dataset.page, button);
     if (button.dataset.page === 'chat' && document.querySelector('[data-chat-tab="prompts"].active')) refreshPrompts();
     if (button.dataset.page === 'history') loadChatHistory();
+    if (button.dataset.page === 'llm' && cloudTourStage === 1) requestAnimationFrame(showCloudTourFields);
   });
 });
 
@@ -282,6 +364,30 @@ function setLlmModelsOpen(open) {
     option.setAttribute('aria-selected', String(selected));
   });
 }
+
+function setLlmUrlsOpen(open) {
+  $('llm-url-dropdown-state').checked = open;
+  $('toggle-llm-urls').setAttribute('aria-expanded', String(open));
+  document.querySelectorAll('[data-llm-url]').forEach(option => {
+    const selected = option.dataset.llmUrl === $('llm-url').value.trim();
+    option.classList.toggle('selected', selected);
+    option.setAttribute('aria-selected', String(selected));
+  });
+}
+$('toggle-llm-urls').addEventListener('click', () => setLlmUrlsOpen(!$('llm-url-dropdown-state').checked));
+$('llm-url').addEventListener('click', () => setLlmUrlsOpen(true));
+document.querySelectorAll('[data-llm-url]').forEach(option => {
+  option.addEventListener('click', () => {
+    $('llm-url').value = option.dataset.llmUrl;
+    $('llm-url').dispatchEvent(new Event('input', { bubbles: true }));
+    $('llm-url').dispatchEvent(new Event('change', { bubbles: true }));
+    setLlmUrlsOpen(false);
+    $('llm-url').focus();
+  });
+});
+document.addEventListener('click', event => {
+  if (!event.target.closest('.llm-url-dropdown')) setLlmUrlsOpen(false);
+});
 $('toggle-llm-models').addEventListener('click', () => {
   if (!$('llm-model-options').children.length) { showToast('请先点击获取模型'); return; }
   setLlmModelsOpen(!$('llm-model-dropdown-state').checked);
@@ -291,7 +397,7 @@ $('llm-model').addEventListener('click', () => {
 });
 $('llm-model').addEventListener('input', () => setLlmModelsOpen(false));
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape') setLlmModelsOpen(false);
+  if (event.key === 'Escape') { setLlmModelsOpen(false); setLlmUrlsOpen(false); }
 });
 $('fetch-llm-models').addEventListener('click', async () => {
   const button = $('fetch-llm-models');
@@ -384,6 +490,16 @@ document.querySelectorAll('[data-chat-tab]').forEach(button => {
     document.querySelector(`[data-chat-panel="${button.dataset.chatTab}"]`)?.classList.add('active');
     if (button.dataset.chatTab === 'prompts') refreshPrompts();
   });
+});
+
+$('open-prompt-market').addEventListener('click', () => {
+  document.querySelector('#llm > .llm-form').hidden = true;
+  $('prompts').hidden = false;
+  refreshPrompts();
+});
+$('close-prompt-market').addEventListener('click', () => {
+  $('prompts').hidden = true;
+  document.querySelector('#llm > .llm-form').hidden = false;
 });
 
 document.querySelectorAll('[data-motion-tab]').forEach(button => {
