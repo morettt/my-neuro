@@ -5,9 +5,6 @@ $buildDir = Join-Path $projectDir 'build\electron-ui'
 $appDir = Join-Path $buildDir 'app'
 $outputDir = Join-Path $buildDir 'dist'
 $toolsDir = Join-Path $PSScriptRoot 'electron-ui-package'
-$portableNode = 'D:\tools\node-v18.20.8-win-x64\node.exe'
-$nodeExe = if (Test-Path -LiteralPath $portableNode -PathType Leaf) { $portableNode } else { 'node.exe' }
-$npmCmd = if (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $nodeExe) 'npm.cmd') -PathType Leaf) { Join-Path (Split-Path -Parent $nodeExe) 'npm.cmd' } else { 'npm.cmd' }
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 # ASCII source also works with Windows PowerShell's default file encoding.
 $exeName = ([string][char]0x80A5) + ([string][char]0x725B) + '.exe'
@@ -70,14 +67,14 @@ if (-not (Test-Path -LiteralPath $builderCli)) {
         # creating a directory cycle that breaks ZIP archiving.
         Push-Location -LiteralPath $toolsDir
         try {
-            & $npmCmd install --no-audit --no-fund
+            & npm.cmd install --no-audit --no-fund
             if ($LASTEXITCODE -ne 0) { throw 'Failed to install electron-builder.' }
         } finally {
             Pop-Location
         }
     }
 }
-& $nodeExe $builderCli --projectDir $toolsDir --config $configPath --win portable --x64
+& node.exe $builderCli --projectDir $toolsDir --config $configPath --win portable --x64
 if ($LASTEXITCODE -ne 0) { throw 'Portable build failed. See the error above.' }
 
 $artifact = Join-Path $outputDir 'Feiniu.exe'
