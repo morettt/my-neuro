@@ -1186,12 +1186,30 @@ ipcMain.handle('control:start-live2d', event => {
   if (live2dProcess && live2dProcess.exitCode === null) return { ok: false, message: '桌宠已在运行' };
   startRuntimeLog(event.sender);
   showAvatarLoadingWindow();
-  live2dProcess = spawn('cmd.exe', ['/d', '/c', 'go.bat'], {
+  const electronExe = path.join(__dirname, 'node_modules', 'electron', 'dist', 'electron.exe');
+  if (!fs.existsSync(electronExe)) {
+    closeAvatarLoadingWindow();
+    stopRuntimeLog();
+    return { ok: false, message: '桌宠启动失败：缺少 Electron 运行文件，请重新安装依赖' };
+  }
+  live2dProcess = spawn(electronExe, ['.'], {
     cwd: __dirname,
     windowsHide: true
   });
-  live2dProcess.stdout.on('data', () => {});
-  live2dProcess.stderr.on('data', () => {});
+  const sendStartupOutput = chunk => {
+    if (!event.sender.isDestroyed()) event.sender.send('control:live2d-log', String(chunk));
+  };
+  live2dProcess.stdout.on('data', sendStartupOutput);
+  live2dProcess.stderr.on('data', sendStartupOutput);
+  live2dProcess.on('error', error => {
+    closeAvatarLoadingWindow();
+    stopRuntimeLog();
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('control:live2d-log', `桌宠启动失败：${error.message}\n`);
+      event.sender.send('control:live2d-state', false);
+    }
+    live2dProcess = null;
+  });
   live2dProcess.on('exit', code => {
     closeAvatarLoadingWindow();
     stopRuntimeLog();
