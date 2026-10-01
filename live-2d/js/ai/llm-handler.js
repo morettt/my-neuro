@@ -138,11 +138,7 @@ class LLMHandler {
         return async function(prompt) {
             let hasRetriedWithoutImage = false; // 标志：是否已经重试过（避免无限循环）
             let isFirstAttempt = true; // 标志：是否是第一次尝试
-            const choreographyMode = getAvatarMotionMode(config);
             const shouldRunChoreography = shouldRunMotionChoreography(config);
-            const waitForChoreography = shouldRunChoreography &&
-                choreographyMode === 'director' &&
-                config?.motion_director?.wait_before_tts !== false;
             const choreographyUserMessage = Array.isArray(prompt)
                 ? prompt
                     .filter(item => item && item.type === 'text')
@@ -328,7 +324,6 @@ class LLMHandler {
                         _streamBuf = '';
                         ttsProcessor.reset();
                         result = await visionClient.chatCompletion(messagesForAPI, null, true, (text) => {
-                            if (shouldRunChoreography) return;
                             isStreamingToTTS = true;
                             ttsProcessor.addStreamingText(text);
                         });
@@ -357,7 +352,6 @@ class LLMHandler {
                         if (iteration === 0) ttsProcessor.reset();
                         result = await llmClient.chatCompletion(messagesForAPI, allTools, true, (text) => {
                             if (iteration > 0) return;
-                            if (shouldRunChoreography) return;
                             isStreamingToTTS = true;
                             ttsProcessor.addStreamingText(text);
                         });
@@ -834,23 +828,6 @@ class LLMHandler {
                             config,
                             { userMessage: choreographyUserMessage }
                         );
-                        if (waitForChoreography) {
-                            const waitMs = Math.max(
-                                200,
-                                Math.min(
-                                    3000,
-                                    Number(config?.motion_director?.first_frame_wait_ms) || 1500
-                                )
-                            );
-                            logToTerminal(
-                                'info',
-                                `[MotionDirector] director 模式等待首帧，最多 ${waitMs}ms`
-                            );
-                            await Promise.race([
-                                choreographyWork.firstFrameLoaded,
-                                new Promise(resolve => setTimeout(resolve, waitMs))
-                            ]);
-                        }
                         choreographyWork.catch((error) => {
                             logToTerminal(
                                 'warn',
@@ -864,7 +841,7 @@ class LLMHandler {
                         }
                     }
 
-                    if (iteration === 0 && isStreamingToTTS && !waitForChoreography) {
+                    if (iteration === 0 && isStreamingToTTS) {
                         // streaming already started - finalize
                         if (typeof ttsProcessor.finalizeStreamingText === 'function') {
                             ttsProcessor.finalizeStreamingText();
