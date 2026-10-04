@@ -178,5 +178,11 @@
     "desc": "你画我猜小游戏插件：内置本地网页（默认浏览器打开），支持「AI 画你猜」与「玩家画肥牛猜」两种模式；AI 画画通过笔画协议生成并用 p5.brush 渲染手绘风，笔画失败时可选用生图模型兜底；带倒计时、计分板、揭晓动画和 OBS 展示页；对局状态可存档恢复。无需额外依赖，复制到 live-2d/plugins/community/ 即可使用，需自行在控制中心配置 LLM 供应商与模型，肥牛的人设提示词也由用户自行填写。",
     "author": "爱熬夜的人形兔",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-feiniu-draw-guess"
+  },
+  "feiniu-computer-use": {
+    "display_name": "feiniu-computer-use",
+    "desc": "让肥牛看屏幕、找窗口、点击、输入、按键、滚动、拖拽，操作 Windows 桌面软件。默认完全自主控制，无需逐次询问授权；保留观察-动作-刷新、Esc 停止和动作上限，可关闭自主模式恢复按应用分级确认。内置主人让位（你在操作时自动等待）、长文本分段输入与部分完成回执、worker 重启后旧操作失效等可靠性机制。需自备 Python 环境并安装 uiautomation，按 README 配置；请勿在世界之眼中代理本插件。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-feiniu-computer-use"
   }
 }
