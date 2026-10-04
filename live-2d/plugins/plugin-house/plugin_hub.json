@@ -172,5 +172,11 @@
     "desc": "屏幕感知插件：用户每次发话前自动截取桌面截图，由独立视觉模型（OpenAI 兼容 API，如 Qwen-VL 系列）转述为中文文字，并通过 system prompt 补丁注入主对话上下文，让主 LLM 在不破坏对话历史的前提下感知用户屏幕。支持触发来源过滤（voice/text）、转述间隔复用、超时与长度兜底；截图或视觉模型失败时静默跳过，不阻塞用户消息发送。需自备视觉模型 API Key，与主 LLM 完全隔离。",
     "author": "爱熬夜的人形兔",
     "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-screen-narrator"
+  },
+  "feiniu-draw-guess": {
+    "display_name": "feiniu-draw-guess",
+    "desc": "你画我猜小游戏插件：内置本地网页（默认浏览器打开），支持「AI 画你猜」与「玩家画肥牛猜」两种模式；AI 画画通过笔画协议生成并用 p5.brush 渲染手绘风，笔画失败时可选用生图模型兜底；带倒计时、计分板、揭晓动画和 OBS 展示页；对局状态可存档恢复。无需额外依赖，复制到 live-2d/plugins/community/ 即可使用，需自行在控制中心配置 LLM 供应商与模型，肥牛的人设提示词也由用户自行填写。",
+    "author": "爱熬夜的人形兔",
+    "repo": "https://github.com/A-night-owl-Rabbit/my-neuro-plugin-feiniu-draw-guess"
   }
 }
