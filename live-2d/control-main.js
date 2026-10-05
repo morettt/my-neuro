@@ -1,4 +1,15 @@
 const { app, BrowserWindow, ipcMain, shell, net, dialog } = require('electron');
+
+// Electron 28 / Chromium 120 retains an IMM32 fallback for Windows IMEs.
+// The failing session receives only keyUp events, with no keyDown or composition
+// reaching webContents despite correct focus. Use the alternate native IME path.
+// https://github.com/chromium/chromium/blob/120.0.6099.225/ui/base/ime/init/input_method_factory.cc
+if (process.platform === 'win32' && process.versions.electron?.startsWith('28.')) {
+  const disabledFeatures = new Set(app.commandLine.getSwitchValue('disable-features').split(',').filter(Boolean));
+  disabledFeatures.add('TSFImeSupport');
+  app.commandLine.appendSwitch('disable-features', [...disabledFeatures].join(','));
+}
+
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
