@@ -6,6 +6,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const axios = require('axios');
+const http = require('http');
+const https = require('https');
 const { PluginManager } = require('../../../js/core/plugin-manager.js');
 const { ConversationCore } = require('../../../js/ai/conversation/ConversationCore.js');
 const { ToolExecutor } = require('../../../js/ai/tool-executor.js');
@@ -13,41 +15,69 @@ const { getMergedToolsList } = require('../../../js/api-utils.js');
 const { eventBus } = require('../../../js/core/event-bus.js');
 const { Events } = require('../../../js/core/events.js');
 
-const originalFetch = global.fetch;
+const originalHttpsRequest = https.request;
 const originalAdapter = axios.defaults.adapter;
-let temporary, managers, requests, mode;
+const proxyVariables = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'];
+const originalProxy = Object.fromEntries(proxyVariables.map(name => [name, process.env[name]]));
+let temporary, managers, requests, mode, server;
 const config = { context: { max_messages: 20, enable_limit: true }, tools: { enabled: true } };
 
-// Test the real SDK's wire requests, rather than mocking Client/callTool.
-function installMCPFixture() {
-    global.fetch = async (url, init = {}) => {
-        const body = init.body ? JSON.parse(init.body) : null;
-        const headers = new Headers(init.headers);
-        requests.push({ url: String(url), method: init.method, headers, body, signal: init.signal });
-        if (init.signal?.aborted) throw init.signal.reason;
-        if (init.method === 'GET') return new Response(null, { status: 405 });
-        if (body?.id === undefined) return new Response(null, { status: 202 });
-        if (mode === 'http-error') return new Response('unavailable', { status: 503 });
-        if (mode === 'hang' || (mode === 'hang-call' && body.method === 'tools/call')) {
-            return await new Promise((resolve, reject) => {
-                init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true });
-            });
-        }
-        let result;
-        if (body.method === 'initialize') {
-            result = { protocolVersion: body.params.protocolVersion, capabilities: { tools: {} },
-                serverInfo: { name: 'fixture', version: '1.0' } };
-        } else if (body.method === 'tools/list') {
-            result = { tools: ['web_search', 'web_fetch'].map(name => ({ name,
-                inputSchema: { type: 'object' } })) };
-        } else if (body.method === 'tools/call') {
-            result = mode === 'tool-error'
-                ? { isError: true, content: [{ type: 'text', text: 'quota fixture' }] }
-                : { content: [{ type: 'text', text: 'Source: https://example.com/current' },
-                    { type: 'text', text: 'Useful current information.' }] };
-        } else throw new Error(`Unexpected MCP method: ${body.method}`);
-        return Response.json({ jsonrpc: '2.0', id: body.id, result });
+// Exercise the real SDK and Node HTTP adapter, observing headers at the server.
+// Only Node HTTP routing is local; the production endpoint stays fixed.
+async function installMCPFixture() {
+    server = http.createServer((request, response) => {
+        let raw = '';
+        request.on('data', chunk => { raw += chunk; });
+        request.on('end', () => {
+            const body = raw ? JSON.parse(raw) : null;
+            requests.push({ url: `https://${request.headers.host}${request.url}`,
+                method: request.method, headers: new Headers(request.headers), body, response });
+            if (request.method === 'GET') { response.writeHead(405).end(); return; }
+            if (body?.id === undefined) { response.writeHead(202).end(); return; }
+            if (mode === 'http-error') { response.writeHead(503).end('unavailable'); return; }
+            if (mode === 'hang' || (mode === 'hang-call' && body.method === 'tools/call')) return;
+            let result;
+            if (body.method === 'initialize') {
+                result = { protocolVersion: body.params.protocolVersion, capabilities: { tools: {} },
+                    serverInfo: { name: 'fixture', version: '1.0' } };
+            } else if (body.method === 'tools/list') {
+                result = { tools: ['web_search', 'web_fetch'].map(name => ({ name,
+                    inputSchema: { type: 'object' } })) };
+            } else if (body.method === 'tools/call') {
+                result = mode === 'tool-error'
+                    ? { isError: true, content: [{ type: 'text', text: 'quota fixture' }] }
+                    : { content: [{ type: 'text', text: 'Source: https://example.com/current' },
+                        { type: 'text', text: 'Useful current information.' }] };
+            }
+            if (mode === 'partial-body' && body.method === 'tools/call') {
+                response.setHeader('Content-Type', 'application/json');
+                response.write('{"jsonrpc":');
+                return;
+            }
+            if (mode === 'sse' && body.method === 'tools/call') {
+                response.setHeader('Content-Type', 'text/event-stream');
+                response.end(`data: ${JSON.stringify({ jsonrpc: '2.0', id: body.id, result })}\n\n`);
+                return;
+            }
+            response.setHeader('Content-Type', 'application/json');
+            response.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result }));
+        });
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    https.request = (options, callback) => {
+        assert.equal(options.hostname, 'search.parallel.ai');
+        return http.request({ ...options, protocol: 'http:', hostname: '127.0.0.1',
+            port: server.address().port, headers: { ...options.headers, host: 'search.parallel.ai' }
+        }, callback);
     };
+}
+
+async function assertConnectionClosed(request) {
+    const until = Date.now() + 2000;
+    while (!request.response.destroyed && Date.now() < until) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.ok(request.response.destroyed);
 }
 
 async function loadPlugin(values = {}, { enabled = true, toolsEnabled = true, shipped = false } = {}) {
@@ -86,18 +116,25 @@ async function dispatch(name = 'web_search', args = { query: 'current research n
 
 const calls = () => requests.filter(request => request.body?.method === 'tools/call');
 
-beforeEach(() => {
+beforeEach(async () => {
+    proxyVariables.forEach(name => { delete process.env[name]; });
     temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'my-neuro-search-'));
     managers = []; requests = []; mode = 'success';
     global.voiceChat = conversation();
     global.mcpManager = null;
-    installMCPFixture();
+    await installMCPFixture();
 });
 
 afterEach(async () => {
     for (const manager of managers) await manager.stopAll();
-    global.fetch = originalFetch;
+    https.request = originalHttpsRequest;
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
     axios.defaults.adapter = originalAdapter;
+    proxyVariables.forEach(name => {
+        if (originalProxy[name] === undefined) delete process.env[name];
+        else process.env[name] = originalProxy[name];
+    });
     delete global.pluginManager; delete global.voiceChat; delete global.mcpManager;
     fs.rmSync(temporary, { recursive: true, force: true });
 });
@@ -182,6 +219,24 @@ test('legacy plain/schema Tavily keys keep Tavily; explicit Parallel overrides a
     assert.equal(tavilyCalls.length, 2);
 });
 
+test('Parallel HTTP transport does not inherit global Axios credentials or adapters', async () => {
+    const originalAuth = axios.defaults.auth;
+    const originalHeader = axios.defaults.headers.common.Authorization;
+    axios.defaults.auth = { username: 'other-service', password: 'test-only' };
+    axios.defaults.headers.common.Authorization = 'Bearer other-service-test';
+    axios.defaults.adapter = () => { throw new Error('Unrelated global adapter'); };
+    try {
+        await loadPlugin();
+        assert.match(await dispatch(), /Useful current information/);
+        requests.forEach(request => assert.equal(request.headers.has('authorization'), false));
+    } finally {
+        if (originalAuth === undefined) delete axios.defaults.auth;
+        else axios.defaults.auth = originalAuth;
+        if (originalHeader === undefined) delete axios.defaults.headers.common.Authorization;
+        else axios.defaults.headers.common.Authorization = originalHeader;
+    }
+});
+
 test('disabled plugin, global tools, disabled/invalid provider and explicit Tavily without key fail closed', async () => {
     for (const [values, options] of [
         [{}, { enabled: false }], [{}, { toolsEnabled: false }],
@@ -246,13 +301,28 @@ test('HTTP and MCP errors remain visible without provider fallback', async () =>
     assert.match(await dispatch(), /quota fixture/);
 });
 
+test('SDK consumes SSE tool responses through the current-realm stream adapter', async () => {
+    await loadPlugin();
+    mode = 'sse';
+    assert.match(await dispatch(), /Useful current information/);
+    assert.match(await dispatch('web_fetch', { urls: ['https://example.com/current'] }), /Useful current information/);
+});
+
+test('total deadline cancels a partially received response body', async () => {
+    await loadPlugin({ timeout_ms: 250 });
+    mode = 'partial-body';
+    assert.match(await dispatch(), /超时/);
+    assert.equal(calls().length, 1);
+    await assertConnectionClosed(calls()[0]);
+});
+
 test('total timeout cancels SDK connection requests', async () => {
     await loadPlugin({ timeout_ms: 25 });
     mode = 'hang';
     const keepAlive = setInterval(() => {}, 1000);
     try {
         assert.match(await dispatch(), /超时/);
-        assert.ok(requests[0].signal.aborted);
+        await assertConnectionClosed(requests[0]);
     } finally { clearInterval(keepAlive); }
 });
 
@@ -265,7 +335,7 @@ test('user interruption and plugin unload abort in-flight tool calls', async () 
         while (calls().length === before) await new Promise(resolve => setImmediate(resolve));
         await stop();
         assert.match(await pending, /搜索已取消/);
-        assert.ok(calls().at(-1).signal.aborted);
+        await assertConnectionClosed(calls().at(-1));
     }
     assert.deepEqual(manager.getAllTools(), []);
 });
