@@ -57,6 +57,11 @@ class PluginContext {
         return voiceChat.messages || [];
     }
 
+    /** 当前对话的匿名 ID；独立后台任务没有对话时返回 null。 */
+    getConversationId() {
+        return global.voiceChat?.conversationCore?.sessionId || null;
+    }
+
     /**
      * 注入系统提示词片段（幂等，可多次调用）
      * @param {string} id - 唯一标识，用于后续移除
