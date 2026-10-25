@@ -26,7 +26,7 @@ avatar_bp = Blueprint('avatar', __name__)
 AVATAR_TYPES = ['live2d', 'vrm']
 TYPE_CONFIG_KEYS = {
     'live2d': 'live2d_model',      # 模型目录名
-    'vrm': 'vrm_model_path',       # 相对路径（3D/xx.vrm）
+    'vrm': 'vrm_model_path',       # 相对路径（3D/VRM/<模型名>/xx.vrm）
 }
 PET_BASE = 'http://localhost:3002'
 
@@ -70,20 +70,21 @@ def _scan_live2d():
 
 
 def _scan_vrm():
-    """3D/**/*.vrm（排除 3D/mmd）-> value 为相对路径"""
-    root = PROJECT_ROOT / '3D'
+    """3D/VRM/<模型名>/**/*.vrm -> 每目录一个模型，名称取目录名。"""
+    root = PROJECT_ROOT / '3D' / 'VRM'
     results = []
     if not root.exists():
         return results
-    mmd_root = root / 'mmd'
-    for vrm in sorted(root.rglob('*.vrm')):
-        try:
-            vrm.relative_to(mmd_root)
-            continue  # 位于 3D/mmd 下，跳过
-        except ValueError:
-            pass
-        rel = vrm.relative_to(PROJECT_ROOT).as_posix()
-        results.append({'name': vrm.stem, 'value': rel})
+    for model_dir in sorted(root.iterdir()):
+        if not model_dir.is_dir():
+            continue
+        files = sorted(
+            (p for p in model_dir.rglob('*') if p.is_file() and p.suffix.lower() == '.vrm'),
+            key=lambda p: p.relative_to(model_dir).as_posix(),
+        )
+        if files:
+            rel = files[0].relative_to(PROJECT_ROOT).as_posix()
+            results.append({'name': model_dir.name, 'value': rel})
     return results
 
 

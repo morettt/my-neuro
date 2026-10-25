@@ -4,7 +4,10 @@
 // 中文情绪 -> VRM preset 表情映射可被模型目录下的 emotion_mapping.json 覆盖（可选）。
 
 function getCharacterName(modelPath) {
-    const match = String(modelPath || '').match(/3D\/(?:.*\/)?([^\/]+?)\.vrm$/i);
+    const normalized = String(modelPath || '').replace(/\\/g, '/');
+    const folder = normalized.match(/(?:^|\/)3D\/VRM\/([^/]+)\/.+\.vrm$/i);
+    if (folder) return folder[1];
+    const match = normalized.match(/3D\/(?:.*\/)?([^\/]+?)\.vrm$/i);
     if (match) return match[1];
     return 'VRM角色';
 }

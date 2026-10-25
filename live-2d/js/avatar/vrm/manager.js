@@ -80,7 +80,7 @@ class VRMManager {
 
     /**
      * 加载 VRM 模型（支持 0.x 与 1.0）
-     * @param {string} modelPath 相对 live-2d 根目录，如 "3D/Sample_A.vrm"
+     * @param {string} modelPath 相对 live-2d 根目录，如 "3D/VRM/Sample_A/Sample_A.vrm"
      * @param {object} options { gazeEnabled }
      * @returns {VRMModelAdapter}
      */

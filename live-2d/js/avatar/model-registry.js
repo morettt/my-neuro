@@ -1,7 +1,7 @@
 // model-registry.js - 四形态模型注册表（纯 fs 实现，主进程与渲染进程均可 require）
 // 目录约定：
 //   Live2D:   2D/<模型名>/**/*.model3.json
-//   VRM:      3D/**/*.vrm            （Phase 7 启用）
+//   VRM:      3D/VRM/<模型名>/**/*.vrm
 //   MMD:      3D/mmd/<模型名>/**/*.pmx（Phase 8 启用）
 //   PNGTuber: PNG/<模型名>/pngtuber.json（Phase 9 启用）
 const fs = require('fs');
@@ -73,20 +73,23 @@ function resolveLive2DModel(preferredName) {
 }
 
 /**
- * 扫描 VRM 模型：3D/**\/*.vrm（排除 3D/mmd/）
- * @returns {Array<{ name, modelPath }>} name = 文件名（不含扩展名）
+ * 扫描 VRM 模型：3D/VRM/<模型名>/**\/*.vrm
+ * 每个模型目录取路径排序后的第一份 VRM，模型名使用一级目录名。
+ * @returns {Array<{ name, modelPath }>}
  */
 function scanVRMModels() {
-    const dir = path.join(APP_ROOT, '3D');
+    const dir = path.join(APP_ROOT, '3D', 'VRM');
     const files = [];
     walkFiles(dir, (n) => n.toLowerCase().endsWith('.vrm'), files, '');
-    return files
-        .map(toPosix)
-        .filter(rel => !rel.toLowerCase().startsWith('mmd/'))
-        .map(rel => ({
-            name: rel.split('/').pop().replace(/\.vrm$/i, ''),
-            modelPath: `3D/${rel}`
-        }));
+    const byName = new Map();
+    for (const rel of files.map(toPosix).sort()) {
+        if (!rel.includes('/')) continue;
+        const name = rel.split('/')[0];
+        if (!byName.has(name)) {
+            byName.set(name, { name, modelPath: `3D/VRM/${rel}` });
+        }
+    }
+    return [...byName.values()];
 }
 
 /**
