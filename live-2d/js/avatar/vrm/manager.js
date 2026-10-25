@@ -37,7 +37,7 @@ class VRMManager {
         return !!(this.renderer && !this._disposed);
     }
 
-    initThreeJS(canvasId = 'vrm-canvas') {
+    initThreeJS(canvasId = 'vrm-canvas', options = {}) {
         this.canvas = document.getElementById(canvasId);
         if (!this.canvas) {
             throw new Error(`VRMManager: 找不到 canvas 元素 #${canvasId}`);
@@ -46,13 +46,13 @@ class VRMManager {
         this.renderer = new THREE.WebGLRenderer({
             canvas: this.canvas,
             alpha: true,
-            antialias: false,   // 高 DPI 下抗锯齿开销过大（可能触发软件渲染时秒级帧耗时冻结主线程）
+            antialias: options.antialias === true,
             premultipliedAlpha: false,
             powerPreference: 'high-performance'
         });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         // 钳制 pixelRatio：4K/300% 缩放环境下按 devicePixelRatio 全量渲染会拖死渲染进程
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, options.pixelRatioLimit || 1.5));
         this.renderer.setClearColor(0x000000, 0);
         this.renderer.outputColorSpace = THREE.SRGBColorSpace;
         try {
@@ -190,7 +190,7 @@ class VRMManager {
                 model.updateCameraOrbit();
                 this.camera.aspect = vr.width / vr.height;
                 this.camera.updateProjectionMatrix();
-                this.renderer.render(this.scene, this.camera);
+                this.renderScene();
                 this._frameErrorCount = 0;
 
                 // 帧耗时观测：首帧 + 每 300 帧汇报一次均值（性能问题定位用）
@@ -217,6 +217,10 @@ class VRMManager {
             }
         };
         animate();
+    }
+
+    renderScene() {
+        this.renderer.render(this.scene, this.camera);
     }
 
     stopLoop() {

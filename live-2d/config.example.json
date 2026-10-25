@@ -196,6 +196,8 @@
     "model_type": "live2d",
     "vrm_model": "",
     "vrm_model_path": "",
+    "mmd_model": "",
+    "mmd_model_path": "",
     "model_scale": 1,
     "focus_factor": 0.3,
     "hide_from_screenshot": true,

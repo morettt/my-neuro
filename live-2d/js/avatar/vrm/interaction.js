@@ -99,6 +99,7 @@ class VRMInteractionController {
         // VMC开关（肥牛独有功能，保留）
         const vmcBtn = document.getElementById('btn-toggle-vmc');
         if (vmcBtn) {
+            vmcBtn.style.display = this.model.modelType === 'mmd' ? 'none' : '';
             const vmcSender = this.model.getVMCSender && this.model.getVMCSender();
             vmcBtn.classList.toggle('active', !!(vmcSender && vmcSender.enabled));
             this._updateRenderBtnState();
@@ -122,6 +123,7 @@ class VRMInteractionController {
 
         const renderBtn = document.getElementById('btn-toggle-render');
         if (renderBtn) {
+            renderBtn.style.display = this.model.modelType === 'mmd' ? 'none' : '';
             this._on(renderBtn, 'click', (e) => {
                 e.stopPropagation();
                 const vmcSender = this.model.getVMCSender && this.model.getVMCSender();

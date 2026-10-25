@@ -5,7 +5,8 @@ const { HttpServer } = require('./js/services/http-server')
 const {
     scanLive2DModels,
     resolveLive2DModel,
-    scanVRMModels
+    scanVRMModels,
+    scanMMDModels
 } = require('./js/avatar/model-registry')
 const { saveModelPrefs } = require('./js/avatar/preferences-store')
 const {
@@ -27,7 +28,7 @@ let shortcutManager = null;
 let rendererRequestCounter = 0;
 const pendingRendererRequests = new Map();
 let avatarSwitchTransaction = null;
-const SUPPORTED_AVATAR_TYPES = new Set(['live2d', 'vrm']);
+const SUPPORTED_AVATAR_TYPES = new Set(['live2d', 'vrm', 'mmd']);
 const AVATAR_RESULT_PHASES = new Set([
     'ready',
     'busy',
@@ -162,14 +163,15 @@ function scheduleWindowReload(win, reason) {
 function resolveAvatarModelSelection(type, requestedName) {
     const scanners = {
         live2d: scanLive2DModels,
-        vrm: scanVRMModels
+        vrm: scanVRMModels,
+        mmd: scanMMDModels
     };
     const scan = scanners[type];
     const all = scan ? scan() : [];
     const requested = String(requestedName || '').trim();
     const entry = all.find(model => model.modelPath === requested)
         || all.find(model => model.name === requested)
-        || (type === 'vrm'
+        || (type !== 'live2d'
             ? all.find(model => path.basename(model.modelPath) === requested)
             : null);
 
@@ -177,7 +179,7 @@ function resolveAvatarModelSelection(type, requestedName) {
         entry: entry || null,
         all,
         configValue: entry
-            ? (type === 'vrm' ? entry.modelPath : entry.name)
+            ? (type !== 'live2d' ? entry.modelPath : entry.name)
             : null
     };
 }
@@ -186,6 +188,7 @@ function avatarModelCount(type) {
     if (!SUPPORTED_AVATAR_TYPES.has(type)) return 0;
     if (type === 'live2d') return scanLive2DModels().length;
     if (type === 'vrm') return scanVRMModels().length;
+    if (type === 'mmd') return scanMMDModels().length;
     return 0;
 }
 
@@ -200,7 +203,7 @@ function normalizeConfiguredAvatarType(configData) {
     const requested = normalizeAvatarType(configData.ui.model_type) || 'live2d';
     const usable = SUPPORTED_AVATAR_TYPES.has(requested) && hasAvatarModel(requested)
         ? requested
-        : ['live2d', 'vrm'].find(hasAvatarModel);
+        : ['live2d', 'vrm', 'mmd'].find(hasAvatarModel);
     if (!usable || usable === requested) return usable;
 
     configData.ui.model_type = usable;
@@ -1047,10 +1050,10 @@ ipcMain.handle('avatar:set-model', async (event, payload) => {
             };
         }
 
-        const configPatch = type === 'vrm'
+        const configPatch = type !== 'live2d'
             ? {
-                vrm_model: selection.entry.name,
-                vrm_model_path: selection.entry.modelPath
+                [`${type}_model`]: selection.entry.name,
+                [`${type}_model_path`]: selection.entry.modelPath
             }
             : { live2d_model: selection.entry.name };
         const configData = loadConfigData();
@@ -1075,7 +1078,7 @@ ipcMain.handle('avatar:set-model', async (event, payload) => {
                     'avatar-reload-model',
                     {
                         type,
-                        configKey: 'vrm_model_path',
+                        configKey: `${type}_model_path`,
                         configValue: selection.entry.modelPath
                     },
                     'avatar-reload-model'
@@ -1114,13 +1117,14 @@ ipcMain.handle('avatar:set-model', async (event, payload) => {
     }
 });
 
-// 形态模型列表：本 PR 只暴露已经接入的 Live2D 和 VRM。
+// 形态模型列表：Live2D、VRM 和 PMX。
 ipcMain.handle('avatar:get-models', async (event, type) => {
     try {
         const normalized = String(type || 'live2d').trim().toLowerCase();
         const scanners = {
             live2d: scanLive2DModels,
-            vrm: scanVRMModels
+            vrm: scanVRMModels,
+            mmd: scanMMDModels
         };
         const scan = scanners[normalized];
         if (!scan) {
