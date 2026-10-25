@@ -2830,7 +2830,7 @@ async function resetModelPosition() {
 
 // ============ 皮套形态管理（avatar v2） ============
 
-const AVATAR_TYPE_LABELS = { live2d: 'Live2D', vrm: 'VRM' };
+const AVATAR_TYPE_LABELS = { live2d: 'Live2D', vrm: 'VRM', mmd: 'PMX' };
 let avatarStatusCache = null;
 
 // 读取当前形态/各形态已选模型/桌宠在线状态，并刷新 UI

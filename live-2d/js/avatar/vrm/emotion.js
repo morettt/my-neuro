@@ -5,7 +5,7 @@
 
 function getCharacterName(modelPath) {
     const normalized = String(modelPath || '').replace(/\\/g, '/');
-    const folder = normalized.match(/(?:^|\/)3D\/VRM\/([^/]+)\/.+\.vrm$/i);
+    const folder = normalized.match(/(?:^|\/)3D\/(?:VRM|PMX)\/([^/]+)\/.+\.(?:vrm|pmx)$/i);
     if (folder) return folder[1];
     const match = normalized.match(/3D\/(?:.*\/)?([^\/]+?)\.vrm$/i);
     if (match) return match[1];

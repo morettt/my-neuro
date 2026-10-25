@@ -2,7 +2,7 @@
 // 目录约定：
 //   Live2D:   2D/<模型名>/**/*.model3.json
 //   VRM:      3D/VRM/<模型名>/**/*.vrm
-//   MMD:      3D/mmd/<模型名>/**/*.pmx（Phase 8 启用）
+//   PMX:      3D/PMX/<模型名>/**/*.pmx（内部形态名 mmd）
 //   PNGTuber: PNG/<模型名>/pngtuber.json（Phase 9 启用）
 const fs = require('fs');
 const path = require('path');
@@ -93,21 +93,22 @@ function scanVRMModels() {
 }
 
 /**
- * 扫描 MMD 模型：3D/mmd/<模型名>/**\/*.pmx
+ * 扫描 PMX 模型：3D/PMX/<模型名>/**\/*.pmx
  * @returns {Array<{ name, dir, modelPath }>}
  */
 function scanMMDModels() {
-    const dir = path.join(APP_ROOT, '3D', 'mmd');
+    const dir = path.join(APP_ROOT, '3D', 'PMX');
     const files = [];
     walkFiles(dir, (n) => n.toLowerCase().endsWith('.pmx'), files, '');
-    return files.map(toPosix).map(rel => {
-        const name = rel.includes('/') ? rel.split('/')[0] : rel.replace(/\.pmx$/i, '');
-        return {
-            name,
-            dir: `3D/mmd/${name}`,
-            modelPath: `3D/mmd/${rel}`
-        };
-    });
+    const byName = new Map();
+    for (const rel of files.map(toPosix).sort()) {
+        if (!rel.includes('/')) continue;
+        const name = rel.split('/')[0];
+        if (!byName.has(name)) byName.set(name, {
+            name, dir: `3D/PMX/${name}`, modelPath: `3D/PMX/${rel}`
+        });
+    }
+    return [...byName.values()];
 }
 
 /**

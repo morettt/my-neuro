@@ -1509,9 +1509,10 @@ for (const [id, kind] of [['reset-expressions', 'expressions'], ['reset-actions'
     if (currentModel) {
       $('live2d-model').value = currentModel;
       $('model-menu-text').textContent = `当前桌宠：${currentModel}`;
-      if (currentModel.startsWith('[VRM] ')) {
-        set(config, 'ui.model_type', 'vrm');
-        set(config, 'ui.vrm_model', currentModel.slice(6));
+      if (currentModel.startsWith('[VRM] ') || currentModel.startsWith('[PMX] ')) {
+        const type = currentModel.startsWith('[PMX] ') ? 'mmd' : 'vrm';
+        set(config, 'ui.model_type', type);
+        set(config, `ui.${type}_model`, currentModel.slice(6));
       } else {
         set(config, 'ui.model_type', 'live2d');
         set(config, 'ui.live2d_model', currentModel);
@@ -1529,9 +1530,10 @@ for (const [id, kind] of [['reset-expressions', 'expressions'], ['reset-actions'
           option.classList.toggle('selected', selected);
           option.setAttribute('aria-selected', String(selected));
         });
-        if (button.dataset.model.startsWith('[VRM] ')) {
-          set(config, 'ui.model_type', 'vrm');
-          set(config, 'ui.vrm_model', button.dataset.model.slice(6));
+        if (button.dataset.model.startsWith('[VRM] ') || button.dataset.model.startsWith('[PMX] ')) {
+          const type = button.dataset.model.startsWith('[PMX] ') ? 'mmd' : 'vrm';
+          set(config, 'ui.model_type', type);
+          set(config, `ui.${type}_model`, button.dataset.model.slice(6));
         } else {
           set(config, 'ui.model_type', 'live2d');
           set(config, 'ui.live2d_model', button.dataset.model);

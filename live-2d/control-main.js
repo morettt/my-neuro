@@ -17,7 +17,7 @@ const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const http = require('http');
 const nodeNet = require('node:net');
-const { scanLive2DModels, resolveLive2DModel, scanVRMModels } = require('./js/avatar/model-registry');
+const { scanLive2DModels, resolveLive2DModel, scanVRMModels, scanMMDModels } = require('./js/avatar/model-registry');
 const { EMOTIONS: motionEmotions, mergeExpressionConfig, mergeActionConfig, isLive2DModelDir } = require('./js/avatar/model-defaults');
 const { loadProvidersFromStore, saveProviders } = require('./js/core/llm-provider-store');
 
@@ -1128,25 +1128,28 @@ ipcMain.handle('control:save-config', (_event, config) => {
 
 ipcMain.handle('control:list-live2d-models', () => [
   ...scanLive2DModels().map(model => model.name),
-  ...scanVRMModels().map(model => `[VRM] ${model.name}`)
+  ...scanVRMModels().map(model => `[VRM] ${model.name}`),
+  ...scanMMDModels().map(model => `[PMX] ${model.name}`)
 ]);
 ipcMain.handle('control:current-live2d-model', () => {
   const currentConfig = readJson(configPath, {});
-  if (currentConfig.ui?.model_type === 'vrm') {
-    const configured = currentConfig.ui?.vrm_model;
-    const model = scanVRMModels().find(item => item.name === configured) || scanVRMModels()[0];
-    return model ? `[VRM] ${model.name}` : '';
+  const type = currentConfig.ui?.model_type;
+  if (type === 'vrm' || type === 'mmd') {
+    const models = type === 'mmd' ? scanMMDModels() : scanVRMModels();
+    const model = models.find(item => item.modelPath === currentConfig.ui?.[`${type}_model_path`])
+      || models.find(item => item.name === currentConfig.ui?.[`${type}_model`]) || models[0];
+    return model ? `[${type === 'mmd' ? 'PMX' : 'VRM'}] ${model.name}` : '';
   }
   return resolveLive2DModel(currentConfig.ui?.live2d_model).entry?.name || '';
 });
 ipcMain.handle('control:select-live2d-model', async (_event, name) => {
-  const isVrm = name.startsWith('[VRM] ');
-  const modelName = isVrm ? name.slice(6) : name;
-  const targetType = isVrm ? 'vrm' : 'live2d';
-  const vrmEntry = isVrm ? scanVRMModels().find(model => model.name === modelName) : null;
-  if (isVrm ? !vrmEntry : !scanLive2DModels().some(model => model.name === modelName)) throw new Error('模型不存在');
+  const targetType = name.startsWith('[PMX] ') ? 'mmd' : name.startsWith('[VRM] ') ? 'vrm' : 'live2d';
+  const modelName = targetType === 'live2d' ? name : name.slice(6);
+  const models = targetType === 'mmd' ? scanMMDModels() : targetType === 'vrm' ? scanVRMModels() : scanLive2DModels();
+  const entry = models.find(model => model.name === modelName);
+  if (!entry) throw new Error('模型不存在');
   const currentConfig = readJson(configPath, {});
-  const activeType = currentConfig.ui?.model_type === 'vrm' ? 'vrm' : 'live2d';
+  const activeType = currentConfig.ui?.model_type || 'live2d';
   const modelResult = await postDesktop('/set-avatar-model', { type: targetType, model_name: modelName }, 20000);
   let switchResult = modelResult;
   if (modelResult.success && activeType !== targetType) {
@@ -1154,9 +1157,9 @@ ipcMain.handle('control:select-live2d-model', async (_event, name) => {
   }
   currentConfig.ui ||= {};
   currentConfig.ui.model_type = targetType;
-  if (isVrm) {
-    currentConfig.ui.vrm_model = vrmEntry.name;
-    currentConfig.ui.vrm_model_path = vrmEntry.modelPath;
+  if (targetType !== 'live2d') {
+    currentConfig.ui[`${targetType}_model`] = entry.name;
+    currentConfig.ui[`${targetType}_model_path`] = entry.modelPath;
   } else {
     currentConfig.ui.live2d_model = modelName;
     currentConfig.ui.vrm_model = '';

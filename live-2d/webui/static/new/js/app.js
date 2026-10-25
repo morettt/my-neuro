@@ -3378,7 +3378,7 @@ async function refreshModelList() {
 
 // ============ 四形态皮套管理 ============
 
-const AVATAR_TYPE_LABELS = { live2d: 'Live2D', vrm: 'VRM', mmd: 'MMD', pngtuber: 'PNGTuber' };
+const AVATAR_TYPE_LABELS = { live2d: 'Live2D', vrm: 'VRM', mmd: 'PMX', pngtuber: 'PNGTuber' };
 let avatarStatusCache = null;
 
 // 读取当前形态/各形态已选模型/桌宠在线状态，并刷新 UI

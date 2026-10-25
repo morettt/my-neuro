@@ -9,9 +9,9 @@
 模型列表由本模块直接扫描文件系统（与 js/avatar/model-registry.js 同一目录约定），
 不依赖桌宠在线。
 
-注意：当前线上运行时仅接入 Live2D 与 VRM 两种形态
-（main.js 的 SUPPORTED_AVATAR_TYPES 仅含这两项），
-MMD / PNGTuber 尚未移植，故此处不开放，避免用户切换到无 driver 的形态。
+注意：当前线上运行时接入 Live2D、VRM 与 PMX 三种形态
+（与 main.js 的 SUPPORTED_AVATAR_TYPES 对齐），
+PMX 使用内部形态名 mmd；PNGTuber 尚未移植，故此处不开放。
 """
 
 import json
@@ -22,11 +22,12 @@ from .utils import PROJECT_ROOT, logger
 
 avatar_bp = Blueprint('avatar', __name__)
 
-# 线上运行时仅支持这两种形态（与 main.js SUPPORTED_AVATAR_TYPES 对齐）
-AVATAR_TYPES = ['live2d', 'vrm']
+# 与 main.js SUPPORTED_AVATAR_TYPES 对齐
+AVATAR_TYPES = ['live2d', 'vrm', 'mmd']
 TYPE_CONFIG_KEYS = {
     'live2d': 'live2d_model',      # 模型目录名
     'vrm': 'vrm_model_path',       # 相对路径（3D/VRM/<模型名>/xx.vrm）
+    'mmd': 'mmd_model_path',       # 相对路径（3D/PMX/<模型名>/xx.pmx）
 }
 PET_BASE = 'http://localhost:3002'
 
@@ -88,9 +89,28 @@ def _scan_vrm():
     return results
 
 
+def _scan_pmx():
+    """3D/PMX/<模型名>/**/*.pmx，按模型文件夹去重。"""
+    root = PROJECT_ROOT / '3D' / 'PMX'
+    results = []
+    if not root.exists():
+        return results
+    for model_dir in sorted(root.iterdir()):
+        if not model_dir.is_dir():
+            continue
+        files = sorted(
+            (p for p in model_dir.rglob('*') if p.is_file() and p.suffix.lower() == '.pmx'),
+            key=lambda p: p.relative_to(model_dir).as_posix(),
+        )
+        if files:
+            results.append({'name': model_dir.name, 'value': files[0].relative_to(PROJECT_ROOT).as_posix()})
+    return results
+
+
 _SCANNERS = {
     'live2d': _scan_live2d,
     'vrm': _scan_vrm,
+    'mmd': _scan_pmx,
 }
 
 

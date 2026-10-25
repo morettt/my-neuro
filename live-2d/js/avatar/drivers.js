@@ -57,16 +57,17 @@ function createLive2DDriver() {
     };
 }
 
-// ============ VRM driver（v2 组合式栈：manager/adapter/interaction/emotion） ============
-function createVRMDriver() {
+// ============ 3D driver（VRM/PMX 共用交互与语音链路） ============
+function createVRMDriver(type = 'vrm') {
     let state = null; // { app, model, emotionMapper, expressionMapper, musicPlayer, vrmController, manager }
 
     return {
-        engine: 'three',
+        engine: type === 'mmd' ? 'three-mmd' : 'three',
         async init(context) {
-            const { VRMSetup } = require('./vrm/setup.js');
-            logToTerminal('info', '[VRMDriver] 正在加载 VRM 3D 模型...');
-            const result = await VRMSetup.initialize(
+            const Setup = type === 'mmd'
+                ? require('./pmx/setup.js').PMXSetup : require('./vrm/setup.js').VRMSetup;
+            logToTerminal('info', `[AvatarDriver] 正在加载 ${type === 'mmd' ? 'PMX' : 'VRM'} 3D 模型...`);
+            const result = await Setup.initialize(
                 context.modelController,
                 context.config,
                 context.ttsEnabled,
@@ -83,13 +84,14 @@ function createVRMDriver() {
 
         async dispose() {
             if (!state) return;
-            const { VRMSetup } = require('./vrm/setup.js');
-            await VRMSetup.suspend();
+            const Setup = type === 'mmd'
+                ? require('./pmx/setup.js').PMXSetup : require('./vrm/setup.js').VRMSetup;
+            await Setup.suspend();
             global.pixiApp = null;
             global.currentModel = null;
             global.currentVRMAdapter = null;
             state = null;
-            logToTerminal('info', '[VRMDriver] 已挂起（上下文保留）');
+            logToTerminal('info', `[AvatarDriver] ${type} 已挂起（上下文保留）`);
         },
 
         getModel() { return state?.model || null; },
@@ -110,6 +112,7 @@ function createVRMDriver() {
 function registerBuiltinDrivers() {
     avatarFacade.register('live2d', createLive2DDriver());
     avatarFacade.register('vrm', createVRMDriver());
+    avatarFacade.register('mmd', createVRMDriver('mmd'));
 }
 
 module.exports = { registerBuiltinDrivers };
