@@ -37,19 +37,19 @@ function resolveExpressionMap(modelPath) {
     return DEFAULT_EXPRESSION_MAP;
 }
 
-// 解析要加载的 VRM 路径：config.ui.vrm_model_path 有效 > 注册表第一个
+// 解析要加载的 VRM 路径：已选路径 > 模型目录名 > 注册表第一个
 function resolveVRMPath(config) {
-    let modelPath = config?.ui?.vrm_model_path || '';
-    if (modelPath && fs.existsSync(path.resolve(APP_ROOT, modelPath))) {
-        return modelPath;
-    }
+    const modelPath = config?.ui?.vrm_model_path || '';
     const { scanVRMModels } = require('../model-registry.js');
     const all = scanVRMModels();
+    const selected = all.find(model => model.modelPath === modelPath)
+        || all.find(model => model.name === config?.ui?.vrm_model);
+    if (selected) return selected.modelPath;
     if (all.length > 0) {
         if (modelPath) console.warn(`[VRMSetup] 配置的 VRM 路径 "${modelPath}" 无效，回退到: ${all[0].modelPath}`);
         return all[0].modelPath;
     }
-    throw new Error('3D 目录下没有找到任何 .vrm 模型');
+    throw new Error('3D/VRM 目录下没有找到模型，请按 3D/VRM/模型名/模型文件.vrm 放置');
 }
 
 class VRMSetup {
