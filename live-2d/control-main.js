@@ -985,8 +985,23 @@ ipcMain.handle('control:install-plugin-dlc', async (_event, name, url) => {
 ipcMain.handle('control:launch-plugin-bat', (_event, name, bat) => {
   if (!/^[\w.-]+$/.test(name) || typeof bat !== 'string') return { ok: false, message: '启动信息无效' };
   const root = path.resolve(__dirname, 'plugins-dlc', name);
-  const file = path.resolve(root, bat);
-  if (!file.startsWith(`${root}${path.sep}`) || !fs.existsSync(file)) return { ok: false, message: '找不到插件启动文件' };
+  const direct = path.resolve(root, bat);
+  let file = direct;
+  if (!file.startsWith(`${root}${path.sep}`) || !fs.existsSync(file)) {
+    file = null;
+    if (fs.existsSync(root)) {
+      const pending = [root];
+      while (pending.length && !file) {
+        const current = pending.shift();
+        for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+          const candidate = path.join(current, entry.name);
+          if (entry.isDirectory()) pending.push(candidate);
+          else if (entry.name === bat) { file = candidate; break; }
+        }
+      }
+    }
+  }
+  if (!file || !fs.existsSync(file)) return { ok: false, message: '找不到插件启动文件' };
   spawn('cmd.exe', ['/d', '/c', 'start', '', file], { cwd: path.dirname(file), windowsHide: true, detached: true }).unref();
   return { ok: true, message: '插件已启动' };
 });
