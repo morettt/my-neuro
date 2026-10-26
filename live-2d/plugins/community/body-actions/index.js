@@ -19,6 +19,7 @@ class BodyActionsPlugin extends Plugin {
 
     async onStart() {
         this.runtime?.refresh();
+        this.context.log('info', '身体动作插件已启用：回复请求将追加身体动作提示词');
         // Warm the backend without delaying avatar/app initialization.
         this.warming = this.service.ensureReady().catch(error => {
             if (!this.stopped) this.context.log('warn', `动作服务: ${error.message}`);
@@ -26,15 +27,15 @@ class BodyActionsPlugin extends Plugin {
     }
 
     adapter() {
-        const model = global.avatarFacade?.getModel?.();
-        if (global.avatarFacade?.getActiveType?.() !== 'vrm' || model?.modelType !== 'vrm' || model._disposed) return null;
-        return model;
+        const facade = global.avatarFacade || global.window?.avatar;
+        const model = facade?.getModel?.() || global.currentModel;
+        return ['vrm', 'mmd'].includes(model?.modelType) && !model._disposed ? model : null;
     }
 
     async onUserInput() { this.cancel(); }
 
     async onLLMRequest(request) {
-        this.bodyRequest = Boolean(this.adapter()) && !this.stopped;
+        this.bodyRequest = !this.stopped;
         this.runtime?.beginRequest(this.bodyRequest);
         if (!this.bodyRequest) return;
         const prompt = BODY_PROMPT + `\n每次回复最多 ${this.maxActions()} 个动作标签。`
@@ -54,7 +55,11 @@ class BodyActionsPlugin extends Plugin {
         if (parsed.rejected.length) this.context.log('warn', `已忽略 ${parsed.rejected.length} 个组合、无效或超量的身体动作`);
         this.cancel();
         this.runtime?.setReply(response.text);
-        if (this.stopped || !parsed.actions.length || !this.adapter()) return;
+        if (this.stopped || !parsed.actions.length) return;
+        if (!this.adapter()) {
+            this.context.log('warn', '已收到身体动作标签，但当前没有可播放的 VRM 或 PMX 模型；请等待 3D 模型加载完成');
+            return;
+        }
         const epoch = this.epoch;
         this.abort = new AbortController();
         this.work = this.run(parsed.actions, epoch, this.abort.signal).catch(error => {
@@ -84,11 +89,11 @@ class BodyActionsPlugin extends Plugin {
     }
 
     async onTTSText(text) {
-        return this.adapter() ? stripMotionTags(parseActions(text, this.maxActions()).text).trim() : text;
+        return !this.stopped ? stripMotionTags(parseActions(text, this.maxActions()).text).trim() : text;
     }
 
     onDisplayText(text) {
-        if (!this.adapter() || this.stopped) return text;
+        if (this.stopped) return text;
         const userLabel = this.context.getConfig?.()?.subtitle_labels?.user || 'User';
         // User ASR/input subtitles are ordinary text, not the assistant protocol.
         if (String(text).startsWith(`${userLabel}:`)) return text;

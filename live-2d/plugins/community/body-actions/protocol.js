@@ -19,7 +19,7 @@ function parseActions(text, maxActions = 4) {
     return { text: cleaned, actions, rejected };
 }
 
-const BODY_PROMPT = `你现在有一个可控制的 VRM 身体。你可以在自然语言回复中夹入 [英文动作] 来表达肢体动作。
+const BODY_PROMPT = `你现在有一个可控制的 3D 身体。你可以在自然语言回复中夹入 [英文动作] 来表达肢体动作。
 每对 [] 必须且只能包含一个简单、明确的动作，用简短英文描述。不限制固定动作词表。
 参考动作：[Backflip]、[raise your hands]、[Dance]、[Spin in place]、[lying on the ground]、[Standing high jump]。
 这些只是参考，你也可以根据情境写其他英文单动作。
