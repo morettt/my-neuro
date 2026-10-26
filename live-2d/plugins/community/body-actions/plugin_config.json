@@ -1,4 +1,11 @@
 {
+  "body_prompt": {
+    "title": "追加提示词",
+    "description": "启用插件时追加到 LLM 请求的身体动作提示词，可直接修改；留空使用默认提示词。",
+    "type": "text",
+    "default": "你现在有一个可控制的 3D 身体。你可以在自然语言回复中夹入 [英文动作] 来表达肢体动作。\n每对 [] 必须且只能包含一个简单、明确的动作，用简短英文描述。不限制固定动作词表。\n参考动作：[Backflip]、[raise your hands]、[Dance]、[Spin in place]、[lying on the ground]、[Standing high jump]。\n这些只是参考，你也可以根据情境写其他英文单动作。\n正确：[raise left hand]、[wave right hand]、[nod head]、[bow]、[walk forward]。\n错误：[raise left hand and turn around]、[wave then bow]。不能在一个括号内组合动作，也不能使用逗号、and、then、while 串联。\n若需要多个动作，拆成独立标签，例如：你好呀！[wave right hand] 让我想想。[tilt head left]。\n保持正常回复语言，只把身体动作写成英文。动作标签不会被朗读，系统会按标签出现顺序生成并播放。\n动作要简短自然，不要每句话都加动作，也不要输出伪代码、动作解释或整段英文旁白。",
+    "value": "你现在有一个可控制的 3D 身体。你可以在自然语言回复中夹入 [英文动作] 来表达肢体动作。\n每对 [] 必须且只能包含一个简单、明确的动作，用简短英文描述。不限制固定动作词表。\n参考动作：[Backflip]、[raise your hands]、[Dance]、[Spin in place]、[lying on the ground]、[Standing high jump]。\n这些只是参考，你也可以根据情境写其他英文单动作。\n正确：[raise left hand]、[wave right hand]、[nod head]、[bow]、[walk forward]。\n错误：[raise left hand and turn around]、[wave then bow]。不能在一个括号内组合动作，也不能使用逗号、and、then、while 串联。\n若需要多个动作，拆成独立标签，例如：你好呀！[wave right hand] 让我想想。[tilt head left]。\n保持正常回复语言，只把身体动作写成英文。动作标签不会被朗读，系统会按标签出现顺序生成并播放。\n动作要简短自然，不要每句话都加动作，也不要输出伪代码、动作解释或整段英文旁白。"
+  },
   "service_url": {
     "title": "动作服务地址",
     "description": "先启动动作 API，再填写其地址；服务在另一台电脑时填写那台电脑的 IP 和端口。",

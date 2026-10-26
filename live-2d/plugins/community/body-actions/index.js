@@ -38,8 +38,11 @@ class BodyActionsPlugin extends Plugin {
         this.bodyRequest = !this.stopped;
         this.runtime?.beginRequest(this.bodyRequest);
         if (!this.bodyRequest) return;
-        const prompt = BODY_PROMPT + `\n每次回复最多 ${this.maxActions()} 个动作标签。`
-            + (this.config.extra_prompt ? `\n${this.config.extra_prompt}` : '');
+        const config = this.context.getPluginConfig?.() || this.config;
+        const bodyPrompt = typeof config.body_prompt === 'string' && config.body_prompt.trim()
+            ? config.body_prompt.trim() : BODY_PROMPT;
+        const prompt = bodyPrompt + `\n每次回复最多 ${this.maxActions()} 个动作标签。`
+            + (config.extra_prompt ? `\n${config.extra_prompt}` : '');
         // Request-local injection avoids modifying the user's saved persona prompt.
         request.messages.push({ role: 'system', content: prompt });
     }
