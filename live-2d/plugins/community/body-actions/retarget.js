@@ -2,7 +2,7 @@
 // Coordinates are rotated to the desktop viewport orientation.
 const THREE = require('three');
 const { attachBodyPlayer } = require('./runtime-hooks');
-const { createPMXMotionRig } = require('./pmx-rig');
+const { PMXMotionRetargeter } = require('./pmx-rig');
 const V = () => new THREE.Vector3();
 const Q = () => new THREE.Quaternion();
 const world = node => node.getWorldPosition(V());
@@ -146,7 +146,7 @@ function sampleFrame(frames, index) {
 class BodyMotionPlayer {
     constructor(adapter, blendSeconds = 0.3) {
         this.adapter = adapter;
-        this.retarget = new MotionRetargeter(adapter.modelType === 'mmd' ? createPMXMotionRig(adapter) : adapter.vrm);
+        this.retarget = adapter.modelType === 'mmd' ? new PMXMotionRetargeter(adapter, MotionRetargeter) : new MotionRetargeter(adapter.vrm);
         this.blend = THREE.MathUtils.clamp(Number(blendSeconds) || 0.3, 0.05, 1);
     }
 
