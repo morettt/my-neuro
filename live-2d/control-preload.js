@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('controlApi', {
   readPluginReadme: (type, name) => ipcRenderer.invoke('control:read-plugin-readme', type, name),
   installPlugin: (id, repo) => ipcRenderer.invoke('control:install-plugin', id, repo),
   installPluginDlc: (name, url) => ipcRenderer.invoke('control:install-plugin-dlc', name, url),
+  onDlcProgress: callback => ipcRenderer.on('control:dlc-progress', (_event, text) => callback(text)),
   launchPluginBat: (name, bat) => ipcRenderer.invoke('control:launch-plugin-bat', name, bat),
   onPluginsChanged: callback => ipcRenderer.on('control:plugins-changed', () => callback()),
   loadConfig: () => ipcRenderer.invoke('control:load-config'),
