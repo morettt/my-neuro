@@ -1051,7 +1051,7 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '
 function pluginCard(plugin) {
   const dlcInstalled = !plugin.downloadDlc || plugin.dlcInstalled;
   const featured = plugin.name === 'body-actions' || plugin.relPath === 'community/body-actions';
-  return `<article class="plugin-card card${featured ? ' featured-plugin' : ''}" style="${featured ? 'border:2px solid #f0b429;box-shadow:0 0 12px rgba(240,180,41,.35)' : ''}" data-plugin-card="${escapeHtml(plugin.relPath)}">
+  return `<article class="plugin-card card" data-plugin-card="${escapeHtml(plugin.relPath)}">
     <div class="plugin-summary"><strong>${escapeHtml(plugin.displayName)}</strong><p>${escapeHtml(plugin.description || '暂无说明')}</p><small>${escapeHtml(plugin.author || '')}</small></div>
     <div class="plugin-actions">
       ${plugin.downloadDlc && !dlcInstalled ? `<button type="button" class="primary" data-plugin-dlc="${escapeHtml(plugin.relPath)}">安装 DLC</button>` : ''}
