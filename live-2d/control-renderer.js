@@ -1104,7 +1104,9 @@ function bindPluginCards() {
     const plugin = [...pluginData.builtIn, ...pluginData.community].find(item => item.relPath === button.dataset.pluginDlc);
     if (!plugin) return;
     button.disabled = true; button.textContent = '安装中…';
+    window.controlApi.onDlcProgress(text => { const match = text.match(/([0-9]+)%/); button.textContent = text === 'extracting' ? '正在解压…' : (match ? (match[1] === '100' ? '正在解压…' : `下载中 ${match[1]}%`) : button.textContent); });
     const result = await window.controlApi.installPluginDlc(plugin.name, plugin.downloadDlc);
+    button.textContent = result.ok ? '已安装' : '安装失败';
     showToast(result.message);
     await loadPlugins();
   }));

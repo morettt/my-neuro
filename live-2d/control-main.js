@@ -481,32 +481,78 @@ function runProcess(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { windowsHide: true, ...options });
     let output = '';
-    child.stdout?.on('data', chunk => { output += chunk.toString(); });
-    child.stderr?.on('data', chunk => { output += chunk.toString(); });
+    const forward = chunk => { const text = chunk.toString(); output += text; options.onOutput?.(text); };
+    child.stdout?.on('data', forward);
+    child.stderr?.on('data', forward);
     child.once('error', reject);
     child.once('exit', code => code === 0 ? resolve(output) : reject(new Error(output.trim() || `${command} 退出码 ${code}`)));
   });
 }
 
-async function downloadFile(url, file) {
-  const response = await net.fetch(url, { signal: AbortSignal.timeout(180000) });
+async function downloadFileOnce(url, file, onProgress) {
+  let received = fs.existsSync(file) ? fs.statSync(file).size : 0;
+  const headers = received ? { Range: `bytes=${received}-` } : {};
+  const response = await net.fetch(url, { headers, signal: AbortSignal.timeout(180000) });
   if (!response.ok) throw new Error(`下载失败（HTTP ${response.status}）`);
-  fs.writeFileSync(file, Buffer.from(await response.arrayBuffer()));
+  if (received && response.status !== 206) { received = 0; fs.rmSync(file, { force: true }); }
+  const total = received + (Number(response.headers.get('content-length')) || 0);
+  const output = fs.createWriteStream(file, { flags: received ? 'a' : 'w' });
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('Download stream unavailable');
+  try {
+    while (true) {
+      const { done, value } = await Promise.race([
+        reader.read(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('download stalled for 30 seconds')), 30000))
+      ]);
+      if (done) break;
+      received += value.byteLength;
+      if (!output.write(Buffer.from(value))) await new Promise(resolve => output.once('drain', resolve));
+      onProgress?.(received, total);
+    }
+  } finally { output.end(); }
 }
 
-async function expandZip(zipFile, destination) {
+async function downloadFile(url, file, onProgress) {
+  let lastError;
+  for (let attempt = 1; attempt <= 8; attempt++) {
+    try {
+      await downloadFileOnce(url, file, onProgress);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 8) await new Promise(resolve => setTimeout(resolve, Math.min(attempt * 2000, 10000)));
+    }
+  }
+  throw lastError;
+}
+
+async function expandZip(zipFile, destination, onProgress) {
   fs.mkdirSync(destination, { recursive: true });
-  await runProcess('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+  await runProcess('7z.exe', ['x', zipFile, `-o${destination}`, '-y', '-bsp1'], {
+    onOutput: text => { const match = text.match(/(\d+)%/); if (match) onProgress?.(match[1]); }
+  });
+  /* await runProcess('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
     '$ErrorActionPreference = "Stop"; [Console]::OutputEncoding = [Text.UTF8Encoding]::new(); Expand-Archive -LiteralPath $env:MY_NEURO_PLUGIN_ZIP -DestinationPath $env:MY_NEURO_PLUGIN_DESTINATION -Force'], {
     env: {
       ...process.env,
       MY_NEURO_PLUGIN_ZIP: zipFile,
       MY_NEURO_PLUGIN_DESTINATION: destination
     }
-  });
+  }); */
 }
 
-async function installModelScopeDlc(repoUrl, destination) {
+function flattenSingleDirectory(destination) {
+  const entries = fs.readdirSync(destination, { withFileTypes: true });
+  if (entries.length !== 1 || !entries[0].isDirectory()) return;
+  const nested = path.join(destination, entries[0].name);
+  for (const entry of fs.readdirSync(nested)) {
+    fs.renameSync(path.join(nested, entry), path.join(destination, entry));
+  }
+  fs.rmSync(nested, { recursive: true, force: true });
+}
+
+async function installModelScopeDlc(repoUrl, destination, onProgress) {
   const match = repoUrl.match(/^https:\/\/www\.modelscope\.cn\/(models|datasets)\/([\w.-]+)\/([\w.-]+)\/?$/i);
   if (!match) throw new Error('魔搭仓库地址无效');
   const repoId = `${match[2]}/${match[3]}`;
@@ -516,9 +562,12 @@ async function installModelScopeDlc(repoUrl, destination) {
   for (const command of ['modelscope', 'python.exe']) {
     try {
       const args = command === 'modelscope'
-        ? ['download', kind, repoId, '--local_dir', destination]
-        : ['-m', 'modelscope', 'download', kind, repoId, '--local_dir', destination];
-      await runProcess(command, args, { cwd: destination });
+        ? ['download', kind, repoId, '--revision', 'master', '--local_dir', destination]
+        : ['-m', 'modelscope', 'download', kind, repoId, '--revision', 'master', '--local_dir', destination];
+      await runProcess(command, args, { cwd: destination, onOutput: text => onProgress?.(text) });
+      const required = ['web.py', 'weights/gpt.pth', 'weights/vq.pth', 'runtime/env/python.exe', '启动动作服务.bat'];
+      const hasRequired = required.every(file => fs.existsSync(path.join(destination, file)));
+      if (!hasRequired) throw new Error('魔搭下载不完整：缺少 BONES120 运行文件或权重');
       return;
     } catch (error) { lastError = error; }
   }
@@ -965,7 +1014,7 @@ ipcMain.handle('control:install-plugin', async (_event, id, repo) => {
   try { return await installPluginArchive(id, repo); }
   catch (error) { return { ok: false, message: `安装失败：${error.message}` }; }
 });
-ipcMain.handle('control:install-plugin-dlc', async (_event, name, url) => {
+ipcMain.handle('control:install-plugin-dlc', async (event, name, url) => {
   if (!/^[\w.-]+$/.test(name) || !/^https:\/\//i.test(url)) return { ok: false, message: 'DLC 信息无效' };
   const target = path.join(__dirname, 'plugins-dlc', name);
   const isModelScope = /^https:\/\/www\.modelscope\.cn\/(models|datasets)\/[\w.-]+\/[\w.-]+(?:\.git)?\/?$/i.test(url);
@@ -973,13 +1022,24 @@ ipcMain.handle('control:install-plugin-dlc', async (_event, name, url) => {
   const zipFile = path.join(temp, 'dlc.zip');
   try {
     if (isModelScope) {
-      await installModelScopeDlc(url, target);
+      const zipUrl = `${url.replace(/\/$/, '')}/resolve/master/T2M.zip`;
+      await downloadFile(zipUrl, zipFile, (received, total) => {
+        event.sender.send('control:dlc-progress', total ? `${Math.floor(received * 100 / total)}%` : '下载中');
+      });
+      event.sender.send('control:dlc-progress', 'extracting');
+      await expandZip(zipFile, target, percent => event.sender.send('control:dlc-progress', `${percent}%`));
+      flattenSingleDirectory(target);
     } else {
       await downloadFile(url, zipFile);
-      await expandZip(zipFile, target);
+      await expandZip(zipFile, target, percent => event.sender.send('control:dlc-progress', `${percent}%`));
+      flattenSingleDirectory(target);
     }
+    if (!fs.existsSync(path.join(target, '启动动作服务.bat'))) throw new Error('DLC 文件结构无效：找不到启动动作服务.bat');
     return { ok: true, message: 'DLC 安装完成' };
-  } catch (error) { return { ok: false, message: `DLC 安装失败：${error.message}` }; }
+  } catch (error) {
+    fs.rmSync(target, { recursive: true, force: true });
+    return { ok: false, message: `DLC 安装失败：${error.message}` };
+  }
   finally { fs.rmSync(temp, { recursive: true, force: true }); }
 });
 ipcMain.handle('control:launch-plugin-bat', (_event, name, bat) => {
