@@ -1,0 +1,59 @@
+{
+  "service_url": {
+    "title": "动作服务 服务地址",
+    "type": "string",
+    "default": "http://127.0.0.1:17880",
+    "value": "http://127.0.0.1:17880"
+  },
+  "auto_start": {
+    "title": "自动启动本地 动作服务 服务",
+    "type": "bool",
+    "default": false,
+    "value": false
+  },
+  "backend_directory": {
+    "title": "动作服务 模型包目录",
+    "description": "包含 web.py 和 weights 文件夹的目录。",
+    "type": "string",
+    "default": "",
+    "value": ""
+  },
+  "python_executable": {
+    "title": "推理环境 Python",
+    "description": "已安装 torch 和 动作服务 依赖的 Python 可执行文件。",
+    "type": "string",
+    "default": "",
+    "value": ""
+  },
+  "device": {
+    "title": "推理设备",
+    "description": "cpu、cuda 或 auto。",
+    "type": "string",
+    "default": "cpu",
+    "value": "cpu"
+  },
+  "timeout_ms": {
+    "title": "生成与启动超时（毫秒）",
+    "type": "int",
+    "default": 120000,
+    "value": 120000
+  },
+  "max_actions": {
+    "title": "每条回复最多动作数",
+    "type": "int",
+    "default": 4,
+    "value": 4
+  },
+  "blend_seconds": {
+    "title": "动作衔接时间（秒）",
+    "type": "float",
+    "default": 0.3,
+    "value": 0.3
+  },
+  "extra_prompt": {
+    "title": "附加身体提示词",
+    "type": "string",
+    "default": "",
+    "value": ""
+  }
+}
