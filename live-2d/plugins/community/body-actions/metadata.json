@@ -7,5 +7,5 @@
   "main": "index.js",
   "lang": "js",
   "bat": "启动动作服务.bat",
-  "download_dlc": "https://www.modelscope.cn/models/morelle/T2M-DLC"
+  "download_dlc": "https://www.modelscope.cn/models/morelle/T2M-DLC2"
 }
