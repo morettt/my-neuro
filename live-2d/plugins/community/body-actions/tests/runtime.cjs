@@ -112,6 +112,31 @@ async function rendererTest(root, output, actionName, motionFile, modelType) {
         plugin.player.elapsed = plugin.player.blend + best / data.fps;
         model.update(0);
         assert(getBodyPlayer(model) === plugin.player);
+        if (modelType === 'mmd') {
+            const retarget = plugin.player.retarget;
+            let invertedSource = 0, invertedModel = 0;
+            for (let i = 0; i < data.joints.length; i++) {
+                retarget.apply(data.joints[i]);
+                if (data.joints[i][15][1] < data.joints[i][0][1]) {
+                    invertedSource++;
+                    if (retarget.bones.head.getWorldPosition(new THREE.Vector3()).y < retarget.bones.hips.getWorldPosition(new THREE.Vector3()).y) invertedModel++;
+                }
+                for (const side of ['左', '右']) for (const part of ['足', 'ひざ', '足首']) {
+                    const source = model.mesh.skeleton.bones.find(bone => bone.name === side + part);
+                    const deform = model.mesh.skeleton.bones.find(bone => bone.name === side + part + 'D');
+                    if (!source || !deform) continue;
+                    assert(source.getWorldQuaternion(new THREE.Quaternion()).angleTo(deform.getWorldQuaternion(new THREE.Quaternion())) < 1e-6,
+                        `Deform leg differs from motion leg: ${side + part}, frame ${i}`);
+                }
+                for (const [name, child] of [['leftUpperArm', 'leftLowerArm'], ['rightUpperArm', 'rightLowerArm'], ['leftLowerLeg', 'leftFoot'], ['rightLowerLeg', 'rightFoot']]) {
+                    const direction = (a, b) => b.getWorldPosition(new THREE.Vector3()).sub(a.getWorldPosition(new THREE.Vector3())).normalize();
+                    assert(direction(retarget.bones[name], retarget.bones[child]).dot(direction(retarget.core.bones[name], retarget.core.bones[child])) > 0.999,
+                        `PMX limb diverges from proxy: ${name}, frame ${i}`);
+                }
+            }
+            assert(invertedModel >= invertedSource * 0.8, 'PMX torso did not follow inverted motion');
+            model.update(0);
+        }
         const upper = model.vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
         if (!flip) assert(baseline.angleTo(upper.quaternion) > 0.1, 'Motion did not change the left arm');
         // Idle and gaze must not overwrite body motion; mouth remains independent.

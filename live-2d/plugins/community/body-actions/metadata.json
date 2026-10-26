@@ -1,7 +1,7 @@
 {
   "name": "body-actions",
   "displayName": "身体动作插件",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": "community",
   "description": "让 AI 在回复中用 [英文单动作] 控制 VRM 或 PMX 身体，保留语音口型和桌宠拖动。",
   "main": "index.js",
