@@ -40,7 +40,7 @@ class MotionService {
         try { return await this.health(); } catch (_) {}
         if (this.lifecycle.signal.aborted) throw new Error('插件已停止');
         const cfg = this.config;
-        if (!cfg.auto_start) throw new Error('动作服务未运行，请启动本地服务或开启自动启动');
+        if (!cfg.auto_start) throw new Error(`无法连接动作服务 ${this.url.origin}，请先启动动作 API，并检查插件中的动作服务地址`);
         if (!['localhost', '127.0.0.1', '[::1]'].includes(this.url.hostname)) throw new Error('仅支持自动启动本机服务');
         const directory = path.resolve(cfg.backend_directory || '.');
         const python = cfg.python_executable || '';

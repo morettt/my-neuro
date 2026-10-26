@@ -13,7 +13,6 @@ async function runPipeline(withPlugin, answer = '你好！[raise left hand] 我�
     const plugin = new BodyActionsPlugin({}, { log() {} });
     plugin.config = {}; plugin.epoch = 0;
     plugin.run = async () => {};
-    plugin.adapter = () => ({ modelType: 'vrm' });
     class Client {
         async chatCompletion(messages, _tools, _stream, onChunk) {
             requestedMessages = messages;

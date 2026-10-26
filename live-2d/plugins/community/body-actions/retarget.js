@@ -2,6 +2,7 @@
 // Coordinates are rotated to the desktop viewport orientation.
 const THREE = require('three');
 const { attachBodyPlayer } = require('./runtime-hooks');
+const { createPMXMotionRig } = require('./pmx-rig');
 const V = () => new THREE.Vector3();
 const Q = () => new THREE.Quaternion();
 const world = node => node.getWorldPosition(V());
@@ -56,7 +57,7 @@ class MotionRetargeter {
             }
             const r = this.rest;
             for (const name of ['hips', 'spine', 'chest', 'neck', 'head', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm', 'leftUpperLeg', 'rightUpperLeg', 'leftLowerLeg', 'rightLowerLeg', 'leftFoot', 'rightFoot']) {
-                if (!r[name]) throw new Error(`VRM 缺少必要骨骼: ${name}`);
+                if (!r[name]) throw new Error(`模型缺少必要骨骼: ${name}`);
             }
             this.restLeft = r.leftUpperLeg.world.clone().sub(r.rightUpperLeg.world);
             this.restShoulders = (r.leftShoulder || r.leftUpperArm).world.clone().sub((r.rightShoulder || r.rightUpperArm).world);
@@ -119,14 +120,20 @@ class MotionRetargeter {
             b[name].updateWorldMatrix(false, true);
         }
         const hips = b.hips;
-        hips.position.copy(hips.parent.worldToLocal(p[0].clone().multiplyScalar(this.scale).add(this.anchor)));
+        this.moveHips(p[0].clone().multiplyScalar(this.scale).add(this.anchor));
         this.vrm.scene.updateWorldMatrix(true, true);
         const avatarMin = Math.min(...this.feet.map(name => world(b[name]).y));
         const sourceMin = Math.min(...[7, 8, 10, 11].map(i => p[i].y)) * this.scale + this.floor;
         const root = world(hips);
         root.y += sourceMin + this.sole - avatarMin;
-        hips.position.copy(hips.parent.worldToLocal(root));
+        this.moveHips(root);
         this.vrm.scene.updateWorldMatrix(true, true);
+    }
+
+    moveHips(target) {
+        const hips = this.bones.hips, root = this.bones.motionRoot || hips;
+        const position = world(root).add(target.clone().sub(world(hips)));
+        root.position.copy(root.parent.worldToLocal(position));
     }
 }
 
@@ -139,14 +146,14 @@ function sampleFrame(frames, index) {
 class BodyMotionPlayer {
     constructor(adapter, blendSeconds = 0.3) {
         this.adapter = adapter;
-        this.retarget = new MotionRetargeter(adapter.vrm);
+        this.retarget = new MotionRetargeter(adapter.modelType === 'mmd' ? createPMXMotionRig(adapter) : adapter.vrm);
         this.blend = THREE.MathUtils.clamp(Number(blendSeconds) || 0.3, 0.05, 1);
     }
 
     play(data) {
         if (this.active) throw new Error('身体动作仍在播放');
         const { fps, frames } = validateMotion(data);
-        if (this.adapter._disposed) throw new Error('VRM 模型已经卸载');
+        if (this.adapter._disposed) throw new Error('模型已经卸载');
         this.motion = { fps, frames };
         this.original = this.retarget.capture();
         // Preserve the ground-relative camera height throughout the clip. Tracking

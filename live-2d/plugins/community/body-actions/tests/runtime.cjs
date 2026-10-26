@@ -33,8 +33,9 @@ app.whenReady().then(async () => {
         fs.writeFileSync(html, `<style>body{margin:0;background:#e6ebf2}canvas{position:fixed;inset:0}</style>
             <div id="vrm-container"><canvas id="vrm-canvas"></canvas></div><div id="live2d-container"></div>
             <div id="mmd-container"></div><div id="model-controls" style="display:none"></div>`);
+        fs.appendFileSync(html, '<canvas id="mmd-canvas"></canvas>');
         await win.loadFile(html);
-        const result = await win.webContents.executeJavaScript(`(${rendererTest.toString()})(${JSON.stringify(root)}, ${JSON.stringify(output)}, ${JSON.stringify(process.argv[2] || 'raise left hand')}, ${JSON.stringify(process.argv[3] || '')})`);
+        const result = await win.webContents.executeJavaScript(`(${rendererTest.toString()})(${JSON.stringify(root)}, ${JSON.stringify(output)}, ${JSON.stringify(process.argv[2] || 'raise left hand')}, ${JSON.stringify(process.argv[3] || '')}, ${JSON.stringify(process.argv[4] || 'vrm')})`);
         if (errors.length) throw new Error(errors.join('\n'));
         log(JSON.stringify({ success: true, ...result, output }));
         app.exit(0);
@@ -42,7 +43,7 @@ app.whenReady().then(async () => {
 });
 setTimeout(() => fail(new Error('Runtime test timed out')), 180000);
 
-async function rendererTest(root, output, actionName, motionFile) {
+async function rendererTest(root, output, actionName, motionFile, modelType) {
     const assert = require('assert/strict');
     const fs = require('fs');
     const path = require('path');
@@ -52,17 +53,21 @@ async function rendererTest(root, output, actionName, motionFile) {
     require.cache[require.resolve(path.join(root, 'js/api-utils.js'))] = {
         exports: { logToTerminal: (_level, text) => console.log(text) }
     };
-    const { scanVRMModels } = require(path.join(root, 'js/avatar/model-registry'));
-    const selected = scanVRMModels().find(m => m.name.startsWith('Q')) || scanVRMModels()[0];
-    assert(selected, 'No VRM model found');
+    const { scanVRMModels, scanMMDModels } = require(path.join(root, 'js/avatar/model-registry'));
+    const models = modelType === 'mmd' ? scanMMDModels() : scanVRMModels();
+    const selected = models.find(m => m.name.startsWith('Q')) || models[0];
+    assert(selected, 'No 3D model found');
     const { avatarFacade } = require(path.join(root, 'js/avatar/avatar-facade'));
     const { registerBuiltinDrivers } = require(path.join(root, 'js/avatar/drivers'));
     registerBuiltinDrivers();
-    const config = { ui: { model_type: 'vrm', vrm_model_path: selected.modelPath, model_scale: 0.65,
+    const config = { ui: { model_type: modelType, vrm_model_path: selected.modelPath, mmd_model_path: selected.modelPath, model_scale: 0.65,
         live2d_gaze_tracking: false, model_position: { x: 0.75, y: 0.62, remember_position: true, bounce_back: false } },
         vmc: { enabled: false } };
-    const state = await avatarFacade.init('vrm', { config, ttsEnabled: false, asrEnabled: false, ttsProcessor: null, voiceChat: null });
+    const state = await avatarFacade.init(modelType, { config, ttsEnabled: false, asrEnabled: false, ttsProcessor: null, voiceChat: null });
     const { model, manager } = state;
+    // Exercise the compatibility entry used by deployments without a ready facade.
+    delete global.avatarFacade;
+    delete window.avatar;
     const frame = () => new Promise(requestAnimationFrame);
     await frame(); await frame();
     manager.stopLoop();
@@ -114,7 +119,8 @@ async function rendererTest(root, output, actionName, motionFile) {
         model.update(0);
         assert(rotation.angleTo(upper.quaternion) < 0.001);
         avatarFacade.setMouth(0.7);
-        assert(model.vrm.expressionManager.getValue('aa') > 0.5, 'Mouth lost control during body motion');
+        if (modelType === 'mmd') assert(model.mesh.morphTargetInfluences.some(value => value > 0.5), 'PMX mouth lost control');
+        else assert(model.vrm.expressionManager.getValue('aa') > 0.5, 'Mouth lost control during body motion');
         avatarFacade.setMouth(0);
         manager.startLoop(); manager.stopLoop();
         await ipcRenderer.invoke('body-actions-test:capture', 'action');
@@ -186,7 +192,7 @@ async function rendererTest(root, output, actionName, motionFile) {
         assert.equal(manager._frameErrorCount, 0);
         return { model: selected.name, fps: data.fps, frames: data.joints.length,
             generationSeconds: data.generation_seconds, actionPose, cameraCheck,
-            checks: ['real inference', 'single-action rejection', 'tag filtering', 'prompt injection',
+            checks: [motionFile ? 'recorded motion playback' : 'real inference', 'single-action rejection', 'tag filtering', 'prompt injection',
                 'body ownership', 'mouth during motion', 'pose restore', 'interrupt'] };
     } finally {
         await plugin.onStop();

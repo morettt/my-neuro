@@ -45,9 +45,9 @@ test('prompt injection uses existing hooks without adding any core request field
         assert(request.messages[1].content.includes('每对 [] 必须且只能包含一个'));
         assert(!('deferTTSUntilResponse' in request));
         global.avatarFacade.getActiveType = () => 'live2d';
-        const untouched = { messages: [] };
-        await plugin.onLLMRequest(untouched);
-        assert.deepEqual(untouched, { messages: [] });
+        const next = { messages: [] };
+        await plugin.onLLMRequest(next);
+        assert(next.messages[0].content.includes('每对 [] 必须且只能包含一个'));
     } finally { global.avatarFacade = saved; }
 });
 
@@ -66,4 +66,41 @@ test('interrupted generation never plays a late response', async () => {
     await plugin.work;
     assert.equal(plugin.cache.size, 0);
     assert(!plugin.player);
+});
+
+test('prompt injection works before model readiness and without the avatar facade', async () => {
+    const facade = global.avatarFacade, model = global.currentModel;
+    try {
+        delete global.avatarFacade;
+        delete global.currentModel;
+        const plugin = new BodyActionsPlugin({}, { log() {} });
+        plugin.config = {};
+        const request = { messages: [] };
+        await plugin.onLLMRequest(request);
+        assert(request.messages[0].content.includes('[Backflip]'));
+        assert.equal(plugin.adapter(), null);
+        global.currentModel = { modelType: 'vrm' };
+        assert.equal(plugin.adapter(), global.currentModel);
+        global.currentModel._disposed = true;
+        assert.equal(plugin.adapter(), null);
+        plugin.stopped = true;
+        const stoppedRequest = { messages: [] };
+        await plugin.onLLMRequest(stoppedRequest);
+        assert.deepEqual(stoppedRequest.messages, []);
+    } finally {
+        global.avatarFacade = facade;
+        global.currentModel = model;
+    }
+});
+
+test('unavailable VRM reports why a received action was not played', async () => {
+    const logs = [];
+    const plugin = new BodyActionsPlugin({}, { log: (level, text) => logs.push(text) });
+    plugin.config = {}; plugin.epoch = 0;
+    plugin.adapter = () => null;
+    await plugin.onLLMRequest({ messages: [] });
+    const reply = { text: '你好[raise left hand]' };
+    await plugin.onLLMResponse(reply);
+    assert.equal(reply.text, '你好');
+    assert(logs.some(text => text.includes('当前没有可播放的 VRM 或 PMX 模型')));
 });
