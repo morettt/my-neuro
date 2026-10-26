@@ -155,7 +155,11 @@ class BodyMotionPlayer {
         const { fps, frames } = validateMotion(data);
         if (this.adapter._disposed) throw new Error('模型已经卸载');
         this.motion = { fps, frames };
+        // Keep the pose left by the previous action as the next action's
+        // transition source. BONES120 generates independent clips, so the
+        // runtime must provide this continuity.
         this.original = this.retarget.capture();
+        this.startPose = this.retarget.capture();
         // Preserve the ground-relative camera height throughout the clip. Tracking
         // the moving pelvis vertically would visually cancel jumps and flips.
         this.cameraTargetY = world(this.retarget.bones.hips).y;
@@ -183,9 +187,9 @@ class BodyMotionPlayer {
                 let amount = entering ? this.elapsed / this.blend : 1 - (this.elapsed - this.blend - duration) / this.blend;
                 amount = THREE.MathUtils.smoothstep(amount, 0, 1);
                 for (const [name, bone] of Object.entries(this.retarget.bones)) {
-                    const original = this.original[name];
-                    bone.quaternion.copy(original.quaternion.clone().slerp(bone.quaternion, amount));
-                    bone.position.copy(original.position.clone().lerp(bone.position, amount));
+                    const start = this.startPose[name];
+                    bone.quaternion.copy(start.quaternion.clone().slerp(bone.quaternion, amount));
+                    bone.position.copy(start.position.clone().lerp(bone.position, amount));
                 }
             }
         } catch (error) {
@@ -203,7 +207,10 @@ class BodyMotionPlayer {
     stop(reason = 'cancelled', error) {
         if (!this.active) return;
         this.active = false;
-        this.retarget.restore(this.original);
+        // On normal completion keep the final pose so the next independent
+        // BONES120 clip can blend from it. Interruptions still restore the
+        // pose that was present before this action started.
+        if (reason !== 'completed') this.retarget.restore(this.original);
         this.binding?.restore();
         this.binding = null;
         const resolve = this.resolve;

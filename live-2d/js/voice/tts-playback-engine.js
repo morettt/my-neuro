@@ -143,6 +143,12 @@ class TTSPlaybackEngine {
                                     );
                                 } catch (_) {}
                             }
+                            eventBus.emit(Events.TTS_TEXT_PROGRESS, {
+                                position: this.displayedText.length + charDisplayIndex,
+                                positionInSegment: charDisplayIndex,
+                                segmentLength,
+                                segmentText: processedText,
+                            });
                             
                             // 触发情绪动作
                             if (useLegacyEmotionLogic && this.emotionMapper && emotionMarkers.length > 0) {

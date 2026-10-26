@@ -107,6 +107,12 @@ class RuntimeHooks {
             return original.call(this, plugin.onDisplayText(text), ...args);
         });
         const tts = runtime.ttsProcessor || runtime.voiceChat?.ttsProcessor;
+        const model = plugin.adapter?.();
+        this.patches.wrap(model, 'update', original => function (...args) {
+            const result = original.apply(this, args);
+            if (!plugin.stopped && !getBodyPlayer(this)) plugin.updateIdle?.(this, args[0]);
+            return result;
+        });
         this.patches.wrap(tts, 'reset', original => function (...args) {
             hooks.clearPending();
             return original.apply(this, args);
