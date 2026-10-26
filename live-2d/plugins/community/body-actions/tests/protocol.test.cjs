@@ -68,6 +68,24 @@ test('interrupted generation never plays a late response', async () => {
     assert(!plugin.player);
 });
 
+test('editable body prompt takes effect on the next request and blank falls back to defaults', async () => {
+    let bodyPrompt = 'Use [bow] to greet.';
+    const plugin = new BodyActionsPlugin({}, { getPluginConfig: () => ({ body_prompt: bodyPrompt }) });
+    plugin.config = {};
+    const request = { messages: [] };
+    await plugin.onLLMRequest(request);
+    assert(request.messages[0].content.startsWith(bodyPrompt));
+    assert(!request.messages[0].content.includes('[Backflip]'));
+    bodyPrompt = 'Use [wave right hand] to greet.';
+    const next = { messages: [] };
+    await plugin.onLLMRequest(next);
+    assert(next.messages[0].content.startsWith(bodyPrompt));
+    bodyPrompt = '   ';
+    const fallback = { messages: [] };
+    await plugin.onLLMRequest(fallback);
+    assert(fallback.messages[0].content.includes('[Backflip]'));
+});
+
 test('prompt injection works before model readiness and without the avatar facade', async () => {
     const facade = global.avatarFacade, model = global.currentModel;
     try {
