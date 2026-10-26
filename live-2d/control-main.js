@@ -506,6 +506,25 @@ async function expandZip(zipFile, destination) {
   });
 }
 
+async function installModelScopeDlc(repoUrl, destination) {
+  const match = repoUrl.match(/^https:\/\/www\.modelscope\.cn\/(models|datasets)\/([\w.-]+)\/([\w.-]+)\/?$/i);
+  if (!match) throw new Error('魔搭仓库地址无效');
+  const repoId = `${match[2]}/${match[3]}`;
+  const kind = match[1].toLowerCase() === 'datasets' ? '--dataset' : '--model';
+  fs.mkdirSync(destination, { recursive: true });
+  let lastError;
+  for (const command of ['modelscope', 'python.exe']) {
+    try {
+      const args = command === 'modelscope'
+        ? ['download', kind, repoId, '--local_dir', destination]
+        : ['-m', 'modelscope', 'download', kind, repoId, '--local_dir', destination];
+      await runProcess(command, args, { cwd: destination });
+      return;
+    } catch (error) { lastError = error; }
+  }
+  throw new Error(`找不到可用的 ModelScope 下载命令：${lastError?.message || '请安装 modelscope CLI'}`);
+}
+
 async function installDependencies(pluginDir) {
   const messages = [];
   if (fs.existsSync(path.join(pluginDir, 'requirements.txt'))) {
@@ -949,11 +968,16 @@ ipcMain.handle('control:install-plugin', async (_event, id, repo) => {
 ipcMain.handle('control:install-plugin-dlc', async (_event, name, url) => {
   if (!/^[\w.-]+$/.test(name) || !/^https:\/\//i.test(url)) return { ok: false, message: 'DLC 信息无效' };
   const target = path.join(__dirname, 'plugins-dlc', name);
+  const isModelScope = /^https:\/\/www\.modelscope\.cn\/(models|datasets)\/[\w.-]+\/[\w.-]+(?:\.git)?\/?$/i.test(url);
   const temp = fs.mkdtempSync(path.join(app.getPath('temp'), 'my-neuro-dlc-'));
   const zipFile = path.join(temp, 'dlc.zip');
   try {
-    await downloadFile(url, zipFile);
-    await expandZip(zipFile, target);
+    if (isModelScope) {
+      await installModelScopeDlc(url, target);
+    } else {
+      await downloadFile(url, zipFile);
+      await expandZip(zipFile, target);
+    }
     return { ok: true, message: 'DLC 安装完成' };
   } catch (error) { return { ok: false, message: `DLC 安装失败：${error.message}` }; }
   finally { fs.rmSync(temp, { recursive: true, force: true }); }

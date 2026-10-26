@@ -5,5 +5,7 @@
   "author": "community",
   "description": "让 AI 在回复中用 [英文单动作] 控制 VRM 或 PMX 身体，保留语音口型和桌宠拖动。",
   "main": "index.js",
-  "lang": "js"
+  "lang": "js",
+  "bat": "启动动作服务.bat",
+  "download_dlc": "https://www.modelscope.cn/models/morelle/T2M"
 }

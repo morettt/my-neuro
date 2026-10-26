@@ -6,6 +6,7 @@ const Events = {
     TTS_START: 'tts:start',              // TTS开始播放
     TTS_END: 'tts:end',                  // TTS播放结束
     TTS_INTERRUPTED: 'tts:interrupted',  // TTS被中断
+    TTS_TEXT_PROGRESS: 'tts:text:progress',
 
     // ASR相关事件
     ASR_START: 'asr:start',              // 开始录音
