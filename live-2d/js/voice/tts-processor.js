@@ -51,6 +51,7 @@ class EnhancedTextProcessor {
         // 回退字幕状态
         this.fallbackDisplayText = '';
         this._fallbackTimer = null;
+        this._subtitleHideTimer = null;
 
         // 🔥 TTS完成Promise（用于等待播放完成）
         this.completionPromise = null;
@@ -195,6 +196,7 @@ class EnhancedTextProcessor {
 
     // 回退模式：累积文本并启动打字机动画
     appendFallbackText(segmentText) {
+        this.cancelSubtitleHide();
         // 把新文本追加到待显示队列
         if (!this._fallbackQueue) this._fallbackQueue = [];
         this._fallbackQueue.push(...[...cleanDisplayText(segmentText)]);
@@ -230,6 +232,9 @@ class EnhancedTextProcessor {
                 // 队列空了，停下来等新字符进来
                 this._fallbackTimer = null;
                 this.textMouth.stop();
+                if (this.fallbackDisplayText && typeof showSubtitle === 'function') {
+                    showSubtitle(`${label}: ${this.fallbackDisplayText}`, 3000);
+                }
                 eventBus.emit(Events.TTS_TEXT_COMPLETE, { text: this.fallbackDisplayText });
             }
         };
@@ -238,11 +243,20 @@ class EnhancedTextProcessor {
     }
 
     // 全部完成的处理
+    cancelSubtitleHide() {
+        if (this._subtitleHideTimer !== null) clearTimeout(this._subtitleHideTimer);
+        this._subtitleHideTimer = null;
+    }
+
     handleAllComplete() {
         this.textMouth.stop();
+        this.cancelSubtitleHide();
         // 如果有回退字幕，停留3秒让用户看完
         const hideDelay = this.fallbackDisplayText ? 3000 : 1000;
-        setTimeout(() => {
+        const generation = this.abortGeneration;
+        this._subtitleHideTimer = setTimeout(() => {
+            this._subtitleHideTimer = null;
+            if (generation !== this.abortGeneration) return;
             if (typeof hideSubtitle === 'function') hideSubtitle();
             // 🔥 通过 playbackEngine 调用表情映射器
             if (this.playbackEngine.expressionMapper) {
@@ -250,7 +264,7 @@ class EnhancedTextProcessor {
                 const defaultExpr = this.playbackEngine.expressionMapper.defaultExpression || "表情1";
                 this.playbackEngine.expressionMapper.triggerExpression(defaultExpr);
             }
-        }, 1000);
+        }, hideDelay);
 
         if (this.playbackEngine.onEndCallback) {
             this.playbackEngine.onEndCallback();
@@ -269,6 +283,7 @@ class EnhancedTextProcessor {
     // 添加流式文本
     addStreamingText(text) {
         if (this.shouldStop) return;
+        this.cancelSubtitleHide();
         this.llmFullResponse += text;
 
         if (this.requestHandler.volcTtsEnabled) {
@@ -339,6 +354,7 @@ class EnhancedTextProcessor {
 
     // 重置
     reset() {
+        this.cancelSubtitleHide();
         this.textMouth.stop();
         this.llmFullResponse = '';
         this.fallbackDisplayText = '';
@@ -374,6 +390,7 @@ class EnhancedTextProcessor {
 
     // 打断
     interrupt() {
+        this.cancelSubtitleHide();
         this.textMouth.stop();
         console.log('打断TTS播放...');
 

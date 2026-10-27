@@ -10,12 +10,14 @@
 
 关闭 TTS 时，纯文本回复仍由 `TextMouthDriver` 按文字节奏驱动当前模型口型，不创建音频或发起合成。TTS 失败后的字幕回退同样保留口型；文本结束、重置或打断后归零。纯文本的 `isPlaying()` 仍返回 false，不占用音频播放状态。
 
+字幕回退最后一个字显示完成后停留 3 秒再隐藏，不依赖音频完成 Promise。新回复、重置或打断会取消上一条回复的结束清理计时，防止旧计时器误关新字幕。
+
 Key 保存在本机 `config.json` 的 `cloud.volcengine_tts.api_key`，示例配置中为空。声音 ID 保存在 `cloud.volcengine_tts.voice_type`，界面保存时会使用填写的 ID；运行中的桌宠重新读取配置，下一次合成使用新设置。WebUI 保存其他云端设置时保留已有新版 Key。
 
 验证命令：
 
 ```text
-node --test js/voice/text-mouth-driver.test.js js/voice/volcengine-lipsync.test.js js/voice/volcengine-config.test.js js/voice/aliyun-clone-ui.test.js js/voice/aliyun-voice-clone.test.js
+node --test js/voice/subtitle-lifecycle.test.js js/voice/text-mouth-driver.test.js js/voice/volcengine-lipsync.test.js js/voice/volcengine-config.test.js js/voice/aliyun-clone-ui.test.js js/voice/aliyun-voice-clone.test.js
 ```
 
 接口参考：[火山双向流式 TTS](https://docs.volcengine.com/docs/DoubaoVoice/WebSocketBidirectionalStreaming-V3?lang=zh)。
