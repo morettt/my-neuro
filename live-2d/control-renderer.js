@@ -547,7 +547,7 @@ function render() {
     if (!el) continue;
     const value = get(config, path, id === 'auto-close-services' ? true : type === 'checked' ? false : '');
     if (type === 'checked') el.checked = Boolean(value);
-    else el.value = value;
+    else el.value = id === 'aliyun-model' ? (value || 'cosyvoice-v3-flash') : value;
     if (id === 'tts-language') {
       const field = el.closest('.model-field');
       const selected = field?.querySelector(`[data-value="${value}"]`);
@@ -573,6 +573,7 @@ function render() {
   ['volc-voice', 'silicon-asr-model'].forEach(id => $(id)?.dispatchEvent(new Event('change')));
   syncTemperatureField();
   syncContextConfig();
+  window.aliyunCloneUI?.renderLibrary();
 }
 
 function serviceLogLineType(line) {
@@ -969,6 +970,35 @@ async function saveConfig() {
 }
 
 $('save-config').addEventListener('click', saveConfig);
+
+window.aliyunCloneUI = window.initAliyunCloneUI({
+  getSettings: () => get(config, 'cloud.aliyun_tts', {}),
+  persistSelection: async (voice, voices) => {
+    const previous = {
+      voice: $('aliyun-voice').value, model: $('aliyun-model').value,
+      voices: get(config, 'cloud.aliyun_tts.voices', []),
+      provider: $('cloud-tts-provider').value, enabled: $('cloud-tts-master-enabled').checked
+    };
+    $('aliyun-voice').value = voice.voice_id;
+    $('aliyun-model').value = voice.model;
+    $('cloud-tts-provider').value = 'aliyun';
+    $('cloud-tts-master-enabled').checked = true;
+    if (voices) set(config, 'cloud.aliyun_tts.voices', voices);
+    setConfigDirty(true);
+    if (!(await saveConfig())) {
+      $('aliyun-voice').value = previous.voice;
+      $('aliyun-model').value = previous.model;
+      $('cloud-tts-provider').value = previous.provider;
+      $('cloud-tts-master-enabled').checked = previous.enabled;
+      set(config, 'cloud.aliyun_tts.voice', previous.voice);
+      set(config, 'cloud.aliyun_tts.model', previous.model);
+      set(config, 'cloud.aliyun_tts.voices', previous.voices);
+      syncCloudProviders(false);
+      setConfigDirty(true);
+      throw new Error('配置未能保存');
+    }
+  }
+});
 
 async function confirmUnsavedConfig(title) {
   if (!configDirty && !pluginConfigDirty) return true;
@@ -1501,6 +1531,14 @@ for (const [id, kind] of [['reset-expressions', 'expressions'], ['reset-actions'
 (async () => {
   try {
     config = await window.controlApi.loadConfig(); render();
+    if (new URLSearchParams(window.location.search).get('view') === 'voice-clone') {
+      switchPage('cloud', document.querySelector('[data-page="cloud"]'));
+      if (pageTransition) await pageTransition.updateCallbackDone;
+      document.querySelector('[data-cloud-tab="cloud-tts"]').click();
+      $('cloud-tts-provider').value = 'aliyun';
+      syncCloudProviders(false);
+      requestAnimationFrame(() => $('aliyun-clone-box').scrollIntoView({ block: 'start' }));
+    }
     environment = await window.controlApi.environmentInfo();
     applyEdition();
     $('vmc-host').value = get(config, 'vmc.host', '127.0.0.1');

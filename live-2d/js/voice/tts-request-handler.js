@@ -6,6 +6,22 @@ const WebSocket = require('ws');
 const { randomUUID } = require('crypto');
 
 class TTSRequestHandler {
+    useAliyunVoice(config) {
+        const voice = config.cloud?.aliyun_tts || {};
+        this.config = config;
+        this.useGateway = false;
+        this.volcTtsEnabled = false;
+        this.cloudTtsEnabled = false;
+        this.aliyunTtsEnabled = true;
+        this.aliyunApiKey = voice.api_key || '';
+        this.aliyunModel = voice.model || 'cosyvoice-v3-flash';
+        this.aliyunVoice = voice.voice || '';
+        this.aliyunSampleRate = voice.sample_rate || 48000;
+        this.aliyunVolume = voice.volume ?? 50;
+        this.aliyunRate = voice.rate ?? 1;
+        this.aliyunPitch = voice.pitch ?? 1;
+    }
+
     constructor(config, ttsUrl) {
         this.config = config;
         this.language = config.tts?.language || "zh";

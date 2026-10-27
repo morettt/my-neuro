@@ -1,2 +1,5 @@
 # Generated Electron runtime and UI launcher
 /Electron-UI/
+/.voice-upload-client.json
+/scripts/.voice-host-work/
+/.voice-clone-ui-check.json

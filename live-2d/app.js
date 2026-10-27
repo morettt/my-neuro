@@ -64,6 +64,13 @@ try {
 global.reloadConfig = function() {
     try {
         config = configLoader.load();
+        // Named voice selection applies to subsequent synthesis requests without
+        // dropping active requests or rebuilding the audio playback engine.
+        if (config.cloud?.aliyun_tts?.enabled && ttsProcessor?.requestHandler?.useAliyunVoice) {
+            ttsProcessor.requestHandler.useAliyunVoice(config);
+            ttsProcessor.config = config;
+            ttsProcessor.ttsUnavailable = false;
+        }
         console.log('配置文件已重新加载');
         logToTerminal('info', '配置文件已重新加载');
         return true;

@@ -20,6 +20,7 @@ const nodeNet = require('node:net');
 const { scanLive2DModels, resolveLive2DModel, scanVRMModels, scanMMDModels } = require('./js/avatar/model-registry');
 const { EMOTIONS: motionEmotions, mergeExpressionConfig, mergeActionConfig, isLive2DModelDir } = require('./js/avatar/model-defaults');
 const { loadProvidersFromStore, saveProviders } = require('./js/core/llm-provider-store');
+const aliyunVoiceClone = require('./js/voice/aliyun-voice-clone');
 
 const configPath = path.join(__dirname, 'config.json');
 const pluginsPath = path.join(__dirname, 'plugins');
@@ -44,6 +45,7 @@ app.on('second-instance', () => {
 });
 let selectedVoiceModelPath = '';
 let selectedVoiceAudioPath = '';
+let selectedAliyunAudioPath = '';
 let avatarLoadingWindow = null;
 let avatarLoadingTimer = null;
 
@@ -770,7 +772,9 @@ function createControlWindow() {
       autoCloseServices ? stopConfiguredServices() : Promise.resolve()])
       .finally(() => { if (!win.isDestroyed()) win.destroy(); });
   });
-  win.loadFile('control.html');
+  win.loadFile(path.join(__dirname, 'control.html'), {
+    query: process.argv.includes('--voice-clone') ? { view: 'voice-clone' } : {}
+  });
   ipcMain.on('control:config-dirty', (event, dirty) => {
     if (event.sender === win.webContents) configDirty = Boolean(dirty);
   });
@@ -860,6 +864,46 @@ ipcMain.handle('control:select-voice-file', async (_event, kind) => {
   if (isModel) selectedVoiceModelPath = target;
   else selectedVoiceAudioPath = target;
   return { ok: true, filename: path.basename(target) };
+});
+ipcMain.handle('control:select-aliyun-audio', async (_event, droppedPath) => {
+  try {
+    let source = typeof droppedPath === 'string' ? droppedPath : '';
+    if (!source) {
+      const result = await dialog.showOpenDialog({ properties: ['openFile'], filters: [
+        { name: '参考音频', extensions: ['wav', 'mp3', 'm4a'] }
+      ] });
+      if (result.canceled || !result.filePaths[0]) return { canceled: true };
+      source = result.filePaths[0];
+    }
+    const extension = path.extname(source).slice(1).toLowerCase();
+    const mimes = { wav: 'audio/wav', mp3: 'audio/mpeg', m4a: 'audio/mp4' };
+    if (!mimes[extension]) throw new Error('请选择 WAV、MP3 或 M4A 音频');
+    const stat = await fs.promises.stat(source);
+    if (!stat.isFile() || !stat.size || stat.size > 10 * 1024 * 1024) throw new Error('音频不能为空，且不能超过 10 MB');
+    const bytes = await fs.promises.readFile(source);
+    if (!bytes.length || bytes.length > 10 * 1024 * 1024) throw new Error('音频不能为空，且不能超过 10 MB');
+    selectedAliyunAudioPath = source;
+    return { ok: true, filename: path.basename(source), size: bytes.length,
+      preview: `data:${mimes[extension]};base64,${bytes.toString('base64')}` };
+  } catch (error) { return { ok: false, message: error.message }; }
+});
+ipcMain.handle('control:upload-aliyun-audio', async () => {
+  const defaults = readJson(path.join(__dirname, '.voice-upload-client.json'), {});
+  try {
+    if (!selectedAliyunAudioPath) throw new Error('请先选择参考音频');
+    const uploaded = await aliyunVoiceClone.uploadAudio(selectedAliyunAudioPath, defaults, (...args) => net.fetch(...args));
+    return { ok: true, ...uploaded };
+  } catch (error) { return { ok: false, message: error.message }; }
+});
+ipcMain.handle('control:enroll-aliyun-voice', async (_event, options) => {
+  try {
+    return { ok: true, ...await aliyunVoiceClone.enrollVoice(options, (...args) => net.fetch(...args)) };
+  } catch (error) { return { ok: false, message: error.message }; }
+});
+ipcMain.handle('control:query-aliyun-voice', async (_event, options) => {
+  try {
+    return { ok: true, ...await aliyunVoiceClone.queryVoice(options, (...args) => net.fetch(...args)) };
+  } catch (error) { return { ok: false, message: error.message }; }
 });
 ipcMain.handle('control:generate-voice-bat', (_event, options) => {
   const character = String(options?.character || '').trim();
@@ -1220,8 +1264,9 @@ ipcMain.handle('control:download-tool', async (_event, tool) => {
   return { ok: true, filename };
 });
 
-ipcMain.handle('control:save-config', (_event, config) => {
+ipcMain.handle('control:save-config', async (_event, config) => {
   saveControlConfig(config);
+  if (config.cloud?.aliyun_tts?.enabled) await notifyDesktopReload();
   return { ok: true };
 });
 
