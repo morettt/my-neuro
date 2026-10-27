@@ -480,6 +480,7 @@ const fields = {
   'aliyun-enabled': ['cloud.aliyun_tts.enabled', 'checked'], 'aliyun-key': ['cloud.aliyun_tts.api_key', 'value'],
   'aliyun-model': ['cloud.aliyun_tts.model', 'value'], 'aliyun-voice': ['cloud.aliyun_tts.voice', 'value'],
   'volc-key': ['cloud.volcengine_tts.api_key', 'value'], 'cloud-asr-enabled': ['cloud.baidu_asr.enabled', 'checked'],
+  'volc-speaker': ['cloud.volcengine_tts.voice_type', 'value'],
   'cloud-asr-url': ['cloud.baidu_asr.url', 'value'], 'cloud-asr-appid': ['cloud.baidu_asr.appid', 'value'],
   'cloud-asr-appkey': ['cloud.baidu_asr.appkey', 'value'], 'cloud-asr-pid': ['cloud.baidu_asr.dev_pid', 'value']
   ,'silicon-asr-enabled': ['cloud.siliconflow_asr.enabled', 'checked'], 'silicon-asr-api': ['cloud.siliconflow_asr.api', 'value'],
@@ -559,6 +560,7 @@ function render() {
     if (!el) continue;
     const value = get(config, path, id === 'auto-close-services' ? true : type === 'checked' ? false : '');
     if (type === 'checked') el.checked = Boolean(value);
+    else if (id === 'volc-speaker') el.value = String(value).trim().startsWith('S_') ? String(value).trim() : 'S_RCbi2PGQ1';
     else el.value = id === 'aliyun-model' ? (value || 'cosyvoice-v3-flash') : value;
     if (id === 'tts-language') {
       const field = el.closest('.model-field');
@@ -970,7 +972,7 @@ async function saveConfig() {
     set(config, path, type === 'checked' ? el.checked : type === 'number' ? Number(el.value) : el.value);
   }
   set(config, 'ui.show_model', !$('hide-model').checked);
-  set(config, 'cloud.volcengine_tts.voice_type', 'S_RCbi2PGQ1');
+  set(config, 'cloud.volcengine_tts.voice_type', $('volc-speaker').value.trim() || 'S_RCbi2PGQ1');
   set(config, 'cloud.volcengine_tts.resource_id', 'seed-icl-2.0');
   delete config.conversation;
   try {

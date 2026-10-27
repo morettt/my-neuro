@@ -62,3 +62,16 @@ test('streaming sessions use the same default replica and authentication setting
   assert.equal(session.voiceType, DEFAULT_SPEAKER);
   assert.equal(session.resourceId, 'seed-icl-2.0');
 });
+
+test('a saved custom replica ID is used by both synthesis paths', () => {
+  const config = { cloud: { volcengine_tts: { api_key: 'test-key', voice_type: ' S_CustomVoice2 ' } } };
+  const { TTSRequestHandler } = require('./tts-request-handler');
+  const { VolcengineStreamingSession } = require('./volcengine-streaming');
+  assert.equal(readVolcengineConfig(config).voiceType, 'S_CustomVoice2');
+  const handler = new TTSRequestHandler(config, '');
+  assert.equal(handler.volcVoiceType, 'S_CustomVoice2');
+  const session = new VolcengineStreamingSession(config, {});
+  assert.equal(session.voiceType, 'S_CustomVoice2');
+  handler.useVolcengineVoice({ cloud: { volcengine_tts: { api_key: 'test-key', voice_type: 'S_OtherVoice3' } } });
+  assert.equal(handler.volcVoiceType, 'S_OtherVoice3');
+});
