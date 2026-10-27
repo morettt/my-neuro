@@ -17,6 +17,8 @@
 
 ## 上传配置与部署
 
+新部署无需配置网站上传密钥：未配置网站上传时，本地音频以 Base64 Data URI 直接提交给阿里云，使用界面里填写的阿里云 API Key 完成复刻。下述网站上传配置为可选通道，仅在配置后使用；阿里云 API Key 始终不发送给网站。
+
 服务端模块 `voice_audio.py` 放入网站的 `routes/`，在 FastAPI 的 `app` 中注册 `router`。网站继续使用原来的 `conda activate my-neuro` 和 `python app.py` 启动。
 
 服务端 `.voice-upload-token` 保存上传密钥，仅服务器和本机使用。桌面端从项目根目录的 `.voice-upload-client.json` 读取默认配置：

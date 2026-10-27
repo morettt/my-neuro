@@ -51,11 +51,24 @@ test('upload sends only the audio and upload token, using HTTPS', async () => {
     });
     assert.equal(result.filename, 'reference.wav');
     await assert.rejects(uploadAudio(file, { upload_url: 'http://example.com/upload', upload_token: 'secret' }), /HTTPS/);
-    await assert.rejects(uploadAudio(file, {}), /上传密钥/);
+    const local = await uploadAudio(file, {}, () => { throw new Error('Should not contact the website'); });
+    assert.equal(local.url, 'data:audio/wav;base64,' + Buffer.from('RIFF0000WAVE').toString('base64'));
   } finally {
     fs.unlinkSync(file);
     fs.rmdirSync(dir);
   }
+});
+
+test('a fresh deployment can clone local audio using only the Aliyun API key', async () => {
+  const reference = 'data:audio/wav;base64,' + Buffer.from('RIFF0000WAVE').toString('base64');
+  const result = await enrollVoice({ ...options, audio_url: reference }, async (url, init) => {
+    assert.equal(new URL(url).hostname, 'dashscope.aliyuncs.com');
+    assert.equal(init.headers.Authorization, 'Bearer test-key');
+    assert.equal(JSON.parse(init.body).input.audio, reference);
+    return response({ voice_id: 'direct-voice' });
+  });
+  assert.equal(result.voice_id, 'direct-voice');
+  await assert.rejects(enrollVoice({ ...options, audio_url: 'data:text/html;base64,PHNjcmlwdD4=' }), /格式无效/);
 });
 
 test('switching to a named voice updates synthesis without losing active request tracking', () => {

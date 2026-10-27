@@ -18,6 +18,19 @@ function publicUrl(value) {
   return url.href;
 }
 
+function audioReference(value) {
+  if (typeof value === 'string' && value.startsWith('data:')) {
+    const match = /^data:audio\/(wav|mpeg|mp4);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
+    if (!match) throw new Error('参考音频格式无效');
+    const audio = Buffer.from(match[2], 'base64');
+    if (!audio.length || audio.length > MAX_BYTES || audio.toString('base64') !== match[2]) {
+      throw new Error('参考音频无效或超过 10 MB');
+    }
+    return value;
+  }
+  return publicUrl(value);
+}
+
 async function jsonRequest(fetcher, url, init) {
   const response = await fetcher(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(60000) });
   let data;
@@ -28,18 +41,22 @@ async function jsonRequest(fetcher, url, init) {
   return data;
 }
 
-async function uploadAudio(filePath, settings, fetcher = fetch) {
+async function uploadAudio(filePath, settings = {}, fetcher = fetch) {
   const extension = path.extname(filePath).slice(1).toLowerCase();
   if (!['wav', 'mp3', 'm4a'].includes(extension)) throw new Error('仅支持 WAV、MP3、M4A 音频');
   const stat = await fs.promises.stat(filePath);
   if (!stat.isFile() || !stat.size || stat.size > MAX_BYTES) throw new Error('请选择不超过 10 MB 的非空音频文件');
+  const body = await fs.promises.readFile(filePath);
+  if (!body.length || body.length > MAX_BYTES) throw new Error('请选择不超过 10 MB 的非空音频文件');
+  const token = String(settings.upload_token || '').trim();
+  if (!token) {
+    const mime = { wav: 'audio/wav', mp3: 'audio/mpeg', m4a: 'audio/mp4' }[extension];
+    return { url: `data:${mime};base64,${body.toString('base64')}`,
+      filename: path.basename(filePath), expires_at: Math.floor(Date.now() / 1000) + 86400 };
+  }
   const url = new URL(settings.upload_url || 'https://mynewbot.com/api/voice-audio');
   if (url.protocol !== 'https:' || url.username || url.password) throw new Error('上传地址必须使用 HTTPS');
-  const token = String(settings.upload_token || '').trim();
-  if (!token) throw new Error('请先配置音频上传密钥，或直接填写已有的公网音频 URL');
   url.searchParams.set('format', extension);
-  const body = await fs.promises.readFile(filePath);
-  if (body.length > MAX_BYTES) throw new Error('音频不能超过 10 MB');
   const data = await jsonRequest(fetcher, url.href, {
     method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream' }, body
   });
@@ -57,7 +74,7 @@ async function enrollVoice(options, fetcher = fetch) {
   const data = await jsonRequest(fetcher, url, {
     method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: 'voice-enrollment', input: {
-      action: 'create_voice', target_model: model, prefix, audio: publicUrl(options.audio_url)
+      action: 'create_voice', target_model: model, prefix, audio: audioReference(options.audio_url)
     } })
   });
   if (!data.output?.voice_id) throw new Error('阿里云未返回音色 ID');
