@@ -6,12 +6,14 @@
 
 `volcengine-config.js` 统一提供新版 `X-Api-Key` 鉴权、资源 ID、连接地址和默认音色。普通合成与实时流式播放均使用这一配置。历史预设音色配置不会覆盖新的复刻音色默认值。
 
+字节流式口型使用 `playbackEngine.onAudioDataCallback` 的当前绑定，与普通播放共用 AvatarFacade 的模型路由。VRM 激活或模型切换后，正在播放的流式会话也会向当前模型发送口型值；结束或打断时传入 0 以闭嘴。
+
 Key 保存在本机 `config.json` 的 `cloud.volcengine_tts.api_key`，示例配置中为空。声音 ID 保存在 `cloud.volcengine_tts.voice_type`，界面保存时会使用填写的 ID；运行中的桌宠重新读取配置，下一次合成使用新设置。WebUI 保存其他云端设置时保留已有新版 Key。
 
 验证命令：
 
 ```text
-node --test js/voice/volcengine-config.test.js js/voice/aliyun-clone-ui.test.js js/voice/aliyun-voice-clone.test.js
+node --test js/voice/volcengine-lipsync.test.js js/voice/volcengine-config.test.js js/voice/aliyun-clone-ui.test.js js/voice/aliyun-voice-clone.test.js
 ```
 
 接口参考：[火山双向流式 TTS](https://docs.volcengine.com/docs/DoubaoVoice/WebSocketBidirectionalStreaming-V3?lang=zh)。

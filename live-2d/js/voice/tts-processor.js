@@ -20,8 +20,8 @@ class EnhancedTextProcessor {
         this.playbackEngine = new TTSPlaybackEngine(config, onAudioDataCallback, onStartCallback, onEndCallback);
         this.requestHandler = new TTSRequestHandler(config, ttsUrl);
 
-        // 字节流式session所需回调（直接存下来，不经过playbackEngine）
-        this._onMouthValue    = onAudioDataCallback;
+        // 字节流式 session 的开始/结束回调。
+        // 口型共用 playbackEngine 当前回调，由 AvatarFacade 路由到活动模型。
         this._onStartCallback = onStartCallback;
         this._onEndCallback   = onEndCallback;
 
@@ -266,7 +266,7 @@ class EnhancedTextProcessor {
             // 字节流式路径：用 Promise 链保证 open → sendToken 严格串行
             if (!this.volcSession) {
                 this.volcSession = new VolcengineStreamingSession(this.config, {
-                    onMouthValue:     this._onMouthValue,
+                    onMouthValue:     value => this.playbackEngine.onAudioDataCallback?.(value),
                     onStartCallback:  this._onStartCallback,
                     onEndCallback:    this._onEndCallback,
                     onComplete:       () => this.handleAllComplete(),
