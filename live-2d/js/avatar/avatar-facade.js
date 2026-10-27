@@ -336,7 +336,11 @@ class AvatarFacade {
 
     // TTS 口型回调统一接到门面（形态切换后无需重接 TTS 链路）
     _wireMouthSink() {
-        const playbackEngine = this._context?.ttsProcessor?.playbackEngine;
+        const processor = this._context?.ttsProcessor;
+        if (typeof processor?.setMouthCallback === 'function') {
+            processor.setMouthCallback(value => this.setMouth(value));
+        }
+        const playbackEngine = processor?.playbackEngine;
         if (playbackEngine) {
             playbackEngine.onAudioDataCallback = (value) => this.setMouth(value);
         }

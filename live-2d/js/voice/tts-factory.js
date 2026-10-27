@@ -3,6 +3,7 @@ const { EnhancedTextProcessor } = require('./tts-processor.js');
 const { logToTerminal } = require('../api-utils.js');
 const { eventBus } = require('../core/event-bus.js');
 const { Events } = require('../core/events.js');
+const { TextMouthDriver } = require('./text-mouth-driver');
 
 // 情绪/动作标签只供皮套驱动使用，不能进入字幕和聊天记录。
 // 第二个 replace 会隐藏流式响应末尾尚未闭合的半截标签（例如“<开”）。
@@ -56,12 +57,16 @@ class TTSFactory {
                 config
             );
         } else {
+            let mouthSink = value => modelController.setMouthOpenY(value);
+            const textMouth = new TextMouthDriver(value => mouthSink(value));
             // 创建虚拟TTS处理器（纯文本模式）
             const virtualTTS = {
-                reset: () => {},
+                setMouthCallback: callback => { mouthSink = callback; },
+                reset: () => { textMouth.stop(); virtualTTS.accumulatedText = ''; },
                 processTextToSpeech: (text) => {
                     // 直接显示文本，不进行语音合成
                     const displayText = cleanDisplayText(text);
+                    textMouth.push(displayText);
                     uiController.showSubtitle(`Fake Neuro: ${displayText}`, 3000);
 
                     // 添加到聊天记录
@@ -83,7 +88,9 @@ class TTSFactory {
                 addStreamingText: (text) => {
                     // 在纯文本模式下，流式文本直接累积显示，带自动消失
                     if (!virtualTTS.accumulatedText) virtualTTS.accumulatedText = '';
+                    const previousText = cleanDisplayText(virtualTTS.accumulatedText);
                     virtualTTS.accumulatedText += text;
+                    textMouth.push(cleanDisplayText(virtualTTS.accumulatedText).slice(previousText.length));
                     uiController.showSubtitle(`Fake Neuro: ${cleanDisplayText(virtualTTS.accumulatedText)}`, 3000);
                 },
                 finalizeStreamingText: () => {
@@ -111,6 +118,7 @@ class TTSFactory {
                     }
                 },
                 interrupt: () => {
+                    textMouth.stop();
                     virtualTTS.accumulatedText = '';
                     uiController.hideSubtitle();
                     // 立即调用结束回调，确保ASR解锁
