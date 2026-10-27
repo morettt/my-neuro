@@ -159,6 +159,12 @@ button:hover { background: #f0ece4; }
 .secret-toggle svg { display:block; width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
 .secret-toggle .secret-eye-slash { opacity:0; }
 .secret-toggle.revealed .secret-eye-slash { opacity:1; }
+.aliyun-key-field { display:grid; gap:7px; }
+.aliyun-key-title { display:flex; align-items:center; gap:6px; }
+.form-card .aliyun-key-help { display:grid; place-items:center; width:26px; height:26px; min-height:0; padding:5px; border:0; border-radius:6px; background:transparent; color:#8a8175; box-shadow:none; }
+.form-card .aliyun-key-help:hover { background:#eee9df; color:#514a40; }
+.aliyun-key-help:focus-visible { outline:2px solid #938674; outline-offset:2px; }
+.aliyun-key-help svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; }
 .form-card .settings-control { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; column-gap:12px; }
 .form-card .settings-control > span { grid-column:1; }
 .form-card .settings-control .inline-config-button { grid-column:2; margin:0; padding:7px 14px; border:1px solid #ded7cb; border-radius:8px; background:#fff; color:#665e52; font:inherit; font-weight:650; }
@@ -249,6 +255,7 @@ button:hover { background: #f0ece4; }
 .provider-panel.active { display:grid; }
 .native-select-hidden { display:none!important; }
 .provider-dropdown { width:100%; margin-top:7px; }
+.provider-dropdown.is-disabled .trigger { opacity:.5; cursor:default; pointer-events:none; }
 .config-note { margin:0; padding:12px; border-radius:9px; background:#f3efe7; color:#766d60; line-height:1.6; }
 
 .log-grid { gap:12px; margin-top:12px; }
@@ -612,8 +619,6 @@ body:has(#history.active) .content { padding-bottom:25px; background:radial-grad
 .aliyun-clone-box h3, .aliyun-clone-box p { margin: 0; }
 .aliyun-clone-box .config-note { line-height: 1.6; overflow-wrap: anywhere; }
 .aliyun-clone-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.voice-clone-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; }
-.voice-clone-heading h3 { color:#594c3d; font-size:18px; }
 .form-card .voice-dropzone { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; width:100%; min-height:174px; padding:22px; border:1.5px dashed #b8aa96; border-radius:16px; color:#75634f; background:linear-gradient(135deg,#faf8f2,#efede3); transition:border-color .15s,background .15s; }
 .form-card .voice-dropzone:hover,.form-card .voice-dropzone.over { border-color:#847056; background:#eee8db; }
 .voice-drop-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:14px; background:#e8e0d0; font-size:26px; }
@@ -639,6 +644,14 @@ body:has(#history.active) .content { padding-bottom:25px; background:radial-grad
 #aliyun-clone-status[data-kind="success"] { color:#647d51; }
 #aliyun-clone-status[data-kind="error"] { color:#ac594a; }
 .aliyun-clone-box button:disabled { opacity:.5; cursor:default; }
+.form-card .voice-dropzone { position:relative; }
+.form-card .voice-dropzone:disabled { opacity:1; }
+.voice-dropzone.is-processing > :not(.voice-processing) { visibility:hidden; }
+.voice-dropzone .voice-processing { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; color:#745f43; }
+.voice-dropzone .voice-processing-spinner { width:32px; height:32px; border:3px solid #e0d7c7; border-top-color:#8a7659; border-radius:50%; animation:voice-processing-spin .85s linear infinite; }
+.voice-processing strong { font-size:15px; font-weight:600; }
+@keyframes voice-processing-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce){.voice-dropzone .voice-processing-spinner{animation:none}}
 .aliyun-clone-box [hidden] { display:none!important; }
 .aliyun-clone-box[aria-busy="true"] .voice-clone-steps li.active::before { animation:voice-clone-pulse 1.2s ease-in-out infinite; }
 @keyframes voice-clone-pulse { 50% { box-shadow:0 0 0 6px #e6ddcb; } }
