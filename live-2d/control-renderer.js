@@ -101,7 +101,6 @@ document.querySelectorAll('[data-window]').forEach(button => {
 $('github-link').addEventListener('click', () => window.controlApi.openGithub());
 $('gateway-website').addEventListener('click', () => window.controlApi.openExternal('http://mynewbot.com'));
 $('aliyun-key-help').addEventListener('click', () => window.controlApi.openExternal('https://bailian.console.aliyun.com/cn-beijing/model/settings/api-key'));
-$('volcengine-tutorial').addEventListener('click', () => window.controlApi.openExternal('http://mynewbot.com/tutorials/ByteDance-TTS'));
 $('reset-model-position').addEventListener('click', async () => {
   const result = await window.controlApi.resetModelPosition(); showToast(result.message);
 });
@@ -334,7 +333,6 @@ function enhanceSelect(id) {
 
 enhanceSelect('cloud-tts-provider');
 enhanceSelect('aliyun-saved-voices');
-enhanceSelect('volc-voice');
 enhanceSelect('cloud-asr-provider');
 enhanceSelect('silicon-asr-model');
 
@@ -481,8 +479,7 @@ const fields = {
   'cloud-tts-speed': ['cloud.tts.speed', 'number'], 'volc-enabled': ['cloud.volcengine_tts.enabled', 'checked'],
   'aliyun-enabled': ['cloud.aliyun_tts.enabled', 'checked'], 'aliyun-key': ['cloud.aliyun_tts.api_key', 'value'],
   'aliyun-model': ['cloud.aliyun_tts.model', 'value'], 'aliyun-voice': ['cloud.aliyun_tts.voice', 'value'],
-  'volc-appid': ['cloud.volcengine_tts.appid', 'value'], 'volc-token': ['cloud.volcengine_tts.access_token', 'value'],
-  'volc-voice': ['cloud.volcengine_tts.voice_type', 'value'], 'cloud-asr-enabled': ['cloud.baidu_asr.enabled', 'checked'],
+  'volc-key': ['cloud.volcengine_tts.api_key', 'value'], 'cloud-asr-enabled': ['cloud.baidu_asr.enabled', 'checked'],
   'cloud-asr-url': ['cloud.baidu_asr.url', 'value'], 'cloud-asr-appid': ['cloud.baidu_asr.appid', 'value'],
   'cloud-asr-appkey': ['cloud.baidu_asr.appkey', 'value'], 'cloud-asr-pid': ['cloud.baidu_asr.dev_pid', 'value']
   ,'silicon-asr-enabled': ['cloud.siliconflow_asr.enabled', 'checked'], 'silicon-asr-api': ['cloud.siliconflow_asr.api', 'value'],
@@ -585,7 +582,7 @@ function render() {
   $('cloud-asr-provider').value = asrProvider;
   $('cloud-asr-master-enabled').checked = Boolean(get(config, 'cloud.baidu_asr.enabled', false) || get(config, 'cloud.siliconflow_asr.enabled', false));
   syncCloudProviders(false);
-  ['volc-voice', 'silicon-asr-model'].forEach(id => $(id)?.dispatchEvent(new Event('change')));
+  $('silicon-asr-model')?.dispatchEvent(new Event('change'));
   syncTemperatureField();
   syncContextConfig();
   window.aliyunCloneUI?.renderLibrary();
@@ -973,6 +970,8 @@ async function saveConfig() {
     set(config, path, type === 'checked' ? el.checked : type === 'number' ? Number(el.value) : el.value);
   }
   set(config, 'ui.show_model', !$('hide-model').checked);
+  set(config, 'cloud.volcengine_tts.voice_type', 'S_RCbi2PGQ1');
+  set(config, 'cloud.volcengine_tts.resource_id', 'seed-icl-2.0');
   delete config.conversation;
   try {
     await window.controlApi.saveConfig(config);

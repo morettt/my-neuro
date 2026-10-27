@@ -70,6 +70,10 @@ global.reloadConfig = function() {
             ttsProcessor.requestHandler.useAliyunVoice(config);
             ttsProcessor.config = config;
             ttsProcessor.ttsUnavailable = false;
+        } else if (config.cloud?.volcengine_tts?.enabled && ttsProcessor?.requestHandler?.useVolcengineVoice) {
+            ttsProcessor.requestHandler.useVolcengineVoice(config);
+            ttsProcessor.config = config;
+            ttsProcessor.ttsUnavailable = false;
         }
         console.log('配置文件已重新加载');
         logToTerminal('info', '配置文件已重新加载');

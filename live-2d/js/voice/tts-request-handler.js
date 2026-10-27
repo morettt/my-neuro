@@ -4,8 +4,22 @@
 const { logToTerminal } = require('../api-utils.js');
 const WebSocket = require('ws');
 const { randomUUID } = require('crypto');
+const { readVolcengineConfig, volcengineHeaders } = require('./volcengine-config');
 
 class TTSRequestHandler {
+    useVolcengineVoice(config) {
+        const settings = readVolcengineConfig(config);
+        this.config = config;
+        this.useGateway = false;
+        this.aliyunTtsEnabled = false;
+        this.cloudTtsEnabled = false;
+        this.volcTtsEnabled = true;
+        this.volcApiKey = settings.apiKey;
+        this.volcVoiceType = settings.voiceType;
+        this.volcEndpoint = settings.endpoint;
+        this.volcResourceId = settings.resourceId;
+    }
+
     useAliyunVoice(config) {
         const voice = config.cloud?.aliyun_tts || {};
         this.config = config;
@@ -41,11 +55,11 @@ class TTSRequestHandler {
         // 字节跳动TTS配置
         const volcTts = config.cloud?.volcengine_tts || {};
         this.volcTtsEnabled = volcTts.enabled || false;
-        this.volcAppid = volcTts.appid || "";
-        this.volcAccessToken = volcTts.access_token || "";
-        this.volcVoiceType = volcTts.voice_type || "saturn_zh_female_tiaopigongzhu_tob";
-        this.volcEndpoint = "wss://openspeech.bytedance.com/api/v3/tts/bidirection";
-        this.volcResourceId = "seed-tts-2.0";
+        const volcSettings = readVolcengineConfig(config);
+        this.volcApiKey = volcSettings.apiKey;
+        this.volcVoiceType = volcSettings.voiceType;
+        this.volcEndpoint = volcSettings.endpoint;
+        this.volcResourceId = volcSettings.resourceId;
 
         // 阿里云TTS配置
         const aliyunTts = config.cloud?.aliyun_tts || {};
@@ -254,19 +268,17 @@ class TTSRequestHandler {
         const { EventType, MsgType, startConnection, waitForEvent } = require('./volcengine-protocols.js');
 
         // 连接已就绪
-        if (this.volcWs && this.volcWs.readyState === WebSocket.OPEN && this.volcWsReady) {
+        if (this.volcWs && this.volcWs.readyState === WebSocket.OPEN && this.volcWsReady && this.volcConnectedApiKey === this.volcApiKey) {
             await this.volcWsReady;
             return;
         }
 
+        this._closeVolcConnection();
+        const apiKey = this.volcApiKey;
+        const headers = volcengineHeaders(apiKey);
         this.volcWsReady = new Promise((resolve, reject) => {
             const ws = new WebSocket(this.volcEndpoint, {
-                headers: {
-                    'X-Api-App-Key': this.volcAppid,
-                    'X-Api-Access-Key': this.volcAccessToken,
-                    'X-Api-Resource-Id': this.volcResourceId,
-                    'X-Api-Connect-Id': randomUUID(),
-                },
+                headers,
                 skipUTF8Validation: true,
             });
 
@@ -284,6 +296,7 @@ class TTSRequestHandler {
                     await startConnection(ws);
                     await waitForEvent(ws, MsgType.FullServerResponse, EventType.ConnectionStarted);
                     this.volcWs = ws;
+                    this.volcConnectedApiKey = apiKey;
                     resolve();
                 } catch (err) {
                     ws.close();
