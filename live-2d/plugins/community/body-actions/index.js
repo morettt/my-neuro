@@ -14,8 +14,13 @@ class BodyActionsPlugin extends Plugin {
         this.timeline = [];
         this.motionQueue = [];
         this.motionPlaying = false;
-        this.onSpeechProgress = ({ position } = {}) => this.advanceSpeech(position);
+        this.onSpeechProgress = ({ position } = {}) => {
+            this.advanceSpeech(position);
+            this.advanceTextMouth(position);
+        };
         this.context.on('tts:text:progress', this.onSpeechProgress);
+        this.onTextComplete = () => this.stopTextMouth();
+        this.context.on('tts:text:complete', this.onTextComplete);
         this.interrupt = () => this.cancel();
         this.context.on('tts:interrupted', this.interrupt);
         this.context.on('llm:error', this.interrupt);
@@ -23,6 +28,8 @@ class BodyActionsPlugin extends Plugin {
         this.runtime = new RuntimeHooks(this);
         this.idleStates = new WeakMap();
         this.idleTime = 0;
+        this.textMouthTimer = null;
+        this.textMouthStopTimer = null;
     }
 
     async onStart() {
@@ -56,6 +63,61 @@ class BodyActionsPlugin extends Plugin {
     }
 
     maxActions() { return Math.max(1, Math.min(8, Number(this.config.max_actions) || 4)); }
+
+    textOnlyMode() {
+        const config = this.context.getConfig?.() || {};
+        if (config.tts?.enabled === false || config.ui?.text_only_mode === true) return true;
+        const cloud = config.cloud || {};
+        const hasCloudTtsConfig = cloud.tts || cloud.volcengine_tts || cloud.aliyun_tts;
+        if (hasCloudTtsConfig) {
+            const cloudTtsEnabled = cloud.tts?.enabled === true
+                || cloud.volcengine_tts?.enabled === true
+                || cloud.aliyun_tts?.enabled === true;
+            if (!cloudTtsEnabled) return true;
+        }
+        return false;
+    }
+
+    startTextMouth(text) {
+        this.stopTextMouth();
+        const clean = stripMotionTags(String(text || '')).trim();
+        if (!clean || !this.textOnlyMode()) return;
+        this.textMouthText = clean;
+        this.textMouthPosition = 0;
+    }
+
+    advanceTextMouth(position = 0) {
+        if (!this.textOnlyMode() || !this.textMouthText || !Number.isFinite(position)) return;
+        const facade = global.avatarFacade || global.window?.avatar;
+        const setMouth = value => {
+            try { facade?.setMouth?.(value); } catch (_) {}
+        };
+        let phase = 0;
+        const tick = () => {
+            phase += 0.55;
+            const value = Math.max(0, Math.min(0.9,
+                0.18 + Math.abs(Math.sin(phase)) * 0.52 + Math.sin(phase * 2.7) * 0.12));
+            setMouth(value);
+        };
+        if (!this.textMouthTimer) {
+            tick();
+            this.textMouthTimer = setInterval(tick, 70);
+            this.textMouthTimer.unref?.();
+        }
+        if (this.textMouthStopTimer) clearTimeout(this.textMouthStopTimer);
+        this.textMouthStopTimer = setTimeout(() => this.stopTextMouth(), 260);
+        this.textMouthStopTimer.unref?.();
+    }
+
+    stopTextMouth() {
+        if (this.textMouthTimer) clearInterval(this.textMouthTimer);
+        if (this.textMouthStopTimer) clearTimeout(this.textMouthStopTimer);
+        this.textMouthTimer = null;
+        this.textMouthStopTimer = null;
+        this.textMouthText = '';
+        this.textMouthPosition = 0;
+        try { (global.avatarFacade || global.window?.avatar)?.setMouth?.(0); } catch (_) {}
+    }
 
     updateIdle(model, delta) {
         const vrm = model?.vrm;
@@ -106,14 +168,25 @@ class BodyActionsPlugin extends Plugin {
         response.text = stripMotionTags(parsed.text).trim();
         if (parsed.rejected.length) this.context.log('warn', `已忽略 ${parsed.rejected.length} 个组合、无效或超量的身体动作`);
         this.runtime?.setReply(response.text);
+        this.startTextMouth(response.text);
         if (this.stopped || !parsed.actions.length) return;
         if (!this.adapter()) {
             this.context.log('warn', '已收到身体动作标签，但当前没有可播放的 VRM 或 PMX 模型；请等待 3D 模型加载完成');
             return;
         }
         this.abort = new AbortController();
-        for (const item of this.timeline) item.promise = this.generate(item.action, this.abort.signal);
-        this.work = Promise.all(this.timeline.map(item => item.promise)).catch(() => []);
+        if (this.textOnlyMode()) {
+            // Without TTS there is no tts:text:progress event to release the
+            // queue. Play actions in reply order as soon as they are generated.
+            const epoch = this.epoch;
+            const actions = this.timeline.map(item => item.action);
+            this.work = this.run(actions, epoch, this.abort.signal).catch(error => {
+                if (!this.stopped && !this.abort.signal.aborted) this.context.log('warn', `韬綋鍔ㄤ綔澶辫触: ${error.message}`);
+            });
+        } else {
+            for (const item of this.timeline) item.promise = this.generate(item.action, this.abort.signal);
+            this.work = Promise.all(this.timeline.map(item => item.promise)).catch(() => []);
+        }
     }
 
     async generate(action, signal) {
@@ -198,6 +271,7 @@ class BodyActionsPlugin extends Plugin {
         this.timeline = [];
         this.motionQueue = [];
         this.motionPlaying = false;
+        this.stopTextMouth();
     }
 
     async onStop() {
@@ -208,8 +282,10 @@ class BodyActionsPlugin extends Plugin {
         this.context.off('tts:interrupted', this.interrupt);
         this.context.off('llm:error', this.interrupt);
         this.context.off('tts:text:progress', this.onSpeechProgress);
+        this.context.off('tts:text:complete', this.onTextComplete);
         this.service.stop();
         this.cache.clear();
+        this.stopTextMouth();
     }
 
     async onDestroy() { await this.onStop(); }
