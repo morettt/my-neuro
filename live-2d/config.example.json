@@ -151,10 +151,9 @@
     "api_key": "",
     "volcengine_tts": {
       "enabled": false,
-      "appid": "",
-      "access_token": "",
-      "voice_type": "zh_female_tianmeixiaoyuan_uranus_bigtts",
-      "resource_id": "seed-tts-2.0"
+      "api_key": "",
+      "voice_type": "S_RCbi2PGQ1",
+      "resource_id": "seed-icl-2.0"
     },
     "aliyun_tts": {
       "enabled": false,

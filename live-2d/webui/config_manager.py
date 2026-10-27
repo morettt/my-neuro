@@ -1149,6 +1149,7 @@ def handle_voice_settings():
             if 'volcengine_tts' in data:
                 config['cloud']['volcengine_tts'] = {
                     'enabled': data['volcengine_tts'].get('enabled', False),
+                    'api_key': data['volcengine_tts'].get('api_key', config['cloud'].get('volcengine_tts', {}).get('api_key', '')),
                     'appid': data['volcengine_tts'].get('appid', ''),
                     'access_token': data['volcengine_tts'].get('access_token', ''),
                     'voice_type': data['volcengine_tts'].get('voice_type', 'saturn_zh_female_tiaopigongzhu_tob'),

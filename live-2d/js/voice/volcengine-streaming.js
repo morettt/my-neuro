@@ -6,6 +6,7 @@
 
 const { randomUUID } = require('crypto');
 const WebSocket = require('ws');
+const { readVolcengineConfig, volcengineHeaders } = require('./volcengine-config');
 const { eventBus } = require('../core/event-bus.js');
 const { Events } = require('../core/events.js');
 const { shouldUseLegacyEmotionLogic } = require('../avatar/motion-mode.js');
@@ -30,12 +31,11 @@ class VolcengineStreamingSession {
         this.expressionMapper = expressionMapper;
         this.useLegacyEmotionLogic = shouldUseLegacyEmotionLogic(config);
 
-        const volcCfg = config.cloud?.volcengine_tts || {};
-        this.appid       = volcCfg.appid || '';
-        this.accessToken = volcCfg.access_token || '';
-        this.voiceType   = volcCfg.voice_type || 'saturn_zh_female_keainvsheng_tob';
-        this.endpoint    = 'wss://openspeech.bytedance.com/api/v3/tts/bidirection';
-        this.resourceId  = 'seed-tts-2.0';
+        const volcCfg = readVolcengineConfig(config);
+        this.apiKey      = volcCfg.apiKey;
+        this.voiceType   = volcCfg.voiceType;
+        this.endpoint    = volcCfg.endpoint;
+        this.resourceId  = volcCfg.resourceId;
 
         // WebSocket / session
         this.ws        = null;
@@ -66,12 +66,7 @@ class VolcengineStreamingSession {
 
     async open() {
         this.ws = new WebSocket(this.endpoint, {
-            headers: {
-                'X-Api-App-Key':     this.appid,
-                'X-Api-Access-Key':  this.accessToken,
-                'X-Api-Resource-Id': this.resourceId,
-                'X-Api-Connect-Id':  randomUUID(),
-            },
+            headers: volcengineHeaders(this.apiKey),
             skipUTF8Validation: true,
         });
 
