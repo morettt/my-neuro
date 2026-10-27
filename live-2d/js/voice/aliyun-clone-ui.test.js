@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 
-function harness({ voices = [], draft, failSave = false } = {}) {
+function harness({ voices = [], draft, failSave = false, saveWait } = {}) {
   const elements = new Map();
   class Element {
     constructor() { this.value = ''; this.hidden = false; this.disabled = false; this.dataset = {}; this.children = []; this.listeners = {}; this.duration = 12; this.classes = new Set(); this.classList = { add: c => this.classes.add(c), remove: c => this.classes.delete(c), toggle: (c, on) => on ? this.classes.add(c) : this.classes.delete(c) }; }
@@ -22,7 +22,7 @@ function harness({ voices = [], draft, failSave = false } = {}) {
   }
   const $ = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   $('aliyun-key').value = 'test-key'; $('aliyun-model').value = 'cosyvoice-v3-flash'; $('aliyun-voice').value = 'original-voice';
-  const stages = ['upload', 'clone'].map(name => { const element = new Element(); element.dataset.voiceStep = name; return element; });
+  const stages = ['upload', 'clone', 'save'].map(name => { const element = new Element(); element.dataset.voiceStep = name; return element; });
   const storage = new Map();
   const cacheKey = 'feiniu.aliyun.pending-voice.v1';
   if (draft) storage.set(cacheKey, JSON.stringify(draft));
@@ -44,6 +44,7 @@ function harness({ voices = [], draft, failSave = false } = {}) {
     getSettings: () => settings,
     persistSelection: async (voice, entries) => {
       if (failSave) throw new Error('disk unavailable');
+      if (saveWait) await saveWait;
       calls.save.push(JSON.parse(JSON.stringify(voice)));
       if (entries) settings.voices = entries;
       $('aliyun-voice').value = voice.voice_id; $('aliyun-model').value = voice.model;
@@ -151,4 +152,41 @@ test('dropping an audio file uses the same name-first flow', async () => {
   await h.$('aliyun-name-form').emit('submit', { preventDefault() {} });
   assert.equal(h.calls.upload, 1);
   assert.equal(h.calls.save[0].name, '拖入的角色');
+});
+
+test('processing indicator follows upload, cloning and saving, then disappears on success', async () => {
+  const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
+  const upload = deferred(); const clone = deferred(); const save = deferred();
+  const h = harness({ saveWait: save.promise });
+  h.api.uploadAliyunAudio = () => upload.promise;
+  h.api.enrollAliyunVoice = () => clone.promise;
+  await h.$('aliyun-select-audio').emit('click');
+  await h.$('aliyun-audio-preview').emit('loadedmetadata');
+  h.$('aliyun-voice-name').value = '测试角色';
+  const processing = h.$('aliyun-name-form').emit('submit', { preventDefault() {} });
+  assert.equal(h.$('aliyun-processing').hidden, false);
+  assert.equal(h.$('aliyun-processing-text').textContent, '上传中……');
+  assert.equal(h.$('aliyun-select-audio').disabled, true);
+  upload.resolve({ ok: true, url: 'https://example.com/a.wav', expires_at: Date.now() / 1000 + 86400 });
+  await new Promise(setImmediate);
+  assert.equal(h.$('aliyun-processing-text').textContent, '克隆中……');
+  clone.resolve({ ok: true, voice_id: 'new-voice', model: 'cosyvoice-v3-flash' });
+  await new Promise(setImmediate);
+  assert.equal(h.$('aliyun-processing-text').textContent, '保存中……');
+  save.resolve(); await processing;
+  assert.equal(h.$('aliyun-processing').hidden, true);
+  assert.equal(h.$('aliyun-select-audio').disabled, false);
+});
+
+test('a processing failure stops the spinner and shows an error', async () => {
+  const h = harness();
+  h.api.uploadAliyunAudio = async () => { throw new Error('upload failed'); };
+  await h.$('aliyun-select-audio').emit('click');
+  await h.$('aliyun-audio-preview').emit('loadedmetadata');
+  h.$('aliyun-voice-name').value = '测试角色';
+  await h.$('aliyun-name-form').emit('submit', { preventDefault() {} });
+  assert.equal(h.$('aliyun-processing').hidden, true);
+  assert.equal(h.$('aliyun-clone-status').hidden, false);
+  assert.equal(h.$('aliyun-clone-status').dataset.kind, 'error');
+  assert.equal(h.$('aliyun-select-audio').disabled, false);
 });

@@ -100,6 +100,7 @@ document.querySelectorAll('[data-window]').forEach(button => {
 
 $('github-link').addEventListener('click', () => window.controlApi.openGithub());
 $('gateway-website').addEventListener('click', () => window.controlApi.openExternal('http://mynewbot.com'));
+$('aliyun-key-help').addEventListener('click', () => window.controlApi.openExternal('https://bailian.console.aliyun.com/cn-beijing/model/settings/api-key'));
 $('volcengine-tutorial').addEventListener('click', () => window.controlApi.openExternal('http://mynewbot.com/tutorials/ByteDance-TTS'));
 $('reset-model-position').addEventListener('click', async () => {
   const result = await window.controlApi.resetModelPosition(); showToast(result.message);
@@ -287,23 +288,31 @@ function enhanceSelect(id) {
   trigger.append(text);
   const list = document.createElement('ul');
   list.className = 'list webkit-scrollbar';
-  for (const option of select.options) {
-    if (option.hidden) continue;
-    const item = document.createElement('li');
-    item.className = 'listitem';
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'article dropdown-option';
-    button.dataset.value = option.value;
-    button.textContent = option.textContent;
-    button.addEventListener('click', () => {
-      select.value = option.value;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      state.checked = false;
-    });
-    item.append(button);
-    list.append(item);
-  }
+  const rebuildOptions = () => {
+    list.replaceChildren();
+    state.disabled = select.disabled;
+    if (select.disabled) state.checked = false;
+    dropdown.classList.toggle('is-disabled', select.disabled);
+    for (const option of select.options) {
+      if (option.hidden) continue;
+      const item = document.createElement('li');
+      item.className = 'listitem';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'article dropdown-option';
+      button.dataset.value = option.value;
+      button.textContent = option.textContent;
+      button.disabled = select.disabled || option.disabled;
+      button.addEventListener('click', () => {
+        if (select.disabled || option.disabled) return;
+        select.value = option.value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        state.checked = false;
+      });
+      item.append(button);
+      list.append(item);
+    }
+  };
   const refreshText = () => {
     text.textContent = select.options[select.selectedIndex]?.textContent || '请选择';
     list.querySelectorAll('.dropdown-option').forEach(button => {
@@ -315,10 +324,16 @@ function enhanceSelect(id) {
   select.addEventListener('change', refreshText);
   dropdown.append(state, trigger, list);
   select.insertAdjacentElement('afterend', dropdown);
+  new MutationObserver(() => {
+    rebuildOptions();
+    refreshText();
+  }).observe(select, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+  rebuildOptions();
   refreshText();
 }
 
 enhanceSelect('cloud-tts-provider');
+enhanceSelect('aliyun-saved-voices');
 enhanceSelect('volc-voice');
 enhanceSelect('cloud-asr-provider');
 enhanceSelect('silicon-asr-model');

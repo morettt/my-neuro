@@ -5,6 +5,7 @@
     const api = window.controlApi;
     const cacheKey = 'feiniu.aliyun.pending-voice.v1';
     let busy = false;
+    let currentStage = '';
     let selected = null;
     let uploaded = null;
     let audioValid = false;
@@ -24,14 +25,24 @@
         else localStorage.removeItem(cacheKey);
       } catch { /* Naming and saving still work if local draft storage is unavailable. */ }
     }
+    function updateProcessingIndicator() {
+      const labels = { upload: '上传中……', clone: '克隆中……', save: '保存中……' };
+      const processing = busy && Boolean(labels[currentStage]);
+      $('aliyun-processing').hidden = !processing;
+      $('aliyun-processing-text').textContent = labels[currentStage] || '处理中……';
+      $('aliyun-select-audio').classList.toggle('is-processing', processing);
+      $('aliyun-clone-status').hidden = processing;
+    }
     function stage(active) {
-      const stages = ['upload', 'clone'];
+      currentStage = active;
+      const stages = ['upload', 'clone', 'save'];
       $('aliyun-clone-progress').hidden = !stages.includes(active);
       document.querySelectorAll('[data-voice-step]').forEach(element => {
         const index = stages.indexOf(element.dataset.voiceStep);
         element.classList.toggle('active', element.dataset.voiceStep === active);
         element.classList.toggle('done', active === 'saved' || index < stages.indexOf(active));
       });
+      updateProcessingIndicator();
     }
     function controls() {
       $('aliyun-select-audio').disabled = busy || Boolean(pending);
@@ -41,6 +52,7 @@
       $('aliyun-confirm-name').disabled = busy || (!audioValid && !pending?.ready);
       $('aliyun-saved-voices').disabled = busy;
       $('aliyun-clone-box').setAttribute('aria-busy', String(busy));
+      updateProcessingIndicator();
     }
     function settings() {
       const current = getSettings();
@@ -79,6 +91,7 @@
     }
     async function chooseAudio(filePath) {
       if (busy || pending) return;
+      stage('');
       busy = true; controls();
       try {
         const result = await api.selectAliyunAudio(filePath);
@@ -189,6 +202,7 @@
       if (error) { openNameDialog(); throw new Error(error); }
       const voices = Array.isArray(getSettings().voices) ? getSettings().voices : [];
       const voice = { name: pending.name, voice_id: pending.voice_id, model: pending.model };
+      stage('save'); message('正在保存声音角色……');
       try { await persistSelection(voice, [...voices.filter(item => item.voice_id !== voice.voice_id), voice]); }
       catch (error) { throw new Error(`保存失败：${error.message}`); }
       pending = null; cachePending(); stage('saved'); renderLibrary();
