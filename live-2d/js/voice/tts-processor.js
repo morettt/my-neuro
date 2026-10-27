@@ -4,6 +4,7 @@ const { Events } = require('../core/events.js');
 const { TTSPlaybackEngine } = require('./tts-playback-engine.js');
 const { TTSRequestHandler } = require('./tts-request-handler.js');
 const { VolcengineStreamingSession } = require('./volcengine-streaming.js');
+const { TextMouthDriver } = require('./text-mouth-driver');
 
 function cleanDisplayText(text) {
     return String(text || '')
@@ -19,6 +20,9 @@ class EnhancedTextProcessor {
         // 初始化两个大模块
         this.playbackEngine = new TTSPlaybackEngine(config, onAudioDataCallback, onStartCallback, onEndCallback);
         this.requestHandler = new TTSRequestHandler(config, ttsUrl);
+        this.textMouth = new TextMouthDriver(value => {
+            if (!this.playbackEngine.getPlayingState?.()) this.playbackEngine.onAudioDataCallback?.(value);
+        });
 
         // 字节流式 session 的开始/结束回调。
         // 口型共用 playbackEngine 当前回调，由 AvatarFacade 路由到活动模型。
@@ -208,12 +212,15 @@ class EnhancedTextProcessor {
 
         const typeNext = () => {
             if (this.shouldStop) {
+                this.textMouth.stop();
                 this._fallbackTimer = null;
                 return;
             }
 
             if (this._fallbackQueue && this._fallbackQueue.length > 0) {
-                this.fallbackDisplayText += this._fallbackQueue.shift();
+                const character = this._fallbackQueue.shift();
+                this.fallbackDisplayText += character;
+                this.textMouth.push(character);
                 if (typeof showSubtitle === 'function') {
                     showSubtitle(`${label}: ${this.fallbackDisplayText}`);
                 }
@@ -222,6 +229,7 @@ class EnhancedTextProcessor {
             } else {
                 // 队列空了，停下来等新字符进来
                 this._fallbackTimer = null;
+                this.textMouth.stop();
                 eventBus.emit(Events.TTS_TEXT_COMPLETE, { text: this.fallbackDisplayText });
             }
         };
@@ -231,6 +239,7 @@ class EnhancedTextProcessor {
 
     // 全部完成的处理
     handleAllComplete() {
+        this.textMouth.stop();
         // 如果有回退字幕，停留3秒让用户看完
         const hideDelay = this.fallbackDisplayText ? 3000 : 1000;
         setTimeout(() => {
@@ -330,6 +339,7 @@ class EnhancedTextProcessor {
 
     // 重置
     reset() {
+        this.textMouth.stop();
         this.llmFullResponse = '';
         this.fallbackDisplayText = '';
         this._fallbackQueue = [];
@@ -364,6 +374,7 @@ class EnhancedTextProcessor {
 
     // 打断
     interrupt() {
+        this.textMouth.stop();
         console.log('打断TTS播放...');
 
         eventBus.emit(Events.TTS_INTERRUPTED);
