@@ -217,10 +217,12 @@ class EnhancedTextProcessor {
                 if (typeof showSubtitle === 'function') {
                     showSubtitle(`${label}: ${this.fallbackDisplayText}`);
                 }
+                eventBus.emit(Events.TTS_TEXT_PROGRESS, { position: this.fallbackDisplayText.length, text: this.fallbackDisplayText });
                 this._fallbackTimer = setTimeout(typeNext, charInterval);
             } else {
                 // 队列空了，停下来等新字符进来
                 this._fallbackTimer = null;
+                eventBus.emit(Events.TTS_TEXT_COMPLETE, { text: this.fallbackDisplayText });
             }
         };
 
