@@ -73,6 +73,10 @@ class TTSPlaybackEngine {
             
             this.isPlaying = true;
             this.currentAudioResolve = resolve;
+            eventBus.emit(Events.TTS_SEGMENT_START, {
+                position: this.displayedText.length,
+                text: segmentText,
+            });
             
             // 触发开始回调
             if (this.onStartCallback) this.onStartCallback();

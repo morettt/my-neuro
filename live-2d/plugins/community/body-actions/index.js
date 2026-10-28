@@ -14,11 +14,21 @@ class BodyActionsPlugin extends Plugin {
         this.timeline = [];
         this.motionQueue = [];
         this.motionPlaying = false;
+        this.segmentClockSeen = false;
         this.onSpeechProgress = ({ position } = {}) => {
-            this.advanceSpeech(position);
+            // Keep the original subtitle-only/fallback path. Real audio emits
+            // a segment-start event first; fallback TTS and pure subtitle mode
+            // do not, so their character progress remains the action clock.
+            if (!this.segmentClockSeen) this.advanceSpeech(position);
             this.advanceTextMouth(position);
         };
+        this.onSpeechSegmentStart = ({ position = 0, text = '' } = {}) => {
+            this.segmentClockSeen = true;
+            const length = stripMotionTags(String(text || '')).length;
+            this.advanceSpeech(position + length);
+        };
         this.context.on('tts:text:progress', this.onSpeechProgress);
+        this.context.on('tts:segment:start', this.onSpeechSegmentStart);
         this.onTextComplete = () => this.stopTextMouth();
         this.context.on('tts:text:complete', this.onTextComplete);
         this.interrupt = () => this.cancel();
@@ -67,14 +77,10 @@ class BodyActionsPlugin extends Plugin {
     textOnlyMode() {
         const config = this.context.getConfig?.() || {};
         if (config.tts?.enabled === false || config.ui?.text_only_mode === true) return true;
-        const cloud = config.cloud || {};
-        const hasCloudTtsConfig = cloud.tts || cloud.volcengine_tts || cloud.aliyun_tts;
-        if (hasCloudTtsConfig) {
-            const cloudTtsEnabled = cloud.tts?.enabled === true
-                || cloud.volcengine_tts?.enabled === true
-                || cloud.aliyun_tts?.enabled === true;
-            if (!cloudTtsEnabled) return true;
-        }
+        // Cloud providers are selected inside the real TTS processor. Their
+        // config objects may exist while disabled, so their presence must not
+        // force body actions into the text-only path. When TTS is enabled,
+        // subtitle progress events are the clock that releases each action.
         return false;
     }
 
@@ -157,6 +163,7 @@ class BodyActionsPlugin extends Plugin {
         const parsed = parseActions(originalText, this.maxActions());
         this.cancel();
         this.timeline = [];
+        this.segmentClockSeen = false;
         let offset = 0;
         for (const match of originalText.matchAll(/\[([^\[\]]*)\]/g)) {
             const action = match[1].trim();
@@ -282,6 +289,7 @@ class BodyActionsPlugin extends Plugin {
         this.context.off('tts:interrupted', this.interrupt);
         this.context.off('llm:error', this.interrupt);
         this.context.off('tts:text:progress', this.onSpeechProgress);
+        this.context.off('tts:segment:start', this.onSpeechSegmentStart);
         this.context.off('tts:text:complete', this.onTextComplete);
         this.service.stop();
         this.cache.clear();
