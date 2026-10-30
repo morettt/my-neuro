@@ -6,13 +6,14 @@ function isWayland(env = process.env, platform = process.platform) {
     return platform === 'linux' && (env.XDG_SESSION_TYPE === 'wayland' || Boolean(env.WAYLAND_DISPLAY));
 }
 
-// Prefer the session's native backend, including when XWayland also exports
-// DISPLAY. X11 remains an explicit compatibility mode in a Wayland session.
+// The desktop companion needs an interactive model over a click-through desktop
+// overlay. Native Wayland client windows cannot provide that contract on GNOME;
+// keep them opt-in rather than silently replacing the overlay with a blocking window.
 function linuxDisplayMode(env = process.env) {
-    const mode = env.MY_NEURO_DISPLAY_MODE || (isWayland(env, 'linux') ? 'wayland' : 'x11');
+    const mode = env.MY_NEURO_DISPLAY_MODE || 'x11';
     if (!['x11', 'wayland'].includes(mode)) throw new Error('MY_NEURO_DISPLAY_MODE must be x11 or wayland');
     if (mode === 'wayland' && !isWayland(env, 'linux')) throw new Error('Wayland is unavailable. Use MY_NEURO_DISPLAY_MODE=x11 in an X11 session.');
-    if (mode === 'x11' && !env.DISPLAY) throw new Error('XWayland is unavailable (DISPLAY is unset). Use MY_NEURO_DISPLAY_MODE=wayland.');
+    if (mode === 'x11' && !env.DISPLAY) throw new Error('X11/XWayland is unavailable (DISPLAY is unset). Enable XWayland for the desktop overlay; MY_NEURO_DISPLAY_MODE=wayland selects an experimental window without desktop click-through.');
     return mode;
 }
 

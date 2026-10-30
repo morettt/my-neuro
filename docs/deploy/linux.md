@@ -20,16 +20,16 @@ cd ~/project/my-neuro
 
 | 模式 | 启动方式 | 能力与限制 |
 | --- | --- | --- |
-| 原生 Wayland 透明桌宠（Wayland 会话默认） | `./scripts/start-linux.sh` | 独立透明小窗，顶部“⋮⋮ 桌宠”把手移动窗口，“居中”适应窗口；模型可点击、拖动和滚轮缩放。窗口位置和堆叠由合成器管理。 |
-| XWayland 桌面覆盖层（兼容选项） | `MY_NEURO_DISPLAY_MODE=x11 ./scripts/start-linux.sh` | 需要 `DISPLAY`；保留全桌面透明覆盖、鼠标穿透、定位和跨屏窗口逻辑。桌面会话仍为 Wayland。 |
+| XWayland 桌面覆盖层（默认） | `./scripts/start-linux.sh` | 自动覆盖桌面，无需手动全屏；模型可点击、拖动和缩放，空白区域鼠标穿透。Wayland 会话保持不变。 |
+| 原生 Wayland 小窗（实验性、显式选择） | `MY_NEURO_DISPLAY_MODE=wayland ./scripts/start-linux.sh` | 仅用于验证原生渲染和窗口交互。窗口范围会拦截下层内容，不具备桌面覆盖层体验，不作为默认桌宠方案。 |
 
 启动器在 Electron 启动前传入 Ozone 显示后端和 GL 参数；不要绕过启动器直接执行 Electron 二进制，否则新版 Electron 可能在读取应用代码之前选错后端，导致窗口不可见。`npm run control` / `npm start` 也使用相同的启动器。
 
-在 Wayland 会话中，即使同时存在 `DISPLAY`，仍默认选择原生 Wayland；不依赖 XWayland。X11 会话继续使用 X11。`MY_NEURO_DISPLAY_MODE` 可显式覆盖，启动器、控制面板与桌宠子进程统一使用该选择。
+默认使用 X11 后端：在 Wayland 桌面会话中通过 XWayland 提供透明覆盖层，在 X11 会话中直接运行。启动器、控制面板、桌宠子进程使用一致的选择。默认模式需要 `DISPLAY`；若没有 XWayland，会明确报错，不静默改成拦截桌面的透明小窗。
 
-原生 Wayland 默认创建 640×720 的透明窗口，保留任务栏入口，支持最小化、恢复、关闭。顶部把手使用合成器原生的窗口移动，不用全局坐标强行定位。不提供全桌面跨屏覆盖、强制置顶或整窗鼠标穿透，避免关闭输入后无法恢复交互；若桌面提供“总在最上层”窗口菜单，可由用户设置。聊天框、字幕和回弹区域按窗口内部尺寸布局，窗口缩放时不会仍锚在整块显示器外侧。
+实验性原生 Wayland 模式提供 640×720 的透明窗口和移动把手，便于检查原生 GPU、模型、聊天及窗口交互。它不能替代真正的桌宠覆盖层：即使背景透明，窗口范围仍会拦截下层内容；把它手动全屏也不能解决穿透问题。
 
-完整桌面覆盖层需要合成器扩展或额外协议支持，GNOME/KDE/wlroots 的能力并不相同；本实现不自动安装桌面扩展。需要现有覆盖层时，可显式选择 XWayland。
+真正的原生 Wayland 桌宠需要合成器层面的覆盖、输入区域及定位支持。GNOME/KDE/wlroots 的扩展和协议不同，本实现尚未提供这层适配，因此不将普通透明窗口称为原生桌宠适配完成，也不默认启用。
 
 XWayland 覆盖层通过低频鼠标位置采样恢复模型/控件命中检测：移入模型时接收原生点击、拖动和滚轮，空白区域保持穿透。坐标使用 Electron 的 DIP，不再乘显示缩放比例；拖动中即使暂时离开命中框也保持接收松开事件。这样避免依赖 [Electron 仅在 macOS/Windows 支持的鼠标移动转发](https://www.electronjs.org/docs/latest/api/base-window#winsetignoremouseeventsignore-options)。原生 Wayland 透明小窗无需这条采样路径，也不轮询全局鼠标位置。
 
@@ -82,7 +82,7 @@ VRM 默认限制为 30 FPS，减少桌宠持续渲染负载；需要更流畅动
 
 ## 验证范围
 
-已在 ARM64 Linux / Wayland 会话中验证安装、控制面板启动桌宠、Live2D 进入 `ready`、停止流程。XWayland 模式已核对控制面板与桌宠均处于系统的 `IsViewable` 状态，并由用户确认两者同时可见。原生 Wayland 已在 GNOME / ARM64 上实际启动，用户确认透明窗口显示、把手移动窗口、模型点击和拖动正常；渲染器为 Adreno X1-85 / OpenGL ES 3.2。该机器已验证 Adreno X1-85 / freedreno 硬件 WebGL（ANGLE OpenGL 与 OpenGL ES 两条路径）；软件渲染仅作为可选兼容方案。未配置提供商的对话、云语音和大型本地模型不算作端到端通过。截图的 portal 路径有自动测试，真实屏幕选择授权及其他合成器/显卡仍需各自桌面环境验证。
+已在 ARM64 Linux / Wayland 会话中验证安装、控制面板启动桌宠、Live2D 进入 `ready`、停止流程。XWayland 模式已核对控制面板与桌宠均处于系统的 `IsViewable` 状态，并由用户确认两者同时可见。原生 Wayland 实验窗口已验证模型显示、把手移动和窗口内部交互，但其窗口范围拦截下层内容，不满足桌宠覆盖层要求。原生渲染器为 Adreno X1-85 / OpenGL ES 3.2。该机器已验证 Adreno X1-85 / freedreno 硬件 WebGL（ANGLE OpenGL 与 OpenGL ES 两条路径）；软件渲染仅作为可选兼容方案。未配置提供商的对话、云语音和大型本地模型不算作端到端通过。截图的 portal 路径有自动测试，真实屏幕选择授权及其他合成器/显卡仍需各自桌面环境验证。
 
 ```bash
 node --test $(find live-2d/js -name '*.test.js')
