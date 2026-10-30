@@ -1,8 +1,11 @@
 const { globalShortcut, BrowserWindow, app } = require('electron');
 
+const { isWayland, linuxDisplayMode } = require('./platform/runtime');
 let uiohookApi = null;
 try {
-    uiohookApi = require('uiohook-napi');
+    // X11 key hooks cannot observe native Wayland applications and may abort
+    // the process when no X server is available. Use focused-window PTT.
+    if (!isWayland()) uiohookApi = require('uiohook-napi');
 } catch (error) {
     console.warn('[PTT] uiohook-napi is unavailable; PTT will use window focus fallback only.', error.message);
 }
@@ -19,6 +22,8 @@ class ShortcutManager {
     }
 
     registerAll() {
+        if (process.env.MY_NEURO_DISABLE_GLOBAL_SHORTCUTS === '1') return;
+        if (isWayland()) console.warn('[PTT] Wayland: hold-to-talk requires focus; global shortcuts use the desktop portal where available.');
         this._registerAppControls();
         this._registerTTSInterrupt();
         this._registerWindowTopMost();
@@ -42,6 +47,7 @@ class ShortcutManager {
     }
 
     _registerWindowTopMost() {
+        if (process.platform === 'linux' && linuxDisplayMode() === 'wayland') return;
         this._register('CommandOrControl+T', () => {
             const windows = BrowserWindow.getAllWindows();
             windows.forEach(win => {

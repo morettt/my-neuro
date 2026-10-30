@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { projectPython } = require('../platform/runtime');
 
 function pluginDlcInfo(pluginsDir, pluginDir, metadata) {
     const target = path.resolve(pluginsDir, '..', 'plugins-dlc', path.basename(pluginDir));
@@ -14,7 +15,7 @@ function pluginDlcInfo(pluginsDir, pluginDir, metadata) {
     const complete = root => checks.length > 0 && checks.every(file => fs.existsSync(path.join(root, file)));
     const legacyRoot = path.resolve(pluginsDir, '..', '..', 'full-hub');
     const resourceRoot = complete(target) ? target : complete(legacyRoot) ? legacyRoot : target;
-    const python = path.resolve(pluginsDir, '..', '..', 'env', 'python.exe');
+    const python = projectPython(path.resolve(pluginsDir, '..', '..'));
     return { target, script, resourceRoot, installed: complete(resourceRoot) && fs.existsSync(python) };
 }
 

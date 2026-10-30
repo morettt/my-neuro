@@ -13,7 +13,7 @@
     "@pixiv/three-vrm": "^3.5.1",
     "axios": "^1.9.0",
     "cors": "^2.8.5",
-    "electron": "^28.0.0",
+    "electron": "^45.1.0",
     "express": "^5.1.0",
     "node-fetch": "^3.3.2",
     "pixi-live2d-display": "^0.3.1",
@@ -22,10 +22,13 @@
     "screenshot-desktop": "^1.15.3",
     "socket.io-client": "^4.8.1",
     "three": "^0.183.2",
-    "uiohook-napi": "1.5.4",
     "ws": "^8.18.0"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "optionalDependencies": {
+    "uiohook-napi": "1.5.4"
+  },
+  "desktopName": "io.github.morettt.MyNeuro.desktop"
 }

@@ -1,4 +1,7 @@
 const { app, BrowserWindow, ipcMain, screen, globalShortcut, desktopCapturer, dialog, nativeImage } = require('electron')
+const { configureElectron } = require('./js/platform/runtime');
+const { nativeWayland } = configureElectron(app);
+const { captureScreen } = require('./js/platform/screen-capture');
 const path = require('path')
 const fs = require('fs')
 const { HttpServer } = require('./js/services/http-server')
@@ -266,6 +269,7 @@ function finalizeRendererFailure(win, result, reason) {
 
 
 function ensureTopMost(win) {
+    if (nativeWayland) return;
     if (!win.isAlwaysOnTop()) {
         win.setAlwaysOnTop(true, 'screen-saver')
     }
@@ -327,6 +331,7 @@ function computePetWindowBounds(config, displays, primaryDisplay) {
 }
 
 function applyPetUnionBounds(win, config) {
+    if (nativeWayland) return null;
     if (!win || win.isDestroyed()) return null;
     const displays = screen.getAllDisplays();
     const primary = screen.getPrimaryDisplay();
@@ -355,6 +360,7 @@ function applyPetUnionBounds(win, config) {
 // 排的 500/1500ms 延迟重申，会在已经切到 B 屏后触发、把窗口拽回 A 屏的尺寸/位置，两边互相打架
 // 导致窗口尺寸错乱、模型与光标错位。
 function schedulePetBoundsRepair(win, targetBounds) {
+    if (nativeWayland) return;
     if (!win || !targetBounds) return;
     if (win._petBoundsRepairTimers) {
         for (const t of win._petBoundsRepairTimers) clearTimeout(t);
@@ -382,6 +388,7 @@ function schedulePetBoundsRepair(win, targetBounds) {
 // 随后由 schedulePetBoundsRepair 修正，中间一两帧会“闪跳”。切屏期间把窗口透明度降到 0
 // 遮住过渡，待 getBounds 收敛到目标尺寸后再恢复原透明度。
 function hidePetForMove(win) {
+    if (nativeWayland) return;
     if (!win || win.isDestroyed()) return;
     if (win._petHidden) return; // 已在切屏过渡中，不重复记录原透明度
     try {
@@ -444,17 +451,15 @@ function createWindow () {
     console.log(`窗口位置: (${minX}, ${minY})`);
     
     const win = new BrowserWindow({
-        x: minX,
-        y: minY,
-        width: totalWidth,
-        height: totalHeight,
-        transparent: true,
-        frame: false,
-        alwaysOnTop: true,
-        backgroundColor: '#00000000',
+        ...(nativeWayland ? { width: 960, height: 720, minWidth: 640, minHeight: 480 }
+            : { x: minX, y: minY, width: totalWidth, height: totalHeight }),
+        transparent: !nativeWayland,
+        frame: nativeWayland,
+        alwaysOnTop: !nativeWayland,
+        backgroundColor: nativeWayland ? '#20232b' : '#00000000',
         hasShadow: false,
         focusable: true,
-        type: 'desktop',
+        type: process.platform === 'linux' ? 'normal' : 'desktop',
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
@@ -464,11 +469,13 @@ function createWindow () {
         },
         resizable: true,
         movable: true,
-        skipTaskbar: true,
+        skipTaskbar: !nativeWayland,
         maximizable: false,
     })
-    win.setAlwaysOnTop(true, 'screen-saver')
-    win.setIgnoreMouseEvents(true, { forward: true });
+    if (!nativeWayland) {
+        win.setAlwaysOnTop(true, 'screen-saver');
+        win.setIgnoreMouseEvents(true, { forward: true });
+    }
     win.setMenu(null)
     
     // 立即验证窗口尺寸
@@ -575,7 +582,7 @@ ipcMain.on('get-screen-info-sync', (event) => {
 });
 
 ipcMain.on('set-ignore-mouse-events', (event, { ignore, options }) => {
-    BrowserWindow.fromWebContents(event.sender).setIgnoreMouseEvents(ignore, options)
+    if (!nativeWayland) BrowserWindow.fromWebContents(event.sender)?.setIgnoreMouseEvents(ignore, options)
 })
 
 ipcMain.on('set-window-opacity', (event, opacity) => {
@@ -585,7 +592,7 @@ ipcMain.on('set-window-opacity', (event, opacity) => {
 
 ipcMain.on('request-top-most', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
-    win.setAlwaysOnTop(true, 'screen-saver')
+    if (!nativeWayland) win.setAlwaysOnTop(true, 'screen-saver')
 })
 
 // 添加保存配置的IPC处理器
@@ -670,30 +677,8 @@ ipcMain.handle('take-screenshot', async (event) => {
     try {
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        const displays = await screenshot.listDisplays();
-
-        const cursorPoint = screen.getCursorScreenPoint();
-        const currentDisplay = screen.getDisplayNearestPoint(cursorPoint);
-
-        const electronDisplays = screen.getAllDisplays().sort((a, b) => a.bounds.x - b.bounds.x);
-        const targetIndex = electronDisplays.findIndex(d => d.id === currentDisplay.id);
-
-        const nativeDisplays = displays.sort((a, b) => (a.left || 0) - (b.left || 0));
-
-        if (targetIndex >= nativeDisplays.length) {
-            throw new Error(`屏幕索引越界：鼠标在 Index ${targetIndex}，但原生只检测到 ${nativeDisplays.length} 个屏幕`);
-        }
-
-        const targetNativeDisplay = nativeDisplays[targetIndex];
-
-        const imgBuffer = await screenshot({
-            screen: targetNativeDisplay.id,
-            format: 'jpg'
-        });
-
-        // 视觉模型默认使用均衡画质：限制到 1600x900 内、保持比例且不放大小图。
-        // 这样可显著减少 2K/4K 屏幕截图的 Base64 体积和上传延迟。
-        const image = nativeImage.createFromBuffer(imgBuffer);
+        const captured = await captureScreen({ desktopCapturer, screen, screenshot });
+        const image = Buffer.isBuffer(captured) ? nativeImage.createFromBuffer(captured) : captured;
         if (image.isEmpty()) throw new Error('截图图像解码失败');
         const sourceSize = image.getSize();
         const scale = Math.min(1, 1600 / sourceSize.width, 900 / sourceSize.height);

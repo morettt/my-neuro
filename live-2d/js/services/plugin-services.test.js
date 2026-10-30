@@ -6,6 +6,7 @@ const vm = require('vm');
 const { EventEmitter } = require('events');
 const { discoverPluginServices, resolvePluginServiceLaunch } = require('./plugin-services');
 const { pluginDlcInfo, findPluginDlc } = require('./plugin-dlc');
+const { projectPython } = require('../platform/runtime');
 const { downloadProcessEnv, explainStorageError } = require('./download-storage');
 
 const root = path.resolve(__dirname, '../..');
@@ -66,7 +67,7 @@ function controlHarness(t) {
         pluginsPath: pluginsDir,
         pluginDlcInfo, findPluginDlc,
         readJson: file => JSON.parse(fs.readFileSync(file, 'utf8')),
-        projectRoot: dir, hubRoot: path.join(dir, 'full-hub'), projectEnvPython: path.join(dir, 'env/python.exe'),
+        projectRoot: dir, hubRoot: path.join(dir, 'full-hub'), projectEnvPython: projectPython(dir),
         serviceProcesses, serviceDownloads,
         pluginDlcProgress: new Map(),
         ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
@@ -75,12 +76,12 @@ function controlHarness(t) {
         serviceInstalled: () => false,
         portListening: async () => false,
         listeningPids: async () => [],
-        ensureProjectPython: async () => path.join(dir, 'env/python.exe'),
+        ensureProjectPython: async () => projectPython(dir),
         sendServiceLog: (_sender, service, text) => logs.push({ service, text }),
         runProcess: async () => {},
         net: { fetch: async url => { calls.push({ url }); } },
         AbortSignal,
-        process: { env: {} },
+        process: { env: {}, platform: 'win32' },
         spawn: (command, args, options) => {
             const child = new EventEmitter();
             child.stdout = new EventEmitter();
@@ -91,6 +92,7 @@ function controlHarness(t) {
             return child;
         }
     };
+    context.spawnManaged = context.spawn;
     vm.runInNewContext(source.slice(source.indexOf("ipcMain.handle('control:start-service'"), source.indexOf("ipcMain.handle('control:open-external'")), context);
     vm.runInNewContext(source.slice(source.indexOf("ipcMain.handle('control:set-plugin-enabled'"), source.indexOf("ipcMain.handle('control:save-plugin-config'")), context);
     vm.runInNewContext(source.slice(source.indexOf("ipcMain.handle('control:service-status'"), source.indexOf("ipcMain.handle('control:start-service'")), context);
@@ -274,8 +276,8 @@ test('DLC detection checks model completeness and prefers new DLC over legacy re
     let plugin = findPluginDlc(pluginsDir, 'local-bert', url);
     fs.mkdirSync(plugin.target, { recursive: true });
     assert.equal(findPluginDlc(pluginsDir, 'local-bert', url).installed, false);
-    fs.mkdirSync(path.join(dir, 'env'), { recursive: true });
-    fs.writeFileSync(path.join(dir, 'env/python.exe'), 'test');
+    fs.mkdirSync(path.dirname(projectPython(dir)), { recursive: true });
+    fs.writeFileSync(projectPython(dir), 'test');
     const legacy = path.join(dir, 'full-hub');
     fs.mkdirSync(path.join(legacy, 'bert-hub'), { recursive: true });
     for (const file of plugin.metadata.localService.checks) fs.writeFileSync(path.join(legacy, file), 'old');
@@ -370,4 +372,24 @@ test('BERT configuration opens only service controls and logs', () => {
     assert.doesNotMatch(element('plugin-detail-content').innerHTML, /plugin-config-form|data-plugin-field/);
     assert.equal(element('plugin-readme').hidden, true);
     assert.equal(fs.existsSync(path.join(root, 'plugins/built-in/local-bert/plugin_config.json')), false);
+});
+
+
+test('Linux service launch uses the selected Python and stopping never targets unrelated listeners', async t => {
+    const { context, handlers, calls, event } = controlHarness(t);
+    context.process.platform = 'linux';
+    context.serviceInstalled = () => true;
+    fs.mkdirSync(path.dirname(context.projectEnvPython), { recursive: true });
+    fs.writeFileSync(context.projectEnvPython, 'test');
+    assert.equal((await handlers.get('control:start-service')(event, 'bert')).ok, true);
+    assert.equal(calls[0].command, context.projectEnvPython);
+    const owned = context.serviceProcesses.bert;
+    const stopped = [];
+    context.stopManaged = async child => stopped.push(child);
+    assert.equal((await handlers.get('control:stop-service')(event, 'bert')).ok, true);
+    assert.deepEqual(stopped, [owned]);
+    assert.equal(calls.length, 1);
+    context.portListening = async () => true;
+    assert.equal((await handlers.get('control:stop-service')(event, 'bert')).ok, false);
+    assert.equal(calls.length, 1);
 });

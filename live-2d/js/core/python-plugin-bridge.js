@@ -8,7 +8,10 @@ const { Plugin } = require('./plugin-base.js');
 const { logToTerminal } = require('../api-utils.js');
 
 // Windows 用 python，其他平台用 python3
-const PYTHON_CMD = process.platform === 'win32' ? 'python' : 'python3';
+const { projectPython } = require('../platform/runtime');
+const fs = require('fs');
+const candidate = projectPython(path.resolve(__dirname, '../../..'));
+const PYTHON_CMD = fs.existsSync(candidate) ? candidate : (process.platform === 'win32' ? 'python' : 'python3');
 
 // plugin_sdk.py 所在目录（plugins/）
 const SDK_DIR = path.join(__dirname, '..', '..', 'plugins');

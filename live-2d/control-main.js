@@ -10,6 +10,9 @@ if (process.platform === 'win32' && process.versions.electron?.startsWith('28.')
   app.commandLine.appendSwitch('disable-features', [...disabledFeatures].join(','));
 }
 
+const { configureElectron, projectPython, spawnManaged, stopManaged, requireLinuxPython } = require('./js/platform/runtime');
+const { nativeWayland } = configureElectron(app);
+
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -60,6 +63,7 @@ function closeAvatarLoadingWindow() {
 }
 
 function showAvatarLoadingWindow() {
+  if (nativeWayland) return;
   closeAvatarLoadingWindow();
   const displays = require('electron').screen.getAllDisplays();
   const minX = Math.min(...displays.map(display => display.bounds.x));
@@ -161,10 +165,11 @@ function getServiceDefinitions() {
 }
 const projectRoot = path.resolve(__dirname, '..');
 const hubRoot = path.join(projectRoot, 'full-hub');
-const projectEnvPython = path.join(projectRoot, 'env', 'python.exe');
+const projectEnvPython = projectPython(projectRoot);
 const projectEnvUrl = 'https://modelscope.cn/models/morelle/my-neuro-env/resolve/master/my-neuro-env.tar.gz';
 
 async function ensureProjectPython(sender, service, onProgress = () => {}) {
+  if (process.platform !== 'win32') return requireLinuxPython(projectRoot);
   if (fs.existsSync(projectEnvPython)) {
     onProgress({ stage: 'environment-ready', percent: 100 });
     return projectEnvPython;
@@ -258,6 +263,12 @@ async function serviceStatus() {
 }
 
 async function stopConfiguredServices() {
+  if (process.platform !== 'win32') {
+    await Promise.all([...Object.values(serviceProcesses), ...Object.values(serviceDownloads)].map(stopManaged));
+    for (const id of Object.keys(serviceProcesses)) serviceProcesses[id] = null;
+    for (const id of Object.keys(serviceDownloads)) serviceDownloads[id] = null;
+    return;
+  }
   for (const [id, definition] of Object.entries(getServiceDefinitions())) {
     const pids = await listeningPids(definition.port);
     if (serviceProcesses[id]?.pid) pids.push(String(serviceProcesses[id].pid));
@@ -279,6 +290,7 @@ async function stopConfiguredServices() {
 }
 
 function listeningPids(port) {
+  if (process.platform !== 'win32') return Promise.resolve([]);
   return new Promise(resolve => {
     const child = spawn('netstat.exe', ['-ano', '-p', 'tcp'], { windowsHide: true });
     let output = '';
@@ -732,11 +744,11 @@ function createControlWindow() {
     height: 760,
     minWidth: 860,
     minHeight: 620,
-    frame: false,
+    frame: nativeWayland,
     show: false,
-    opacity: 0,
-    transparent: true,
-    backgroundColor: '#00000000',
+    opacity: nativeWayland ? 1 : 0,
+    transparent: !nativeWayland,
+    backgroundColor: nativeWayland ? '#20232b' : '#00000000',
     webPreferences: {
       preload: path.join(__dirname, 'control-preload.js'),
       contextIsolation: true,
@@ -747,6 +759,7 @@ function createControlWindow() {
     }
   });
   const fadeWindow = (from, to, duration = 320) => new Promise(resolve => {
+    if (nativeWayland) { resolve(); return; }
     const startedAt = Date.now();
     const timer = setInterval(() => {
       if (win.isDestroyed()) {
@@ -782,6 +795,9 @@ function createControlWindow() {
       autoCloseServices ? stopConfiguredServices() : Promise.resolve()])
       .finally(() => { if (!win.isDestroyed()) win.destroy(); });
   });
+  win.webContents.once('did-finish-load', () => {
+    if (process.argv.includes('--start-pet')) startLive2d({ sender: win.webContents });
+  });
   win.loadFile(path.join(__dirname, 'control.html'), {
     query: process.argv.includes('--voice-clone') ? { view: 'voice-clone' } : {}
   });
@@ -807,6 +823,10 @@ async function stopLive2dProcess() {
     return { ok: false, message: '桌宠未在运行' };
   }
   await postDesktop('/prepare-close', {}, 1800);
+  if (process.platform !== 'win32') {
+    try { await stopManaged(live2dProcess); live2dProcess = null; return { ok: true, message: '桌宠已关闭' }; }
+    catch (error) { return { ok: false, message: error.message }; }
+  }
   const pid = live2dProcess.pid;
   return new Promise(resolve => {
     const killer = spawn('taskkill.exe', ['/pid', String(pid), '/t', '/f'], { windowsHide: true });
@@ -916,6 +936,7 @@ ipcMain.handle('control:query-aliyun-voice', async (_event, options) => {
   } catch (error) { return { ok: false, message: error.message }; }
 });
 ipcMain.handle('control:generate-voice-bat', (_event, options) => {
+  if (process.platform !== 'win32') return { ok: false, message: 'Linux 请独立部署 GPT-SoVITS 并配置 TTS API 地址，不使用 Windows 声音启动脚本。' };
   const character = String(options?.character || '').trim();
   const text = String(options?.text || '').trim();
   const language = ['zh', 'en', 'ja'].includes(options?.language) ? options.language : 'zh';
@@ -938,12 +959,13 @@ ipcMain.handle('control:start-service', async (event, id) => {
   if (!definition) return { ok: false, message: '未知服务' };
   if (!serviceInstalled(definition)) return { ok: false, message: `${definition.name} 模块尚未安装` };
   if (await portListening(definition.port)) return { ok: false, message: `${definition.name} 已在运行` };
+  if (process.platform !== 'win32' && !definition.startScript) return { ok: false, message: '此模块仅提供 Windows 运行包。Linux 请独立部署服务并配置 API 地址，参见 Linux 部署文档。' };
   const batPath = definition.bat ? path.join(projectRoot, definition.bat) : null;
   if (batPath && !fs.existsSync(batPath)) return { ok: false, message: `找不到 ${definition.bat}` };
   if (definition.startScript && !fs.existsSync(projectEnvPython)) return { ok: false, message: '缺少公共 Python 环境，请先下载模块' };
   sendServiceLog(event.sender, id, `正在启动 ${definition.name}...\n`);
   const child = definition.startScript
-    ? spawn(projectEnvPython, ['-u', definition.startScript, ...(definition.startArgs || [])], {
+    ? spawnManaged(projectEnvPython, ['-u', definition.startScript, ...(definition.startArgs || [])], {
       cwd: definition.resourceRoot || hubRoot, windowsHide: true,
       env: { ...downloadProcessEnv(__dirname), PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', MY_NEURO_FULL_HUB_DIR: hubRoot,
         MY_NEURO_SERVICE_RESOURCE_DIR: definition.resourceRoot || hubRoot }
@@ -963,8 +985,16 @@ ipcMain.handle('control:start-service', async (event, id) => {
 async function stopService(event, id) {
   const definition = getServiceDefinitions()[id];
   if (!definition) return { ok: false, message: '未知服务' };
-  const pids = await listeningPids(definition.port);
   const tracked = serviceProcesses[id];
+  if (process.platform !== 'win32') {
+    if (!tracked) return { ok: false, message: '此服务不是由本控制面板启动，请在启动它的终端停止。' };
+    try {
+      await stopManaged(tracked);
+      serviceProcesses[id] = null;
+      return { ok: true, message: `${definition.name} 已停止` };
+    } catch (error) { return { ok: false, message: error.message }; }
+  }
+  const pids = await listeningPids(definition.port);
   if (tracked?.pid) pids.push(String(tracked.pid));
   const uniquePids = [...new Set(pids)];
   if (!uniquePids.length) return { ok: false, message: `${definition.name} 未在运行` };
@@ -1016,6 +1046,7 @@ ipcMain.handle('control:download-service', async (event, id) => {
   const definition = getServiceDefinitions()[id];
   if (!definition) return { ok: false, message: '未知服务' };
   if (definition.plugin) return { ok: false, message: '请在插件列表点击安装 DLC' };
+  if (process.platform !== 'win32') return { ok: false, message: '该下载包含 Windows 运行环境。Linux 请独立部署 GPT-SoVITS 或使用云端 TTS。' };
   if (serviceInstalled(definition) && fs.existsSync(projectEnvPython)) return { ok: false, message: `${definition.name} 已安装` };
   if (serviceDownloads[id]) return { ok: false, message: `${definition.name} 正在下载` };
   const script = definition.downloadScript || path.join(hubRoot, 'Batch_Download.py');
@@ -1033,7 +1064,7 @@ ipcMain.handle('control:download-service', async (event, id) => {
     return { ok: false, message: `\u9879\u76ee Python \u73af\u5883\u5b89\u88c5\u5931\u8d25\uff1a${error.message}` };
   }
   fs.mkdirSync(hubRoot, { recursive: true });
-  const child = spawn(pythonExecutable, ['-u', script, ...(definition.flag ? [definition.flag] : [])], {
+  const child = spawnManaged(pythonExecutable, ['-u', script, ...(definition.flag ? [definition.flag] : [])], {
     cwd: hubRoot,
     windowsHide: true,
     env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', MY_NEURO_FULL_HUB_DIR: hubRoot }
@@ -1094,6 +1125,7 @@ ipcMain.handle('control:install-plugin-dlc', async (event, name, url) => {
   if (!/^[\w.-]+$/.test(name) || !/^https:\/\//i.test(url)) return { ok: false, message: 'DLC 信息无效' };
   const plugin = findPluginDlc(pluginsPath, name, url);
   if (!plugin) return { ok: false, message: '找不到对应插件的 DLC 声明' };
+  if (process.platform !== 'win32' && !plugin.script) return { ok: false, message: '该 DLC 未提供跨平台安装器，请按插件文档手动部署 Linux 服务。' };
   if (plugin.script) {
     const id = plugin.metadata.localService.id;
     if (serviceDownloads[id]) return { ok: false, message: 'DLC 正在安装' };
@@ -1110,7 +1142,7 @@ ipcMain.handle('control:install-plugin-dlc', async (event, name, url) => {
       progress({ stage: 'model-download', label: `正在下载${plugin.metadata.localService.tabLabel || name}模型（当前文件）`, percent: null, received: 0, total: 0, text: '' });
       fs.mkdirSync(plugin.target, { recursive: true });
       await new Promise((resolve, reject) => {
-        const child = spawn(python, ['-u', plugin.script], {
+        const child = spawnManaged(python, ['-u', plugin.script], {
           cwd: plugin.target, windowsHide: true,
           env: { ...downloadProcessEnv(__dirname), PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8',
             MY_NEURO_FULL_HUB_DIR: hubRoot, MY_NEURO_PLUGIN_DLC_DIR: plugin.target }
@@ -1189,6 +1221,7 @@ ipcMain.handle('control:launch-plugin-bat', (_event, name, bat) => {
     }
   }
   if (!file || !fs.existsSync(file)) return { ok: false, message: '找不到插件启动文件' };
+  if (process.platform !== 'win32') return { ok: false, message: '该插件只提供 Windows 启动脚本，请按插件文档手动部署 Linux 服务。' };
   spawn('cmd.exe', ['/d', '/c', 'start', '', file], { cwd: path.dirname(file), windowsHide: true, detached: true }).unref();
   return { ok: true, message: '插件已启动' };
 });
@@ -1423,16 +1456,25 @@ ipcMain.handle('control:apply-vmc', async (_event, host, port) => {
   return postDesktop('/control-vmc', { host: current.vmc.host, port: current.vmc.port });
 });
 
-ipcMain.handle('control:start-live2d', event => {
+function startLive2d(event) {
   if (live2dProcess && live2dProcess.exitCode === null) return { ok: false, message: '桌宠已在运行' };
   startRuntimeLog(event.sender);
   showAvatarLoadingWindow();
-  live2dProcess = spawn('cmd.exe', ['/d', '/c', 'go.bat'], {
-    cwd: __dirname,
-    windowsHide: true
+  live2dProcess = process.platform === 'win32'
+    ? spawn('cmd.exe', ['/d', '/c', 'go.bat'], { cwd: __dirname, windowsHide: true })
+    : spawnManaged(process.execPath, ['.'], {
+      cwd: __dirname, env: { ...process.env, ELECTRON_RUN_AS_NODE: '' }
+    });
+  const petProcess = live2dProcess;
+  live2dProcess.on('error', error => {
+    if (live2dProcess === petProcess) live2dProcess = null;
+    closeAvatarLoadingWindow();
+    stopRuntimeLog();
+    if (!event.sender.isDestroyed()) event.sender.send('control:tool-log', `桌宠启动失败：${error.message}\n`);
   });
-  live2dProcess.stdout.on('data', () => {});
-  live2dProcess.stderr.on('data', () => {});
+  const appendPetLog = chunk => fs.appendFileSync(runtimeLogPath, chunk);
+  live2dProcess.stdout.on('data', appendPetLog);
+  live2dProcess.stderr.on('data', appendPetLog);
   live2dProcess.on('exit', code => {
     closeAvatarLoadingWindow();
     stopRuntimeLog();
@@ -1443,7 +1485,8 @@ ipcMain.handle('control:start-live2d', event => {
     live2dProcess = null;
   });
   return { ok: true, message: '正在启动桌宠' };
-});
+}
+ipcMain.handle('control:start-live2d', startLive2d);
 
 ipcMain.handle('control:stop-live2d', async () => {
   return stopLive2dProcess();
