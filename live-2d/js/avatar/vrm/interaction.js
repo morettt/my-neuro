@@ -16,6 +16,7 @@ class VRMInteractionController {
         this.manager = null;
         this.canvas = null;
         this.isDragging = false;
+        this.isRightDragging = false;
         this.dragOffset = { x: 0, y: 0 };
         this.config = null;
         this._listeners = [];
@@ -27,6 +28,8 @@ class VRMInteractionController {
         // 防御：重绑/形态恢复时取消可能仍在进行的回弹动画，
         // 避免旧模型的动画帧继续按过期 startX/dx 改写新模型位置
         this._cancelBounce();
+        this.isDragging = false;
+        this.isRightDragging = false;
         this.model = model;
         this.manager = manager;
         this.canvas = manager.canvas;
@@ -54,6 +57,8 @@ class VRMInteractionController {
     }
 
     destroy() {
+        this.isDragging = false;
+        this.isRightDragging = false;
         this._teardown();
         this._cancelBounce();
         // 隐藏 VRM 控制面板
@@ -188,7 +193,7 @@ class VRMInteractionController {
         const canvas = this.canvas;
         const model = this.model;
         let mouseDownPos = null;
-        let isRightDragging = false;
+        this.isRightDragging = false;
         const rightDragStart = { x: 0, y: 0 };
 
         // containsPoint：检查client坐标是否在模型/UI元素上（穿透判定用）
@@ -228,7 +233,7 @@ class VRMInteractionController {
                 this._maybeExpandPetWindow(vr.x, vr.y);
                 return;
             }
-            if (isRightDragging) {
+            if (this.isRightDragging) {
                 const dx = e.clientX - rightDragStart.x;
                 const dy = e.clientY - rightDragStart.y;
                 model._orbitTheta -= dx * 0.005;
@@ -264,7 +269,7 @@ class VRMInteractionController {
                 }
             } else if (e.button === 2) {
                 if (isOverModel) {
-                    isRightDragging = true;
+                    this.isRightDragging = true;
                     rightDragStart.x = e.clientX;
                     rightDragStart.y = e.clientY;
                     ipcRenderer.send('set-ignore-mouse-events', { ignore: false });
@@ -293,8 +298,8 @@ class VRMInteractionController {
                     }
                 }, 100);
             }
-            if (e.button === 2 && isRightDragging) {
-                isRightDragging = false;
+            if (e.button === 2 && this.isRightDragging) {
+                this.isRightDragging = false;
                 setTimeout(() => {
                     if (this.model && !model.containsPoint({ x: e.clientX, y: e.clientY })) {
                         ipcRenderer.send('set-ignore-mouse-events', { ignore: true, options: { forward: true } });
@@ -311,7 +316,7 @@ class VRMInteractionController {
         });
 
         this._on(canvas, 'mouseout', (e) => {
-            if (this.isDragging) return;
+            if (this.isDragging || this.isRightDragging) return;
             const t = e.relatedTarget;
             const root = document.getElementById('feiniu-board-game-root');
             if (t && root && root.contains(t)) return;

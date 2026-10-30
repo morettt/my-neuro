@@ -37,7 +37,7 @@ class UIController {
         // 快捷面板(#quick-settings)原本没被纳入判定，只靠模型命中盒蹭——单屏布局下齿轮落在
         // 命中盒外就点不动了。这里统一把它们纳入：鼠标在这些元素上时保持窗口可交互。
         const INTERACTIVE_UI = '#quick-settings, #text-chat-container, #model-controls';
-        const updateMouseIgnore = (e) => {
+        this.updateMouseIgnore = (e) => {
             if (!global.currentModel) return;
             if (this.isAdjustingSubtitle) return;
 
@@ -51,13 +51,16 @@ class UIController {
             const facade = global.avatarFacade || window.avatar;
             const controller = facade?.getController?.() || global.modelController;
             const model = facade?.getModel?.() || global.currentModel;
-            let overModel = false;
-            if (controller && typeof controller.isPointOverInteractive === 'function') {
-                overModel = controller.isPointOverInteractive(e.clientX, e.clientY);
-            } else if (model && typeof model.containsPoint === 'function') {
-                try {
-                    overModel = !!model.containsPoint({ x: e.clientX, y: e.clientY });
-                } catch (_) {}
+            let overModel = !!(controller?.isDragging || controller?.isRightDragging || controller?.isDraggingChat || this.isDraggingSubtitle);
+            // Keep native mouse-up delivery while dragging beyond a cached hit box.
+            if (!overModel) {
+                if (controller && typeof controller.isPointOverInteractive === 'function') {
+                    overModel = controller.isPointOverInteractive(e.clientX, e.clientY);
+                } else if (model && typeof model.containsPoint === 'function') {
+                    try {
+                        overModel = !!model.containsPoint({ x: e.clientX, y: e.clientY });
+                    } catch (_) {}
+                }
             }
 
             ipcRenderer.send('set-ignore-mouse-events', {
@@ -66,7 +69,7 @@ class UIController {
             });
         };
 
-        document.addEventListener('mousemove', updateMouseIgnore);
+        document.addEventListener('mousemove', this.updateMouseIgnore);
     }
 
     // 设置聊天框事件

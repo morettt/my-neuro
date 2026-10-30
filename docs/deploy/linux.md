@@ -27,6 +27,8 @@ cd ~/project/my-neuro
 
 无 `DISPLAY` 时自动使用原生 Wayland 窗口。需要覆盖层时安装/启用发行版的 XWayland。不在原生 Wayland 上反复调用窗口定位修正，避免窗口被错误拉伸或隐藏。
 
+XWayland 覆盖层通过低频鼠标位置采样恢复模型/控件命中检测：移入模型时接收原生点击、拖动和滚轮，空白区域保持穿透。坐标使用 Electron 的 DIP，不再乘显示缩放比例；拖动中即使暂时离开命中框也保持接收松开事件。这样避免依赖 [Electron 仅在 macOS/Windows 支持的鼠标移动转发](https://www.electronjs.org/docs/latest/api/base-window#winsetignoremouseeventsignore-options)。原生 Wayland 普通窗口无需这条采样路径。
+
 Wayland 会话中不启动 `uiohook-napi` 全局键盘钩子：X11 钩子不能可靠捕获其他 Wayland 应用的按下/松开事件。**按住说话需要先聚焦桌宠窗口**；也可使用语音自动检测。普通全局快捷键交给 Electron 的 GlobalShortcuts portal，是否可用取决于桌面后端和用户授权，不保证所有合成器都支持。菜单入口的 `.desktop` 身份由安装脚本注册；若不需要全局快捷键，设置 `MY_NEURO_DISABLE_GLOBAL_SHORTCUTS=1`。
 
 ## 截图与屏幕权限

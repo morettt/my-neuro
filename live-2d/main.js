@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, screen, globalShortcut, desktopCapturer, di
 const { configureElectron } = require('./js/platform/runtime');
 const { nativeWayland } = configureElectron(app);
 const { captureScreen } = require('./js/platform/screen-capture');
+const { startX11PointerPolling } = require('./js/platform/x11-pointer');
 const path = require('path')
 const fs = require('fs')
 const { HttpServer } = require('./js/services/http-server')
@@ -487,6 +488,7 @@ function createWindow () {
     schedulePetBoundsRepair(win, { x: minX, y: minY, width: totalWidth, height: totalHeight })
     
     win.loadFile('index.html')
+    if (process.platform === 'linux' && !nativeWayland) startX11PointerPolling(win, screen);
     win.on('minimize', (event) => {
         event.preventDefault()
         win.restore()
