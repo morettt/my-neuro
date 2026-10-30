@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('controlApi', {
   queryAliyunVoice: options => ipcRenderer.invoke('control:query-aliyun-voice', options),
   generateVoiceBat: options => ipcRenderer.invoke('control:generate-voice-bat', options),
   serviceStatus: () => ipcRenderer.invoke('control:service-status'),
+  pluginServiceStatus: () => ipcRenderer.invoke('control:plugin-service-status'),
   startService: id => ipcRenderer.invoke('control:start-service', id),
   stopService: id => ipcRenderer.invoke('control:stop-service', id),
   downloadService: id => ipcRenderer.invoke('control:download-service', id),
@@ -28,7 +29,11 @@ contextBridge.exposeInMainWorld('controlApi', {
   readPluginReadme: (type, name) => ipcRenderer.invoke('control:read-plugin-readme', type, name),
   installPlugin: (id, repo) => ipcRenderer.invoke('control:install-plugin', id, repo),
   installPluginDlc: (name, url) => ipcRenderer.invoke('control:install-plugin-dlc', name, url),
-  onDlcProgress: callback => ipcRenderer.on('control:dlc-progress', (_event, text) => callback(text)),
+  onDlcProgress: callback => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('control:dlc-progress', listener);
+    return () => ipcRenderer.removeListener('control:dlc-progress', listener);
+  },
   launchPluginBat: (name, bat) => ipcRenderer.invoke('control:launch-plugin-bat', name, bat),
   onPluginsChanged: callback => ipcRenderer.on('control:plugins-changed', () => callback()),
   loadConfig: () => ipcRenderer.invoke('control:load-config'),

@@ -7,12 +7,13 @@ let configDirty = false;
 let pluginConfigDirty = false;
 let loadingConfigUi = true;
 let closePromptOpen = false;
-const serviceLogs = { tts: '', asr: '', bert: '' };
-const serviceDownloadProgress = { tts: null, asr: null, bert: null };
-const serviceDownloadActive = { tts: false, asr: false, bert: false };
-const serviceDownloadStage = { tts: null, asr: null, bert: null };
-const serviceDownloadHasEnvironmentStage = { tts: false, asr: false, bert: false };
+const serviceLogs = {};
+const serviceDownloadProgress = {};
+const serviceDownloadActive = {};
+const serviceDownloadStage = {};
+const serviceDownloadHasEnvironmentStage = {};
 let serviceData = [];
+let pluginServiceData = [];
 
 const $ = id => document.getElementById(id);
 document.documentElement.spellcheck = false;
@@ -615,7 +616,8 @@ function renderServiceLog(output, text) {
 }
 
 function paintServiceLog() {
-  $('service-log-title').textContent = `${activeServiceLog.toUpperCase()} 日志`;
+  const service = serviceData.find(item => item.id === activeServiceLog);
+  $('service-log-title').textContent = service ? `${service.tabLabel} 日志` : '服务日志';
   const output = $('service-log-output');
   renderServiceLog(output, serviceLogs[activeServiceLog]);
   output.scrollTop = output.scrollHeight;
@@ -689,8 +691,7 @@ function consumeServiceDownloadProgress(service, text) {
     .replace(/\r/g, '\n');
 }
 
-function renderActiveService() {
-  const service = serviceData.find(item => item.id === activeServiceLog);
+function serviceCard(service) {
   const progress = service ? serviceDownloadProgress[service.id] : null;
   const progressPercent = progress?.percent ?? 0;
   const progressDetail = progress
@@ -699,12 +700,31 @@ function renderActiveService() {
   const progressMarkup = service?.downloading
     ? `<div class="service-download-progress"><div class="service-download-meta"><span>${escapeHtml(progressDetail)}</span>${progress ? `<strong>${Math.round(progressPercent)}%</strong>` : ''}</div><div class="service-progress-track"><i class="${progress ? '' : 'indeterminate'}" style="width:${progress ? progressPercent : 32}%"></i></div></div>`
     : '';
-  $('service-list').innerHTML = service
+  const html = service
     ? `<article class="service card ${service.downloading ? 'is-downloading' : ''}" data-service="${service.id}"><div class="service-info"><b>${service.name}</b><small class="${service.running ? 'running' : ''}">${service.downloading ? '正在下载模块' : service.starting ? '正在启动' : service.running ? '运行中' : service.installed ? '未启动' : '未安装'} · 端口 ${service.port}</small>${progressMarkup}</div><div class="service-actions">${service.installed ? `<button data-service-action="start" ${service.running ? 'disabled' : ''}>启动</button><button data-service-action="stop" ${service.running ? '' : 'disabled'}>停止</button>${service.id === 'tts' ? '<button data-service-action="voice-clone">声音克隆</button>' : ''}` : `<button data-service-action="download" ${service.downloading ? 'disabled' : ''}>${service.downloading ? '下载中…' : '下载模块'}</button>`}</div></article>`
     : '<div class="empty"><p>暂无模块信息</p></div>';
+  return service?.plugin ? html.replace('>停止</button>', '>关闭</button>') : html;
 }
 
-$('service-list').addEventListener('click', async event => {
+function renderActiveService() {
+  $('service-list').innerHTML = serviceCard(serviceData.find(item => item.id === activeServiceLog));
+}
+
+function renderPluginService() {
+  const panel = $('plugin-service-controls');
+  if (!panel || !editingPlugin?.serviceId) return;
+  const service = pluginServiceData.find(item => item.plugin === editingPlugin.relPath);
+  panel.innerHTML = service
+    ? service.installed ? serviceCard(service) : '<p>DLC 尚未安装，请返回插件列表点击“安装 DLC”。</p>'
+    : '<p>请先在插件列表启用此插件。</p>';
+  const output = $('plugin-service-log');
+  if (output) {
+    renderServiceLog(output, serviceLogs[editingPlugin.serviceId]);
+    output.scrollTop = output.scrollHeight;
+  }
+}
+
+async function handleServiceAction(event) {
   const button = event.target.closest('[data-service-action]');
   if (!button || button.disabled) return;
   const service = button.closest('[data-service]');
@@ -739,31 +759,44 @@ $('service-list').addEventListener('click', async event => {
   } finally {
     await refreshServiceStatus();
   }
-});
+}
+$('service-list').addEventListener('click', handleServiceAction);
+$('plugin-detail-content').addEventListener('click', handleServiceAction);
 
 async function refreshServiceStatus() {
   try {
-    serviceData = await window.controlApi.serviceStatus();
-    serviceData.forEach(service => { serviceDownloadActive[service.id] = service.downloading; });
+    [serviceData, pluginServiceData] = await Promise.all([
+      window.controlApi.serviceStatus(), window.controlApi.pluginServiceStatus()
+    ]);
+    [...serviceData, ...pluginServiceData].forEach(service => { serviceDownloadActive[service.id] = service.downloading; });
+    if (!serviceData.some(service => service.id === activeServiceLog)) activeServiceLog = serviceData[0]?.id || '';
+    $('service-tabs').innerHTML = serviceData.map(service =>
+      `<button class="${service.id === activeServiceLog ? 'active' : ''}" data-service-tab="${escapeHtml(service.id)}">${escapeHtml(service.tabLabel)}</button>`
+    ).join('');
     renderActiveService();
+    paintServiceLog();
+    renderPluginService();
   } catch (error) { showToast(`服务状态读取失败：${error.message}`); }
 }
 
-document.querySelectorAll('[data-service-tab]').forEach(button => button.addEventListener('click', () => {
+$('service-tabs').addEventListener('click', event => {
+  const button = event.target.closest('[data-service-tab]');
+  if (!button) return;
   document.querySelector('[data-service-tab].active')?.classList.remove('active');
   button.classList.add('active');
   activeServiceLog = button.dataset.serviceTab;
   renderActiveService();
   paintServiceLog();
-}));
+});
 $('clear-service-log').addEventListener('click', () => { serviceLogs[activeServiceLog] = ''; paintServiceLog(); });
 window.controlApi.onServiceLog(({ service, text }) => {
   const logText = consumeServiceDownloadProgress(service, text);
-  serviceLogs[service] = (serviceLogs[service] + logText).slice(-120000);
+  serviceLogs[service] = ((serviceLogs[service] || '') + logText).slice(-120000);
   if (service === activeServiceLog) {
     paintServiceLog();
     renderActiveService();
   }
+  if (service === editingPlugin?.serviceId) renderPluginService();
 });
 window.controlApi.onServiceState(refreshServiceStatus);
 
@@ -1093,16 +1126,68 @@ let pluginData = { builtIn: [], community: [], market: [] };
 let editingPlugin = null;
 let recentlyInstalledPluginPath = null;
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char]);
+const dlcInstallProgress = new Map();
+
+function updateDlcInstallProgress(previous = {}, payload) {
+  const report = typeof payload === 'object' ? payload : { text: String(payload) };
+  const state = { ...previous, ...report };
+  if (report.stage && report.stage !== previous.stage) state.buffer = '';
+  const text = String(report.text || '').replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -\/]*[@-~])/g, '');
+  if (text) {
+    state.buffer = ((state.buffer || '') + text).slice(-4000);
+    const matches = [...state.buffer.matchAll(/(\d{1,3}(?:\.\d+)?)\s*%/g)];
+    if (!report.stage && matches.length && !['done', 'error'].includes(state.stage)) {
+      state.percent = Math.min(100, Number(matches.at(-1)[1]));
+    }
+    if (text === 'extracting') { state.stage = 'extracting'; state.percent = null; }
+  }
+  return state;
+}
+
+function dlcProgressMarkup(state) {
+  if (!state || state.stage === 'done') return '';
+  const labels = { checking: '正在检查 Python 环境', 'environment-download': '正在下载 Python 环境',
+    'environment-extract': '正在解压 Python 环境', 'environment-ready': 'Python 环境已就绪',
+    'model-download': '正在下载 BERT 模型（当前文件）', extracting: '正在解压 DLC',
+    done: 'DLC 安装完成', error: 'DLC 安装失败' };
+  const percent = Number.isFinite(state.percent) ? Math.max(0, Math.min(100, state.percent)) : null;
+  const size = bytes => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  const detail = state.stage === 'environment-download' && state.received
+    ? ` · ${size(state.received)}${state.total ? ` / ${size(state.total)}` : ''}`
+    : state.stage === 'error' ? ` · ${state.text || ''}` : '';
+  return `<div class="dlc-install-progress ${state.stage === 'error' ? 'failed' : ''}"><div class="dlc-progress-label"><span>${escapeHtml(labels[state.stage] || '正在下载 DLC')}${escapeHtml(detail)}</span><strong>${percent === null ? '' : `${Math.round(percent)}%`}</strong></div><div class="dlc-progress-track" role="progressbar" aria-label="DLC 安装进度" ${percent === null ? '' : `aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100"`}><i class="${percent === null && state.active ? 'indeterminate' : ''}" style="width:${percent ?? (state.active ? 30 : 0)}%"></i></div></div>`;
+}
+
+function paintDlcInstallProgress(name) {
+  const state = dlcInstallProgress.get(name);
+  document.querySelectorAll('[data-dlc-progress]').forEach(element => {
+    if (element.dataset.dlcProgress === name) element.innerHTML = dlcProgressMarkup(state);
+  });
+  document.querySelectorAll('[data-plugin-dlc]').forEach(button => {
+    const plugin = [...pluginData.builtIn, ...pluginData.community].find(item => item.relPath === button.dataset.pluginDlc);
+    if (plugin?.name !== name) return;
+    button.disabled = Boolean(state?.active);
+    button.textContent = state?.active ? '安装中…' : state?.stage === 'error' ? '重试安装 DLC' : '安装 DLC';
+  });
+}
+
+window.controlApi.onDlcProgress(payload => {
+  if (!payload?.plugin) return;
+  dlcInstallProgress.set(payload.plugin, updateDlcInstallProgress(dlcInstallProgress.get(payload.plugin), payload));
+  paintDlcInstallProgress(payload.plugin);
+});
 
 function pluginCard(plugin) {
   const dlcInstalled = !plugin.downloadDlc || plugin.dlcInstalled;
+  const progress = dlcInstallProgress.get(plugin.name) || (plugin.dlcProgress ? updateDlcInstallProgress({}, plugin.dlcProgress) : null);
+  if (progress) dlcInstallProgress.set(plugin.name, progress);
   const featured = plugin.name === 'body-actions' || plugin.relPath === 'community/body-actions';
   return `<article class="plugin-card card" data-plugin-card="${escapeHtml(plugin.relPath)}">
-    <div class="plugin-summary"><strong>${escapeHtml(plugin.displayName)}</strong><p>${escapeHtml(plugin.description || '暂无说明')}</p><small>${escapeHtml(plugin.author || '')}</small></div>
+    <div class="plugin-summary"><strong>${escapeHtml(plugin.displayName)}</strong><p>${escapeHtml(plugin.description || '暂无说明')}</p><small>${escapeHtml(plugin.author || '')}</small><div data-dlc-progress="${escapeHtml(plugin.name)}">${dlcProgressMarkup(progress)}</div></div>
     <div class="plugin-actions">
-      ${plugin.downloadDlc && !dlcInstalled ? `<button type="button" class="primary" data-plugin-dlc="${escapeHtml(plugin.relPath)}">安装 DLC</button>` : ''}
+      ${plugin.downloadDlc && !dlcInstalled ? `<button type="button" class="primary" data-plugin-dlc="${escapeHtml(plugin.relPath)}" ${progress?.active ? 'disabled' : ''}>${progress?.active ? '安装中…' : '安装 DLC'}</button>` : ''}
       ${plugin.bat && dlcInstalled ? `<button type="button" data-plugin-launch="${escapeHtml(plugin.relPath)}">启动</button>` : ''}
-      ${plugin.hasConfig ? `<button type="button" data-plugin-config="${escapeHtml(plugin.relPath)}">配置</button>` : ''}
+      ${plugin.hasConfig || plugin.serviceId ? `<button type="button" data-plugin-config="${escapeHtml(plugin.relPath)}">配置</button>` : ''}
       ${dlcInstalled ? `<label class="plugin-switch"><span>启用</span><input type="checkbox" data-plugin-enabled="${escapeHtml(plugin.relPath)}" ${plugin.enabled ? 'checked' : ''}><i></i></label>` : ''}
     </div>
   </article>`;
@@ -1151,11 +1236,27 @@ function bindPluginCards() {
     const plugin = [...pluginData.builtIn, ...pluginData.community].find(item => item.relPath === button.dataset.pluginDlc);
     if (!plugin) return;
     button.disabled = true; button.textContent = '安装中…';
-    window.controlApi.onDlcProgress(text => { const match = text.match(/([0-9]+)%/); button.textContent = text === 'extracting' ? '正在解压…' : (match ? (match[1] === '100' ? '正在解压…' : `下载中 ${match[1]}%`) : button.textContent); });
-    const result = await window.controlApi.installPluginDlc(plugin.name, plugin.downloadDlc);
-    button.textContent = result.ok ? '已安装' : '安装失败';
-    showToast(result.message);
-    await loadPlugins();
+    dlcInstallProgress.set(plugin.name, { stage: 'checking', percent: null, active: true });
+    paintDlcInstallProgress(plugin.name);
+    const unsubscribe = window.controlApi.onDlcProgress(payload => {
+      if (payload?.plugin) return;
+      dlcInstallProgress.set(plugin.name, updateDlcInstallProgress(dlcInstallProgress.get(plugin.name), payload));
+      paintDlcInstallProgress(plugin.name);
+    });
+    try {
+      const result = await window.controlApi.installPluginDlc(plugin.name, plugin.downloadDlc);
+      dlcInstallProgress.set(plugin.name, { stage: result.ok ? 'done' : 'error', percent: result.ok ? 100 : null, active: false, text: result.message });
+      button.textContent = result.ok ? '已安装' : '安装失败';
+      showToast(result.message);
+    } catch (error) {
+      dlcInstallProgress.set(plugin.name, { stage: 'error', percent: null, active: false, text: error.message });
+      showToast(`安装失败：${error.message}`);
+    }
+    finally {
+      unsubscribe?.();
+      await loadPlugins();
+      await refreshServiceStatus();
+    }
   }));
   document.querySelectorAll('[data-plugin-launch]').forEach(button => button.addEventListener('click', async () => {
     const plugin = [...pluginData.builtIn, ...pluginData.community].find(item => item.relPath === button.dataset.pluginLaunch);
@@ -1247,8 +1348,17 @@ function openPluginDetail(plugin) {
   document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-panel').forEach(element => element.hidden = true);
   $('plugin-detail').hidden = false;
   $('plugin-detail-title').textContent = plugin.displayName;
-  $('plugin-readme').hidden = !plugin.hasReadme;
-  $('plugin-detail-content').innerHTML = `<div class="plugin-config-form">${configFields(plugin.config)}</div>`;
+  $('plugin-readme').hidden = Boolean(plugin.serviceId) || !plugin.hasReadme;
+  $('plugin-detail-content').innerHTML = plugin.serviceId ? '' : `<div class="plugin-config-form">${configFields(plugin.config)}</div>`;
+  if (plugin.serviceId) {
+    $('plugin-detail-content').insertAdjacentHTML('beforeend', '<div class="plugin-service-panel"><div id="plugin-service-controls"></div><section class="service-console card"><div class="service-log-tabs"><strong>运行日志</strong><button type="button" id="clear-plugin-service-log">清空日志</button></div><pre id="plugin-service-log"></pre></section></div>');
+    $('clear-plugin-service-log').addEventListener('click', () => {
+      serviceLogs[plugin.serviceId] = '';
+      renderPluginService();
+    });
+    renderPluginService();
+    refreshServiceStatus();
+  }
 }
 
 $('plugin-detail-back').addEventListener('click', () => {

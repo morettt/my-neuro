@@ -3,3 +3,5 @@
 /.voice-upload-client.json
 /scripts/.voice-host-work/
 /.voice-clone-ui-check.json
+/.download-cache/
+/plugins-dlc/
