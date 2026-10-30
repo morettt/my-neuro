@@ -102,7 +102,21 @@ class UIController {
 
         // 巨窗覆盖多屏时，必须锚到主屏右下，不能锚整窗右下（否则对话框会跑到副屏最右侧）。
         const screenInfo = ipcRenderer.sendSync('get-screen-info-sync');
-        if (screenInfo?.primaryDisplay && screenInfo?.windowBounds) {
+        if (window.__nativeWayland) {
+            // Native surfaces can move/resize without global desktop coordinates.
+            textChatContainer.style.setProperty('left', 'auto', 'important');
+            textChatContainer.style.setProperty('right', '20px', 'important');
+            textChatContainer.style.setProperty('bottom', '50px', 'important');
+            textChatContainer.style.setProperty('width', 'min(350px, calc(100vw - 40px))', 'important');
+            const subtitle = document.getElementById('subtitle-container');
+            if (subtitle) {
+                subtitle.style.setProperty('left', '20px', 'important');
+                subtitle.style.setProperty('bottom', '20px', 'important');
+                subtitle.style.setProperty('width', 'calc(100vw - 40px)', 'important');
+                subtitle.style.setProperty('max-width', '400px', 'important');
+                subtitle.style.setProperty('transform', 'none', 'important');
+            }
+        } else if (screenInfo?.primaryDisplay && screenInfo?.windowBounds) {
             const { primaryDisplay, windowBounds } = screenInfo;
             const winX = windowBounds.x;
             const winY = windowBounds.y;
@@ -119,7 +133,7 @@ class UIController {
             const subtitleContainer = document.getElementById('subtitle-container');
             if (subtitleContainer) {
                 subtitleContainer.style.setProperty('position', 'fixed', 'important');
-                subtitleContainer.style.setProperty('left', (primaryLeftOffset + primaryDisplay.bounds.width - 800) + 'px', 'important');
+                subtitleContainer.style.setProperty('left', Math.max(primaryLeftOffset + 20, primaryLeftOffset + primaryDisplay.bounds.width - 800) + 'px', 'important');
                 subtitleContainer.style.setProperty('right', 'auto', 'important');
                 subtitleContainer.style.setProperty('bottom', (primaryBottomOffset + 20) + 'px', 'important');
                 subtitleContainer.style.setProperty('width', '400px', 'important');

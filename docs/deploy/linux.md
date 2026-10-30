@@ -20,14 +20,18 @@ cd ~/project/my-neuro
 
 | 模式 | 启动方式 | 能力与限制 |
 | --- | --- | --- |
-| XWayland 桌宠覆盖层（默认） | `./scripts/start-linux.sh` | 当 `DISPLAY` 可用时使用 X11 后端，保留透明、模型交互、桌面定位和跨屏窗口逻辑；置顶、缩放及跨屏效果仍受合成器约束。桌面会话保持 Wayland。 |
-| 原生 Wayland 窗口 | `MY_NEURO_DISPLAY_MODE=wayland ./scripts/start-linux.sh` | 角色显示在可交互、有边框的普通窗口内。由合成器负责窗口定位，不做全桌面覆盖、鼠标穿透或强制置顶。窗口内拖动角色、打字和聚焦按键录音可用。 |
+| 原生 Wayland 透明桌宠（Wayland 会话默认） | `./scripts/start-linux.sh` | 独立透明小窗，顶部“⋮⋮ 桌宠”把手移动窗口，“居中”适应窗口；模型可点击、拖动和滚轮缩放。窗口位置和堆叠由合成器管理。 |
+| XWayland 桌面覆盖层（兼容选项） | `MY_NEURO_DISPLAY_MODE=x11 ./scripts/start-linux.sh` | 需要 `DISPLAY`；保留全桌面透明覆盖、鼠标穿透、定位和跨屏窗口逻辑。桌面会话仍为 Wayland。 |
 
 启动器在 Electron 启动前传入 Ozone 显示后端和 GL 参数；不要绕过启动器直接执行 Electron 二进制，否则新版 Electron 可能在读取应用代码之前选错后端，导致窗口不可见。`npm run control` / `npm start` 也使用相同的启动器。
 
-无 `DISPLAY` 时自动使用原生 Wayland 窗口。需要覆盖层时安装/启用发行版的 XWayland。不在原生 Wayland 上反复调用窗口定位修正，避免窗口被错误拉伸或隐藏。
+在 Wayland 会话中，即使同时存在 `DISPLAY`，仍默认选择原生 Wayland；不依赖 XWayland。X11 会话继续使用 X11。`MY_NEURO_DISPLAY_MODE` 可显式覆盖，启动器、控制面板与桌宠子进程统一使用该选择。
 
-XWayland 覆盖层通过低频鼠标位置采样恢复模型/控件命中检测：移入模型时接收原生点击、拖动和滚轮，空白区域保持穿透。坐标使用 Electron 的 DIP，不再乘显示缩放比例；拖动中即使暂时离开命中框也保持接收松开事件。这样避免依赖 [Electron 仅在 macOS/Windows 支持的鼠标移动转发](https://www.electronjs.org/docs/latest/api/base-window#winsetignoremouseeventsignore-options)。原生 Wayland 普通窗口无需这条采样路径。
+原生 Wayland 默认创建 640×720 的透明窗口，保留任务栏入口，支持最小化、恢复、关闭。顶部把手使用合成器原生的窗口移动，不用全局坐标强行定位。不提供全桌面跨屏覆盖、强制置顶或整窗鼠标穿透，避免关闭输入后无法恢复交互；若桌面提供“总在最上层”窗口菜单，可由用户设置。聊天框、字幕和回弹区域按窗口内部尺寸布局，窗口缩放时不会仍锚在整块显示器外侧。
+
+完整桌面覆盖层需要合成器扩展或额外协议支持，GNOME/KDE/wlroots 的能力并不相同；本实现不自动安装桌面扩展。需要现有覆盖层时，可显式选择 XWayland。
+
+XWayland 覆盖层通过低频鼠标位置采样恢复模型/控件命中检测：移入模型时接收原生点击、拖动和滚轮，空白区域保持穿透。坐标使用 Electron 的 DIP，不再乘显示缩放比例；拖动中即使暂时离开命中框也保持接收松开事件。这样避免依赖 [Electron 仅在 macOS/Windows 支持的鼠标移动转发](https://www.electronjs.org/docs/latest/api/base-window#winsetignoremouseeventsignore-options)。原生 Wayland 透明小窗无需这条采样路径，也不轮询全局鼠标位置。
 
 Wayland 会话中不启动 `uiohook-napi` 全局键盘钩子：X11 钩子不能可靠捕获其他 Wayland 应用的按下/松开事件。**按住说话需要先聚焦桌宠窗口**；也可使用语音自动检测。普通全局快捷键交给 Electron 的 GlobalShortcuts portal，是否可用取决于桌面后端和用户授权，不保证所有合成器都支持。菜单入口的 `.desktop` 身份由安装脚本注册；若不需要全局快捷键，设置 `MY_NEURO_DISABLE_GLOBAL_SHORTCUTS=1`。
 
@@ -78,12 +82,12 @@ VRM 默认限制为 30 FPS，减少桌宠持续渲染负载；需要更流畅动
 
 ## 验证范围
 
-已在 ARM64 Linux / Wayland 会话中验证安装、控制面板启动桌宠、Live2D 进入 `ready`、停止流程。XWayland 模式已核对控制面板与桌宠均处于系统的 `IsViewable` 状态，并由用户确认两者同时可见。原生 Wayland 普通窗口完成了模型初始化验证，桌面可见性及交互仍需进一步实测。该机器已验证 Adreno X1-85 / freedreno 硬件 WebGL（ANGLE OpenGL 与 OpenGL ES 两条路径）；软件渲染仅作为可选兼容方案。未配置提供商的对话、云语音和大型本地模型不算作端到端通过。截图的 portal 路径有自动测试，真实屏幕选择授权及其他合成器/显卡仍需各自桌面环境验证。
+已在 ARM64 Linux / Wayland 会话中验证安装、控制面板启动桌宠、Live2D 进入 `ready`、停止流程。XWayland 模式已核对控制面板与桌宠均处于系统的 `IsViewable` 状态，并由用户确认两者同时可见。原生 Wayland 已在 GNOME / ARM64 上实际启动，用户确认透明窗口显示、把手移动窗口、模型点击和拖动正常；渲染器为 Adreno X1-85 / OpenGL ES 3.2。该机器已验证 Adreno X1-85 / freedreno 硬件 WebGL（ANGLE OpenGL 与 OpenGL ES 两条路径）；软件渲染仅作为可选兼容方案。未配置提供商的对话、云语音和大型本地模型不算作端到端通过。截图的 portal 路径有自动测试，真实屏幕选择授权及其他合成器/显卡仍需各自桌面环境验证。
 
 ```bash
 node --test $(find live-2d/js -name '*.test.js')
 ```
 
-启动时传入 `--start-pet` 可以在控制面板加载后自动启动桌宠，例如 `./scripts/start-linux.sh --software-rendering --start-pet`。
+启动时传入 `--start-pet` 可以在控制面板加载后自动启动桌宠，例如 `./scripts/start-linux.sh --start-pet`。
 
 日志位于 `live-2d/runtime.log`。删除 `env/`、`live-2d/node_modules/` 可移除本地依赖；删除 `~/.local/share/applications/io.github.morettt.MyNeuro.desktop` 可移除默认菜单入口（设置了 `XDG_DATA_HOME` 时在对应目录）。

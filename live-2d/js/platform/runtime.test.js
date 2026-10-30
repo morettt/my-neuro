@@ -5,12 +5,14 @@ const { once } = require('node:events');
 const { isWayland, linuxDisplayMode, projectPython, spawnManaged, stopManaged } = require('./runtime');
 const { captureScreen } = require('./screen-capture');
 
-test('Wayland sessions select XWayland overlays when available and a native window otherwise', () => {
+test('Wayland sessions prefer native windows even when XWayland is available', () => {
     assert.equal(isWayland({ WAYLAND_DISPLAY: 'wayland-0' }, 'linux'), true);
     assert.equal(isWayland({ XDG_SESSION_TYPE: 'wayland' }, 'win32'), false);
-    assert.equal(linuxDisplayMode({ DISPLAY: ':0', WAYLAND_DISPLAY: 'wayland-0' }), 'x11');
+    assert.equal(linuxDisplayMode({ DISPLAY: ':0', WAYLAND_DISPLAY: 'wayland-0' }), 'wayland');
+    assert.equal(linuxDisplayMode({ DISPLAY: ':0', XDG_SESSION_TYPE: 'x11' }), 'x11');
+    assert.equal(linuxDisplayMode({ DISPLAY: ':0', WAYLAND_DISPLAY: 'wayland-0', MY_NEURO_DISPLAY_MODE: 'x11' }), 'x11');
     assert.equal(linuxDisplayMode({ WAYLAND_DISPLAY: 'wayland-0' }), 'wayland');
-    assert.equal(linuxDisplayMode({ DISPLAY: ':0', MY_NEURO_DISPLAY_MODE: 'wayland' }), 'wayland');
+    assert.equal(linuxDisplayMode({ DISPLAY: ':0', WAYLAND_DISPLAY: 'wayland-0', MY_NEURO_DISPLAY_MODE: 'wayland' }), 'wayland');
     assert.throws(() => linuxDisplayMode({ MY_NEURO_DISPLAY_MODE: 'x11' }), /XWayland/);
     assert.throws(() => linuxDisplayMode({ MY_NEURO_DISPLAY_MODE: 'invalid' }), /must be/);
 });
@@ -59,12 +61,12 @@ test('Electron receives Ozone and GL switches before the app entry, for both con
     const env = { DISPLAY: ':0', WAYLAND_DISPLAY: 'wayland-0' };
     for (const entry of ['control-main.js', '.']) {
         const args = electronLaunchArgs(entry, ['--start-pet'], env, 'linux', { softwareRendering: true });
-        assert.equal(args[0], '--ozone-platform=x11');
+        assert.equal(args[0], '--ozone-platform=wayland');
         assert.ok(args.indexOf('--use-angle=swiftshader') < args.indexOf(entry));
         assert.ok(args.includes('--enable-features=WebRTCPipeWireCapturer,GlobalShortcutsPortal'));
         assert.equal(args.at(-1), '--start-pet');
     }
-    const native = electronLaunchArgs('.', [], { MY_NEURO_DISPLAY_MODE: 'wayland' }, 'linux', {});
+    const native = electronLaunchArgs('.', [], { WAYLAND_DISPLAY: 'wayland-0', MY_NEURO_DISPLAY_MODE: 'wayland' }, 'linux', {});
     assert.equal(native[0], '--ozone-platform=wayland');
     assert.ok(!native.includes('--use-angle=swiftshader'));
     assert.deepEqual(electronLaunchArgs('.', ['--test'], {}, 'win32', {}), ['.', '--test']);

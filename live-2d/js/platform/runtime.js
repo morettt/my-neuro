@@ -6,11 +6,12 @@ function isWayland(env = process.env, platform = process.platform) {
     return platform === 'linux' && (env.XDG_SESSION_TYPE === 'wayland' || Boolean(env.WAYLAND_DISPLAY));
 }
 
-// Overlay positioning and pointer forwarding need X11. Native Wayland uses a
-// normal, interactive window instead of an unpositionable desktop-sized overlay.
+// Prefer the session's native backend, including when XWayland also exports
+// DISPLAY. X11 remains an explicit compatibility mode in a Wayland session.
 function linuxDisplayMode(env = process.env) {
-    const mode = env.MY_NEURO_DISPLAY_MODE || (env.DISPLAY ? 'x11' : 'wayland');
+    const mode = env.MY_NEURO_DISPLAY_MODE || (isWayland(env, 'linux') ? 'wayland' : 'x11');
     if (!['x11', 'wayland'].includes(mode)) throw new Error('MY_NEURO_DISPLAY_MODE must be x11 or wayland');
+    if (mode === 'wayland' && !isWayland(env, 'linux')) throw new Error('Wayland is unavailable. Use MY_NEURO_DISPLAY_MODE=x11 in an X11 session.');
     if (mode === 'x11' && !env.DISPLAY) throw new Error('XWayland is unavailable (DISPLAY is unset). Use MY_NEURO_DISPLAY_MODE=wayland.');
     return mode;
 }

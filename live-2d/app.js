@@ -2,6 +2,7 @@
 // 跨屏桥接：注入 window.electronScreen（必须在任何模型交互逻辑之前加载）
 require('./js/services/electron-screen-bridge.js');
 require('./js/services/linux-pointer-bridge.js');
+require('./js/services/native-wayland-window.js');
 const { Live2DInteractionController: ModelInteractionController } = require('./js/avatar/live2d/interaction.js');
 const { configLoader } = require('./js/core/config-loader.js');
 const { logToTerminal } = require('./js/api-utils.js');

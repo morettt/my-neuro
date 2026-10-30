@@ -3,6 +3,7 @@ const { configureElectron } = require('./js/platform/runtime');
 const { nativeWayland } = configureElectron(app);
 const { captureScreen } = require('./js/platform/screen-capture');
 const { startX11PointerPolling } = require('./js/platform/x11-pointer');
+const { windowScreenInfo } = require('./js/platform/window-layout');
 const path = require('path')
 const fs = require('fs')
 const { HttpServer } = require('./js/services/http-server')
@@ -452,12 +453,12 @@ function createWindow () {
     console.log(`窗口位置: (${minX}, ${minY})`);
     
     const win = new BrowserWindow({
-        ...(nativeWayland ? { width: 960, height: 720, minWidth: 640, minHeight: 480 }
+        ...(nativeWayland ? { width: 640, height: 720, minWidth: 480, minHeight: 480 }
             : { x: minX, y: minY, width: totalWidth, height: totalHeight }),
-        transparent: !nativeWayland,
-        frame: nativeWayland,
+        transparent: true,
+        frame: false,
         alwaysOnTop: !nativeWayland,
-        backgroundColor: nativeWayland ? '#20232b' : '#00000000',
+        backgroundColor: '#00000000',
         hasShadow: false,
         focusable: true,
         type: process.platform === 'linux' ? 'normal' : 'desktop',
@@ -490,8 +491,7 @@ function createWindow () {
     win.loadFile('index.html')
     if (process.platform === 'linux' && !nativeWayland) startX11PointerPolling(win, screen);
     win.on('minimize', (event) => {
-        event.preventDefault()
-        win.restore()
+        if (!nativeWayland) { event.preventDefault(); win.restore(); }
     })
     // 移除 will-move 限制,允许跨屏幕移动
     win.on('blur', () => {
@@ -569,14 +569,27 @@ ipcMain.on('window-move', (event) => {
     applyPetUnionBounds(win, config);
 });
 
+ipcMain.on('get-window-mode-sync', event => {
+    event.returnValue = { nativeWayland };
+});
+
+ipcMain.on('native-window-action', (event, action) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || !nativeWayland) return;
+    if (action === 'minimize') win.minimize();
+    if (action === 'close') win.close();
+});
+
 ipcMain.on('get-screen-info-sync', (event) => {
     try {
         const win = BrowserWindow.fromWebContents(event.sender);
-        event.returnValue = {
+        event.returnValue = windowScreenInfo({
+            nativeWayland,
+            contentBounds: win?.getContentBounds(),
+            windowBounds: win && !win.isDestroyed() ? win.getBounds() : null,
             primaryDisplay: screen.getPrimaryDisplay(),
-            allDisplays: screen.getAllDisplays(),
-            windowBounds: win && !win.isDestroyed() ? win.getBounds() : null
-        };
+            displays: screen.getAllDisplays()
+        });
     } catch (e) {
         console.error('获取屏幕信息失败:', e);
         event.returnValue = null;
