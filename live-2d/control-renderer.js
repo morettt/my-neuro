@@ -1148,7 +1148,7 @@ function dlcProgressMarkup(state) {
   if (!state || state.stage === 'done') return '';
   const labels = { checking: '正在检查 Python 环境', 'environment-download': '正在下载 Python 环境',
     'environment-extract': '正在解压 Python 环境', 'environment-ready': 'Python 环境已就绪',
-    'model-download': '正在下载 BERT 模型（当前文件）', extracting: '正在解压 DLC',
+    'model-download': state.label || '正在下载模型（当前文件）', extracting: '正在解压 DLC',
     done: 'DLC 安装完成', error: 'DLC 安装失败' };
   const percent = Number.isFinite(state.percent) ? Math.max(0, Math.min(100, state.percent)) : null;
   const size = bytes => `${(bytes / 1024 / 1024).toFixed(1)} MB`;

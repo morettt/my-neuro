@@ -21,7 +21,7 @@ const { scanLive2DModels, resolveLive2DModel, scanVRMModels, scanMMDModels } = r
 const { EMOTIONS: motionEmotions, mergeExpressionConfig, mergeActionConfig, isLive2DModelDir } = require('./js/avatar/model-defaults');
 const { loadProvidersFromStore, saveProviders } = require('./js/core/llm-provider-store');
 const aliyunVoiceClone = require('./js/voice/aliyun-voice-clone');
-const { discoverPluginServices } = require('./js/services/plugin-services');
+const { discoverPluginServices, resolvePluginServiceLaunch } = require('./js/services/plugin-services');
 const { pluginDlcInfo, findPluginDlc } = require('./js/services/plugin-dlc');
 const { downloadCacheRoot, ensureDownloadSpace, downloadProcessEnv, explainStorageError } = require('./js/services/download-storage');
 
@@ -154,12 +154,6 @@ const pluginDlcProgress = new Map();
 const builtinServiceDefinitions = {
   tts: { name: 'TTS 语音合成', port: 5000, bat: '2.TTS.bat', flag: '--tts', checks: [
     'tts-hub/GPT-SoVITS-Bundle/runtime', 'tts-hub/GPT-SoVITS-Bundle/GPT_SoVITS'
-  ] },
-  asr: { name: 'ASR 语音识别', port: 1000, bat: '1.ASR.bat', flag: '--asr', checks: [
-    'asr-hub/model/torch_hub/snakers4_silero-vad_master',
-    'asr-hub/model/asr/models/iic/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch/config.yaml',
-    'asr-hub/model/asr/models/iic/punc_ct-transformer_cn-en-common-vocab471067-large/config.yaml',
-    'asr-hub/model/asr/models/iic/punc_ct-transformer_cn-en-common-vocab471067-large/model.pt'
   ] }
 };
 function getServiceDefinitions() {
@@ -227,16 +221,7 @@ async function ensureProjectPython(sender, service, onProgress = () => {}) {
 }
 
 function serviceLaunchDefinition(id) {
-  const definition = getServiceDefinitions()[id];
-  if (id !== 'asr' || !definition) return definition;
-  const current = readJson(configPath, {});
-  if (current.cloud?.baidu_asr?.enabled === true) {
-    return { ...definition, name: '百度流式 ASR（仅 VAD）', bat: 'VAD.bat' };
-  }
-  if (current.cloud?.siliconflow_asr?.enabled === true) {
-    return { ...definition, name: 'SiliconFlow ASR（本地 VAD）' };
-  }
-  return { ...definition, name: '本地 ASR' };
+  return resolvePluginServiceLaunch(getServiceDefinitions()[id], readJson(configPath, {}));
 }
 
 function serviceInstalled(definition) {
@@ -958,9 +943,9 @@ ipcMain.handle('control:start-service', async (event, id) => {
   if (definition.startScript && !fs.existsSync(projectEnvPython)) return { ok: false, message: '缺少公共 Python 环境，请先下载模块' };
   sendServiceLog(event.sender, id, `正在启动 ${definition.name}...\n`);
   const child = definition.startScript
-    ? spawn(projectEnvPython, ['-u', definition.startScript], {
+    ? spawn(projectEnvPython, ['-u', definition.startScript, ...(definition.startArgs || [])], {
       cwd: definition.resourceRoot || hubRoot, windowsHide: true,
-      env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', MY_NEURO_FULL_HUB_DIR: hubRoot,
+      env: { ...downloadProcessEnv(__dirname), PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', MY_NEURO_FULL_HUB_DIR: hubRoot,
         MY_NEURO_SERVICE_RESOURCE_DIR: definition.resourceRoot || hubRoot }
     })
     : spawn('cmd.exe', ['/d', '/c', batPath], { cwd: projectRoot, windowsHide: true });
@@ -1122,7 +1107,7 @@ ipcMain.handle('control:install-plugin-dlc', async (event, name, url) => {
     try {
       progress({ stage: 'checking', percent: null, active: true, text: '' });
       const python = await ensureProjectPython(event.sender, id, progress);
-      progress({ stage: 'model-download', percent: null, received: 0, total: 0, text: '' });
+      progress({ stage: 'model-download', label: `正在下载${plugin.metadata.localService.tabLabel || name}模型（当前文件）`, percent: null, received: 0, total: 0, text: '' });
       fs.mkdirSync(plugin.target, { recursive: true });
       await new Promise((resolve, reject) => {
         const child = spawn(python, ['-u', plugin.script], {

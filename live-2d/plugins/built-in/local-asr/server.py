@@ -1,0 +1,386 @@
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+import torch
+import json
+import numpy as np
+import os
+import sys
+import re
+import threading
+import time
+from pathlib import Path
+from models import model_paths
+from contextlib import asynccontextmanager
+
+from datetime import datetime
+from queue import Queue
+
+# 保存原始的stdout和stderr
+original_stdout = sys.stdout
+original_stderr = sys.stderr
+
+
+# 创建一个可以同时写到文件和终端的类，并过滤ANSI颜色码
+class TeeOutput:
+    def __init__(self, file1, file2):
+        self.file1 = file1
+        self.file2 = file2
+        # 用于匹配ANSI颜色码的正则表达式
+        self.ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+    def write(self, data):
+        # 终端输出保持原样（带颜色）
+        self.file1.write(data)
+        # 文件输出去掉颜色码
+        clean_data = self.ansi_escape.sub('', data)
+        self.file2.write(clean_data)
+        self.file1.flush()
+        self.file2.flush()
+
+    def flush(self):
+        self.file1.flush()
+        self.file2.flush()
+
+    def isatty(self):
+        return self.file1.isatty()
+
+    def fileno(self):
+        return self.file1.fileno()
+
+
+# 创建logs目录
+LOGS_DIR = os.path.join(os.environ.get('MY_NEURO_SERVICE_RESOURCE_DIR') or os.environ['MY_NEURO_FULL_HUB_DIR'], 'logs')
+
+
+def setup_logging():
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    log_file = open(os.path.join(LOGS_DIR, 'asr.log'), 'w', encoding='utf-8')
+    sys.stdout = TeeOutput(original_stdout, log_file)
+    sys.stderr = TeeOutput(original_stderr, log_file)
+
+@asynccontextmanager
+async def lifespan(_app):
+    await startup_event()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+VAD_ONLY = '--vad-only' in sys.argv
+
+
+@app.post('/shutdown')
+async def shutdown_service():
+    def exit_after_response():
+        time.sleep(0.15)
+        os._exit(0)
+    threading.Thread(target=exit_after_response, daemon=True).start()
+    return {'ok': True}
+
+# 添加 CORS 中间件
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 创建模型存储目录
+RESOURCE_ROOT = Path(os.environ.get('MY_NEURO_SERVICE_RESOURCE_DIR') or os.environ['MY_NEURO_FULL_HUB_DIR'])
+MODEL_DIR = str(RESOURCE_ROOT / 'asr-hub' / 'model')
+LOCAL_MODELS = model_paths(RESOURCE_ROOT)
+
+# 全局变量
+SAMPLE_RATE = 16000
+WINDOW_SIZE = 512
+VAD_THRESHOLD = 0.7
+
+# VAD状态
+vad_state = {
+    "is_running": False,
+    "active_websockets": set(),
+    "model": None,
+    "result_queue": Queue()
+}
+
+# 设置设备和数据类型
+device = "cuda" if torch.cuda.is_available() else "cpu"
+torch.set_default_dtype(torch.float32)
+
+# 初始化模型状态
+model_state = {
+    "vad_model": None,
+    "asr_model": None,
+    "punc_model": None
+}
+
+# 热词配置
+HOTWORD_FILE = os.path.join(os.environ['MY_NEURO_FULL_HUB_DIR'], 'hotwords.txt')
+hotword_state = {
+    "hotwords": ""
+}
+
+
+def load_hotwords():
+    """从 hotwords.txt 加载热词，格式：每行一个 '词语 权重'"""
+    if not os.path.exists(HOTWORD_FILE):
+        print(f"热词文件不存在: {HOTWORD_FILE}，将不使用热词")
+        hotword_state["hotwords"] = ""
+        return
+
+    try:
+        with open(HOTWORD_FILE, "r", encoding="utf-8") as f:
+            lines = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+        hotword_str = " ".join(lines)
+        hotword_state["hotwords"] = hotword_str
+        print(f"已加载 {len(lines)} 个热词: {hotword_str}")
+    except Exception as e:
+        print(f"加载热词文件失败: {e}")
+        hotword_state["hotwords"] = ""
+
+
+async def startup_event():
+    print("正在加载模型...")
+
+    # 检查VAD模型目录是否存在
+    local_vad_path = str(LOCAL_MODELS['vad'])
+
+    # 下载只发生在插件的 DLC 安装流程中。
+    if not os.path.isfile(os.path.join(local_vad_path, 'hubconf.py')):
+        raise RuntimeError('VAD 模型缺失，请在插件列表重新安装 ASR DLC')
+    else:
+        print("VAD模型目录已存在，跳过下载步骤")
+
+    # 加载VAD模型（严格本地模式，避免torch.hub解析路径）
+    try:
+        print("正在从本地加载VAD模型...")
+        # 关键：通过`source='local'`强制使用本地模式，避免torch.hub解析repo_or_dir为远程仓库
+        model_state["vad_model"] = torch.hub.load(
+            repo_or_dir=local_vad_path,
+            model='silero_vad',
+            force_reload=False,
+            onnx=True,
+            trust_repo=True,
+            source='local'  # 添加这一行，强制本地加载模式
+        )
+
+        # 解包模型（silero-vad的torch.hub.load返回元组 (model, example)）
+        vad_model_tuple = model_state["vad_model"]
+        model_state["vad_model"] = vad_model_tuple[0]  # 提取第一个元素（模型本体）
+        print("VAD模型加载完成")
+    except Exception as e:
+        print(f"VAD模型加载失败: {str(e)}")
+        raise e
+
+    vad_state['model'] = model_state['vad_model']
+    if VAD_ONLY:
+        print('云端语音识别已启用，仅启动本地 VAD，不加载本地 ASR 和标点模型')
+        return
+
+    from funasr import AutoModel
+    from memory_loader import memory_efficient_loading
+    for key in ('asr', 'punc'):
+        for name in ('config.yaml', 'model.pt'):
+            if not (LOCAL_MODELS[key] / name).is_file():
+                raise RuntimeError(f'{key} 模型缺失，请在插件列表重新安装 ASR DLC')
+
+    # 设置环境变量来指定模型下载位置
+    asr_model_path = os.path.join(MODEL_DIR, "asr")
+    if not os.path.exists(asr_model_path):
+        os.makedirs(asr_model_path)
+
+    # 保存原始环境变量
+    original_modelscope_cache = os.environ.get('MODELSCOPE_CACHE', '')
+    original_funasr_home = os.environ.get('FUNASR_HOME', '')
+
+    # 设置环境变量
+    os.environ['MODELSCOPE_CACHE'] = asr_model_path
+    os.environ['FUNASR_HOME'] = MODEL_DIR
+
+    # 加载热词
+    load_hotwords()
+
+    # 加载ASR模型（SeACo-Paraformer，支持热词）
+    print("正在加载ASR模型（paraformer-zh，支持热词）...")
+    with memory_efficient_loading():
+        model_state["asr_model"] = AutoModel(
+            model=str(LOCAL_MODELS['asr']),
+            disable_update=True,
+            device=device,
+            dtype="float32"
+        )
+    print("ASR模型加载完成")
+
+    # 加载标点符号模型
+    print("正在加载标点符号模型...")
+    with memory_efficient_loading():
+        model_state["punc_model"] = AutoModel(
+            model=str(LOCAL_MODELS['punc']),
+            disable_update=True,
+            device=device,
+            model_type="pytorch",
+            dtype="float32"
+        )
+
+    # 恢复原始环境变量
+    if original_modelscope_cache:
+        os.environ['MODELSCOPE_CACHE'] = original_modelscope_cache
+    else:
+        os.environ.pop('MODELSCOPE_CACHE', None)
+
+    if original_funasr_home:
+        os.environ['FUNASR_HOME'] = original_funasr_home
+    else:
+        os.environ.pop('FUNASR_HOME', None)
+    print("标点符号模型加载完成")
+
+    vad_state["model"] = model_state["vad_model"]
+
+
+@app.websocket("/v1/ws/vad")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    vad_state["active_websockets"].add(websocket)
+    try:
+        print("新的WebSocket连接")
+        while True:
+            try:
+                data = await websocket.receive_bytes()
+                audio = np.frombuffer(data, dtype=np.float32).copy()
+
+                if len(audio) == WINDOW_SIZE:
+                    audio_tensor = torch.FloatTensor(audio)
+                    speech_prob = vad_state["model"](audio_tensor, SAMPLE_RATE).item()
+                    result = {
+                        "is_speech": speech_prob > VAD_THRESHOLD,
+                        "probability": float(speech_prob)
+                    }
+                    await websocket.send_text(json.dumps(result))
+            except WebSocketDisconnect:
+                print("客户端断开连接")
+                break
+            except Exception as e:
+                print(f"处理音频数据时出错: {str(e)}")
+                break
+    except Exception as e:
+        print(f"WebSocket错误: {str(e)}")
+    finally:
+        if websocket in vad_state["active_websockets"]:
+            vad_state["active_websockets"].remove(websocket)
+        print("WebSocket连接关闭")
+        try:
+            await websocket.close()
+        except:
+            pass
+
+
+@app.post("/v1/upload_audio")
+async def upload_audio(file: UploadFile = File(...)):
+    if VAD_ONLY:
+        raise HTTPException(status_code=503, detail='当前仅运行 VAD，请使用已配置的云端语音识别服务')
+    try:
+        # 直接读取音频数据到内存
+        audio_bytes = await file.read()
+
+        # 使用 soundfile 或 librosa 直接从内存中解析音频
+        import io
+        try:
+            import soundfile as sf
+            # 直接从内存中读取音频数据
+            audio_data, sample_rate = sf.read(io.BytesIO(audio_bytes))
+            audio_data = audio_data.astype(np.float32)  # sf.read 默认返回 float64，强制转 float32 防止 DoubleTensor 错误
+            print(f"音频数据形状: {audio_data.shape}, 采样率: {sample_rate}")
+        except ImportError:
+            print("soundfile 不可用，尝试使用 librosa")
+            try:
+                import librosa
+                audio_data, sample_rate = librosa.load(io.BytesIO(audio_bytes), sr=16000)
+                audio_data = audio_data.astype(np.float32)  # 确保类型一致
+                print(f"音频数据形状: {audio_data.shape}, 采样率: {sample_rate}")
+            except ImportError:
+                return {
+                    "status": "error",
+                    "message": "需要安装 soundfile 或 librosa 库来处理音频"
+                }
+
+        # 进行ASR处理 - 直接传入音频数组
+        with torch.no_grad():
+            generate_kwargs = {
+                "input": audio_data,
+                "dtype": "float32"
+            }
+            if hotword_state["hotwords"]:
+                generate_kwargs["hotword"] = hotword_state["hotwords"]
+
+            asr_result = model_state["asr_model"].generate(**generate_kwargs)
+
+            # 添加标点符号
+            if asr_result and len(asr_result) > 0:
+                text_input = asr_result[0]["text"]
+                final_result = model_state["punc_model"].generate(
+                    input=text_input,
+                    dtype="float32"
+                )
+
+                return {
+                    "status": "success",
+                    "filename": file.filename or "uploaded_audio",
+                    "text": final_result[0]["text"] if final_result else text_input
+                }
+            else:
+                return {
+                    "status": "error",
+                    "filename": file.filename or "uploaded_audio",
+                    "message": "语音识别失败"
+                }
+
+    except Exception as e:
+        print(f"处理音频时出错: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+
+@app.get("/hotwords")
+def get_hotwords():
+    """查看当前热词"""
+    return {
+        "hotwords": hotword_state["hotwords"],
+        "file": HOTWORD_FILE
+    }
+
+
+@app.post("/hotwords/reload")
+def reload_hotwords():
+    """重新加载热词文件"""
+    load_hotwords()
+    return {
+        "status": "success",
+        "hotwords": hotword_state["hotwords"]
+    }
+
+
+@app.get("/vad/status")
+def get_status():
+    closed_websockets = set()
+    for ws in vad_state["active_websockets"]:
+        try:
+            if ws.client_state.name == "DISCONNECTED":
+                closed_websockets.add(ws)
+        except:
+            closed_websockets.add(ws)
+
+    for ws in closed_websockets:
+        vad_state["active_websockets"].remove(ws)
+
+    return {
+        "is_running": bool(vad_state["active_websockets"]),
+        "active_connections": len(vad_state["active_websockets"])
+    }
+
+
+if __name__ == '__main__':
+    import uvicorn
+    setup_logging()
+    uvicorn.run(app, host="127.0.0.1", port=1000)

@@ -1,0 +1,25 @@
+{
+  "name": "local-asr",
+  "displayName": "本地 ASR 服务",
+  "version": "1.0.0",
+  "description": "本地语音识别与 VAD。安装 DLC 后启用，点击配置查看日志、启动和关闭服务。",
+  "main": "index.js",
+  "download_dlc": "https://www.modelscope.cn/models/morelle/my-neuro-vad",
+  "dlc": { "installScript": "download.py" },
+  "localService": {
+    "id": "asr",
+    "name": "ASR 语音识别",
+    "tabLabel": "ASR",
+    "port": 1000,
+    "checks": [
+      "asr-hub/model/torch_hub/snakers4_silero-vad_master/hubconf.py",
+      "asr-hub/model/asr/models/iic/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch/config.yaml",
+      "asr-hub/model/asr/models/iic/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch/model.pt",
+      "asr-hub/model/asr/models/iic/punc_ct-transformer_cn-en-common-vocab471067-large/config.yaml",
+      "asr-hub/model/asr/models/iic/punc_ct-transformer_cn-en-common-vocab471067-large/model.pt"
+    ],
+    "startScript": "server.py",
+    "launchResolver": "service.js",
+    "shutdownPath": "/shutdown"
+  }
+}
