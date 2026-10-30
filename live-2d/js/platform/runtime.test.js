@@ -53,3 +53,33 @@ test('Linux stop terminates the owned process group and leaves unrelated process
     assert.equal(unrelated.signalCode, null);
     await stopManaged(child);
 });
+
+test('Electron receives Ozone and GL switches before the app entry, for both control and pet', () => {
+    const { electronLaunchArgs } = require('./runtime');
+    const env = { DISPLAY: ':0', WAYLAND_DISPLAY: 'wayland-0' };
+    for (const entry of ['control-main.js', '.']) {
+        const args = electronLaunchArgs(entry, ['--start-pet'], env, 'linux', { softwareRendering: true });
+        assert.equal(args[0], '--ozone-platform=x11');
+        assert.ok(args.indexOf('--use-angle=swiftshader') < args.indexOf(entry));
+        assert.ok(args.includes('--enable-features=WebRTCPipeWireCapturer,GlobalShortcutsPortal'));
+        assert.equal(args.at(-1), '--start-pet');
+    }
+    const native = electronLaunchArgs('.', [], { MY_NEURO_DISPLAY_MODE: 'wayland' }, 'linux', {});
+    assert.equal(native[0], '--ozone-platform=wayland');
+    assert.ok(!native.includes('--use-angle=swiftshader'));
+    assert.deepEqual(electronLaunchArgs('.', ['--test'], {}, 'win32', {}), ['.', '--test']);
+});
+
+test('software rendering persists locally but an explicit environment override wins', t => {
+    const fs = require('node:fs');
+    const os = require('node:os');
+    const { readLinuxSettings, softwareRendering } = require('./runtime');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'neuro-linux-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'settings.json');
+    assert.deepEqual(readLinuxSettings(file), {});
+    fs.writeFileSync(file, JSON.stringify({ softwareRendering: true }));
+    assert.equal(softwareRendering({}, readLinuxSettings(file)), true);
+    assert.equal(softwareRendering({ MY_NEURO_SOFTWARE_RENDERING: '0' }, readLinuxSettings(file)), false);
+    assert.equal(softwareRendering({ MY_NEURO_SOFTWARE_RENDERING: '1' }, {}), true);
+});

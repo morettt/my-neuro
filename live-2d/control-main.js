@@ -10,7 +10,7 @@ if (process.platform === 'win32' && process.versions.electron?.startsWith('28.')
   app.commandLine.appendSwitch('disable-features', [...disabledFeatures].join(','));
 }
 
-const { configureElectron, projectPython, spawnManaged, stopManaged, requireLinuxPython } = require('./js/platform/runtime');
+const { configureElectron, electronLaunchArgs, projectPython, spawnManaged, stopManaged, requireLinuxPython } = require('./js/platform/runtime');
 const { nativeWayland } = configureElectron(app);
 
 const fs = require('fs');
@@ -745,10 +745,10 @@ function createControlWindow() {
     minWidth: 860,
     minHeight: 620,
     frame: nativeWayland,
-    show: false,
-    opacity: nativeWayland ? 1 : 0,
-    transparent: !nativeWayland,
-    backgroundColor: nativeWayland ? '#20232b' : '#00000000',
+    show: process.platform === 'linux',
+    opacity: process.platform === 'linux' ? 1 : 0,
+    transparent: process.platform !== 'linux',
+    backgroundColor: process.platform === 'linux' ? '#20232b' : '#00000000',
     webPreferences: {
       preload: path.join(__dirname, 'control-preload.js'),
       contextIsolation: true,
@@ -759,7 +759,7 @@ function createControlWindow() {
     }
   });
   const fadeWindow = (from, to, duration = 320) => new Promise(resolve => {
-    if (nativeWayland) { resolve(); return; }
+    if (process.platform === 'linux') { resolve(); return; }
     const startedAt = Date.now();
     const timer = setInterval(() => {
       if (win.isDestroyed()) {
@@ -780,7 +780,7 @@ function createControlWindow() {
   let configDirty = false;
   win.once('ready-to-show', () => {
     win.show();
-    fadeWindow(0, 1);
+    if (process.platform !== 'linux') fadeWindow(0, 1);
   });
   win.on('close', event => {
     if (closing) return;
@@ -1462,7 +1462,7 @@ function startLive2d(event) {
   showAvatarLoadingWindow();
   live2dProcess = process.platform === 'win32'
     ? spawn('cmd.exe', ['/d', '/c', 'go.bat'], { cwd: __dirname, windowsHide: true })
-    : spawnManaged(process.execPath, ['.'], {
+    : spawnManaged(process.execPath, electronLaunchArgs('.'), {
       cwd: __dirname, env: { ...process.env, ELECTRON_RUN_AS_NODE: '' }
     });
   const petProcess = live2dProcess;

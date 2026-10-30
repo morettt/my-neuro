@@ -4,8 +4,8 @@
   "description": "Combined Project",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "control": "electron control-main.js",
+    "start": "node scripts/launch.cjs pet",
+    "control": "node scripts/launch.cjs control",
     "start-server": "node server.js"
   },
   "dependencies": {

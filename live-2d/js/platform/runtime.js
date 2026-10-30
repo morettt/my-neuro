@@ -15,21 +15,37 @@ function linuxDisplayMode(env = process.env) {
     return mode;
 }
 
+const linuxSettingsPath = path.resolve(__dirname, '../../.runtime/linux-settings.json');
+
+function readLinuxSettings(file = linuxSettingsPath) {
+    try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return {}; }
+}
+
+function softwareRendering(env = process.env, settings = readLinuxSettings()) {
+    return env.MY_NEURO_SOFTWARE_RENDERING !== undefined
+        ? env.MY_NEURO_SOFTWARE_RENDERING === '1' : settings.softwareRendering === true;
+}
+
+// Ozone is initialized before application JS runs in modern Electron. Backend
+// and GL switches must be present on the executable command line, including
+// when the control panel launches the pet as a separate Electron process.
+function electronLaunchArgs(entry, args = [], env = process.env, platform = process.platform, settings = readLinuxSettings()) {
+    if (platform !== 'linux') return [entry, ...args];
+    const switches = [`--ozone-platform=${linuxDisplayMode(env)}`];
+    if (softwareRendering(env, settings)) {
+        switches.push('--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader');
+    }
+    const features = ['WebRTCPipeWireCapturer'];
+    if (isWayland(env, platform)) features.push('GlobalShortcutsPortal');
+    switches.push(`--enable-features=${features.join(',')}`);
+    return [...switches, entry, ...args];
+}
+
 function configureElectron(app) {
     if (process.platform !== 'linux') return { nativeWayland: false };
-    const mode = linuxDisplayMode();
-    if (process.env.MY_NEURO_SOFTWARE_RENDERING === '1') {
-        app.commandLine.appendSwitch('use-gl', 'angle');
-        app.commandLine.appendSwitch('use-angle', 'swiftshader');
-        app.commandLine.appendSwitch('enable-unsafe-swiftshader');
-    }
-    app.commandLine.appendSwitch('ozone-platform', mode);
-    const features = new Set(app.commandLine.getSwitchValue('enable-features').split(',').filter(Boolean));
-    features.add('WebRTCPipeWireCapturer');
-    if (isWayland()) features.add('GlobalShortcutsPortal');
-    app.commandLine.appendSwitch('enable-features', [...features].join(','));
+    // These are app settings; Ozone/GL configuration belongs in electronLaunchArgs.
     app.setDesktopName('io.github.morettt.MyNeuro.desktop');
-    return { nativeWayland: mode === 'wayland' };
+    return { nativeWayland: linuxDisplayMode() === 'wayland' };
 }
 
 function projectPython(root, env = process.env, platform = process.platform) {
@@ -69,4 +85,4 @@ function requireLinuxPython(root) {
     return python;
 }
 
-module.exports = { isWayland, linuxDisplayMode, configureElectron, projectPython, spawnManaged, stopManaged, requireLinuxPython };
+module.exports = { linuxSettingsPath, readLinuxSettings, softwareRendering, electronLaunchArgs, isWayland, linuxDisplayMode, configureElectron, projectPython, spawnManaged, stopManaged, requireLinuxPython };

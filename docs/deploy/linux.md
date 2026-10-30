@@ -23,6 +23,8 @@ cd ~/project/my-neuro
 | XWayland 桌宠覆盖层（默认） | `./scripts/start-linux.sh` | 当 `DISPLAY` 可用时使用 X11 后端，保留透明、模型交互、桌面定位和跨屏窗口逻辑；置顶、缩放及跨屏效果仍受合成器约束。桌面会话保持 Wayland。 |
 | 原生 Wayland 窗口 | `MY_NEURO_DISPLAY_MODE=wayland ./scripts/start-linux.sh` | 角色显示在可交互、有边框的普通窗口内。由合成器负责窗口定位，不做全桌面覆盖、鼠标穿透或强制置顶。窗口内拖动角色、打字和聚焦按键录音可用。 |
 
+启动器在 Electron 启动前传入 Ozone 显示后端和 GL 参数；不要绕过启动器直接执行 Electron 二进制，否则新版 Electron 可能在读取应用代码之前选错后端，导致窗口不可见。`npm run control` / `npm start` 也使用相同的启动器。
+
 无 `DISPLAY` 时自动使用原生 Wayland 窗口。需要覆盖层时安装/启用发行版的 XWayland。不在原生 Wayland 上反复调用窗口定位修正，避免窗口被错误拉伸或隐藏。
 
 Wayland 会话中不启动 `uiohook-napi` 全局键盘钩子：X11 钩子不能可靠捕获其他 Wayland 应用的按下/松开事件。**按住说话需要先聚焦桌宠窗口**；也可使用语音自动检测。普通全局快捷键交给 Electron 的 GlobalShortcuts portal，是否可用取决于桌面后端和用户授权，不保证所有合成器都支持。菜单入口的 `.desktop` 身份由安装脚本注册；若不需要全局快捷键，设置 `MY_NEURO_DISABLE_GLOBAL_SHORTCUTS=1`。
@@ -41,6 +43,8 @@ Wayland 会话中的视觉截图通过 Electron / PipeWire / `xdg-desktop-portal
 ./scripts/start-linux.sh --software-rendering
 ```
 
+这个选项会把软件渲染偏好保存在本机的 `live-2d/.runtime/linux-settings.json`（不提交 Git）。菜单、`npm run control`、`npm start` 和控制面板启动的桌宠子进程都会读取它；因此无需每次重复传参。设置 `MY_NEURO_SOFTWARE_RENDERING=0` 可以临时使用硬件渲染。
+
 这个选项会启用 Chromium 的软件 WebGL（`enable-unsafe-swiftshader`），只用于需要该兼容路径的机器，CPU 占用可能增加。硬件渲染仍是默认选项。若希望应用菜单也使用软件渲染，重新注册入口：
 
 ```bash
@@ -58,7 +62,7 @@ MY_NEURO_SOFTWARE_RENDERING=1 python3 scripts/install-linux-desktop.py
 
 ## 验证范围
 
-已在 ARM64 Linux / Wayland 会话中验证安装、控制面板启动桌宠、Live2D 进入 `ready`、停止流程；XWayland 覆盖层和原生 Wayland 普通窗口均能渲染。该机器使用软件渲染完成新版 Electron 验证。未配置提供商的对话、云语音和大型本地模型不算作端到端通过。截图的 portal 路径有自动测试，真实屏幕选择授权及其他合成器/显卡仍需各自桌面环境验证。
+已在 ARM64 Linux / Wayland 会话中验证安装、控制面板启动桌宠、Live2D 进入 `ready`、停止流程。XWayland 模式已核对控制面板与桌宠均处于系统的 `IsViewable` 状态，并由用户确认两者同时可见。原生 Wayland 普通窗口完成了模型初始化验证，桌面可见性及交互仍需进一步实测。该机器使用软件渲染完成新版 Electron 验证。未配置提供商的对话、云语音和大型本地模型不算作端到端通过。截图的 portal 路径有自动测试，真实屏幕选择授权及其他合成器/显卡仍需各自桌面环境验证。
 
 ```bash
 node --test $(find live-2d/js -name '*.test.js')
