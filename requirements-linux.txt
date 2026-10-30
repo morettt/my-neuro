@@ -1,0 +1,7 @@
+# Lightweight control/WebUI and Python plugin dependencies. No CUDA bundle.
+flask>=3,<4
+requests>=2.32,<3
+aiohttp>=3.10,<4
+httpx>=0.27,<1
+pillow>=10,<13
+psutil>=5.9,<8

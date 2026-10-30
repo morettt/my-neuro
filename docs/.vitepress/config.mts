@@ -53,6 +53,7 @@ export default defineConfig({
               items: [
                 { text: '环境要求', link: '/deploy/requirements' },
                 { text: '安装', link: '/deploy/install' },
+                { text: 'Linux / Wayland', link: '/deploy/linux' },
                 { text: '更新', link: '/deploy/update' }
               ]
             },
@@ -124,6 +125,7 @@ export default defineConfig({
               text: '开始用',
               items: [
                 { text: '下载与打开', link: '/qt/deploy/download' },
+                { text: 'Linux / Wayland', link: '/deploy/linux' },
                 { text: '认识肥牛.exe', link: '/qt/config/open-qt' }
               ]
             },
