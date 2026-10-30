@@ -43,13 +43,27 @@ Wayland 会话中的视觉截图通过 Electron / PipeWire / `xdg-desktop-portal
 ./scripts/start-linux.sh --software-rendering
 ```
 
-这个选项会把软件渲染偏好保存在本机的 `live-2d/.runtime/linux-settings.json`（不提交 Git）。菜单、`npm run control`、`npm start` 和控制面板启动的桌宠子进程都会读取它；因此无需每次重复传参。设置 `MY_NEURO_SOFTWARE_RENDERING=0` 可以临时使用硬件渲染。
+这个选项会把软件渲染偏好保存在本机的 `live-2d/.runtime/linux-settings.json`（不提交 Git）。菜单、`npm run control`、`npm start` 和控制面板启动的桌宠子进程都会读取它；因此无需每次重复传参。设置 `MY_NEURO_SOFTWARE_RENDERING=0` 可以临时使用硬件渲染；`./scripts/start-linux.sh --hardware-rendering` 会保存硬件渲染偏好。软件渲染的 3D 模型可能占用多个 CPU 核心并明显发热，有可用 GPU 时优先恢复硬件渲染。
 
 这个选项会启用 Chromium 的软件 WebGL（`enable-unsafe-swiftshader`），只用于需要该兼容路径的机器，CPU 占用可能增加。硬件渲染仍是默认选项。若希望应用菜单也使用软件渲染，重新注册入口：
 
 ```bash
 MY_NEURO_SOFTWARE_RENDERING=1 python3 scripts/install-linux-desktop.py
 ```
+
+## 硬件渲染与 VRM 负载
+
+显示后端和 GPU 参数都必须在 Electron 启动前传入。修复启动参数顺序后，不应仅因为旧的显示故障就永久启用 SwiftShader。可先使用硬件模式：
+
+```bash
+./scripts/start-linux.sh --hardware-rendering
+```
+
+如果默认硬件路径不适配本机驱动，可用 `MY_NEURO_ANGLE_BACKEND=gles` 或 `gl` 指定 ANGLE 的 OpenGL ES / OpenGL 后端；`auto` 恢复 Electron 默认选择。也可在本地 `live-2d/.runtime/linux-settings.json` 中设置 `"softwareRendering": false, "angleBackend": "gles"`。菜单入口读取同一设置，不写死 SwiftShader。
+
+判断是否使用 GPU 要看 `runtime.log` 中 VRM 的 `WebGL渲染器`，例如 `ANGLE (freedreno, Adreno X1-85, OpenGL ES 3.2)`；存在 GPU 进程本身不代表使用硬件，`SwiftShader` / `llvmpipe` 仍是软件实现。
+
+VRM 默认限制为 30 FPS，减少桌宠持续渲染负载；需要更流畅动画时可在 `config.json` 的 `ui.vrm_max_fps` 中设置 60，重新启动桌宠生效。主光源跟随相机方向，避免默认负 Z 视角下角色被背光照暗；保留模型原有 MToon 材质、贴图与阴影色。
 
 ## 本地语音模型和插件
 
@@ -62,7 +76,7 @@ MY_NEURO_SOFTWARE_RENDERING=1 python3 scripts/install-linux-desktop.py
 
 ## 验证范围
 
-已在 ARM64 Linux / Wayland 会话中验证安装、控制面板启动桌宠、Live2D 进入 `ready`、停止流程。XWayland 模式已核对控制面板与桌宠均处于系统的 `IsViewable` 状态，并由用户确认两者同时可见。原生 Wayland 普通窗口完成了模型初始化验证，桌面可见性及交互仍需进一步实测。该机器使用软件渲染完成新版 Electron 验证。未配置提供商的对话、云语音和大型本地模型不算作端到端通过。截图的 portal 路径有自动测试，真实屏幕选择授权及其他合成器/显卡仍需各自桌面环境验证。
+已在 ARM64 Linux / Wayland 会话中验证安装、控制面板启动桌宠、Live2D 进入 `ready`、停止流程。XWayland 模式已核对控制面板与桌宠均处于系统的 `IsViewable` 状态，并由用户确认两者同时可见。原生 Wayland 普通窗口完成了模型初始化验证，桌面可见性及交互仍需进一步实测。该机器已验证 Adreno X1-85 / freedreno 硬件 WebGL（ANGLE OpenGL 与 OpenGL ES 两条路径）；软件渲染仅作为可选兼容方案。未配置提供商的对话、云语音和大型本地模型不算作端到端通过。截图的 portal 路径有自动测试，真实屏幕选择授权及其他合成器/显卡仍需各自桌面环境验证。
 
 ```bash
 node --test $(find live-2d/js -name '*.test.js')
