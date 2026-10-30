@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const { EventEmitter } = require('events');
-const { discoverPluginServices } = require('./plugin-services');
+const { discoverPluginServices, resolvePluginServiceLaunch } = require('./plugin-services');
 const { pluginDlcInfo, findPluginDlc } = require('./plugin-dlc');
 const { downloadProcessEnv, explainStorageError } = require('./download-storage');
 
@@ -148,16 +148,86 @@ test('downloading plugin cannot be disabled midway through environment setup', a
     assert.ok(context.getServiceDefinitions().bert);
 });
 
-test('terminal never lists BERT; plugin management receives its service instead', async t => {
+test('terminal only lists TTS; plugin management receives BERT and ASR', async t => {
     const { context, handlers } = controlHarness(t);
     context.serviceStatus = async () => [
-        { id: 'tts', plugin: null }, { id: 'asr', plugin: null },
+        { id: 'tts', plugin: null }, { id: 'asr', plugin: 'built-in/local-asr' },
         { id: 'bert', plugin: 'built-in/local-bert' }
     ];
     const terminal = await handlers.get('control:service-status')();
     const plugins = await handlers.get('control:plugin-service-status')();
-    assert.equal(JSON.stringify(terminal.map(service => service.id)), '["tts","asr"]');
-    assert.equal(JSON.stringify(plugins.map(service => service.id)), '["bert"]');
+    assert.equal(JSON.stringify(terminal.map(service => service.id)), '["tts"]');
+    assert.equal(JSON.stringify(plugins.map(service => service.id)), '["asr","bert"]');
+});
+
+function addAsrPlugin(context) {
+    const pluginDir = path.join(context.pluginsPath, 'built-in/local-asr');
+    fs.mkdirSync(pluginDir, { recursive: true });
+    for (const name of fs.readdirSync(path.join(root, 'plugins/built-in/local-asr'))) {
+        if (name === '__pycache__') continue;
+        fs.copyFileSync(path.join(root, 'plugins/built-in/local-asr', name), path.join(pluginDir, name));
+    }
+}
+
+test('ASR registers as an enabled plugin and resolves local or cloud VAD launch modes', t => {
+    const { context, setEnabled } = controlHarness(t);
+    addAsrPlugin(context);
+    setEnabled(['built-in/local-bert', 'built-in/local-asr']);
+    const services = context.getServiceDefinitions();
+    assert.ok(services.bert);
+    assert.equal(services.asr.plugin, 'built-in/local-asr');
+    assert.equal(services.asr.port, 1000);
+    assert.deepEqual(resolvePluginServiceLaunch(services.asr, {}).startArgs, []);
+    for (const provider of ['baidu_asr', 'siliconflow_asr']) {
+        const launch = resolvePluginServiceLaunch(services.asr, { cloud: { [provider]: { enabled: true } } });
+        assert.deepEqual(launch.startArgs, ['--vad-only']);
+    }
+    setEnabled(['built-in/local-bert']);
+    assert.equal(context.getServiceDefinitions().asr, undefined);
+});
+
+test('ASR starts its own server with cloud VAD flag and project-local runtime caches', async t => {
+    const { context, handlers, calls, event, setEnabled } = controlHarness(t);
+    addAsrPlugin(context);
+    setEnabled(['built-in/local-asr']);
+    context.serviceInstalled = () => true;
+    context.serviceLaunchDefinition = id => resolvePluginServiceLaunch(context.getServiceDefinitions()[id], { cloud: { siliconflow_asr: { enabled: true } } });
+    fs.mkdirSync(path.dirname(context.projectEnvPython), { recursive: true });
+    fs.writeFileSync(context.projectEnvPython, 'test');
+    assert.equal((await handlers.get('control:start-service')(event, 'asr')).ok, true);
+    assert.equal(calls[0].args[1], context.getServiceDefinitions().asr.startScript);
+    assert.equal(calls[0].args[2], '--vad-only');
+    assert.ok(calls[0].options.env.TEMP.startsWith(context.__dirname));
+    assert.ok(calls[0].options.env.MODELSCOPE_CACHE.startsWith(context.__dirname));
+});
+
+test('ASR installs through plugin DLC before enablement and reports its own progress label', async t => {
+    const { context, handlers, calls, event, setEnabled } = controlHarness(t);
+    addAsrPlugin(context);
+    setEnabled([]);
+    fs.mkdirSync(path.dirname(context.projectEnvPython), { recursive: true });
+    fs.writeFileSync(context.projectEnvPython, 'test');
+    const url = 'https://www.modelscope.cn/models/morelle/my-neuro-vad';
+    const task = handlers.get('control:install-plugin-dlc')(event, 'local-asr', url);
+    await new Promise(setImmediate);
+    const plugin = findPluginDlc(context.pluginsPath, 'local-asr', url);
+    assert.equal(calls[0].args[1], plugin.script);
+    assert.equal(calls[0].options.env.MY_NEURO_PLUGIN_DLC_DIR, plugin.target);
+    assert.match(context.pluginDlcProgress.get('local-asr').label, /ASR/);
+    assert.doesNotMatch(context.pluginDlcProgress.get('local-asr').label, /BERT/);
+    for (const relative of plugin.metadata.localService.checks) {
+        const file = path.join(plugin.target, relative);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, 'fixture');
+    }
+    context.serviceDownloads.asr.emit('exit', 0);
+    assert.equal((await task).ok, true);
+    assert.equal(findPluginDlc(context.pluginsPath, 'local-asr', url).installed, true);
+});
+
+test('main process only declares TTS as a built-in terminal service', () => {
+    const definitions = vm.runInNewContext(source.slice(source.indexOf('const builtinServiceDefinitions'), source.indexOf('function getServiceDefinitions')) + '; builtinServiceDefinitions');
+    assert.equal(JSON.stringify(Object.keys(definitions)), '["tts"]');
 });
 
 test('DLC installer works before plugin enablement and validates resources before success', async t => {

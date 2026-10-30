@@ -21,13 +21,13 @@ function discoverPluginServices(pluginsDir, reservedIds = []) {
             || !Array.isArray(service.checks) || !service.checks.length
             || !service.checks.every(item => typeof item === 'string' && item.length)) continue;
         const scripts = {};
-        for (const key of ['startScript']) {
+        for (const key of ['startScript', ...(service.launchResolver ? ['launchResolver'] : [])]) {
             if (typeof service[key] !== 'string') break;
             const file = path.resolve(pluginDir, service[key]);
             if (!file.startsWith(pluginDir + path.sep) || !fs.existsSync(file)) break;
             scripts[key] = file;
         }
-        if (!scripts.startScript) continue;
+        if (!scripts.startScript || service.launchResolver && !scripts.launchResolver) continue;
         let dlc;
         try { dlc = pluginDlcInfo(pluginsDir, pluginDir, metadata); } catch { continue; }
         services[service.id] = { ...service, ...scripts, resourceRoot: dlc.resourceRoot, plugin: relPath };
@@ -35,4 +35,14 @@ function discoverPluginServices(pluginsDir, reservedIds = []) {
     return services;
 }
 
-module.exports = { discoverPluginServices };
+function resolvePluginServiceLaunch(definition, config) {
+    if (!definition?.launchResolver) return definition;
+    const resolveLaunch = require(definition.launchResolver);
+    const options = resolveLaunch(config);
+    if (!options || !Array.isArray(options.startArgs) || !options.startArgs.every(arg => typeof arg === 'string')) {
+        throw new Error('插件服务启动参数无效');
+    }
+    return { ...definition, name: options.name || definition.name, startArgs: options.startArgs };
+}
+
+module.exports = { discoverPluginServices, resolvePluginServiceLaunch };
