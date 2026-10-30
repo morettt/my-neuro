@@ -1,0 +1,26 @@
+{
+  "name": "local-tts",
+  "displayName": "本地 TTS 服务",
+  "version": "1.0.0",
+  "description": "本地 GPT-SoVITS 语音合成。安装 DLC 后启用，点击配置查看日志、启动和关闭服务。",
+  "main": "index.js",
+  "download_dlc": "https://www.modelscope.cn/models/morelle/fake-neuro-gsv",
+  "dlc": { "installScript": "download.py" },
+  "localService": {
+    "id": "tts",
+    "name": "TTS 语音合成",
+    "tabLabel": "TTS",
+    "port": 5000,
+    "checks": [
+      "tts-hub/GPT-SoVITS-Bundle/runtime/python.exe",
+      "tts-hub/GPT-SoVITS-Bundle/api.py",
+      "tts-hub/GPT-SoVITS-Bundle/GPT_SoVITS",
+      "tts-hub/GPT-SoVITS-Bundle/role_voice_api/neuro/merge.pth",
+      "tts-hub/GPT-SoVITS-Bundle/role_voice_api/neuro/01.wav"
+    ],
+    "startScript": "server.py",
+    "pythonPath": "tts-hub/GPT-SoVITS-Bundle/runtime/python.exe",
+    "workingDirectory": "tts-hub/GPT-SoVITS-Bundle",
+    "actions": [{ "label": "声音克隆", "page": "voice" }]
+  }
+}
