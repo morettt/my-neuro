@@ -34,6 +34,10 @@ function electronLaunchArgs(entry, args = [], env = process.env, platform = proc
     const switches = [`--ozone-platform=${linuxDisplayMode(env)}`];
     if (softwareRendering(env, settings)) {
         switches.push('--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader');
+    } else {
+        const backend = env.MY_NEURO_ANGLE_BACKEND || settings.angleBackend || 'auto';
+        if (!['auto', 'gl', 'gles'].includes(backend)) throw new Error('MY_NEURO_ANGLE_BACKEND must be auto, gl or gles');
+        if (backend !== 'auto') switches.push('--use-gl=angle', `--use-angle=${backend}`);
     }
     const features = ['WebRTCPipeWireCapturer'];
     if (isWayland(env, platform)) features.push('GlobalShortcutsPortal');

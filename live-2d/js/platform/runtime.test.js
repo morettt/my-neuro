@@ -83,3 +83,14 @@ test('software rendering persists locally but an explicit environment override w
     assert.equal(softwareRendering({ MY_NEURO_SOFTWARE_RENDERING: '0' }, readLinuxSettings(file)), false);
     assert.equal(softwareRendering({ MY_NEURO_SOFTWARE_RENDERING: '1' }, {}), true);
 });
+
+test('hardware ANGLE backend uses GL/GLES without enabling SwiftShader and supports an override', () => {
+    const { electronLaunchArgs } = require('./runtime');
+    const settings = { softwareRendering: false, angleBackend: 'gles' };
+    const args = electronLaunchArgs('.', [], { DISPLAY: ':0' }, 'linux', settings);
+    assert.ok(args.includes('--use-angle=gles'));
+    assert.ok(!args.includes('--enable-unsafe-swiftshader'));
+    const override = electronLaunchArgs('.', [], { DISPLAY: ':0', MY_NEURO_ANGLE_BACKEND: 'gl' }, 'linux', settings);
+    assert.ok(override.includes('--use-angle=gl'));
+    assert.throws(() => electronLaunchArgs('.', [], { DISPLAY: ':0', MY_NEURO_ANGLE_BACKEND: 'invalid' }, 'linux', settings), /ANGLE_BACKEND/);
+});

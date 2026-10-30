@@ -16,12 +16,11 @@ def quote_exec(value):
     return '"' + str(value).replace('\\', '\\\\').replace('"', '\\"').replace('`', '\\`').replace('$', '\\$').replace('%', '%%') + '"'
 
 quoted = f"{quote_exec(node)} {quote_exec(root / 'live-2d/scripts/launch.cjs')} control"
-if os.environ.get('MY_NEURO_SOFTWARE_RENDERING') == '1':
-    quoted += ' --software-rendering'
+if os.environ.get('MY_NEURO_SOFTWARE_RENDERING') in ('0', '1'):
     settings = root / 'live-2d/.runtime/linux-settings.json'
     settings.parent.mkdir(parents=True, exist_ok=True)
     existing = json.loads(settings.read_text()) if settings.exists() else {}
-    settings.write_text(json.dumps({**existing, 'softwareRendering': True}, indent=2) + '\n')
+    settings.write_text(json.dumps({**existing, 'softwareRendering': os.environ['MY_NEURO_SOFTWARE_RENDERING'] == '1'}, indent=2) + '\n')
 applications = Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local/share')) / 'applications'
 applications.mkdir(parents=True, exist_ok=True)
 entry = applications / 'io.github.morettt.MyNeuro.desktop'
