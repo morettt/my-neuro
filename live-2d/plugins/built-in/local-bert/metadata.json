@@ -1,0 +1,18 @@
+{
+  "name": "local-bert",
+  "displayName": "本地 BERT 服务",
+  "version": "1.0.0",
+  "description": "本地 BERT 分类服务。安装 DLC 后启用，点击配置查看日志、启动和关闭服务。",
+  "main": "index.js",
+  "download_dlc": "https://www.modelscope.cn/models/morelle/Omni_fn_bert",
+  "dlc": { "installScript": "download.py" },
+  "localService": {
+    "id": "bert",
+    "name": "BERT 模型服务",
+    "tabLabel": "BERT",
+    "port": 6007,
+    "checks": ["bert-hub/config.json", "bert-hub/model.safetensors", "bert-hub/vocab.txt"],
+    "startScript": "server.py",
+    "shutdownPath": "/shutdown"
+  }
+}

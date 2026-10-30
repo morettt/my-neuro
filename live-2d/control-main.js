@@ -21,6 +21,9 @@ const { scanLive2DModels, resolveLive2DModel, scanVRMModels, scanMMDModels } = r
 const { EMOTIONS: motionEmotions, mergeExpressionConfig, mergeActionConfig, isLive2DModelDir } = require('./js/avatar/model-defaults');
 const { loadProvidersFromStore, saveProviders } = require('./js/core/llm-provider-store');
 const aliyunVoiceClone = require('./js/voice/aliyun-voice-clone');
+const { discoverPluginServices } = require('./js/services/plugin-services');
+const { pluginDlcInfo, findPluginDlc } = require('./js/services/plugin-dlc');
+const { downloadCacheRoot, ensureDownloadSpace, downloadProcessEnv, explainStorageError } = require('./js/services/download-storage');
 
 const configPath = path.join(__dirname, 'config.json');
 const pluginsPath = path.join(__dirname, 'plugins');
@@ -145,9 +148,10 @@ function stopRuntimeLog() {
   runtimeLogLength = 0;
   runtimeLogRemainder = '';
 }
-const serviceProcesses = { tts: null, asr: null, bert: null };
-const serviceDownloads = { tts: null, asr: null, bert: null };
-const serviceDefinitions = {
+const serviceProcesses = {};
+const serviceDownloads = {};
+const pluginDlcProgress = new Map();
+const builtinServiceDefinitions = {
   tts: { name: 'TTS 语音合成', port: 5000, bat: '2.TTS.bat', flag: '--tts', checks: [
     'tts-hub/GPT-SoVITS-Bundle/runtime', 'tts-hub/GPT-SoVITS-Bundle/GPT_SoVITS'
   ] },
@@ -156,19 +160,23 @@ const serviceDefinitions = {
     'asr-hub/model/asr/models/iic/speech_seaco_paraformer_large_asr_nat-zh-cn-16k-common-vocab8404-pytorch/config.yaml',
     'asr-hub/model/asr/models/iic/punc_ct-transformer_cn-en-common-vocab471067-large/config.yaml',
     'asr-hub/model/asr/models/iic/punc_ct-transformer_cn-en-common-vocab471067-large/model.pt'
-  ] },
-  bert: { name: 'BERT 模型服务', port: 6007, bat: '3.bert.bat', flag: '--bert', checks: [
-    'bert-hub/config.json', 'bert-hub/model.safetensors', 'bert-hub/vocab.txt'
   ] }
 };
+function getServiceDefinitions() {
+  return { ...builtinServiceDefinitions, ...discoverPluginServices(pluginsPath, Object.keys(builtinServiceDefinitions)) };
+}
 const projectRoot = path.resolve(__dirname, '..');
 const hubRoot = path.join(projectRoot, 'full-hub');
 const projectEnvPython = path.join(projectRoot, 'env', 'python.exe');
 const projectEnvUrl = 'https://modelscope.cn/models/morelle/my-neuro-env/resolve/master/my-neuro-env.tar.gz';
 
-async function ensureProjectPython(sender, service) {
-  if (fs.existsSync(projectEnvPython)) return projectEnvPython;
-  const tempDir = fs.mkdtempSync(path.join(app.getPath('temp'), 'my-neuro-env-'));
+async function ensureProjectPython(sender, service, onProgress = () => {}) {
+  if (fs.existsSync(projectEnvPython)) {
+    onProgress({ stage: 'environment-ready', percent: 100 });
+    return projectEnvPython;
+  }
+  onProgress({ stage: 'environment-download', percent: null, received: 0, total: 0 });
+  const tempDir = fs.mkdtempSync(path.join(downloadCacheRoot(__dirname), 'env-'));
   const archive = path.join(tempDir, 'my-neuro-env.tar.gz');
   const envDir = path.join(projectRoot, 'env');
   sendServiceLog(sender, service, '@@ENV_START\n');
@@ -177,15 +185,19 @@ async function ensureProjectPython(sender, service) {
     const response = await net.fetch(projectEnvUrl, { redirect: 'follow' });
     if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
     const total = Number(response.headers.get('content-length')) || 0;
+    ensureDownloadSpace(tempDir, total);
     let received = 0;
     let lastPercent = -1;
+    let lastProgressBytes = 0;
     const progressStream = new (require('node:stream').Transform)({
       transform(chunk, _encoding, callback) {
         received += chunk.length;
         const percent = total ? Math.min(100, Math.floor(received / total * 100)) : 0;
-        if (percent !== lastPercent) {
+        if (percent !== lastPercent || received - lastProgressBytes >= 1024 * 1024) {
           lastPercent = percent;
+          lastProgressBytes = received;
           sendServiceLog(sender, service, `@@ENV_PROGRESS:${percent}:${received}:${total}\n`);
+          onProgress({ stage: 'environment-download', percent: total ? percent : null, received, total });
         }
         callback(null, chunk);
       }
@@ -193,6 +205,7 @@ async function ensureProjectPython(sender, service) {
     await pipeline(Readable.fromWeb(response.body), progressStream, fs.createWriteStream(archive));
     fs.mkdirSync(envDir, { recursive: true });
     sendServiceLog(sender, service, '@@ENV_EXTRACT\n');
+    onProgress({ stage: 'environment-extract', percent: null });
     sendServiceLog(sender, service, '\u9879\u76ee Python \u73af\u5883\u4e0b\u8f7d\u5b8c\u6210\uff0c\u6b63\u5728\u89e3\u538b...\n');
     await new Promise((resolve, reject) => {
       const child = spawn('tar.exe', ['-xzf', archive, '-C', envDir], { windowsHide: true });
@@ -203,15 +216,18 @@ async function ensureProjectPython(sender, service) {
     });
     if (!fs.existsSync(projectEnvPython)) throw new Error('\u89e3\u538b\u540e\u672a\u627e\u5230 env\\python.exe');
     sendServiceLog(sender, service, '@@ENV_DONE\n');
+    onProgress({ stage: 'environment-ready', percent: 100 });
     sendServiceLog(sender, service, '\u9879\u76ee Python \u73af\u5883\u5b89\u88c5\u5b8c\u6210\u3002\n');
     return projectEnvPython;
+  } catch (error) {
+    throw new Error(explainStorageError(error, tempDir));
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 }
 
 function serviceLaunchDefinition(id) {
-  const definition = serviceDefinitions[id];
+  const definition = getServiceDefinitions()[id];
   if (id !== 'asr' || !definition) return definition;
   const current = readJson(configPath, {});
   if (current.cloud?.baidu_asr?.enabled === true) {
@@ -224,7 +240,7 @@ function serviceLaunchDefinition(id) {
 }
 
 function serviceInstalled(definition) {
-  return definition.checks.every(item => fs.existsSync(path.join(hubRoot, item)));
+  return definition.checks.every(item => fs.existsSync(path.join(definition.resourceRoot || hubRoot, item)));
 }
 
 function portListening(port) {
@@ -243,12 +259,12 @@ function sendServiceLog(sender, service, text) {
 }
 
 async function serviceStatus() {
-  return Promise.all(Object.entries(serviceDefinitions).map(async ([id, definition]) => {
+  return Promise.all(Object.entries(getServiceDefinitions()).map(async ([id, definition]) => {
     const listening = await portListening(definition.port);
     const processActive = Boolean(serviceProcesses[id] && serviceProcesses[id].exitCode === null);
     return {
-      id, name: definition.name, port: definition.port,
-      installed: serviceInstalled(definition),
+      id, name: definition.name, tabLabel: definition.tabLabel || id.toUpperCase(), port: definition.port, plugin: definition.plugin || null,
+      installed: serviceInstalled(definition) && (!definition.startScript || fs.existsSync(projectEnvPython)),
       downloading: Boolean(serviceDownloads[id]),
       running: listening || processActive,
       starting: processActive && !listening
@@ -257,7 +273,7 @@ async function serviceStatus() {
 }
 
 async function stopConfiguredServices() {
-  for (const [id, definition] of Object.entries(serviceDefinitions)) {
+  for (const [id, definition] of Object.entries(getServiceDefinitions())) {
     const pids = await listeningPids(definition.port);
     if (serviceProcesses[id]?.pid) pids.push(String(serviceProcesses[id].pid));
     for (const pid of new Set(pids)) {
@@ -268,6 +284,12 @@ async function stopConfiguredServices() {
       await runProcess('taskkill.exe', ['/pid', String(serviceDownloads[id].pid), '/t', '/f']).catch(() => {});
       serviceDownloads[id] = null;
     }
+  }
+  // DLC 可以在插件启用前安装，退出时也要结束这些安装进程。
+  for (const [id, child] of Object.entries(serviceDownloads)) {
+    if (!child?.pid) continue;
+    await runProcess('taskkill.exe', ['/pid', String(child.pid), '/t', '/f']).catch(() => {});
+    serviceDownloads[id] = null;
   }
 }
 
@@ -415,12 +437,15 @@ function listPlugins() {
       if (!fs.existsSync(metaPath)) continue;
       const meta = readJson(metaPath, {});
       const configFile = path.join(dir, 'plugin_config.json');
+      let dlcInstalled = false;
+      try { dlcInstalled = pluginDlcInfo(pluginsPath, dir, meta).installed; } catch {}
       result[key].push({ type, name: entry.name, relPath: `${type}/${entry.name}`,
         displayName: meta.displayName || meta.name || entry.name, description: meta.description || '',
         author: meta.author || '', version: meta.version || '', enabled: enabled.has(`${type}/${entry.name}`),
         hasConfig: fs.existsSync(configFile), config: readJson(configFile, {}),
+        serviceId: meta.localService?.id || null,
         hasReadme: fs.existsSync(path.join(dir, 'README.md')), bat: meta.bat || '', downloadDlc: meta.download_dlc || '',
-        dlcInstalled: !meta.download_dlc || fs.existsSync(path.join(__dirname, 'plugins-dlc', entry.name)) });
+        dlcInstalled, dlcProgress: pluginDlcProgress.get(entry.name) || null });
     }
     result[key].sort((a, b) => a.displayName.localeCompare(b.displayName, 'zh-CN'));
   }
@@ -921,16 +946,24 @@ ipcMain.handle('control:generate-voice-bat', (_event, options) => {
   fs.writeFileSync(batPath, content, 'utf8');
   return { ok: true, message: `已生成：${path.basename(batPath)}` };
 });
-ipcMain.handle('control:service-status', () => serviceStatus());
+ipcMain.handle('control:service-status', async () => (await serviceStatus()).filter(service => !service.plugin));
+ipcMain.handle('control:plugin-service-status', async () => (await serviceStatus()).filter(service => service.plugin));
 ipcMain.handle('control:start-service', async (event, id) => {
   const definition = serviceLaunchDefinition(id);
   if (!definition) return { ok: false, message: '未知服务' };
   if (!serviceInstalled(definition)) return { ok: false, message: `${definition.name} 模块尚未安装` };
   if (await portListening(definition.port)) return { ok: false, message: `${definition.name} 已在运行` };
-  const batPath = path.join(projectRoot, definition.bat);
-  if (!fs.existsSync(batPath)) return { ok: false, message: `找不到 ${definition.bat}` };
+  const batPath = definition.bat ? path.join(projectRoot, definition.bat) : null;
+  if (batPath && !fs.existsSync(batPath)) return { ok: false, message: `找不到 ${definition.bat}` };
+  if (definition.startScript && !fs.existsSync(projectEnvPython)) return { ok: false, message: '缺少公共 Python 环境，请先下载模块' };
   sendServiceLog(event.sender, id, `正在启动 ${definition.name}...\n`);
-  const child = spawn('cmd.exe', ['/d', '/c', batPath], { cwd: projectRoot, windowsHide: true });
+  const child = definition.startScript
+    ? spawn(projectEnvPython, ['-u', definition.startScript], {
+      cwd: definition.resourceRoot || hubRoot, windowsHide: true,
+      env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', MY_NEURO_FULL_HUB_DIR: hubRoot,
+        MY_NEURO_SERVICE_RESOURCE_DIR: definition.resourceRoot || hubRoot }
+    })
+    : spawn('cmd.exe', ['/d', '/c', batPath], { cwd: projectRoot, windowsHide: true });
   serviceProcesses[id] = child;
   child.stdout.on('data', chunk => sendServiceLog(event.sender, id, chunk));
   child.stderr.on('data', chunk => sendServiceLog(event.sender, id, chunk));
@@ -942,8 +975,8 @@ ipcMain.handle('control:start-service', async (event, id) => {
   });
   return { ok: true, message: `${definition.name} 正在启动` };
 });
-ipcMain.handle('control:stop-service', async (event, id) => {
-  const definition = serviceDefinitions[id];
+async function stopService(event, id) {
+  const definition = getServiceDefinitions()[id];
   if (!definition) return { ok: false, message: '未知服务' };
   const pids = await listeningPids(definition.port);
   const tracked = serviceProcesses[id];
@@ -951,9 +984,9 @@ ipcMain.handle('control:stop-service', async (event, id) => {
   const uniquePids = [...new Set(pids)];
   if (!uniquePids.length) return { ok: false, message: `${definition.name} 未在运行` };
   sendServiceLog(event.sender, id, `正在停止 ${definition.name}...\n`);
-  if (id === 'bert') {
+  if (definition.shutdownPath) {
     try {
-      await net.fetch('http://127.0.0.1:6007/shutdown', {
+      await net.fetch(`http://127.0.0.1:${definition.port}${definition.shutdownPath}`, {
         method: 'POST',
         signal: AbortSignal.timeout(1500)
       });
@@ -964,7 +997,7 @@ ipcMain.handle('control:stop-service', async (event, id) => {
         return { ok: true, message: `${definition.name} 已停止` };
       }
     } catch (_) {
-      // 旧版 BERT 服务没有退出接口时，继续使用进程结束兜底。
+      // 服务不支持退出接口时，继续使用进程结束兜底。
     }
   }
   const stopResults = await Promise.allSettled(uniquePids.map(pid =>
@@ -992,14 +1025,16 @@ ipcMain.handle('control:stop-service', async (event, id) => {
   serviceProcesses[id] = null;
   sendServiceLog(event.sender, id, `${definition.name} 已停止\n`);
   return { ok: true, message: `${definition.name} 已停止` };
-});
+}
+ipcMain.handle('control:stop-service', stopService);
 ipcMain.handle('control:download-service', async (event, id) => {
-  const definition = serviceDefinitions[id];
+  const definition = getServiceDefinitions()[id];
   if (!definition) return { ok: false, message: '未知服务' };
-  if (serviceInstalled(definition)) return { ok: false, message: `${definition.name} 已安装` };
+  if (definition.plugin) return { ok: false, message: '请在插件列表点击安装 DLC' };
+  if (serviceInstalled(definition) && fs.existsSync(projectEnvPython)) return { ok: false, message: `${definition.name} 已安装` };
   if (serviceDownloads[id]) return { ok: false, message: `${definition.name} 正在下载` };
-  const script = path.join(hubRoot, 'Batch_Download.py');
-  if (!fs.existsSync(script)) return { ok: false, message: '找不到 Batch_Download.py' };
+  const script = definition.downloadScript || path.join(hubRoot, 'Batch_Download.py');
+  if (!fs.existsSync(script)) return { ok: false, message: `找不到下载脚本：${script}` };
   sendServiceLog(event.sender, id, `开始下载 ${definition.name} 模块...\n`);
   serviceDownloads[id] = { exitCode: null };
   if (!event.sender.isDestroyed()) event.sender.send('control:service-state');
@@ -1012,7 +1047,8 @@ ipcMain.handle('control:download-service', async (event, id) => {
     if (!event.sender.isDestroyed()) event.sender.send('control:service-state');
     return { ok: false, message: `\u9879\u76ee Python \u73af\u5883\u5b89\u88c5\u5931\u8d25\uff1a${error.message}` };
   }
-  const child = spawn(pythonExecutable, ['-u', script, definition.flag], {
+  fs.mkdirSync(hubRoot, { recursive: true });
+  const child = spawn(pythonExecutable, ['-u', script, ...(definition.flag ? [definition.flag] : [])], {
     cwd: hubRoot,
     windowsHide: true,
     env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', MY_NEURO_FULL_HUB_DIR: hubRoot }
@@ -1034,12 +1070,23 @@ ipcMain.handle('control:open-external', (_event, url) => {
 });
 ipcMain.handle('control:list-plugins', () => listPlugins());
 ipcMain.handle('control:refresh-plugin-market', () => refreshPluginMarket());
-ipcMain.handle('control:set-plugin-enabled', (_event, relPath, enabled) => {
+ipcMain.handle('control:set-plugin-enabled', async (event, relPath, enabled) => {
   if (!/^(built-in|community)\/[\w.-]+$/.test(relPath)) throw new Error('插件路径无效');
   const file = path.join(pluginsPath, 'enabled_plugins.json');
   const current = new Set(readJson(file, { plugins: [] }).plugins || []);
+  if (!enabled) {
+    for (const [id, definition] of Object.entries(getServiceDefinitions())) {
+      if (definition.plugin !== relPath) continue;
+      if (serviceDownloads[id]) throw new Error('模块正在下载，请等待下载结束后停用插件');
+      if (serviceProcesses[id] || await portListening(definition.port)) {
+        const result = await stopService(event, id);
+        if (!result.ok) throw new Error(result.message);
+      }
+    }
+  }
   enabled ? current.add(relPath) : current.delete(relPath);
   fs.writeFileSync(file, `${JSON.stringify({ plugins: [...current] }, null, 2)}\n`, 'utf8');
+  if (!event.sender.isDestroyed()) event.sender.send('control:service-state');
   return { ok: true };
 });
 ipcMain.handle('control:save-plugin-config', (_event, type, name, pluginConfig) => {
@@ -1060,6 +1107,57 @@ ipcMain.handle('control:install-plugin', async (_event, id, repo) => {
 });
 ipcMain.handle('control:install-plugin-dlc', async (event, name, url) => {
   if (!/^[\w.-]+$/.test(name) || !/^https:\/\//i.test(url)) return { ok: false, message: 'DLC 信息无效' };
+  const plugin = findPluginDlc(pluginsPath, name, url);
+  if (!plugin) return { ok: false, message: '找不到对应插件的 DLC 声明' };
+  if (plugin.script) {
+    const id = plugin.metadata.localService.id;
+    if (serviceDownloads[id]) return { ok: false, message: 'DLC 正在安装' };
+    serviceDownloads[id] = { exitCode: null };
+    const progress = report => {
+      const update = report && typeof report.stage === 'string' ? report : { text: String(report) };
+      const current = { ...pluginDlcProgress.get(name), ...update, plugin: name };
+      pluginDlcProgress.set(name, current);
+      if (!event.sender.isDestroyed()) event.sender.send('control:dlc-progress', { plugin: name, ...update });
+    };
+    try {
+      progress({ stage: 'checking', percent: null, active: true, text: '' });
+      const python = await ensureProjectPython(event.sender, id, progress);
+      progress({ stage: 'model-download', percent: null, received: 0, total: 0, text: '' });
+      fs.mkdirSync(plugin.target, { recursive: true });
+      await new Promise((resolve, reject) => {
+        const child = spawn(python, ['-u', plugin.script], {
+          cwd: plugin.target, windowsHide: true,
+          env: { ...downloadProcessEnv(__dirname), PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8',
+            MY_NEURO_FULL_HUB_DIR: hubRoot, MY_NEURO_PLUGIN_DLC_DIR: plugin.target }
+        });
+        serviceDownloads[id] = child;
+        let outputTail = '';
+        const log = chunk => {
+          outputTail = (outputTail + String(chunk)).slice(-4096);
+          sendServiceLog(event.sender, id, chunk); progress(chunk);
+        };
+        child.stdout.on('data', log);
+        child.stderr.on('data', log);
+        child.once('error', reject);
+        child.once('exit', code => {
+          if (code === 0) return resolve();
+          const error = new Error(/ENOSPC|no space left on device|磁盘空间不足/i.test(outputTail)
+            ? 'ENOSPC: 磁盘空间不足' : `DLC 安装进程退出（${code}）`);
+          reject(error);
+        });
+      });
+      if (!pluginDlcInfo(pluginsPath, plugin.dir, plugin.metadata).installed) throw new Error('DLC 模型文件不完整');
+      progress({ stage: 'done', percent: 100, active: false, text: 'DLC 安装完成' });
+      return { ok: true, message: 'DLC 安装完成' };
+    } catch (error) {
+      const message = explainStorageError(error, plugin.target);
+      progress({ stage: 'error', percent: null, active: false, text: message });
+      return { ok: false, message: `DLC 安装失败：${message}` };
+    } finally {
+      serviceDownloads[id] = null;
+      if (!event.sender.isDestroyed()) event.sender.send('control:service-state');
+    }
+  }
   const target = path.join(__dirname, 'plugins-dlc', name);
   const isModelScope = /^https:\/\/www\.modelscope\.cn\/(models|datasets)\/[\w.-]+\/[\w.-]+(?:\.git)?\/?$/i.test(url);
   const temp = fs.mkdtempSync(path.join(app.getPath('temp'), 'my-neuro-dlc-'));
@@ -1078,7 +1176,7 @@ ipcMain.handle('control:install-plugin-dlc', async (event, name, url) => {
       await expandZip(zipFile, target, percent => event.sender.send('control:dlc-progress', `${percent}%`));
       flattenSingleDirectory(target);
     }
-    if (!fs.existsSync(path.join(target, '启动动作服务.bat'))) throw new Error('DLC 文件结构无效：找不到启动动作服务.bat');
+    if (plugin.metadata.bat && !fs.existsSync(path.join(target, plugin.metadata.bat))) throw new Error(`DLC 文件结构无效：找不到 ${plugin.metadata.bat}`);
     return { ok: true, message: 'DLC 安装完成' };
   } catch (error) {
     fs.rmSync(target, { recursive: true, force: true });

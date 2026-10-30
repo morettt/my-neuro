@@ -309,27 +309,27 @@ button:hover { background: #f0ece4; }
 #llm .llm-prompt-market-head #refresh-prompts { display:grid; place-items:center; width:42px; padding:0; }
 #llm .llm-prompt-market-head #refresh-prompts svg { width:20px; height:20px; }
 #services.active { display:block; height:calc(100vh - 145px); min-height:430px; }
-#services .service-tabs { margin-bottom:14px; }
-#services .service-room { display:grid; grid-template-rows:auto minmax(0,1fr); gap:12px; height:calc(100% - 58px); }
-#services .service-list { display:block; min-width:0; }
-#services .service { display:grid; grid-template-columns:minmax(0,1fr) minmax(220px,30%); align-items:center; gap:24px; min-height:88px; padding:16px 20px; }
-#services .service-info { display:flex; flex-direction:column; gap:7px; }
-#services .service-info b { color:#403a32; font-size:16px; }
-#services .service-info small { color:#91897e; }
-#services .service-info small.running { color:#b67818; }
-#services .service.is-downloading { border-color:#e0c99f; box-shadow:0 8px 22px rgba(139,100,39,.1); }
-#services .service-download-progress { width:min(620px,100%); margin-top:3px; }
-#services .service-download-meta { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:7px; color:#71685b; font-size:13px; }
-#services .service-download-meta span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#services .service-download-meta strong { flex:none; color:#b56a12; font-variant-numeric:tabular-nums; }
-#services .service-progress-track { position:relative; height:9px; overflow:hidden; border-radius:999px; background:#e9e3d9; box-shadow:inset 0 1px 2px rgba(68,53,31,.1); }
-#services .service-progress-track i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#dc9637,#efa848); box-shadow:0 0 8px rgba(222,145,47,.3); transition:width .22s ease; }
-#services .service-progress-track i.indeterminate { position:absolute; animation:service-download-moving 1.25s ease-in-out infinite; }
+:is(#services, .plugin-service-panel) .service-tabs { margin-bottom:14px; }
+:is(#services, .plugin-service-panel) .service-room { display:grid; grid-template-rows:auto minmax(0,1fr); gap:12px; height:calc(100% - 58px); }
+:is(#services, .plugin-service-panel) .service-list { display:block; min-width:0; }
+:is(#services, .plugin-service-panel) .service { display:grid; grid-template-columns:minmax(0,1fr) minmax(220px,30%); align-items:center; gap:24px; min-height:88px; padding:16px 20px; }
+:is(#services, .plugin-service-panel) .service-info { display:flex; flex-direction:column; gap:7px; }
+:is(#services, .plugin-service-panel) .service-info b { color:#403a32; font-size:16px; }
+:is(#services, .plugin-service-panel) .service-info small { color:#91897e; }
+:is(#services, .plugin-service-panel) .service-info small.running { color:#b67818; }
+:is(#services, .plugin-service-panel) .service.is-downloading { border-color:#e0c99f; box-shadow:0 8px 22px rgba(139,100,39,.1); }
+:is(#services, .plugin-service-panel) .service-download-progress { width:min(620px,100%); margin-top:3px; }
+:is(#services, .plugin-service-panel) .service-download-meta { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:7px; color:#71685b; font-size:13px; }
+:is(#services, .plugin-service-panel) .service-download-meta span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+:is(#services, .plugin-service-panel) .service-download-meta strong { flex:none; color:#b56a12; font-variant-numeric:tabular-nums; }
+:is(#services, .plugin-service-panel) .service-progress-track { position:relative; height:9px; overflow:hidden; border-radius:999px; background:#e9e3d9; box-shadow:inset 0 1px 2px rgba(68,53,31,.1); }
+:is(#services, .plugin-service-panel) .service-progress-track i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#dc9637,#efa848); box-shadow:0 0 8px rgba(222,145,47,.3); transition:width .22s ease; }
+:is(#services, .plugin-service-panel) .service-progress-track i.indeterminate { position:absolute; animation:service-download-moving 1.25s ease-in-out infinite; }
 @keyframes service-download-moving { from { transform:translateX(-110%); } to { transform:translateX(330%); } }
-#services .service-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-#services .service-actions button:only-child { grid-column:1/-1; }
-#services .service-actions [data-service-action="voice-clone"] { grid-column:1/-1; }
-#services .service-console { display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; padding:0; }
+:is(#services, .plugin-service-panel) .service-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+:is(#services, .plugin-service-panel) .service-actions button:only-child { grid-column:1/-1; }
+:is(#services, .plugin-service-panel) .service-actions [data-service-action="voice-clone"] { grid-column:1/-1; }
+:is(#services, .plugin-service-panel) .service-console { display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; padding:0; }
 .service-log-tabs { display:flex; align-items:center; min-height:50px; padding:6px 8px; border-bottom:1px solid #e2dbcf; }
 .service-log-tabs strong { padding-left:8px; color:#403a32; font-size:15px; font-weight:700; }
 .service-log-tabs button { min-height:36px; padding:7px 14px; border:0; background:transparent; box-shadow:none; color:#756d62; }
@@ -337,14 +337,14 @@ button:hover { background: #f0ece4; }
 .service-log-tabs button.active { background:#8e8473; color:#fff; }
 .service-log-tabs .service-log-clear { display:grid; place-items:center; width:36px; height:34px; min-height:34px; margin-left:auto; padding:0; border-radius:7px; color:#81786c; }
 .service-log-tabs .service-log-clear svg { width:19px; height:19px; }
-#service-log-output { flex:1; min-height:0; margin:0; padding:18px 20px; overflow:auto; background:#f8f6f1; color:#37322c; white-space:pre-wrap; overflow-wrap:anywhere; font:500 15px/1.75 "Cascadia Mono","Microsoft YaHei UI",Consolas,monospace; letter-spacing:.01em; user-select:text; }
-#service-log-output .service-log-line { color:#37322c; }
-#service-log-output .service-log-info { color:#246b95; }
-#service-log-output .service-log-success { color:#27824f; font-weight:650; }
-#service-log-output .service-log-warning { color:#b56a12; font-weight:650; }
-#service-log-output .service-log-error { color:#c13d36; font-weight:650; }
-#service-log-output .service-log-trace { color:#a64e49; }
-#service-log-output .service-log-debug { color:#81786c; }
+:is(#service-log-output, #plugin-service-log) { flex:1; min-height:0; margin:0; padding:18px 20px; overflow:auto; background:#f8f6f1; color:#37322c; white-space:pre-wrap; overflow-wrap:anywhere; font:500 15px/1.75 "Cascadia Mono","Microsoft YaHei UI",Consolas,monospace; letter-spacing:.01em; user-select:text; }
+:is(#service-log-output, #plugin-service-log) .service-log-line { color:#37322c; }
+:is(#service-log-output, #plugin-service-log) .service-log-info { color:#246b95; }
+:is(#service-log-output, #plugin-service-log) .service-log-success { color:#27824f; font-weight:650; }
+:is(#service-log-output, #plugin-service-log) .service-log-warning { color:#b56a12; font-weight:650; }
+:is(#service-log-output, #plugin-service-log) .service-log-error { color:#c13d36; font-weight:650; }
+:is(#service-log-output, #plugin-service-log) .service-log-trace { color:#a64e49; }
+:is(#service-log-output, #plugin-service-log) .service-log-debug { color:#81786c; }
 .log-panel { display:flex; flex-direction:column; min-width:0; min-height:0; height:100%; overflow:hidden; }
 .log-panel header { display:flex; align-items:center; justify-content:space-between; min-height:53px; padding:8px 15px; color:#5c5448; border-color:#e7e0d5; }
 .log-trash { display:grid; place-items:center; width:36px; height:34px; min-height:0; padding:0; border:0; border-radius:7px; background:transparent; color:#82796d; box-shadow:none; }
@@ -393,6 +393,18 @@ footer { position:fixed; left:180px; right:0; bottom:0; z-index:150; display:fle
 .plugin-market-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; color:#6f675c; }
 .plugin-detail { padding:16px; margin-bottom:66px; }
 .plugin-detail[hidden] { display:none; }
+.plugin-service-panel { display:grid; gap:14px; margin-top:16px; }
+.dlc-install-progress { margin-top:12px; min-width:200px; }
+.dlc-progress-label { display:flex; justify-content:space-between; gap:12px; margin-bottom:7px; font-size:12px; color:#756b5c; }
+.dlc-progress-label span { overflow-wrap:anywhere; }
+.dlc-progress-label strong { flex:none; font-variant-numeric:tabular-nums; }
+.dlc-progress-track { position:relative; height:9px; border-radius:999px; overflow:hidden; background:#e9e3d9; }
+.dlc-progress-track i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#dc9637,#efa848); transition:width .2s; }
+.dlc-progress-track i.indeterminate { position:absolute; animation:service-download-moving 1.25s ease-in-out infinite; }
+.dlc-install-progress.failed .dlc-progress-label { color:#c13d36; }
+body:has(#plugins.active #plugin-detail:not([hidden]) .plugin-service-panel) #save-config { display:none; }
+.plugin-service-panel .service-console { height:360px; }
+#clear-plugin-service-log { margin-left:auto; }
 .plugin-detail header { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; padding-bottom:12px; border-bottom:1px solid #e5dfd5; }
 .plugin-detail header strong { font-size:18px; }
 .plugin-back-button { display:grid; place-items:center; width:52px; height:32px; padding:0; border:1px solid #d8d0c3; border-radius:7px; background:#f8f5ef; color:#625a50; box-shadow:none; }
