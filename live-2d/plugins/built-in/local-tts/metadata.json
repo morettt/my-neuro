@@ -2,6 +2,7 @@
   "name": "local-tts",
   "displayName": "本地 TTS 服务",
   "version": "1.0.0",
+  "categories": ["voice"],
   "description": "本地 GPT-SoVITS 语音合成。安装 DLC 后启用，点击配置查看日志、启动和关闭服务。",
   "main": "index.js",
   "download_dlc": "https://www.modelscope.cn/models/morelle/fake-neuro-gsv",

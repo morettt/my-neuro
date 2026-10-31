@@ -1132,6 +1132,12 @@ window.controlApi.onLive2dState(running => {
 });
 
 let pluginData = { builtIn: [], community: [], market: [] };
+let activePluginCategory = 'all';
+
+function matchesPluginCategory(plugin) {
+  return activePluginCategory === 'all' || plugin.categories?.includes(activePluginCategory)
+    || (activePluginCategory === 'voice' && ['tts', 'asr'].includes(plugin.serviceId));
+}
 let editingPlugin = null;
 let recentlyInstalledPluginPath = null;
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char]);
@@ -1223,7 +1229,7 @@ function marketCard(plugin) {
 }
 
 function selectPluginTab(name) {
-  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-panel').forEach(element => { element.hidden = false; });
+  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-categories, #plugins > .plugin-panel').forEach(element => { element.hidden = false; });
   $('plugin-detail').hidden = true;
   document.querySelector('[data-plugin-tab].active')?.classList.remove('active');
   document.querySelector('[data-plugin-panel].active')?.classList.remove('active');
@@ -1316,16 +1322,17 @@ function renderPlugins() {
       )
       || left.index - right.index)
     .map(item => item.plugin);
-  const installedPlugins = enabledFirst([...pluginData.builtIn, ...pluginData.community]);
+  const installedPlugins = enabledFirst([...pluginData.builtIn, ...pluginData.community].filter(matchesPluginCategory));
   const installedCommunityIds = new Set(pluginData.community.map(plugin => plugin.name));
   const sortedMarketPlugins = pluginData.market
+    .filter(matchesPluginCategory)
     .sort((left, right) => Number(installedCommunityIds.has(right.id)) - Number(installedCommunityIds.has(left.id))
       || String(left.display_name || left.id).localeCompare(
         String(right.display_name || right.id),
         'zh-CN'
       ));
-  $('installed-plugin-list').innerHTML = installedPlugins.map(pluginCard).join('') || '<div class="empty card">暂无已安装插件</div>';
-  $('market-plugin-list').innerHTML = sortedMarketPlugins.map(marketCard).join('') || '<div class="empty card">插件广场暂无内容</div>';
+  $('installed-plugin-list').innerHTML = installedPlugins.map(pluginCard).join('') || `<div class="empty card">${activePluginCategory === 'voice' ? '暂无已安装的语音插件' : '暂无已安装插件'}</div>`;
+  $('market-plugin-list').innerHTML = sortedMarketPlugins.map(marketCard).join('') || `<div class="empty card">${activePluginCategory === 'voice' ? '插件广场暂无语音插件' : '插件广场暂无内容'}</div>`;
   bindPluginCards();
 }
 
@@ -1359,7 +1366,7 @@ function configFields(config, prefix = '') {
 
 function openPluginDetail(plugin) {
   editingPlugin = plugin;
-  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-panel').forEach(element => element.hidden = true);
+  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-categories, #plugins > .plugin-panel').forEach(element => element.hidden = true);
   $('plugin-detail').hidden = false;
   $('plugin-detail-title').textContent = plugin.displayName;
   $('plugin-readme').hidden = Boolean(plugin.serviceId) || !plugin.hasReadme;
@@ -1377,7 +1384,7 @@ function openPluginDetail(plugin) {
 
 $('plugin-detail-back').addEventListener('click', () => {
   $('plugin-detail').hidden = true;
-  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-panel').forEach(element => element.hidden = false);
+  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-categories, #plugins > .plugin-panel').forEach(element => element.hidden = false);
 });
 $('plugin-readme').addEventListener('click', async () => {
   if (!editingPlugin) return;
@@ -1495,6 +1502,15 @@ document.addEventListener('change', event => {
 
 document.querySelectorAll('[data-plugin-tab]').forEach(button => button.addEventListener('click', () => {
   selectPluginTab(button.dataset.pluginTab);
+}));
+document.querySelectorAll('[data-plugin-category]').forEach(button => button.addEventListener('click', () => {
+  activePluginCategory = button.dataset.pluginCategory;
+  document.querySelectorAll('[data-plugin-category]').forEach(item => {
+    const selected = item.dataset.pluginCategory === activePluginCategory;
+    item.classList.toggle('active', selected);
+    item.setAttribute('aria-pressed', String(selected));
+  });
+  renderPlugins();
 }));
 $('refresh-plugins').addEventListener('click', async () => {
   const button = $('refresh-plugins');
