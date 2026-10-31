@@ -15,6 +15,7 @@ const { GLTFLoader } = require('../../lib/gltf-loader-bundle.cjs');
 const { VRMLoaderPlugin, VRMUtils } = require('@pixiv/three-vrm');
 const { VRMModelAdapter } = require('./model-adapter.js');
 const { logToTerminal } = require('../../api-utils.js');
+const { installPortraitLighting, createFrameLimiter } = require('./render-policy');
 
 const APP_ROOT = path.join(__dirname, '..', '..', '..');
 
@@ -68,11 +69,8 @@ class VRMManager {
         this.camera.position.set(0, 1.0, 3.0);
         this.camera.lookAt(0, 1.0, 0);
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-        this.scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(1.0, 1.5, 1.0);
-        this.scene.add(directionalLight);
+        installPortraitLighting(this.scene, this.camera);
+        this.maxFPS = Number.isFinite(options.maxFPS) ? options.maxFPS : 30;
 
         this.clock = new THREE.Clock();
         this._disposed = false;
@@ -168,9 +166,11 @@ class VRMManager {
         if (this.clock) this.clock.getDelta(); // 丢弃挂起期间累计的 delta
         this.renderer.autoClear = false;
         let firstFrameLogged = false;
-        const animate = () => {
+        const frameAllowed = createFrameLimiter(this.maxFPS);
+        const animate = (now = performance.now()) => {
             if (this._disposed) return;
             this._animationFrameId = requestAnimationFrame(animate);
+            if (!frameAllowed(now)) return;
             try {
                 const model = this.currentModel;
                 if (!model) return;

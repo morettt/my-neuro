@@ -1037,3 +1037,36 @@ body.screen-left #text-chat-container {
 #subtitle-container.subtitle-adjusting #subtitle-confirm-btn {
     display: block;
 }
+
+/* Native Wayland: a compositor-managed transparent surface, with an explicit
+   drag region. Model/chrome buttons remain normal interactive client content. */
+#native-window-toolbar {
+    position: fixed;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20000;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 8px;
+    border-radius: 12px;
+    color: #514a40;
+    background: rgba(250, 248, 242, .94);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+    font: 13px sans-serif;
+    -webkit-app-region: drag;
+    user-select: none;
+}
+#native-window-toolbar .native-window-grip { padding: 4px 12px 4px 4px; }
+#native-window-toolbar button {
+    -webkit-app-region: no-drag;
+    border: 0;
+    border-radius: 6px;
+    padding: 4px 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+#native-window-toolbar button:hover { background: #e5dfd3; }
+.native-wayland #btn-click-through { display: none !important; }

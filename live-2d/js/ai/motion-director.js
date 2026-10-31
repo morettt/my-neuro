@@ -1,4 +1,5 @@
 'use strict';
+const { llmRequestHeaders } = require('./llm-request-headers');
 
 // Live2D body/face choreography. Empty dedicated provider/model fields reuse
 // config.llm so choreography does not require a second API. A complete
@@ -879,10 +880,7 @@ class MotionDirector {
             `${resolved.api_url}/chat/completions`,
             {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${resolved.api_key}`
-                },
+                headers: llmRequestHeaders(resolved.api_url, resolved.api_key),
                 body: JSON.stringify(
                     this._buildRequestBody(resolved, messages, cfg, stream)
                 ),

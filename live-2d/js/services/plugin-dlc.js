@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { projectPython } = require('../platform/runtime');
 
 function pluginDlcInfo(pluginsDir, pluginDir, metadata) {
     const target = path.resolve(pluginsDir, '..', 'plugins-dlc', path.basename(pluginDir));
@@ -16,7 +17,7 @@ function pluginDlcInfo(pluginsDir, pluginDir, metadata) {
     const resourceRoot = complete(target) ? target : complete(legacyRoot) ? legacyRoot : target;
     const python = metadata.localService?.pythonPath
         ? path.resolve(resourceRoot, metadata.localService.pythonPath)
-        : path.resolve(pluginsDir, '..', '..', 'env', 'python.exe');
+        : projectPython(path.resolve(pluginsDir, '..', '..'));
     if (metadata.localService?.pythonPath && !python.startsWith(resourceRoot + path.sep)) {
         throw new Error('插件运行环境路径无效');
     }

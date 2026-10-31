@@ -329,7 +329,11 @@ class VRMModelAdapter extends EventEmitter {
         const dy = Math.max(-1, Math.min(1, pixelDy / refSize));
 
         const headYawTarget = dx * 0.3;
-        const headPitchTarget = -dy * 0.2;
+        // Screen Y grows downward. VRM 1 faces +Z in model space, so a
+        // positive local X rotation looks down; legacy VRM 0 faces -Z and uses
+        // the opposite pitch sign. Eye expression names already encode direction.
+        const pitchSign = String(this.vrm.meta?.metaVersion ?? '0') === '1' ? 1 : -1;
+        const headPitchTarget = pitchSign * dy * 0.2;
         const eyeYawTarget = dx * 0.7;
         const eyePitchTarget = -dy * 0.5;
 

@@ -16,6 +16,7 @@ class VRMInteractionController {
         this.manager = null;
         this.canvas = null;
         this.isDragging = false;
+        this.isRightDragging = false;
         this.dragOffset = { x: 0, y: 0 };
         this.config = null;
         this._listeners = [];
@@ -27,6 +28,8 @@ class VRMInteractionController {
         // 防御：重绑/形态恢复时取消可能仍在进行的回弹动画，
         // 避免旧模型的动画帧继续按过期 startX/dx 改写新模型位置
         this._cancelBounce();
+        this.isDragging = false;
+        this.isRightDragging = false;
         this.model = model;
         this.manager = manager;
         this.canvas = manager.canvas;
@@ -54,6 +57,8 @@ class VRMInteractionController {
     }
 
     destroy() {
+        this.isDragging = false;
+        this.isRightDragging = false;
         this._teardown();
         this._cancelBounce();
         // 隐藏 VRM 控制面板
@@ -188,7 +193,7 @@ class VRMInteractionController {
         const canvas = this.canvas;
         const model = this.model;
         let mouseDownPos = null;
-        let isRightDragging = false;
+        this.isRightDragging = false;
         const rightDragStart = { x: 0, y: 0 };
 
         // containsPoint：检查client坐标是否在模型/UI元素上（穿透判定用）
@@ -228,7 +233,7 @@ class VRMInteractionController {
                 this._maybeExpandPetWindow(vr.x, vr.y);
                 return;
             }
-            if (isRightDragging) {
+            if (this.isRightDragging) {
                 const dx = e.clientX - rightDragStart.x;
                 const dy = e.clientY - rightDragStart.y;
                 model._orbitTheta -= dx * 0.005;
@@ -264,7 +269,7 @@ class VRMInteractionController {
                 }
             } else if (e.button === 2) {
                 if (isOverModel) {
-                    isRightDragging = true;
+                    this.isRightDragging = true;
                     rightDragStart.x = e.clientX;
                     rightDragStart.y = e.clientY;
                     ipcRenderer.send('set-ignore-mouse-events', { ignore: false });
@@ -293,8 +298,8 @@ class VRMInteractionController {
                     }
                 }, 100);
             }
-            if (e.button === 2 && isRightDragging) {
-                isRightDragging = false;
+            if (e.button === 2 && this.isRightDragging) {
+                this.isRightDragging = false;
                 setTimeout(() => {
                     if (this.model && !model.containsPoint({ x: e.clientX, y: e.clientY })) {
                         ipcRenderer.send('set-ignore-mouse-events', { ignore: true, options: { forward: true } });
@@ -311,7 +316,7 @@ class VRMInteractionController {
         });
 
         this._on(canvas, 'mouseout', (e) => {
-            if (this.isDragging) return;
+            if (this.isDragging || this.isRightDragging) return;
             const t = e.relatedTarget;
             const root = document.getElementById('feiniu-board-game-root');
             if (t && root && root.contains(t)) return;
@@ -379,11 +384,25 @@ class VRMInteractionController {
         const savedPos = this.config?.ui?.model_position;
         const savedScale = this.config?.ui?.model_scale;
         if (rememberPosition && savedPos?.x != null && savedPos?.y != null && savedScale && savedScale > 0) {
-            this.model.viewRect = this._savedToViewRect(savedPos.x, savedPos.y, savedScale);
+            this.model.viewRect = this._savedToViewRect(savedPos.x, savedPos.y, this._initialScale(savedScale));
         } else {
-            this.model.viewRect = this._savedToViewRect(1.35, 0.8, 2.3);
+            this.model.viewRect = this._savedToViewRect(1.35, 0.8, this._initialScale(2.3, true));
         }
         this._clampViewRect();
+        if (process.platform === 'linux') this.saveModelPosition();
+    }
+
+    _initialScale(legacyScale, reset = false, width = window.innerWidth, height = window.innerHeight) {
+        if (process.platform !== 'linux') return legacyScale;
+        const storedWidth = Number(this.config?.ui?.vrm_viewport_width);
+        // The old scale belongs to Live2D too, and multiplied by the entire
+        // overlay width. Migrate to a modest desktop size once; subsequent
+        // starts restore CSS pixels, independent of overlay/client width.
+        const viewportWidth = !reset && Number.isFinite(storedWidth) && storedWidth > 0
+            ? storedWidth
+            : Math.min(420, width * 0.8, height * 0.8 / VRM_VIEWPORT_ASPECT,
+                legacyScale * VRM_SCALE_FACTOR * width);
+        return viewportWidth / (VRM_SCALE_FACTOR * width);
     }
 
     // overrideWidth/Height：跨屏切换时传入“目标显示器的 DIP 尺寸”，避免依赖尚未稳定的 innerWidth。
@@ -396,9 +415,11 @@ class VRMInteractionController {
         this.config.ui.model_position.x = saved.x;
         this.config.ui.model_position.y = saved.y;
         this.config.ui.model_scale = saved.scale;
+        if (process.platform === 'linux') this.config.ui.vrm_viewport_width = vr.width;
 
         ipcRenderer.send('save-model-position', {
             ...saved,
+            ...(process.platform === 'linux' ? { vrmViewportWidth: vr.width } : {}),
             modelName: null   // VRM 位置沿用全局 config 键（与旧行为一致）
         });
     }
@@ -406,7 +427,8 @@ class VRMInteractionController {
     resetModelPosition() {
         if (!this.model) return { success: false };
         const primary = this._getPrimaryWindowOffset();
-        const vr = this._savedToViewRectWithSize(1.35, 0.8, 2.3, primary.width, primary.height);
+        const scale = this._initialScale(2.3, true, primary.width, primary.height);
+        const vr = this._savedToViewRectWithSize(1.35, 0.8, scale, primary.width, primary.height);
         vr.x += primary.x;
         vr.y += primary.y;
         this.model.viewRect = vr;

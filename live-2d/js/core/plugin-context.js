@@ -1,3 +1,4 @@
+const { llmRequestHeaders } = require('../ai/llm-request-headers');
 // plugin-context.js - 插件上下文
 // 每个插件通过此对象访问核心能力，实现安全隔离
 
@@ -212,10 +213,7 @@ class PluginContext {
         try {
             const response = await fetch(endpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
+                headers: llmRequestHeaders(apiUrl, apiKey),
                 body: JSON.stringify(requestBody),
                 signal: requestSignal
             });

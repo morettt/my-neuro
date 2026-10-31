@@ -1,3 +1,4 @@
+const { llmRequestHeaders } = require('./llm-request-headers');
 // DiaryManager.js - AI日记管理模块
 const fs = require('fs');
 const path = require('path');
@@ -103,10 +104,7 @@ ${todayInteractions}
             // 调用LLM生成日记
             const response = await fetch(`${this.voiceChat.API_URL}/chat/completions`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.voiceChat.API_KEY}`
-                },
+                headers: llmRequestHeaders(this.voiceChat.API_URL, this.voiceChat.API_KEY),
                 body: JSON.stringify({
                     model: this.voiceChat.MODEL,
                     messages: [

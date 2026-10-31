@@ -37,7 +37,7 @@ class UIController {
         // 快捷面板(#quick-settings)原本没被纳入判定，只靠模型命中盒蹭——单屏布局下齿轮落在
         // 命中盒外就点不动了。这里统一把它们纳入：鼠标在这些元素上时保持窗口可交互。
         const INTERACTIVE_UI = '#quick-settings, #text-chat-container, #model-controls';
-        const updateMouseIgnore = (e) => {
+        this.updateMouseIgnore = (e) => {
             if (!global.currentModel) return;
             if (this.isAdjustingSubtitle) return;
 
@@ -51,13 +51,16 @@ class UIController {
             const facade = global.avatarFacade || window.avatar;
             const controller = facade?.getController?.() || global.modelController;
             const model = facade?.getModel?.() || global.currentModel;
-            let overModel = false;
-            if (controller && typeof controller.isPointOverInteractive === 'function') {
-                overModel = controller.isPointOverInteractive(e.clientX, e.clientY);
-            } else if (model && typeof model.containsPoint === 'function') {
-                try {
-                    overModel = !!model.containsPoint({ x: e.clientX, y: e.clientY });
-                } catch (_) {}
+            let overModel = !!(controller?.isDragging || controller?.isRightDragging || controller?.isDraggingChat || this.isDraggingSubtitle);
+            // Keep native mouse-up delivery while dragging beyond a cached hit box.
+            if (!overModel) {
+                if (controller && typeof controller.isPointOverInteractive === 'function') {
+                    overModel = controller.isPointOverInteractive(e.clientX, e.clientY);
+                } else if (model && typeof model.containsPoint === 'function') {
+                    try {
+                        overModel = !!model.containsPoint({ x: e.clientX, y: e.clientY });
+                    } catch (_) {}
+                }
             }
 
             ipcRenderer.send('set-ignore-mouse-events', {
@@ -66,7 +69,7 @@ class UIController {
             });
         };
 
-        document.addEventListener('mousemove', updateMouseIgnore);
+        document.addEventListener('mousemove', this.updateMouseIgnore);
     }
 
     // 设置聊天框事件
@@ -99,7 +102,21 @@ class UIController {
 
         // 巨窗覆盖多屏时，必须锚到主屏右下，不能锚整窗右下（否则对话框会跑到副屏最右侧）。
         const screenInfo = ipcRenderer.sendSync('get-screen-info-sync');
-        if (screenInfo?.primaryDisplay && screenInfo?.windowBounds) {
+        if (window.__nativeWayland) {
+            // Native surfaces can move/resize without global desktop coordinates.
+            textChatContainer.style.setProperty('left', 'auto', 'important');
+            textChatContainer.style.setProperty('right', '20px', 'important');
+            textChatContainer.style.setProperty('bottom', '50px', 'important');
+            textChatContainer.style.setProperty('width', 'min(350px, calc(100vw - 40px))', 'important');
+            const subtitle = document.getElementById('subtitle-container');
+            if (subtitle) {
+                subtitle.style.setProperty('left', '20px', 'important');
+                subtitle.style.setProperty('bottom', '20px', 'important');
+                subtitle.style.setProperty('width', 'calc(100vw - 40px)', 'important');
+                subtitle.style.setProperty('max-width', '400px', 'important');
+                subtitle.style.setProperty('transform', 'none', 'important');
+            }
+        } else if (screenInfo?.primaryDisplay && screenInfo?.windowBounds) {
             const { primaryDisplay, windowBounds } = screenInfo;
             const winX = windowBounds.x;
             const winY = windowBounds.y;
@@ -116,7 +133,7 @@ class UIController {
             const subtitleContainer = document.getElementById('subtitle-container');
             if (subtitleContainer) {
                 subtitleContainer.style.setProperty('position', 'fixed', 'important');
-                subtitleContainer.style.setProperty('left', (primaryLeftOffset + primaryDisplay.bounds.width - 800) + 'px', 'important');
+                subtitleContainer.style.setProperty('left', Math.max(primaryLeftOffset + 20, primaryLeftOffset + primaryDisplay.bounds.width - 800) + 'px', 'important');
                 subtitleContainer.style.setProperty('right', 'auto', 'important');
                 subtitleContainer.style.setProperty('bottom', (primaryBottomOffset + 20) + 'px', 'important');
                 subtitleContainer.style.setProperty('width', '400px', 'important');
