@@ -37,7 +37,9 @@ PMX 先在连续的虚拟人形骨架上计算动作，再按实际骨骼层级�
 整体位移按模型父级坐标转换，腿部 D 蒙皮骨同步跟随动作骨；停用和打断恢复全部骨骼与模型位置。
 PMX 需要标准的上下半身、上半身2、颈部、头部和四肢骨骼；缺少骨骼会明确记录名称。
 动作期间保留眨眼、音频口型、拖动和缩放，暂停身体待机与头部跟随以免覆盖动作。
-动作播放期间，相机只跟随身体的水平位置，保持目标高度固定，避免把起跳、腾空和空翻的垂直位移抵消。
+动作播放期间，相机目标固定在动作开始时的位置，让左右、前后移动以及跳跃的位移直接呈现；相机旋转和缩放仍可使用。
+动作结束后在落点恢复待机，保留水平位移；后续动作从当前位置开始，相机保持原来的观察位置。
+前后移动使用较远的透视相机并补偿初始画面大小；靠近相机时保留安全距离，避免走到相机后面消失。
 新消息、语音打断、插件停用会取消旧任务；卸载模型后不会把生成结果播放到新模型。
 
 启用时，会等完整 LLM 回复经过插件过滤后再开始 TTS，
@@ -53,10 +55,11 @@ PMX 需要标准的上下半身、上半身2、颈部、头部和四肢骨骼；
 node --test plugins/community/body-actions/tests/protocol.test.cjs plugins/community/body-actions/tests/llm-pipeline.test.cjs plugins/community/body-actions/tests/subtitle.test.cjs plugins/community/body-actions/tests/runtime-hooks.test.cjs
 node_modules/electron/dist/electron.exe plugins/community/body-actions/tests/runtime.cjs
 node --test plugins/community/body-actions/tests/pmx-rig.test.cjs
+node --test js/avatar/vrm/render-viewport.test.cjs
 ```
 
 第二项使用隐藏窗口和独立配置，调用真实本地 动作服务并生成 VRM 播放截图。
-所有适配代码和测试均位于插件目录，不修改桌宠核心源码。
+动作适配代码位于插件目录，桌宠相机方法支持传入固定目标位置，渲染回归测试位于 `js/avatar/vrm/render-viewport.test.cjs`。
 使用现有 `onLLMRequest`、`onLLMResponse`、`onTTSText` 钩子，配合插件内
 `runtime-hooks.js` 对当前 TTS、字幕、3D 模型实例进行可恢复的运行时方法包装。
 动作结束恢复骨骼/相机方法；停用插件恢复语音和字幕方法，保留其他插件后来接入的方法。

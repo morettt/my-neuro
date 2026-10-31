@@ -1,5 +1,5 @@
-// All runtime adaptation lives in the plugin. No app files or prototypes are
-// modified; instance methods are restored when the plugin/action is stopped.
+// Runtime wrappers live in the plugin and leave prototypes intact.
+// Instance methods are restored when the plugin/action is stopped.
 const { stripMotionTags } = require('./protocol');
 const BODY_OWNER = Symbol.for('feiniu.body-actions.owner');
 
@@ -56,13 +56,7 @@ function attachBodyPlayer(adapter, player) {
     }
     patches.wrap(adapter, 'updateCameraOrbit', original => function (...args) {
         if (!player.active) return original.apply(this, args);
-        const hips = this.vrm.humanoid.getNormalizedBoneNode('hips');
-        const offset = this._orbitYOffset;
-        const target = player.getCameraTarget();
-        const hipY = hips.getWorldPosition(target.clone()).y;
-        this._orbitYOffset = offset + target.y - hipY;
-        try { return original.apply(this, args); }
-        finally { this._orbitYOffset = offset; }
+        return original.call(this, player.getCameraTarget());
     });
     patches.wrap(adapter, 'dispose', original => function (...args) {
         player.stop('model-disposed');
