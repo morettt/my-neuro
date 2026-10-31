@@ -2,7 +2,7 @@ let config = {};
 let live2dRunning = false;
 let environment = { edition: 'cloud', editionLabel: '云端', version: '' };
 let previewEdition = null;
-let activeServiceLog = 'tts';
+let activeServiceLog = '';
 let configDirty = false;
 let pluginConfigDirty = false;
 let loadingConfigUi = true;
@@ -86,7 +86,7 @@ function applyEdition(edition = environment.edition) {
   }
   $('tutorial-content').innerHTML = edition === 'cloud'
     ? '<h2>云端版本教程</h2><p>云端版本教程还没有制作好，请耐心等待。</p>'
-    : '<h2>首次使用</h2><p>在“模型配置”填写 API KEY、API URL，点击“获取模型”选择模型并保存。</p><p>回到“启动”选择 Live2D 或 VRM 角色，然后点击“启动桌宠”。</p><h2>语音功能</h2><p>在“对话设置”启用 ASR、TTS，并在“终端控制室”启动对应服务。</p><h2>插件与工具</h2><p>插件在“插件”页面启用和配置；MCP 工具在“工具屋”启用。</p>';
+    : '<h2>首次使用</h2><p>在“模型配置”填写 API KEY、API URL，点击“获取模型”选择模型并保存。</p><p>回到“启动”选择 Live2D 或 VRM 角色，然后点击“启动桌宠”。</p><h2>语音功能</h2><p>在“对话设置”启用 ASR、TTS，并在“插件”页面安装对应 DLC、启用插件，进入“配置”启动服务。</p><h2>插件与工具</h2><p>插件在“插件”页面启用和配置；MCP 工具在“工具屋”启用。</p>';
 }
 
 document.querySelectorAll('#cloud h3, #cloud button').forEach(element => {
@@ -691,7 +691,7 @@ function consumeServiceDownloadProgress(service, text) {
     .replace(/\r/g, '\n');
 }
 
-function serviceCard(service) {
+function serviceCard(service, actions = []) {
   const progress = service ? serviceDownloadProgress[service.id] : null;
   const progressPercent = progress?.percent ?? 0;
   const progressDetail = progress
@@ -701,9 +701,11 @@ function serviceCard(service) {
     ? `<div class="service-download-progress"><div class="service-download-meta"><span>${escapeHtml(progressDetail)}</span>${progress ? `<strong>${Math.round(progressPercent)}%</strong>` : ''}</div><div class="service-progress-track"><i class="${progress ? '' : 'indeterminate'}" style="width:${progress ? progressPercent : 32}%"></i></div></div>`
     : '';
   const html = service
-    ? `<article class="service card ${service.downloading ? 'is-downloading' : ''}" data-service="${service.id}"><div class="service-info"><b>${service.name}</b><small class="${service.running ? 'running' : ''}">${service.downloading ? '正在下载模块' : service.starting ? '正在启动' : service.running ? '运行中' : service.installed ? '未启动' : '未安装'} · 端口 ${service.port}</small>${progressMarkup}</div><div class="service-actions">${service.installed ? `<button data-service-action="start" ${service.running ? 'disabled' : ''}>启动</button><button data-service-action="stop" ${service.running ? '' : 'disabled'}>停止</button>${service.id === 'tts' ? '<button data-service-action="voice-clone">声音克隆</button>' : ''}` : `<button data-service-action="download" ${service.downloading ? 'disabled' : ''}>${service.downloading ? '下载中…' : '下载模块'}</button>`}</div></article>`
+    ? `<article class="service card ${service.downloading ? 'is-downloading' : ''}" data-service="${service.id}"><div class="service-info"><b>${service.name}</b><small class="${service.running ? 'running' : ''}">${service.downloading ? '正在下载模块' : service.starting ? '正在启动' : service.running ? '运行中' : service.installed ? '未启动' : '未安装'} · 端口 ${service.port}</small>${progressMarkup}</div><div class="service-actions">${service.installed ? `<button data-service-action="start" ${service.running ? 'disabled' : ''}>启动</button><button data-service-action="stop" ${service.running ? '' : 'disabled'}>停止</button>` : `<button data-service-action="download" ${service.downloading ? 'disabled' : ''}>${service.downloading ? '下载中…' : '下载模块'}</button>`}</div></article>`
     : '<div class="empty"><p>暂无模块信息</p></div>';
-  return service?.plugin ? html.replace('>停止</button>', '>关闭</button>') : html;
+  const actionButtons = service?.installed ? actions.map(action => `<button type="button" data-plugin-page="${escapeHtml(action.page)}">${escapeHtml(action.label)}</button>`).join('') : '';
+  return (service?.plugin ? html.replace('>停止</button>', '>关闭</button>') : html)
+    .replace('</div></article>', `${actionButtons}</div></article>`);
 }
 
 function renderActiveService() {
@@ -715,7 +717,7 @@ function renderPluginService() {
   if (!panel || !editingPlugin?.serviceId) return;
   const service = pluginServiceData.find(item => item.plugin === editingPlugin.relPath);
   panel.innerHTML = service
-    ? service.installed ? serviceCard(service) : '<p>DLC 尚未安装，请返回插件列表点击“安装 DLC”。</p>'
+    ? service.installed ? serviceCard(service, editingPlugin.serviceActions || []) : '<p>DLC 尚未安装，请返回插件列表点击“安装 DLC”。</p>'
     : '<p>请先在插件列表启用此插件。</p>';
   const output = $('plugin-service-log');
   if (output) {
@@ -762,6 +764,10 @@ async function handleServiceAction(event) {
 }
 $('service-list').addEventListener('click', handleServiceAction);
 $('plugin-detail-content').addEventListener('click', handleServiceAction);
+$('plugin-detail-content').addEventListener('click', event => {
+  const button = event.target.closest('[data-plugin-page]');
+  if (button && $(button.dataset.pluginPage)?.classList.contains('page')) switchPage(button.dataset.pluginPage);
+});
 
 async function refreshServiceStatus() {
   try {
@@ -769,6 +775,9 @@ async function refreshServiceStatus() {
       window.controlApi.serviceStatus(), window.controlApi.pluginServiceStatus()
     ]);
     [...serviceData, ...pluginServiceData].forEach(service => { serviceDownloadActive[service.id] = service.downloading; });
+    const terminalNav = document.querySelector('[data-page="services"]');
+    if (terminalNav) terminalNav.hidden = serviceData.length === 0;
+    if (!serviceData.length && $('services').classList.contains('active')) switchPage('plugins');
     if (!serviceData.some(service => service.id === activeServiceLog)) activeServiceLog = serviceData[0]?.id || '';
     $('service-tabs').innerHTML = serviceData.map(service =>
       `<button class="${service.id === activeServiceLog ? 'active' : ''}" data-service-tab="${escapeHtml(service.id)}">${escapeHtml(service.tabLabel)}</button>`
@@ -1123,6 +1132,12 @@ window.controlApi.onLive2dState(running => {
 });
 
 let pluginData = { builtIn: [], community: [], market: [] };
+let activePluginCategory = 'all';
+
+function matchesPluginCategory(plugin) {
+  return activePluginCategory === 'all' || plugin.categories?.includes(activePluginCategory)
+    || (activePluginCategory === 'voice' && ['tts', 'asr'].includes(plugin.serviceId));
+}
 let editingPlugin = null;
 let recentlyInstalledPluginPath = null;
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[char]);
@@ -1135,6 +1150,11 @@ function updateDlcInstallProgress(previous = {}, payload) {
   const text = String(report.text || '').replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -\/]*[@-~])/g, '');
   if (text) {
     state.buffer = ((state.buffer || '') + text).slice(-4000);
+    if (state.buffer.includes('@@DLC_EXTRACT_START')) {
+      state.buffer = state.buffer.split('@@DLC_EXTRACT_START').at(-1);
+      state.stage = 'extracting';
+      state.percent = null;
+    }
     const matches = [...state.buffer.matchAll(/(\d{1,3}(?:\.\d+)?)\s*%/g)];
     if (!report.stage && matches.length && !['done', 'error'].includes(state.stage)) {
       state.percent = Math.min(100, Number(matches.at(-1)[1]));
@@ -1209,7 +1229,7 @@ function marketCard(plugin) {
 }
 
 function selectPluginTab(name) {
-  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-panel').forEach(element => { element.hidden = false; });
+  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-categories, #plugins > .plugin-panel').forEach(element => { element.hidden = false; });
   $('plugin-detail').hidden = true;
   document.querySelector('[data-plugin-tab].active')?.classList.remove('active');
   document.querySelector('[data-plugin-panel].active')?.classList.remove('active');
@@ -1302,16 +1322,17 @@ function renderPlugins() {
       )
       || left.index - right.index)
     .map(item => item.plugin);
-  const installedPlugins = enabledFirst([...pluginData.builtIn, ...pluginData.community]);
+  const installedPlugins = enabledFirst([...pluginData.builtIn, ...pluginData.community].filter(matchesPluginCategory));
   const installedCommunityIds = new Set(pluginData.community.map(plugin => plugin.name));
   const sortedMarketPlugins = pluginData.market
+    .filter(matchesPluginCategory)
     .sort((left, right) => Number(installedCommunityIds.has(right.id)) - Number(installedCommunityIds.has(left.id))
       || String(left.display_name || left.id).localeCompare(
         String(right.display_name || right.id),
         'zh-CN'
       ));
-  $('installed-plugin-list').innerHTML = installedPlugins.map(pluginCard).join('') || '<div class="empty card">暂无已安装插件</div>';
-  $('market-plugin-list').innerHTML = sortedMarketPlugins.map(marketCard).join('') || '<div class="empty card">插件广场暂无内容</div>';
+  $('installed-plugin-list').innerHTML = installedPlugins.map(pluginCard).join('') || `<div class="empty card">${activePluginCategory === 'voice' ? '暂无已安装的语音插件' : '暂无已安装插件'}</div>`;
+  $('market-plugin-list').innerHTML = sortedMarketPlugins.map(marketCard).join('') || `<div class="empty card">${activePluginCategory === 'voice' ? '插件广场暂无语音插件' : '插件广场暂无内容'}</div>`;
   bindPluginCards();
 }
 
@@ -1345,7 +1366,7 @@ function configFields(config, prefix = '') {
 
 function openPluginDetail(plugin) {
   editingPlugin = plugin;
-  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-panel').forEach(element => element.hidden = true);
+  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-categories, #plugins > .plugin-panel').forEach(element => element.hidden = true);
   $('plugin-detail').hidden = false;
   $('plugin-detail-title').textContent = plugin.displayName;
   $('plugin-readme').hidden = Boolean(plugin.serviceId) || !plugin.hasReadme;
@@ -1363,7 +1384,7 @@ function openPluginDetail(plugin) {
 
 $('plugin-detail-back').addEventListener('click', () => {
   $('plugin-detail').hidden = true;
-  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-panel').forEach(element => element.hidden = false);
+  document.querySelectorAll('#plugins > .plugin-tabs-row, #plugins > .plugin-categories, #plugins > .plugin-panel').forEach(element => element.hidden = false);
 });
 $('plugin-readme').addEventListener('click', async () => {
   if (!editingPlugin) return;
@@ -1481,6 +1502,15 @@ document.addEventListener('change', event => {
 
 document.querySelectorAll('[data-plugin-tab]').forEach(button => button.addEventListener('click', () => {
   selectPluginTab(button.dataset.pluginTab);
+}));
+document.querySelectorAll('[data-plugin-category]').forEach(button => button.addEventListener('click', () => {
+  activePluginCategory = button.dataset.pluginCategory;
+  document.querySelectorAll('[data-plugin-category]').forEach(item => {
+    const selected = item.dataset.pluginCategory === activePluginCategory;
+    item.classList.toggle('active', selected);
+    item.setAttribute('aria-pressed', String(selected));
+  });
+  renderPlugins();
 }));
 $('refresh-plugins').addEventListener('click', async () => {
   const button = $('refresh-plugins');

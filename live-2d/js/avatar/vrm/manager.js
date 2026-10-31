@@ -1,7 +1,7 @@
 // manager.js - VRM 管理器（v2，组合式架构）
 // Adapted from Project-N-E-K-O/N.E.K.O (Apache-2.0): static/vrm-manager.js 的
 // 组合式结构（manager 持有 adapter/interaction 子模块）、load token 竞态防护与 dispose 清理思路。
-// 渲染路径沿用肥牛旧实现的"视口/裁剪局部渲染"（与 viewRect 拖拽/缩放/持久化联动）。
+// viewRect 控制构图和拖拽/缩放，实际渲染覆盖整个窗口，避免裁掉大幅动作。
 //
 // v2 关键变更（相对 js/model/vrm-model-setup.js）：
 //   - 支持 VRM 0.x 与 1.0（旧实现直接抛错拒绝 1.0）；1.0 模型自动转向面对相机
@@ -159,7 +159,7 @@ class VRMManager {
         }
     }
 
-    // 启动渲染循环（视口/裁剪局部渲染，单帧异常保护）
+    // 启动渲染循环（全窗口渲染，单帧异常保护）
     startLoop() {
         if (this._animationFrameId) return;
         this._disposed = false;
@@ -182,14 +182,8 @@ class VRMManager {
                 this.renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
                 this.renderer.clear(true, true, true);
 
-                const vr = model.viewRect;
-                const vpY = window.innerHeight - vr.y - vr.height;
-                this.renderer.setViewport(vr.x, vpY, vr.width, vr.height);
-                this.renderer.setScissor(vr.x, vpY, vr.width, vr.height);
-                this.renderer.setScissorTest(true);
+                model.updateRenderViewport(window.innerWidth, window.innerHeight);
                 model.updateCameraOrbit();
-                this.camera.aspect = vr.width / vr.height;
-                this.camera.updateProjectionMatrix();
                 this.renderScene();
                 this._frameErrorCount = 0;
 

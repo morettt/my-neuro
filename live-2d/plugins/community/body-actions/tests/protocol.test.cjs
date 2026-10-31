@@ -3,6 +3,19 @@ const assert = require('node:assert/strict');
 const { isSingleAction, parseActions } = require('../protocol');
 const BodyActionsPlugin = require('../index');
 
+test('free movement defaults off and reloads its setting before each playback', () => {
+    let config = {};
+    const plugin = new BodyActionsPlugin({}, { getPluginConfig: () => config });
+    plugin.config = {};
+    const model = {};
+    plugin.player = { adapter: model };
+    assert.equal(plugin.motionPlayer(model).freeMovement, false);
+    config = { free_movement: true };
+    assert.equal(plugin.motionPlayer(model).freeMovement, true);
+    config = { free_movement: false };
+    assert.equal(plugin.motionPlayer(model).freeMovement, false);
+});
+
 test('single actions are separate, ordered and removed from spoken/display text', () => {
     const result = parseActions('你好！[wave right hand] 看这里。[raise left hand]');
     assert.deepEqual(result.actions, ['wave right hand', 'raise left hand']);

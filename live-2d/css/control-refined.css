@@ -371,6 +371,7 @@ footer { position:fixed; left:180px; right:0; bottom:0; z-index:150; display:fle
 .plugin-refresh-button:disabled { opacity:.65; cursor:wait; }
 @keyframes plugin-refresh-spin { to { transform:rotate(360deg); } }
 .plugin-panel { display:none; }
+.plugin-categories { width:220px; max-width:100%; height:36px; margin-bottom:14px; }
 .plugin-panel.active { display:block; animation:subpanel-enter .28s cubic-bezier(.22,.75,.3,1) both; }
 .plugin-list { display:grid; gap:10px; padding-bottom:66px; }
 .plugin-card { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:14px 16px; }

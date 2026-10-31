@@ -6,6 +6,11 @@ const { PMXMotionRetargeter } = require('./pmx-rig');
 const V = () => new THREE.Vector3();
 const Q = () => new THREE.Quaternion();
 const world = node => node.getWorldPosition(V());
+function translateWorld(node, displacement) {
+    const target = world(node).add(displacement);
+    node.position.copy(node.parent ? node.parent.worldToLocal(target) : target);
+    node.updateWorldMatrix(true, true);
+}
 const LIMBS = [
     ['leftShoulder', 'leftUpperArm', 13, 16], ['rightShoulder', 'rightUpperArm', 14, 17],
     ['leftUpperArm', 'leftLowerArm', 16, 18], ['rightUpperArm', 'rightLowerArm', 17, 19],
@@ -146,6 +151,7 @@ function sampleFrame(frames, index) {
 class BodyMotionPlayer {
     constructor(adapter, blendSeconds = 0.3) {
         this.adapter = adapter;
+        this.freeMovement = true;
         this.retarget = adapter.modelType === 'mmd' ? new PMXMotionRetargeter(adapter, MotionRetargeter) : new MotionRetargeter(adapter.vrm);
         this.blend = THREE.MathUtils.clamp(Number(blendSeconds) || 0.3, 0.05, 1);
     }
@@ -154,15 +160,24 @@ class BodyMotionPlayer {
         if (this.active) throw new Error('身体动作仍在播放');
         const { fps, frames } = validateMotion(data);
         if (this.adapter._disposed) throw new Error('模型已经卸载');
+        if (this.needsRebase) {
+            this.retarget = this.adapter.modelType === 'mmd'
+                ? new PMXMotionRetargeter(this.adapter, MotionRetargeter) : new MotionRetargeter(this.adapter.vrm);
+            this.needsRebase = false;
+        }
         this.motion = { fps, frames };
-        // Keep the pose left by the previous action as the next action's
-        // transition source. BONES120 generates independent clips, so the
-        // runtime must provide this continuity.
+        // Blend from the current relaxed pose at the previous destination.
         this.original = this.retarget.capture();
         this.startPose = this.retarget.capture();
-        // Preserve the ground-relative camera height throughout the clip. Tracking
-        // the moving pelvis vertically would visually cancel jumps and flips.
-        this.cameraTargetY = world(this.retarget.bones.hips).y;
+        // Keep the camera anchored while the body moves in all three axes.
+        this.startHips = world(this.retarget.bones.hips);
+        if (this.freeMovement) {
+            this.adapter._bodyMotionCameraTarget ||= this.startHips.clone();
+            this.cameraTarget = this.adapter._bodyMotionCameraTarget.clone();
+        } else {
+            delete this.adapter._bodyMotionCameraTarget;
+            this.cameraTarget = this.startHips.clone();
+        }
         this.retarget.calibrate(frames);
         this.elapsed = 0;
         this.active = true;
@@ -183,6 +198,7 @@ class BodyMotionPlayer {
             this.retarget.apply(sampleFrame(frames, time * fps));
             const entering = this.elapsed < this.blend;
             const leaving = this.elapsed > this.blend + duration;
+            const endHips = leaving ? world(this.retarget.bones.hips) : null;
             if (entering || leaving) {
                 let amount = entering ? this.elapsed / this.blend : 1 - (this.elapsed - this.blend - duration) / this.blend;
                 amount = THREE.MathUtils.smoothstep(amount, 0, 1);
@@ -190,6 +206,11 @@ class BodyMotionPlayer {
                     const start = this.startPose[name];
                     bone.quaternion.copy(start.quaternion.clone().slerp(bone.quaternion, amount));
                     bone.position.copy(start.position.clone().lerp(bone.position, amount));
+                }
+                if (leaving && this.freeMovement) {
+                    const displacement = endHips.sub(world(this.retarget.bones.hips));
+                    displacement.y = 0;
+                    translateWorld(this.retarget.bones.motionMesh || this.retarget.bones.motionRoot || this.retarget.bones.hips, displacement);
                 }
             }
         } catch (error) {
@@ -199,18 +220,24 @@ class BodyMotionPlayer {
     }
 
     getCameraTarget() {
+        if (this.active && this.freeMovement !== false) return this.cameraTarget.clone();
         const target = world(this.retarget.bones.hips);
-        if (this.active) target.y = this.cameraTargetY;
+        if (this.active) target.y = this.cameraTarget.y;
         return target;
     }
 
     stop(reason = 'cancelled', error) {
         if (!this.active) return;
         this.active = false;
-        // On normal completion keep the final pose so the next independent
-        // BONES120 clip can blend from it. Interruptions still restore the
-        // pose that was present before this action started.
-        if (reason !== 'completed') this.retarget.restore(this.original);
+        if (reason === 'completed' && this.freeMovement) {
+            // Return to the relaxed pose at the destination, not at the origin.
+            this.retarget.apply(this.motion.frames[this.motion.frames.length - 1]);
+            const displacement = world(this.retarget.bones.hips).sub(this.startHips);
+            displacement.y = 0;
+            this.retarget.restore(this.original);
+            translateWorld(this.adapter.modelType === 'mmd' ? this.adapter.mesh : this.adapter.vrm.scene, displacement);
+            this.needsRebase = true;
+        } else this.retarget.restore(this.original);
         this.binding?.restore();
         this.binding = null;
         const resolve = this.resolve;

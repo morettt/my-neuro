@@ -157,11 +157,7 @@ function stopRuntimeLog() {
 const serviceProcesses = {};
 const serviceDownloads = {};
 const pluginDlcProgress = new Map();
-const builtinServiceDefinitions = {
-  tts: { name: 'TTS 语音合成', port: 5000, bat: '2.TTS.bat', flag: '--tts', checks: [
-    'tts-hub/GPT-SoVITS-Bundle/runtime', 'tts-hub/GPT-SoVITS-Bundle/GPT_SoVITS'
-  ] }
-};
+const builtinServiceDefinitions = {};
 function getServiceDefinitions() {
   return { ...builtinServiceDefinitions, ...discoverPluginServices(pluginsPath, Object.keys(builtinServiceDefinitions)) };
 }
@@ -256,7 +252,7 @@ async function serviceStatus() {
     const processActive = Boolean(serviceProcesses[id] && serviceProcesses[id].exitCode === null);
     return {
       id, name: definition.name, tabLabel: definition.tabLabel || id.toUpperCase(), port: definition.port, plugin: definition.plugin || null,
-      installed: serviceInstalled(definition) && (!definition.startScript || fs.existsSync(projectEnvPython)),
+      installed: serviceInstalled(definition) && (!definition.startScript || fs.existsSync(definition.pythonExecutable || projectEnvPython)),
       downloading: Boolean(serviceDownloads[id]),
       running: listening || processActive,
       starting: processActive && !listening
@@ -442,7 +438,9 @@ function listPlugins() {
         displayName: meta.displayName || meta.name || entry.name, description: meta.description || '',
         author: meta.author || '', version: meta.version || '', enabled: enabled.has(`${type}/${entry.name}`),
         hasConfig: fs.existsSync(configFile), config: readJson(configFile, {}),
+        categories: Array.isArray(meta.categories) ? meta.categories : [],
         serviceId: meta.localService?.id || null,
+        serviceActions: meta.localService?.actions || [],
         hasReadme: fs.existsSync(path.join(dir, 'README.md')), bat: meta.bat || '', downloadDlc: meta.download_dlc || '',
         dlcInstalled, dlcProgress: pluginDlcProgress.get(entry.name) || null });
     }
@@ -485,6 +483,7 @@ function listPlugins() {
     return {
       id,
       ...item,
+      categories: installedPlugin?.categories?.length ? installedPlugin.categories : (Array.isArray(item.categories) ? item.categories : []),
       display_name: installedPlugin?.displayName || marketDisplayNames[id] || item.display_name || id,
       installed: Boolean(installedPlugin)
     };
@@ -710,9 +709,11 @@ function motionData(character) {
 }
 
 function environmentInfo() {
-  const ttsHub = path.resolve(__dirname, '..', 'full-hub', 'tts-hub');
   let hasLocalTts = false;
-  try { hasLocalTts = fs.statSync(ttsHub).isDirectory() && fs.readdirSync(ttsHub, { withFileTypes: true }).some(entry => entry.isDirectory()); } catch {}
+  try {
+    const metadata = readJson(path.join(pluginsPath, 'built-in/local-tts/metadata.json'), {});
+    hasLocalTts = metadata.localService?.id === 'tts' && pluginDlcInfo(pluginsPath, path.join(pluginsPath, 'built-in/local-tts'), metadata).installed;
+  } catch {}
   const currentConfig = readJson(configPath, {});
   return { edition: hasLocalTts ? 'local' : 'cloud', editionLabel: hasLocalTts ? '本地' : '云端', version: currentConfig.version || '' };
 }
@@ -946,13 +947,9 @@ ipcMain.handle('control:generate-voice-bat', (_event, options) => {
   if (!character || !text) return { ok: false, message: '请填写角色名称和参考文本' };
   if (!selectedVoiceModelPath || !fs.existsSync(selectedVoiceModelPath)) return { ok: false, message: '请先选择模型文件' };
   if (!selectedVoiceAudioPath || !fs.existsSync(selectedVoiceAudioPath)) return { ok: false, message: '请先选择参考音频' };
-  const safeName = character.replace(/[<>:"/\\|?*]/g, '_');
-  const escapedText = text.replace(/"/g, '""');
-  const batPath = path.join(__dirname, 'Voice_Model_Factory', `${safeName}_TTS.bat`);
-  const content = ['@echo off', 'set "PATH=%~dp0..\\..\\full-hub\\tts-hub\\GPT-SoVITS-Bundle\\runtime;%PATH%"',
-    'cd /d "%~dp0..\\..\\full-hub\\tts-hub\\GPT-SoVITS-Bundle"',
-    `python api.py -p 5000 -d cuda -s "${selectedVoiceModelPath}" -dr "${selectedVoiceAudioPath}" -dt "${escapedText}" -dl ${language}`, 'pause', ''].join('\r\n');
-  fs.writeFileSync(batPath, content, 'utf8');
+  const { writeVoiceLauncher } = require('./plugins/built-in/local-tts/voice-launcher');
+  const batPath = writeVoiceLauncher({ factoryDir: path.join(__dirname, 'Voice_Model_Factory'),
+    character, model: selectedVoiceModelPath, reference: selectedVoiceAudioPath, text, language });
   return { ok: true, message: `已生成：${path.basename(batPath)}` };
 });
 ipcMain.handle('control:service-status', async () => (await serviceStatus()).filter(service => !service.plugin));
@@ -965,11 +962,13 @@ ipcMain.handle('control:start-service', async (event, id) => {
   if (process.platform !== 'win32' && !definition.startScript) return { ok: false, message: '此模块仅提供 Windows 运行包。Linux 请独立部署服务并配置 API 地址，参见 Linux 部署文档。' };
   const batPath = definition.bat ? path.join(projectRoot, definition.bat) : null;
   if (batPath && !fs.existsSync(batPath)) return { ok: false, message: `找不到 ${definition.bat}` };
-  if (definition.startScript && !fs.existsSync(projectEnvPython)) return { ok: false, message: '缺少公共 Python 环境，请先下载模块' };
+  const pythonExecutable = definition.pythonExecutable || projectEnvPython;
+  if (process.platform !== 'win32' && /\.exe$/i.test(pythonExecutable)) return { ok: false, message: '该 DLC 使用 Windows Python 运行环境。Linux 请独立部署服务并配置 API 地址。' };
+  if (definition.startScript && !fs.existsSync(pythonExecutable)) return { ok: false, message: '缺少服务运行环境，请先安装 DLC' };
   sendServiceLog(event.sender, id, `正在启动 ${definition.name}...\n`);
   const child = definition.startScript
-    ? spawnManaged(projectEnvPython, ['-u', definition.startScript, ...(definition.startArgs || [])], {
-      cwd: definition.resourceRoot || hubRoot, windowsHide: true,
+    ? spawnManaged(pythonExecutable, ['-u', definition.startScript, ...(definition.startArgs || [])], {
+      cwd: definition.workingDirectory || definition.resourceRoot || hubRoot, windowsHide: true,
       env: { ...downloadProcessEnv(__dirname), PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', MY_NEURO_FULL_HUB_DIR: hubRoot,
         MY_NEURO_SERVICE_RESOURCE_DIR: definition.resourceRoot || hubRoot }
     })
@@ -1128,6 +1127,7 @@ ipcMain.handle('control:install-plugin-dlc', async (event, name, url) => {
   if (!/^[\w.-]+$/.test(name) || !/^https:\/\//i.test(url)) return { ok: false, message: 'DLC 信息无效' };
   const plugin = findPluginDlc(pluginsPath, name, url);
   if (!plugin) return { ok: false, message: '找不到对应插件的 DLC 声明' };
+  if (process.platform !== 'win32' && /\.exe$/i.test(plugin.metadata.localService?.pythonPath || '')) return { ok: false, message: '该 DLC 包含 Windows Python 运行环境。Linux 请独立部署服务并配置 API 地址。' };
   if (process.platform !== 'win32' && !plugin.script) return { ok: false, message: '该 DLC 未提供跨平台安装器，请按插件文档手动部署 Linux 服务。' };
   if (plugin.script) {
     const id = plugin.metadata.localService.id;

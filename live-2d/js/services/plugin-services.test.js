@@ -150,26 +150,27 @@ test('downloading plugin cannot be disabled midway through environment setup', a
     assert.ok(context.getServiceDefinitions().bert);
 });
 
-test('terminal only lists TTS; plugin management receives BERT and ASR', async t => {
+test('terminal has no built-ins; plugin management receives TTS, ASR and BERT', async t => {
     const { context, handlers } = controlHarness(t);
     context.serviceStatus = async () => [
-        { id: 'tts', plugin: null }, { id: 'asr', plugin: 'built-in/local-asr' },
+        { id: 'tts', plugin: 'built-in/local-tts' }, { id: 'asr', plugin: 'built-in/local-asr' },
         { id: 'bert', plugin: 'built-in/local-bert' }
     ];
     const terminal = await handlers.get('control:service-status')();
     const plugins = await handlers.get('control:plugin-service-status')();
-    assert.equal(JSON.stringify(terminal.map(service => service.id)), '["tts"]');
-    assert.equal(JSON.stringify(plugins.map(service => service.id)), '["asr","bert"]');
+    assert.equal(JSON.stringify(terminal.map(service => service.id)), '[]');
+    assert.equal(JSON.stringify(plugins.map(service => service.id)), '["tts","asr","bert"]');
 });
 
-function addAsrPlugin(context) {
-    const pluginDir = path.join(context.pluginsPath, 'built-in/local-asr');
+function addServicePlugin(context, name) {
+    const pluginDir = path.join(context.pluginsPath, 'built-in', name);
     fs.mkdirSync(pluginDir, { recursive: true });
-    for (const name of fs.readdirSync(path.join(root, 'plugins/built-in/local-asr'))) {
-        if (name === '__pycache__') continue;
-        fs.copyFileSync(path.join(root, 'plugins/built-in/local-asr', name), path.join(pluginDir, name));
+    for (const file of fs.readdirSync(path.join(root, 'plugins/built-in', name))) {
+        if (file === '__pycache__') continue;
+        fs.copyFileSync(path.join(root, 'plugins/built-in', name, file), path.join(pluginDir, file));
     }
 }
+const addAsrPlugin = context => addServicePlugin(context, 'local-asr');
 
 test('ASR registers as an enabled plugin and resolves local or cloud VAD launch modes', t => {
     const { context, setEnabled } = controlHarness(t);
@@ -227,9 +228,132 @@ test('ASR installs through plugin DLC before enablement and reports its own prog
     assert.equal(findPluginDlc(context.pluginsPath, 'local-asr', url).installed, true);
 });
 
-test('main process only declares TTS as a built-in terminal service', () => {
+test('main process no longer declares any built-in terminal service', () => {
     const definitions = vm.runInNewContext(source.slice(source.indexOf('const builtinServiceDefinitions'), source.indexOf('function getServiceDefinitions')) + '; builtinServiceDefinitions');
-    assert.equal(JSON.stringify(Object.keys(definitions)), '["tts"]');
+    assert.equal(JSON.stringify(Object.keys(definitions)), '[]');
+});
+
+function createTtsBundle(context) {
+    const url = 'https://www.modelscope.cn/models/morelle/fake-neuro-gsv';
+    const plugin = findPluginDlc(context.pluginsPath, 'local-tts', url);
+    for (const relative of plugin.metadata.localService.checks) {
+        const target = path.join(plugin.target, relative);
+        if (relative.endsWith('/GPT_SoVITS')) fs.mkdirSync(target, { recursive: true });
+        else { fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, 'fixture'); }
+    }
+    return findPluginDlc(context.pluginsPath, 'local-tts', url);
+}
+
+test('TTS uses bundled Python and working directory without requiring ASR environment', async t => {
+    const { context, handlers, calls, event, setEnabled } = controlHarness(t);
+    addServicePlugin(context, 'local-tts');
+    const plugin = createTtsBundle(context);
+    assert.equal(plugin.installed, true);
+    assert.equal(fs.existsSync(context.projectEnvPython), false);
+    setEnabled(['built-in/local-tts']);
+    context.serviceInstalled = () => true;
+    const definition = context.getServiceDefinitions().tts;
+    assert.ok(definition.pythonExecutable.endsWith(path.join('runtime', 'python.exe')));
+    assert.equal((await handlers.get('control:start-service')(event, 'tts')).ok, true);
+    assert.equal(calls[0].command, definition.pythonExecutable);
+    assert.notEqual(calls[0].command, context.projectEnvPython);
+    assert.equal(calls[0].options.cwd, definition.workingDirectory);
+    assert.equal(calls[0].args[1], definition.startScript);
+    assert.ok(calls[0].options.env.TEMP.startsWith(context.__dirname));
+});
+
+test('Linux plugin runtime overrides the shared Python while retaining managed launch and working directory', async t => {
+    const { context, handlers, calls, event, setEnabled } = controlHarness(t);
+    context.process.platform = 'linux';
+    addServicePlugin(context, 'local-tts');
+    const metadataPath = path.join(context.pluginsPath, 'built-in/local-tts/metadata.json');
+    const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+    metadata.localService.pythonPath = 'runtime/bin/python';
+    fs.writeFileSync(metadataPath, JSON.stringify(metadata));
+    const plugin = createTtsBundle(context);
+    const python = path.join(plugin.target, metadata.localService.pythonPath);
+    fs.mkdirSync(path.dirname(python), { recursive: true });
+    fs.writeFileSync(python, 'fixture');
+    assert.equal(findPluginDlc(context.pluginsPath, 'local-tts', metadata.download_dlc).installed, true);
+    assert.equal(fs.existsSync(context.projectEnvPython), false);
+    setEnabled(['built-in/local-tts']);
+    context.serviceInstalled = () => true;
+    context.spawn = () => { throw new Error('Linux services must use managed launch'); };
+    assert.equal((await handlers.get('control:start-service')(event, 'tts')).ok, true);
+    assert.equal(calls[0].command, python);
+    assert.equal(calls[0].options.cwd, path.join(plugin.target, metadata.localService.workingDirectory));
+});
+
+test('Linux rejects Windows Python DLC installation and launch before spawning processes', async t => {
+    const { context, handlers, calls, event, setEnabled } = controlHarness(t);
+    context.process.platform = 'linux';
+    addServicePlugin(context, 'local-tts');
+    const plugin = createTtsBundle(context);
+    setEnabled(['built-in/local-tts']);
+    context.serviceInstalled = () => true;
+    const start = await handlers.get('control:start-service')(event, 'tts');
+    assert.equal(start.ok, false);
+    assert.match(start.message, /Windows Python/);
+    context.ensureProjectPython = () => { throw new Error('Unsupported DLC must be rejected before setup'); };
+    const install = await handlers.get('control:install-plugin-dlc')(event, 'local-tts', plugin.metadata.download_dlc);
+    assert.equal(install.ok, false);
+    assert.match(install.message, /Windows Python/);
+    assert.equal(calls.length, 0);
+});
+
+test('DLC runtime paths cannot escape the resource root', t => {
+    const { pluginsDir } = fixture(t);
+    const pluginDir = path.join(pluginsDir, 'built-in/local-bert');
+    const metadata = JSON.parse(fs.readFileSync(path.join(pluginDir, 'metadata.json'), 'utf8'));
+    metadata.localService.pythonPath = '../../outside/python';
+    assert.throws(() => pluginDlcInfo(pluginsDir, pluginDir, metadata), /运行环境路径无效/);
+});
+
+test('voice cloning writes reference text to JSON and launcher supports both resource roots', t => {
+    const { context } = controlHarness(t);
+    const { writeVoiceLauncher } = require('../../plugins/built-in/local-tts/voice-launcher');
+    const text = 'hello "world" & echo %PATH%\n下一行';
+    const factoryDir = path.join(context.__dirname, 'Voice_Model_Factory');
+    const file = writeVoiceLauncher({ factoryDir, character: '测试角色', model: 'model.pth', reference: 'audio.wav', text, language: 'zh' });
+    const batch = fs.readFileSync(file, 'utf8');
+    assert.match(batch, /plugins-dlc\\local-tts/);
+    assert.match(batch, /full-hub\\tts-hub/);
+    assert.match(batch, /runtime\\python.exe/);
+    assert.doesNotMatch(batch, /hello|echo %PATH%/);
+    const config = JSON.parse(fs.readFileSync(path.join(factoryDir, '测试角色.voice.json'), 'utf8'));
+    assert.equal(config.text, text);
+});
+
+test('TTS cloning appears inside configuration controls instead of plugin card', () => {
+    const renderer = fs.readFileSync(path.join(root, 'control-renderer.js'), 'utf8');
+    const context = { escapeHtml: String, dlcInstallProgress: new Map(), dlcProgressMarkup: () => '', serviceDownloadProgress: {} };
+    vm.runInNewContext(renderer.slice(renderer.indexOf('function pluginCard('), renderer.indexOf('function marketCard(')), context);
+    const plugin = { name: 'local-tts', serviceId: 'tts', relPath: 'built-in/local-tts', downloadDlc: 'source', dlcInstalled: true,
+        serviceActions: [{ label: '声音克隆', page: 'voice' }] };
+    assert.doesNotMatch(context.pluginCard(plugin), /data-plugin-page="voice"|声音克隆/);
+    vm.runInNewContext(renderer.slice(renderer.indexOf('function serviceCard('), renderer.indexOf('function renderActiveService(')), context);
+    const card = context.serviceCard({ id: 'tts', name: 'TTS', plugin: 'built-in/local-tts', installed: true, running: true, port: 5000 }, plugin.serviceActions);
+    assert.match(card, /运行中/);
+    assert.match(card, /关闭/);
+    assert.match(card, /data-plugin-page="voice"/);
+    assert.match(card, /声音克隆/);
+    assert.doesNotMatch(card, /下载模块/);
+});
+
+test('TTS extraction changes stage and clears stale download percentage', () => {
+    const renderer = fs.readFileSync(path.join(root, 'control-renderer.js'), 'utf8');
+    const context = { escapeHtml: String };
+    vm.runInNewContext(renderer.slice(renderer.indexOf('function updateDlcInstallProgress('), renderer.indexOf('function paintDlcInstallProgress(')), context);
+    let state = context.updateDlcInstallProgress({}, { stage: 'model-download', percent: 100, active: true });
+    state = context.updateDlcInstallProgress(state, { text: '@@DLC_EXTRACT_' });
+    state = context.updateDlcInstallProgress(state, { text: 'START\n正在解压' });
+    assert.equal(state.stage, 'extracting');
+    assert.equal(state.percent, null);
+    state = context.updateDlcInstallProgress(state, { text: '\r 25%' });
+    assert.equal(state.percent, 25);
+    assert.match(context.dlcProgressMarkup(state), /正在解压 DLC/);
+    state = context.updateDlcInstallProgress(state, { stage: 'done', percent: 100, active: false });
+    assert.equal(context.dlcProgressMarkup(state), '');
 });
 
 test('DLC installer works before plugin enablement and validates resources before success', async t => {

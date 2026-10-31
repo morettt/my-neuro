@@ -65,7 +65,7 @@
           <button class="nav" data-page="plugins"><span>⬡</span>插件</button>
           <button class="nav" data-page="chat"><span>◫</span>对话设置</button>
           <button class="nav" data-page="animation"><span>♬</span>表情与动作</button>
-          <button class="nav" data-page="services"><span>⌘</span>终端控制室</button>
+          <button class="nav" data-page="services" hidden><span>⌘</span>终端控制室</button>
           <button class="nav" data-page="tools"><span>◇</span>工具屋</button>
           <button class="nav" data-page="cloud"><span>☁</span>云端配置</button>
           <button class="nav" data-page="settings"><span>⚙</span>UI设置</button>
@@ -116,6 +116,7 @@
             <div class="plugin-tabs" role="tablist"><button class="active" data-plugin-tab="installed">当前插件</button><button data-plugin-tab="market">插件广场</button></div>
             <button id="refresh-plugins" class="plugin-refresh-button" type="button" title="刷新插件广场" aria-label="刷新插件广场"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 11"/><path d="M5.5 15A7 7 0 0 0 18 17.5l2-4.5"/></svg></button>
           </div>
+          <div class="plugin-categories plugin-tabs" role="group" aria-label="插件分区"><button type="button" class="active" data-plugin-category="all" aria-pressed="true">全部</button><button type="button" data-plugin-category="voice" aria-pressed="false">语音</button></div>
           <section class="plugin-panel active" data-plugin-panel="installed"><div class="plugin-list" id="installed-plugin-list"></div></section>
           <section class="plugin-panel" data-plugin-panel="market"><div class="plugin-list" id="market-plugin-list"></div></section>
           <section class="plugin-detail card" id="plugin-detail" hidden><header><button id="plugin-detail-back" class="plugin-back-button" title="返回插件列表" aria-label="返回插件列表"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><strong id="plugin-detail-title"></strong><button id="plugin-readme" hidden>使用教程</button></header><div id="plugin-detail-content"></div></section>

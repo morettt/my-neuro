@@ -30,7 +30,16 @@ function discoverPluginServices(pluginsDir, reservedIds = []) {
         if (!scripts.startScript || service.launchResolver && !scripts.launchResolver) continue;
         let dlc;
         try { dlc = pluginDlcInfo(pluginsDir, pluginDir, metadata); } catch { continue; }
-        services[service.id] = { ...service, ...scripts, resourceRoot: dlc.resourceRoot, plugin: relPath };
+        const runtime = {};
+        for (const [key, relative] of [['pythonExecutable', service.pythonPath], ['workingDirectory', service.workingDirectory]]) {
+            if (!relative) continue;
+            if (typeof relative !== 'string' || !dlc.resourceRoot) break;
+            const resolved = path.resolve(dlc.resourceRoot, relative);
+            if (!resolved.startsWith(dlc.resourceRoot + path.sep)) break;
+            runtime[key] = resolved;
+        }
+        if (service.pythonPath && !runtime.pythonExecutable || service.workingDirectory && !runtime.workingDirectory) continue;
+        services[service.id] = { ...service, ...scripts, ...runtime, resourceRoot: dlc.resourceRoot, plugin: relPath };
     }
     return services;
 }

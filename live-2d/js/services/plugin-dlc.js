@@ -15,7 +15,12 @@ function pluginDlcInfo(pluginsDir, pluginDir, metadata) {
     const complete = root => checks.length > 0 && checks.every(file => fs.existsSync(path.join(root, file)));
     const legacyRoot = path.resolve(pluginsDir, '..', '..', 'full-hub');
     const resourceRoot = complete(target) ? target : complete(legacyRoot) ? legacyRoot : target;
-    const python = projectPython(path.resolve(pluginsDir, '..', '..'));
+    const python = metadata.localService?.pythonPath
+        ? path.resolve(resourceRoot, metadata.localService.pythonPath)
+        : projectPython(path.resolve(pluginsDir, '..', '..'));
+    if (metadata.localService?.pythonPath && !python.startsWith(resourceRoot + path.sep)) {
+        throw new Error('插件运行环境路径无效');
+    }
     return { target, script, resourceRoot, installed: complete(resourceRoot) && fs.existsSync(python) };
 }
 
