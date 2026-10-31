@@ -1,3 +1,4 @@
+const { llmRequestHeaders } = require('./llm-request-headers');
 // ContextCompressor.js - 异步上下文压缩模块
 const { logToTerminal } = require('../api-utils.js');
 
@@ -205,10 +206,7 @@ ${conversationText}
             // 调用LLM API
             const response = await fetch(`${this._llmApiUrl}/chat/completions`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this._llmApiKey}`
-                },
+                headers: llmRequestHeaders(this._llmApiUrl, this._llmApiKey),
                 body: JSON.stringify({
                     model: this._llmModel,
                     messages: [{

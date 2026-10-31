@@ -2,6 +2,7 @@
 const { logToTerminal, handleAPIError } = require('../api-utils.js');
 const { sanitizeToolMessageSequence } = require('./tool-message-utils.js');
 const { applyReasoningToRequestBody } = require('./reasoning-request.js');
+const { llmRequestHeaders } = require('./llm-request-headers');
 
 /**
  * 统一的LLM客户端
@@ -109,10 +110,7 @@ class LLMClient {
         try {
             const response = await fetch(endpoint.href, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.apiKey}`
-                },
+                headers: llmRequestHeaders(endpoint.href, this.apiKey),
                 body: JSON.stringify(requestBody)
             });
 

@@ -25,6 +25,7 @@ const { scanLive2DModels, resolveLive2DModel, scanVRMModels, scanMMDModels } = r
 const { EMOTIONS: motionEmotions, mergeExpressionConfig, mergeActionConfig, isLive2DModelDir } = require('./js/avatar/model-defaults');
 const { loadProvidersFromStore, saveProviders } = require('./js/core/llm-provider-store');
 const aliyunVoiceClone = require('./js/voice/aliyun-voice-clone');
+const { llmRequestHeaders } = require('./js/ai/llm-request-headers');
 const { discoverPluginServices, resolvePluginServiceLaunch } = require('./js/services/plugin-services');
 const { pluginDlcInfo, findPluginDlc } = require('./js/services/plugin-dlc');
 const { downloadCacheRoot, ensureDownloadSpace, downloadProcessEnv, explainStorageError } = require('./js/services/download-storage');
@@ -1268,8 +1269,11 @@ ipcMain.handle('control:fetch-llm-models', async (_event, apiUrl, apiKey) => {
     if (endpoint.toLowerCase().endsWith(suffix)) { endpoint = endpoint.slice(0, -suffix.length).replace(/\/+$/, ''); break; }
   }
   endpoint += '/models';
-  const headers = { Accept: 'application/json' };
-  if (String(apiKey || '').trim()) headers.Authorization = `Bearer ${String(apiKey).trim()}`;
+  if (/^https:\/\/opencode\.ai\/inference\/go\/openai\/v1\/models$/i.test(endpoint)) {
+    endpoint = 'https://opencode.ai/inference/go/v1/models';
+  }
+  const headers = { ...llmRequestHeaders(endpoint, String(apiKey || '').trim()), Accept: 'application/json' };
+  if (!String(apiKey || '').trim()) delete headers.Authorization;
   let response;
   try { response = await net.fetch(endpoint, { headers, signal: AbortSignal.timeout(28000) }); }
   catch (error) { throw new Error(`连接模型接口失败：${error.message}`); }
@@ -1288,8 +1292,8 @@ ipcMain.handle('control:test-llm-model', async (_event, apiUrl, apiKey, model) =
   for (const suffix of ['/chat/completions', '/completions', '/responses', '/models']) {
     if (endpoint.toLowerCase().endsWith(suffix)) { endpoint = endpoint.slice(0, -suffix.length).replace(/\/+$/, ''); break; }
   }
-  const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
-  if (String(apiKey || '').trim()) headers.Authorization = `Bearer ${String(apiKey).trim()}`;
+  const headers = { ...llmRequestHeaders(endpoint, String(apiKey || '').trim()), Accept: 'application/json' };
+  if (!String(apiKey || '').trim()) delete headers.Authorization;
   const started = performance.now();
   const signal = AbortSignal.timeout(30000);
   try {
