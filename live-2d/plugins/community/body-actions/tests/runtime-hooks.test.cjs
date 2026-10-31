@@ -84,6 +84,30 @@ test('walking keeps its destination through fade-out and consecutive actions wit
         assert(Math.abs(bones.hips.getWorldPosition(new THREE.Vector3()).x - step) < 1e-8);
         assert(Math.abs(bones.hips.getWorldPosition(new THREE.Vector3()).z + step) < 1e-8);
     }
+    // Switching off restores the original tracking and returns this walk to
+    // its start. Switching back on must resume travel from that same place.
+    for (const freeMovement of [false, true]) {
+        player.freeMovement = freeMovement;
+        const start = bones.hips.getWorldPosition(new THREE.Vector3());
+        const done = player.play(data);
+        if (!freeMovement) assert.equal(adapter._bodyMotionCameraTarget, undefined);
+        let ticks = 0;
+        while (player.active && ticks++ < 100) {
+            player.update(0.01);
+            adapter.updateCameraOrbit();
+            if (!freeMovement && player.active) {
+                const hips = bones.hips.getWorldPosition(new THREE.Vector3());
+                const target = player.getCameraTarget();
+                assert(Math.abs(target.x - hips.x) < 1e-8);
+                assert(Math.abs(target.z - hips.z) < 1e-8);
+                assert.equal(adapter.camera.zoom, 1);
+            }
+        }
+        assert.equal((await done).reason, 'completed');
+        const displacement = bones.hips.getWorldPosition(new THREE.Vector3()).sub(start);
+        assert(Math.abs(displacement.x - (freeMovement ? 1 : 0)) < 1e-8);
+        assert(Math.abs(displacement.z - (freeMovement ? -1 : 0)) < 1e-8);
+    }
     bounds.geometry.dispose(); bounds.material.dispose();
 });
 

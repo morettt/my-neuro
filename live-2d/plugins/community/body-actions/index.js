@@ -43,6 +43,10 @@ class BodyActionsPlugin extends Plugin {
     }
 
     async onStart() {
+        if (!this.freeMovementEnabled()) {
+            const model = this.adapter();
+            if (model) delete model._bodyMotionCameraTarget;
+        }
         this.runtime?.refresh();
         this.context.log('info', '身体动作插件已启用：回复请求将追加身体动作提示词');
         // Warm the backend without delaying avatar/app initialization.
@@ -73,6 +77,19 @@ class BodyActionsPlugin extends Plugin {
     }
 
     maxActions() { return Math.max(1, Math.min(8, Number(this.config.max_actions) || 4)); }
+
+    freeMovementEnabled() {
+        const config = this.context.getPluginConfig?.() || this.config;
+        return config.free_movement === true;
+    }
+
+    motionPlayer(model) {
+        if (!this.player || this.player.adapter !== model) {
+            this.player = new BodyMotionPlayer(model, this.config.blend_seconds);
+        }
+        this.player.freeMovement = this.freeMovementEnabled();
+        return this.player;
+    }
 
     textOnlyMode() {
         const config = this.context.getConfig?.() || {};
@@ -228,8 +245,7 @@ class BodyActionsPlugin extends Plugin {
         try {
             const data = await item.promise;
             if (this.stopped || this.adapter() !== model) return;
-            if (!this.player || this.player.adapter !== model) this.player = new BodyMotionPlayer(model, this.config.blend_seconds);
-            await this.player.play(data);
+            await this.motionPlayer(model).play(data);
         } catch (error) {
             if (!this.stopped) this.context.log('warn', `身体动作失败: ${error.message}`);
         } finally {
@@ -251,9 +267,8 @@ class BodyActionsPlugin extends Plugin {
                 if (this.cache.size >= 16) this.cache.delete(this.cache.keys().next().value);
                 this.cache.set(action.toLowerCase(), data);
             }
-            if (!this.player || this.player.adapter !== model) this.player = new BodyMotionPlayer(model, this.config.blend_seconds);
             this.context.log('info', `播放身体动作: ${action}`);
-            const result = await this.player.play(data);
+            const result = await this.motionPlayer(model).play(data);
             if (result.error) throw new Error(result.error);
             if (result.cancelled) return;
         }

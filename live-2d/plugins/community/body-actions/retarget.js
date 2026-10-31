@@ -151,6 +151,7 @@ function sampleFrame(frames, index) {
 class BodyMotionPlayer {
     constructor(adapter, blendSeconds = 0.3) {
         this.adapter = adapter;
+        this.freeMovement = true;
         this.retarget = adapter.modelType === 'mmd' ? new PMXMotionRetargeter(adapter, MotionRetargeter) : new MotionRetargeter(adapter.vrm);
         this.blend = THREE.MathUtils.clamp(Number(blendSeconds) || 0.3, 0.05, 1);
     }
@@ -170,8 +171,13 @@ class BodyMotionPlayer {
         this.startPose = this.retarget.capture();
         // Keep the camera anchored while the body moves in all three axes.
         this.startHips = world(this.retarget.bones.hips);
-        this.adapter._bodyMotionCameraTarget ||= this.startHips.clone();
-        this.cameraTarget = this.adapter._bodyMotionCameraTarget.clone();
+        if (this.freeMovement) {
+            this.adapter._bodyMotionCameraTarget ||= this.startHips.clone();
+            this.cameraTarget = this.adapter._bodyMotionCameraTarget.clone();
+        } else {
+            delete this.adapter._bodyMotionCameraTarget;
+            this.cameraTarget = this.startHips.clone();
+        }
         this.retarget.calibrate(frames);
         this.elapsed = 0;
         this.active = true;
@@ -201,7 +207,7 @@ class BodyMotionPlayer {
                     bone.quaternion.copy(start.quaternion.clone().slerp(bone.quaternion, amount));
                     bone.position.copy(start.position.clone().lerp(bone.position, amount));
                 }
-                if (leaving) {
+                if (leaving && this.freeMovement) {
                     const displacement = endHips.sub(world(this.retarget.bones.hips));
                     displacement.y = 0;
                     translateWorld(this.retarget.bones.motionMesh || this.retarget.bones.motionRoot || this.retarget.bones.hips, displacement);
@@ -214,13 +220,16 @@ class BodyMotionPlayer {
     }
 
     getCameraTarget() {
-        return this.active ? this.cameraTarget.clone() : world(this.retarget.bones.hips);
+        if (this.active && this.freeMovement !== false) return this.cameraTarget.clone();
+        const target = world(this.retarget.bones.hips);
+        if (this.active) target.y = this.cameraTarget.y;
+        return target;
     }
 
     stop(reason = 'cancelled', error) {
         if (!this.active) return;
         this.active = false;
-        if (reason === 'completed') {
+        if (reason === 'completed' && this.freeMovement) {
             // Return to the relaxed pose at the destination, not at the origin.
             this.retarget.apply(this.motion.frames[this.motion.frames.length - 1]);
             const displacement = world(this.retarget.bones.hips).sub(this.startHips);
