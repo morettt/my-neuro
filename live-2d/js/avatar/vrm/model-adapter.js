@@ -310,7 +310,7 @@ class VRMModelAdapter extends EventEmitter {
         const v = this._vec3Proj;
         head.getWorldPosition(v);
         v.project(this.camera);
-        const vr = this._viewRect;
+        const vr = this._screenProjectionRect || this._viewRect;
         return {
             x: vr.x + (v.x * 0.5 + 0.5) * vr.width,
             y: vr.y + (-v.y * 0.5 + 0.5) * vr.height
@@ -394,24 +394,53 @@ class VRMModelAdapter extends EventEmitter {
         };
     }
 
-    updateCameraOrbit() {
+    updateRenderViewport(width, height) {
+        const vr = this._viewRect;
+        // Extend the original projection to the whole canvas. Negative offsets
+        // preserve the model's pixel size/position while revealing everything
+        // outside the old rectangle, including limbs and root motion.
+        this.renderer.setScissorTest(false);
+        this.renderer.setViewport(0, 0, width, height);
+        this.camera.setViewOffset(vr.width, vr.height, -vr.x, -vr.y, width, height);
+        this._screenProjectionRect = { x: 0, y: 0, width, height };
+    }
+
+    updateCameraOrbit(fixedTarget = null) {
         if (!this.camera || !this.vrm) return;
         const target = this._orbitTarget;
         const hips = this.vrm.humanoid?.getNormalizedBoneNode('hips');
-        if (hips) {
+        if (fixedTarget || this._bodyMotionCameraTarget) {
+            target.copy(fixedTarget || this._bodyMotionCameraTarget);
+        } else if (hips) {
             hips.getWorldPosition(target);
         } else {
             target.set(0, 1, 0);
         }
         target.y += this._orbitYOffset;
 
-        const d = this._orbitDistance;
         const theta = this._orbitTheta;
         const phi = this._orbitPhi;
+        const direction = new THREE.Vector3(-Math.sin(theta) * Math.cos(phi),
+            Math.sin(phi), -Math.cos(theta) * Math.cos(phi));
+        const baseDistance = this._orbitDistance;
+        let d = baseDistance;
+        if (this._bodyMotionCameraTarget && hips) {
+            // Generated walks can travel farther than the original 3m camera
+            // distance. Use a longer lens, and retain clearance if the body
+            // approaches it. Matching zoom preserves the original framing at
+            // the anchor while depth movement still changes the apparent size.
+            const approach = hips.getWorldPosition(new THREE.Vector3()).sub(target).dot(direction);
+            d = Math.max(baseDistance * 4, approach + baseDistance);
+        }
+        const zoom = d / baseDistance;
+        if (this.camera.zoom !== zoom) {
+            this.camera.zoom = zoom;
+            this.camera.updateProjectionMatrix();
+        }
         this.camera.position.set(
-            target.x - d * Math.sin(theta) * Math.cos(phi),
-            target.y + d * Math.sin(phi),
-            target.z - d * Math.cos(theta) * Math.cos(phi)
+            target.x + d * direction.x,
+            target.y + d * direction.y,
+            target.z + d * direction.z
         );
         this.camera.lookAt(target);
         this.camera.updateMatrixWorld();
@@ -420,7 +449,7 @@ class VRMModelAdapter extends EventEmitter {
 
     _updateScreenHitBox() {
         if (!this.vrm?.humanoid || !this.camera) return;
-        const vr = this._viewRect;
+        const vr = this._screenProjectionRect || this._viewRect;
         const humanoid = this.vrm.humanoid;
         const v = this._vec3Proj;
 
