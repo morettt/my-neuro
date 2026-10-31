@@ -1384,7 +1384,7 @@ ipcMain.handle('control:download-tool', async (_event, tool) => {
 
 ipcMain.handle('control:save-config', async (_event, config) => {
   saveControlConfig(config);
-  if (config.cloud?.aliyun_tts?.enabled || config.cloud?.volcengine_tts?.enabled) await notifyDesktopReload();
+  await notifyDesktopReload();
   return { ok: true };
 });
 
