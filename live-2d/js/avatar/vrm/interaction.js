@@ -384,11 +384,25 @@ class VRMInteractionController {
         const savedPos = this.config?.ui?.model_position;
         const savedScale = this.config?.ui?.model_scale;
         if (rememberPosition && savedPos?.x != null && savedPos?.y != null && savedScale && savedScale > 0) {
-            this.model.viewRect = this._savedToViewRect(savedPos.x, savedPos.y, savedScale);
+            this.model.viewRect = this._savedToViewRect(savedPos.x, savedPos.y, this._initialScale(savedScale));
         } else {
-            this.model.viewRect = this._savedToViewRect(1.35, 0.8, 2.3);
+            this.model.viewRect = this._savedToViewRect(1.35, 0.8, this._initialScale(2.3, true));
         }
         this._clampViewRect();
+        if (process.platform === 'linux') this.saveModelPosition();
+    }
+
+    _initialScale(legacyScale, reset = false, width = window.innerWidth, height = window.innerHeight) {
+        if (process.platform !== 'linux') return legacyScale;
+        const storedWidth = Number(this.config?.ui?.vrm_viewport_width);
+        // The old scale belongs to Live2D too, and multiplied by the entire
+        // overlay width. Migrate to a modest desktop size once; subsequent
+        // starts restore CSS pixels, independent of overlay/client width.
+        const viewportWidth = !reset && Number.isFinite(storedWidth) && storedWidth > 0
+            ? storedWidth
+            : Math.min(420, width * 0.8, height * 0.8 / VRM_VIEWPORT_ASPECT,
+                legacyScale * VRM_SCALE_FACTOR * width);
+        return viewportWidth / (VRM_SCALE_FACTOR * width);
     }
 
     // overrideWidth/Height：跨屏切换时传入“目标显示器的 DIP 尺寸”，避免依赖尚未稳定的 innerWidth。
@@ -401,9 +415,11 @@ class VRMInteractionController {
         this.config.ui.model_position.x = saved.x;
         this.config.ui.model_position.y = saved.y;
         this.config.ui.model_scale = saved.scale;
+        if (process.platform === 'linux') this.config.ui.vrm_viewport_width = vr.width;
 
         ipcRenderer.send('save-model-position', {
             ...saved,
+            ...(process.platform === 'linux' ? { vrmViewportWidth: vr.width } : {}),
             modelName: null   // VRM 位置沿用全局 config 键（与旧行为一致）
         });
     }
@@ -411,7 +427,8 @@ class VRMInteractionController {
     resetModelPosition() {
         if (!this.model) return { success: false };
         const primary = this._getPrimaryWindowOffset();
-        const vr = this._savedToViewRectWithSize(1.35, 0.8, 2.3, primary.width, primary.height);
+        const scale = this._initialScale(2.3, true, primary.width, primary.height);
+        const vr = this._savedToViewRectWithSize(1.35, 0.8, scale, primary.width, primary.height);
         vr.x += primary.x;
         vr.y += primary.y;
         this.model.viewRect = vr;

@@ -985,7 +985,11 @@ ipcMain.on('save-model-position', (event, position) => {
             configData.ui.model_position.x = nextPosition.x;
             configData.ui.model_position.y = nextPosition.y;
         }
-        configData.ui.model_scale = nextPosition.scale;
+        if (Number.isFinite(nextPosition.vrmViewportWidth) && nextPosition.vrmViewportWidth > 0) {
+            configData.ui.vrm_viewport_width = nextPosition.vrmViewportWidth;
+        } else {
+            configData.ui.model_scale = nextPosition.scale;
+        }
 
         // 仍记录当前屏原点，仅供诊断；启动落点以巨窗并集为准。
         const win = BrowserWindow.fromWebContents(event.sender);

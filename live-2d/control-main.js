@@ -873,6 +873,7 @@ ipcMain.handle('control:reset-model-position', async () => {
   current.ui.model_position ||= {};
   Object.assign(current.ui.model_position, { x: 1.35, y: 0.8, remember_position: true });
   current.ui.model_scale = 0.65;
+  delete current.ui.vrm_viewport_width;
   fs.writeFileSync(configPath, `${JSON.stringify(current, null, 2)}\n`, 'utf8');
   const result = await postDesktop('/reset-model-position', {});
   return result.success ? { ok: true, message: '皮套位置已立即复位' } : { ok: true, message: '皮套位置已保存，桌宠启动后生效' };
