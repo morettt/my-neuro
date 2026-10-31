@@ -461,7 +461,10 @@ function createWindow () {
         backgroundColor: '#00000000',
         hasShadow: false,
         focusable: true,
-        type: process.platform === 'linux' ? 'normal' : 'desktop',
+        // Mutter can keep an ABOVE normal XWayland window below the focused
+        // application. Use its dock layer for the click-through overlay;
+        // native Wayland clients remain ordinary interactive windows.
+        type: process.platform === 'linux' ? (nativeWayland ? 'normal' : 'dock') : 'desktop',
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false,
