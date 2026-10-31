@@ -20,3 +20,24 @@ function fitViewRect(viewRect, hitBox, width, height) {
 }
 
 module.exports = { windowScreenInfo, fitViewRect };
+
+function overlayDisplayBounds(display, platform = process.platform) {
+    const bounds = display.bounds;
+    if (platform !== 'linux') return bounds;
+    const work = display.workArea;
+    const area = work && work.width > 0 && work.height > 0 ? work : bounds;
+    if (area.x === bounds.x && area.y === bounds.y && area.width === bounds.width && area.height === bounds.height) {
+        // Mutter can infer fullscreen for an undecorated monitor-sized window,
+        // even when Electron's isFullScreen() reports false. Leave a DIP border
+        // when the monitor has no reserved panel/dock work area.
+        return { x: area.x + 1, y: area.y + 1, width: Math.max(1, area.width - 2), height: Math.max(1, area.height - 2) };
+    }
+    return { ...area };
+}
+
+function overlayTopmostLevel(platform = process.platform) {
+    return platform === 'linux' ? 'floating' : 'screen-saver';
+}
+
+module.exports.overlayDisplayBounds = overlayDisplayBounds;
+module.exports.overlayTopmostLevel = overlayTopmostLevel;

@@ -1,5 +1,6 @@
 const { globalShortcut, BrowserWindow, app } = require('electron');
 
+const { overlayTopmostLevel } = require('./platform/window-layout');
 const { isWayland, linuxDisplayMode } = require('./platform/runtime');
 let uiohookApi = null;
 try {
@@ -51,7 +52,7 @@ class ShortcutManager {
         this._register('CommandOrControl+T', () => {
             const windows = BrowserWindow.getAllWindows();
             windows.forEach(win => {
-                win.setAlwaysOnTop(true, 'screen-saver');
+                win.setAlwaysOnTop(true, overlayTopmostLevel());
             });
         }, 'Force window topmost');
     }

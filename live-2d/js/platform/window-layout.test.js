@@ -34,3 +34,19 @@ test('native centering fits the model hit box into the client surface without ch
     assert.equal(view.width, 1000);
     assert.equal(fitViewRect(view, { width: 0, height: 1 }, 640, 720), null);
 });
+
+test('Linux overlay reserves the shell top bar and dock instead of covering the monitor', () => {
+    const { overlayDisplayBounds, overlayTopmostLevel } = require('./window-layout');
+    const display = { bounds: { x: 0, y: 0, width: 1536, height: 1024 }, workArea: { x: 0, y: 32, width: 1536, height: 944 } };
+    assert.deepEqual(overlayDisplayBounds(display, 'linux'), display.workArea);
+    assert.equal(overlayTopmostLevel('linux'), 'floating');
+    assert.deepEqual(overlayDisplayBounds(display, 'win32'), display.bounds);
+    assert.equal(overlayTopmostLevel('win32'), 'screen-saver');
+});
+
+test('Linux borderless overlays cannot exactly match a monitor, including negative-offset monitors', () => {
+    const { overlayDisplayBounds } = require('./window-layout');
+    const bounds = { x: -1920, y: -200, width: 1920, height: 1080 };
+    assert.deepEqual(overlayDisplayBounds({ bounds, workArea: bounds }, 'linux'), { x: -1919, y: -199, width: 1918, height: 1078 });
+    assert.deepEqual(overlayDisplayBounds({ bounds }, 'linux'), { x: -1919, y: -199, width: 1918, height: 1078 });
+});

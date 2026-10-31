@@ -31,6 +31,8 @@ cd ~/project/my-neuro
 
 真正的原生 Wayland 桌宠需要合成器层面的覆盖、输入区域及定位支持。GNOME/KDE/wlroots 的扩展和协议不同，本实现尚未提供这层适配，因此不将普通透明窗口称为原生桌宠适配完成，也不默认启用。
 
+Linux 覆盖层按显示器的工作区布局，为 GNOME 上栏和停靠栏留出空间，不创建恰好铺满显示器的无边框窗口，避免 Mutter 自动添加全屏状态并隐藏上栏。置顶使用普通浮动层级；显示器没有预留工作区时保留 1 DIP 边界，避免被判为全屏。
+
 XWayland 覆盖层通过低频鼠标位置采样恢复模型/控件命中检测：移入模型时接收原生点击、拖动和滚轮，空白区域保持穿透。坐标使用 Electron 的 DIP，不再乘显示缩放比例；拖动中即使暂时离开命中框也保持接收松开事件。这样避免依赖 [Electron 仅在 macOS/Windows 支持的鼠标移动转发](https://www.electronjs.org/docs/latest/api/base-window#winsetignoremouseeventsignore-options)。原生 Wayland 透明小窗无需这条采样路径，也不轮询全局鼠标位置。
 
 Wayland 会话中不启动 `uiohook-napi` 全局键盘钩子：X11 钩子不能可靠捕获其他 Wayland 应用的按下/松开事件。**按住说话需要先聚焦桌宠窗口**；也可使用语音自动检测。普通全局快捷键交给 Electron 的 GlobalShortcuts portal，是否可用取决于桌面后端和用户授权，不保证所有合成器都支持。菜单入口的 `.desktop` 身份由安装脚本注册；若不需要全局快捷键，设置 `MY_NEURO_DISABLE_GLOBAL_SHORTCUTS=1`。

@@ -12,6 +12,7 @@ if (process.platform === 'win32' && process.versions.electron?.startsWith('28.')
 
 const { configureElectron, electronLaunchArgs, projectPython, spawnManaged, stopManaged, requireLinuxPython } = require('./js/platform/runtime');
 const { nativeWayland } = configureElectron(app);
+const { overlayTopmostLevel } = require('./js/platform/window-layout');
 
 const fs = require('fs');
 const path = require('path');
@@ -92,7 +93,7 @@ function showAvatarLoadingWindow() {
     webPreferences: { contextIsolation: true, nodeIntegration: false }
   });
   avatarLoadingWindow.setIgnoreMouseEvents(true);
-  avatarLoadingWindow.setAlwaysOnTop(true, 'screen-saver');
+  avatarLoadingWindow.setAlwaysOnTop(true, overlayTopmostLevel());
   avatarLoadingWindow.loadFile('avatar-loading.html');
   avatarLoadingWindow.once('ready-to-show', () => avatarLoadingWindow?.showInactive());
   avatarLoadingTimer = setTimeout(closeAvatarLoadingWindow, 30000);

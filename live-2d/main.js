@@ -3,7 +3,7 @@ const { configureElectron } = require('./js/platform/runtime');
 const { nativeWayland } = configureElectron(app);
 const { captureScreen } = require('./js/platform/screen-capture');
 const { startX11PointerPolling } = require('./js/platform/x11-pointer');
-const { windowScreenInfo } = require('./js/platform/window-layout');
+const { windowScreenInfo, overlayDisplayBounds, overlayTopmostLevel } = require('./js/platform/window-layout');
 const path = require('path')
 const fs = require('fs')
 const { HttpServer } = require('./js/services/http-server')
@@ -273,7 +273,7 @@ function finalizeRendererFailure(win, result, reason) {
 function ensureTopMost(win) {
     if (nativeWayland) return;
     if (!win.isAlwaysOnTop()) {
-        win.setAlwaysOnTop(true, 'screen-saver')
+        win.setAlwaysOnTop(true, overlayTopmostLevel())
     }
 }
 
@@ -289,7 +289,7 @@ function getFullscreenDisplayBounds(display) {
     };
 }
 
-// 6.55 巨窗并集：用 Electron display.bounds 原始 x/y（副屏在左时为负数），禁止 clamp 到 0。
+// 多屏窗口并集：保留负坐标；Linux 使用 workArea，避免覆盖上栏/停靠栏及触发 Mutter 自动全屏。
 // 相对 6.55 的唯一行为调整：显式 extend=false 但已有 2 块及以上屏幕时，仍覆盖全部屏幕，
 // 避免用户必须先改 config.json 才能把皮套拖到副屏。
 function computePetWindowBounds(config, displays, primaryDisplay) {
@@ -302,7 +302,7 @@ function computePetWindowBounds(config, displays, primaryDisplay) {
     let maxY = -Infinity;
 
     const include = (display) => {
-        const { x, y, width, height } = display.bounds;
+        const { x, y, width, height } = overlayDisplayBounds(display);
         minX = Math.min(minX, x);
         minY = Math.min(minY, y);
         maxX = Math.max(maxX, x + width);
@@ -355,7 +355,7 @@ function applyPetUnionBounds(win, config) {
     return target;
 }
 
-// 创建/跨屏后多次重申窗口边界：抵消创建期被夹到 workArea，以及跨不同 DPI 屏时 Electron 单次
+// 创建/跨屏后多次重申目标边界：Linux 保留工作区边界，并抵消跨不同 DPI 屏时 Electron 单次
 // setBounds 把尺寸算错。
 //
 // 关键：每次调用先取消该窗口上一轮“尚未触发”的重申计时器。否则快速来回切屏时，上一次切到 A 屏
@@ -473,9 +473,10 @@ function createWindow () {
         movable: true,
         skipTaskbar: !nativeWayland,
         maximizable: false,
+        fullscreenable: process.platform !== 'linux',
     })
     if (!nativeWayland) {
-        win.setAlwaysOnTop(true, 'screen-saver');
+        win.setAlwaysOnTop(true, overlayTopmostLevel());
         win.setIgnoreMouseEvents(true, { forward: true });
     }
     win.setMenu(null)
@@ -485,7 +486,7 @@ function createWindow () {
     console.log(`窗口创建后立即尺寸: ${immediateBounds.width}x${immediateBounds.height}`)
     console.log(`窗口创建后立即位置: (${immediateBounds.x}, ${immediateBounds.y})`)
     
-    // 创建后多次重申并集边界，抵消创建期被夹到 workArea；不再打回单屏。
+    // 创建后多次重申目标工作区并集，修正 DPI 换算误差；不再打回单屏。
     schedulePetBoundsRepair(win, { x: minX, y: minY, width: totalWidth, height: totalHeight })
     
     win.loadFile('index.html')
@@ -607,7 +608,7 @@ ipcMain.on('set-window-opacity', (event, opacity) => {
 
 ipcMain.on('request-top-most', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
-    if (!nativeWayland) win.setAlwaysOnTop(true, 'screen-saver')
+    if (!nativeWayland) win.setAlwaysOnTop(true, overlayTopmostLevel())
 })
 
 // 添加保存配置的IPC处理器
