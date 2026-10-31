@@ -424,6 +424,7 @@ function listPlugins() {
         displayName: meta.displayName || meta.name || entry.name, description: meta.description || '',
         author: meta.author || '', version: meta.version || '', enabled: enabled.has(`${type}/${entry.name}`),
         hasConfig: fs.existsSync(configFile), config: readJson(configFile, {}),
+        categories: Array.isArray(meta.categories) ? meta.categories : [],
         serviceId: meta.localService?.id || null,
         serviceActions: meta.localService?.actions || [],
         hasReadme: fs.existsSync(path.join(dir, 'README.md')), bat: meta.bat || '', downloadDlc: meta.download_dlc || '',
@@ -468,6 +469,7 @@ function listPlugins() {
     return {
       id,
       ...item,
+      categories: installedPlugin?.categories?.length ? installedPlugin.categories : (Array.isArray(item.categories) ? item.categories : []),
       display_name: installedPlugin?.displayName || marketDisplayNames[id] || item.display_name || id,
       installed: Boolean(installedPlugin)
     };
