@@ -1,3 +1,4 @@
+const { llmRequestHeaders } = require('./llm-request-headers');
 // MoodChatModule.js - 基于心情系统的智能主动对话模块
 const fs = require('fs');
 const path = require('path');
@@ -187,10 +188,7 @@ class MoodChatModule {
 
             const response = await fetch(`${voiceChat.API_URL}/chat/completions`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${voiceChat.API_KEY}`
-                },
+                headers: llmRequestHeaders(voiceChat.API_URL, voiceChat.API_KEY),
                 body: JSON.stringify({
                     model: voiceChat.MODEL,
                     messages: [{ role: 'user', content: prompt }],

@@ -1,3 +1,4 @@
+const { llmRequestHeaders } = require('../ai/llm-request-headers');
 // tts-request-handler.js - TTS请求处理器
 // 职责：文本翻译、TTS API调用、文本分段
 
@@ -108,10 +109,7 @@ class TTSRequestHandler {
         try {
             const response = await fetch(`${this.translationApiUrl}/chat/completions`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.translationApiKey}`
-                },
+                headers: llmRequestHeaders(this.translationApiUrl, this.translationApiKey),
                 body: JSON.stringify({
                     model: this.translationModel,
                     messages: [

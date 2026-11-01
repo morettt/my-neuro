@@ -18,6 +18,8 @@
 </p>
 
 ## WebUI docs (control panel): run `打开教程网页.bat` at the repo root, or `npm run docs:dev` in `docs/`
+
+Linux / Wayland source setup: [deployment guide (Chinese)](docs/deploy/linux.md).
 For the browser UI opened by `live-2d/启动 WebUI 控制面板.bat`.
 
 ## Older website tutorials (`肥牛.exe` / legacy UI): [Official Website](http://mynewbot.com/tutorials)

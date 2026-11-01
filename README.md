@@ -21,6 +21,8 @@
 
 ## 本项目部署流程请看官网：[点我进官网](http://mynewbot.com/tutorials)
 
+Linux / Wayland 从源码运行请看：[Linux 部署说明](docs/deploy/linux.md)。
+
 
 
 my-neuro的目标是打造专属个人的 AI 角色,打造出逼近真人的AI伙伴 - 通过您的数据印记,塑造出心目中理想的 TA 的形象。

@@ -1,6 +1,6 @@
 # 环境要求
 
-官方安装包只提供 **Windows** 版本，本站的步骤也按 Windows 写。
+官方整合安装包只提供 **Windows** 版本。Linux / Wayland 可按 [Linux 源码部署](/deploy/linux) 使用 Electron 控制面板；下文其余步骤按 Windows 整合包写。
 
 ## 系统
 

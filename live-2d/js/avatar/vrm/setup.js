@@ -57,7 +57,7 @@ class VRMSetup {
         // 1. Three.js 场景（首次创建 / 挂起后复用）
         if (!_manager) _manager = new VRMManager();
         if (!_manager.isAlive()) {
-            _manager.initThreeJS('vrm-canvas');
+            _manager.initThreeJS('vrm-canvas', { maxFPS: config?.ui?.vrm_max_fps ?? 30 });
         }
 
         // 2. 加载模型

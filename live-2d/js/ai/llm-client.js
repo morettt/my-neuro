@@ -2,6 +2,7 @@
 const { logToTerminal, handleAPIError } = require('../api-utils.js');
 const { sanitizeToolMessageSequence } = require('./tool-message-utils.js');
 const { applyReasoningToRequestBody } = require('./reasoning-request.js');
+const { llmRequestHeaders } = require('./llm-request-headers');
 
 /**
  * 统一的LLM客户端
@@ -46,6 +47,17 @@ class LLMClient {
      * @returns {Promise<Object>} API响应的消息对象
      */
     async chatCompletion(messages, tools = null, stream = false, onChunk = null) {
+        const base = String(this.apiUrl || '').trim().replace(/\/+$/, '');
+        if (!base) throw new Error('未配置对话模型的 API 地址，请在模型配置中填写并保存');
+        let endpoint;
+        try {
+            endpoint = new URL(base);
+            if (!['https:', 'http:'].includes(endpoint.protocol)) throw new Error();
+            endpoint.pathname = endpoint.pathname.replace(/\/(?:chat\/completions|completions|responses|models)\/?$/i, '').replace(/\/+$/, '') + '/chat/completions';
+        } catch {
+            throw new Error('API 地址无效，请填写以 http:// 或 https:// 开头的完整地址');
+        }
+        if (!String(this.model || '').trim()) throw new Error('未选择对话模型，请在模型配置中选择模型并保存');
         // 🔥 清理消息格式,确保API兼容性
         const cleanedMessages = this._cleanMessagesForAPI(messages);
 
@@ -96,12 +108,9 @@ class LLMClient {
         }
 
         try {
-            const response = await fetch(`${this.apiUrl}/chat/completions`, {
+            const response = await fetch(endpoint.href, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.apiKey}`
-                },
+                headers: llmRequestHeaders(endpoint.href, this.apiKey),
                 body: JSON.stringify(requestBody)
             });
 
