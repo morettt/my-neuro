@@ -30,7 +30,7 @@ test('real orbit camera stays fixed while the pelvis moves, then resumes followi
     assert.deepEqual(adapter.camera.position.clone().sub(initial).toArray(), [2, 2, -4]);
 });
 
-test('walking keeps its destination through fade-out and consecutive actions without camera recentering', async () => {
+test('walking holds the tail and consecutive clips start from that exact pose without camera recentering', async () => {
     const scene = new THREE.Group();
     const definitions = {
         hips: [null, [0, 1, 0]], spine: ['hips', [0, 1.2, 0]], chest: ['spine', [0, 1.4, 0]],
@@ -67,7 +67,13 @@ test('walking keeps its destination through fade-out and consecutive actions wit
     adapter.updateCameraOrbit();
     let camera;
     for (let step = 1; step <= 2; step++) {
+        const startPose = player.retarget.capture();
         const done = player.play(data);
+        player.update(0);
+        for (const [name, pose] of Object.entries(startPose)) {
+            assert(player.retarget.bones[name].position.distanceTo(pose.position) < 1e-8);
+            assert(player.retarget.bones[name].quaternion.angleTo(pose.quaternion) < 1e-7);
+        }
         adapter.updateCameraOrbit();
         camera ||= adapter.camera.position.clone();
         let ticks = 0;
@@ -81,6 +87,14 @@ test('walking keeps its destination through fade-out and consecutive actions wit
             }
         }
         assert.equal((await done).reason, 'completed');
+        assert(player.holding);
+        assert.equal(getBodyPlayer(adapter), player);
+        const tail = player.retarget.capture();
+        for (let i = 0; i < 30; i++) player.update(1 / 60);
+        for (const [name, pose] of Object.entries(tail)) {
+            assert(player.retarget.bones[name].position.distanceTo(pose.position) < 1e-8);
+            assert(player.retarget.bones[name].quaternion.angleTo(pose.quaternion) < 1e-7);
+        }
         assert(Math.abs(bones.hips.getWorldPosition(new THREE.Vector3()).x - step) < 1e-8);
         assert(Math.abs(bones.hips.getWorldPosition(new THREE.Vector3()).z + step) < 1e-8);
     }
@@ -108,6 +122,10 @@ test('walking keeps its destination through fade-out and consecutive actions wit
         assert(Math.abs(displacement.x - (freeMovement ? 1 : 0)) < 1e-8);
         assert(Math.abs(displacement.z - (freeMovement ? -1 : 0)) < 1e-8);
     }
+    player.stop('plugin-stopped');
+    assert.equal(getBodyPlayer(adapter), null);
+    assert(!player.holding);
+    assert(bones.hips.position.distanceTo(rest.hips) < 1e-8);
     bounds.geometry.dispose(); bounds.material.dispose();
 });
 

@@ -72,6 +72,7 @@ test('real virtual-TTS factory filters both direct and streamed subtitle paths',
             if (name.includes('tts-processor')) return {};
             if (name.includes('api-utils')) return { logToTerminal() {} };
             if (name.includes('event-bus')) return { eventBus: { emit() {} } };
+            if (name.includes('text-mouth-driver')) return { TextMouthDriver: class { push() {} stop() {} } };
             return { Events: {} };
         } };
     vm.runInNewContext(fs.readFileSync(path.join(root, 'js/voice/tts-factory.js'), 'utf8'), context);

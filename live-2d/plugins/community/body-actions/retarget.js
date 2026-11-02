@@ -149,26 +149,23 @@ function sampleFrame(frames, index) {
 }
 
 class BodyMotionPlayer {
-    constructor(adapter, blendSeconds = 0.3) {
+    constructor(adapter, blendSeconds = 0.4) {
         this.adapter = adapter;
         this.freeMovement = true;
         this.retarget = adapter.modelType === 'mmd' ? new PMXMotionRetargeter(adapter, MotionRetargeter) : new MotionRetargeter(adapter.vrm);
-        this.blend = THREE.MathUtils.clamp(Number(blendSeconds) || 0.3, 0.05, 1);
+        this.blend = THREE.MathUtils.clamp(Number(blendSeconds) || 0.4, 0.05, 1);
     }
 
     play(data) {
         if (this.active) throw new Error('身体动作仍在播放');
         const { fps, frames } = validateMotion(data);
         if (this.adapter._disposed) throw new Error('模型已经卸载');
-        if (this.needsRebase) {
-            this.retarget = this.adapter.modelType === 'mmd'
-                ? new PMXMotionRetargeter(this.adapter, MotionRetargeter) : new MotionRetargeter(this.adapter.vrm);
-            this.needsRebase = false;
-        }
         this.motion = { fps, frames };
-        // Blend from the current relaxed pose at the previous destination.
-        this.original = this.retarget.capture();
+        // Preserve the pre-plugin pose for explicit shutdown only. Normal
+        // completion/interruption retains the actual displayed pose instead.
+        this.original ||= this.retarget.capture();
         this.startPose = this.retarget.capture();
+        this.startRotation = this.retarget.bones.hips.getWorldQuaternion(Q());
         // Keep the camera anchored while the body moves in all three axes.
         this.startHips = world(this.retarget.bones.hips);
         if (this.freeMovement) {
@@ -179,40 +176,79 @@ class BodyMotionPlayer {
             this.cameraTarget = this.startHips.clone();
         }
         this.retarget.calibrate(frames);
+        // Derive fixed placement from the newly generated clip's first pose,
+        // without showing that pose or changing the saved on-screen reference.
+        try {
+            this.retarget.apply(frames[0]);
+            this.sourceHips = world(this.retarget.bones.hips);
+            const sourceForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.retarget.bones.hips.getWorldQuaternion(Q()));
+            const targetForward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.startRotation);
+            const yaw = sourceForward.x ** 2 + sourceForward.z ** 2 < 1e-8
+                || targetForward.x ** 2 + targetForward.z ** 2 < 1e-8 ? 0
+                : Math.atan2(targetForward.x, targetForward.z) - Math.atan2(sourceForward.x, sourceForward.z);
+            this.heading = Q().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+            this.placeFrame();
+            const firstPose = this.retarget.capture();
+            this.offsets = Object.fromEntries(Object.entries(firstPose).map(([name, pose]) => [name, {
+                quaternion: this.startPose[name].quaternion.clone().multiply(pose.quaternion.clone().invert()),
+                position: this.startPose[name].position.clone().sub(pose.position)
+            }]));
+        } finally {
+            this.retarget.restore(this.startPose);
+        }
         this.elapsed = 0;
+        this.holding = false;
+        this.heldPose = null;
         this.active = true;
-        this.binding = attachBodyPlayer(this.adapter, this);
+        this.binding ||= attachBodyPlayer(this.adapter, this);
         return new Promise(resolve => { this.resolve = resolve; });
     }
 
+    placeFrame() {
+        const hips = this.retarget.bones.hips;
+        const root = this.retarget.bones.motionMesh || this.retarget.bones.motionRoot || hips;
+        const source = world(hips);
+        const rotation = this.heading.clone().multiply(root.getWorldQuaternion(Q()));
+        root.quaternion.copy(root.parent ? root.parent.getWorldQuaternion(Q()).invert().multiply(rotation) : rotation);
+        root.updateWorldMatrix(true, true);
+        const displacement = source.clone().sub(this.sourceHips).applyQuaternion(this.heading);
+        const target = this.startHips.clone().add(displacement);
+        // Keep vertical motion/floor placement from retargeting; its initial
+        // height mismatch is removed gradually by the entry pose offsets.
+        target.y = source.y;
+        if (!this.freeMovement) { target.x = this.startHips.x; target.z = this.startHips.z; }
+        translateWorld(root, target.sub(world(hips)));
+    }
+
+    enforceHold() {
+        if (!this.holding || !this.heldPose) return;
+        this.retarget.restore(this.heldPose);
+        this.adapter.vrm?.humanoid?.update?.();
+        this.adapter.vrm?.scene?.updateWorldMatrix(true, true);
+    }
+
     update(delta) {
+        if (this.holding) { this.enforceHold(); return true; }
         if (!this.active) return false;
         this.elapsed += Math.min(Math.max(Number(delta) || 0, 0), 0.1);
         const { fps, frames } = this.motion, duration = (frames.length - 1) / fps;
         try {
-            if (this.elapsed >= duration + this.blend * 2) {
-                this.stop('completed');
-                return true;
-            }
-            const time = THREE.MathUtils.clamp(this.elapsed - this.blend, 0, duration);
+            const time = THREE.MathUtils.clamp(this.elapsed, 0, duration);
             this.retarget.apply(sampleFrame(frames, time * fps));
-            const entering = this.elapsed < this.blend;
-            const leaving = this.elapsed > this.blend + duration;
-            const endHips = leaving ? world(this.retarget.bones.hips) : null;
-            if (entering || leaving) {
-                let amount = entering ? this.elapsed / this.blend : 1 - (this.elapsed - this.blend - duration) / this.blend;
-                amount = THREE.MathUtils.smoothstep(amount, 0, 1);
+            this.placeFrame();
+            // Decaying offsets preserve the frozen pose exactly at t=0 and
+            // retain generated motion underneath. Quaternions keep limb lengths.
+            if (this.elapsed < this.blend) {
+                const t = this.elapsed / this.blend;
+                const fade = 1 - (6 * t ** 5 - 15 * t ** 4 + 10 * t ** 3);
                 for (const [name, bone] of Object.entries(this.retarget.bones)) {
-                    const start = this.startPose[name];
-                    bone.quaternion.copy(start.quaternion.clone().slerp(bone.quaternion, amount));
-                    bone.position.copy(start.position.clone().lerp(bone.position, amount));
+                    const offset = this.offsets[name];
+                    bone.quaternion.premultiply(Q().slerp(offset.quaternion, fade));
+                    bone.position.addScaledVector(offset.position, fade);
                 }
-                if (leaving && this.freeMovement) {
-                    const displacement = endHips.sub(world(this.retarget.bones.hips));
-                    displacement.y = 0;
-                    translateWorld(this.retarget.bones.motionMesh || this.retarget.bones.motionRoot || this.retarget.bones.hips, displacement);
-                }
+                (this.adapter.vrm?.scene || this.adapter.mesh)?.updateWorldMatrix(true, true);
             }
+            if (this.elapsed >= duration) this.stop('completed');
         } catch (error) {
             this.stop('error', error.message);
         }
@@ -220,26 +256,27 @@ class BodyMotionPlayer {
     }
 
     getCameraTarget() {
-        if (this.active && this.freeMovement !== false) return this.cameraTarget.clone();
+        if ((this.active || this.holding) && this.freeMovement !== false) return this.cameraTarget.clone();
         const target = world(this.retarget.bones.hips);
-        if (this.active) target.y = this.cameraTarget.y;
+        if (this.active || this.holding) target.y = this.cameraTarget.y;
         return target;
     }
 
     stop(reason = 'cancelled', error) {
-        if (!this.active) return;
+        if (!this.active && !this.holding) return;
         this.active = false;
-        if (reason === 'completed' && this.freeMovement) {
-            // Return to the relaxed pose at the destination, not at the origin.
-            this.retarget.apply(this.motion.frames[this.motion.frames.length - 1]);
-            const displacement = world(this.retarget.bones.hips).sub(this.startHips);
-            displacement.y = 0;
+        if (reason === 'completed' || reason === 'interrupted') {
+            this.heldPose = this.retarget.capture();
+            this.holding = true;
+        } else {
+            this.holding = false;
+            this.heldPose = null;
             this.retarget.restore(this.original);
-            translateWorld(this.adapter.modelType === 'mmd' ? this.adapter.mesh : this.adapter.vrm.scene, displacement);
-            this.needsRebase = true;
-        } else this.retarget.restore(this.original);
-        this.binding?.restore();
-        this.binding = null;
+            this.original = null;
+            this.binding?.restore();
+            this.binding = null;
+            delete this.adapter._bodyMotionCameraTarget;
+        }
         const resolve = this.resolve;
         this.resolve = null;
         resolve?.({ cancelled: reason !== 'completed', reason, error });

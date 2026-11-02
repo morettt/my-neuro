@@ -39,11 +39,13 @@ function attachBodyPlayer(adapter, player) {
     };
     adapter[BODY_OWNER] = player;
     patches.wrap(adapter, 'update', original => function (delta) {
-        if (!player.active) return original.call(this, delta);
+        if (!player.active && !player.holding) return original.call(this, delta);
         updating = true;
         try {
             player.update(delta);
-            return original.call(this, delta);
+            const result = original.call(this, delta);
+            player.enforceHold?.();
+            return result;
         } finally {
             updating = false;
             if (restorePending) restore();
@@ -51,11 +53,11 @@ function attachBodyPlayer(adapter, player) {
     });
     for (const key of ['_updateIdleAnimation', '_updateGazeTracking']) {
         patches.wrap(adapter, key, original => function (...args) {
-            if (!player.active && !updating) return original.apply(this, args);
+            if (!player.active && !player.holding && !updating) return original.apply(this, args);
         });
     }
     patches.wrap(adapter, 'updateCameraOrbit', original => function (...args) {
-        if (!player.active) return original.apply(this, args);
+        if (!player.active && !player.holding) return original.apply(this, args);
         return original.call(this, player.getCameraTarget());
     });
     patches.wrap(adapter, 'dispose', original => function (...args) {

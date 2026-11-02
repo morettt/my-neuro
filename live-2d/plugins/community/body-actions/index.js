@@ -85,6 +85,7 @@ class BodyActionsPlugin extends Plugin {
 
     motionPlayer(model) {
         if (!this.player || this.player.adapter !== model) {
+            this.player?.stop('model-changed');
             this.player = new BodyMotionPlayer(model, this.config.blend_seconds);
         }
         this.player.freeMovement = this.freeMovementEnabled();
@@ -286,10 +287,10 @@ class BodyActionsPlugin extends Plugin {
         return stripMotionTags(text);
     }
 
-    cancel() {
+    cancel({ releasePose = false } = {}) {
         this.epoch++;
         this.abort?.abort();
-        this.player?.stop('interrupted');
+        this.player?.stop(releasePose ? 'plugin-stopped' : 'interrupted');
         this.timeline = [];
         this.motionQueue = [];
         this.motionPlaying = false;
@@ -299,7 +300,7 @@ class BodyActionsPlugin extends Plugin {
     async onStop() {
         if (this.stopped) return;
         this.stopped = true;
-        this.cancel();
+        this.cancel({ releasePose: true });
         this.runtime?.dispose();
         this.context.off('tts:interrupted', this.interrupt);
         this.context.off('llm:error', this.interrupt);

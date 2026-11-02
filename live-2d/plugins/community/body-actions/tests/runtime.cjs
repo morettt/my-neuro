@@ -16,7 +16,7 @@ app.setPath('userData', path.join(output, 'profile'));
 let win;
 ipcMain.handle('avatar-runtime-ready', () => ({ success: true }));
 ipcMain.handle('body-actions-test:capture', async (_event, name) => {
-    if (!['idle', 'action', 'restored'].includes(name) && !/^flip-(old|new)-\d+$/.test(name)) throw new Error('Invalid capture');
+    if (!['idle', 'action', 'held', 'restored'].includes(name) && !/^flip-(old|new)-\d+$/.test(name)) throw new Error('Invalid capture');
     const img = await win.webContents.capturePage();
     fs.writeFileSync(path.join(output, `${name}.png`), img.toPNG());
 });
@@ -76,7 +76,7 @@ async function rendererTest(root, output, actionName, motionFile, modelType) {
     const schema = JSON.parse(fs.readFileSync(path.join(root, 'plugins/community/body-actions/plugin_config.json'), 'utf8'));
     const pluginConfig = Object.fromEntries(Object.entries(schema).map(([k, v]) => [k, v.value ?? v.default]));
     const handlers = new Map();
-    const context = { getPluginConfig: () => pluginConfig, on: (name, handler) => handlers.set(name, handler),
+    const context = { getPluginConfig: () => pluginConfig, getConfig: () => ({tts:{enabled:false}}), on: (name, handler) => handlers.set(name, handler),
         off: name => handlers.delete(name), log: (level, text) => console.log(`[${level}] ${text}`) };
     const plugin = new BodyActionsPlugin({}, context);
     await plugin.onInit();
@@ -109,7 +109,7 @@ async function rendererTest(root, output, actionName, motionFile, modelType) {
         const best = data.joints.reduce((best, joints, index, all) => flip
             ? joints[15][1] - joints[0][1] < all[best][15][1] - all[best][0][1] ? index : best
             : joints[20][1] - joints[0][1] > all[best][20][1] - all[best][0][1] ? index : best, 0);
-        plugin.player.elapsed = plugin.player.blend + best / data.fps;
+        plugin.player.elapsed = best / data.fps;
         model.update(0);
         assert(getBodyPlayer(model) === plugin.player);
         if (modelType === 'mmd') {
@@ -173,7 +173,7 @@ async function rendererTest(root, output, actionName, motionFile, modelType) {
                 model.updateCameraOrbit(); manager.renderScene();
             };
             for (let i = 0; i < data.joints.length; i++) {
-                player.elapsed = player.blend + i / data.fps;
+                player.elapsed = i / data.fps;
                 model.update(0);
                 pelvisY.push(pelvis.getWorldPosition(new THREE.Vector3()).y);
                 // Render the old behavior and fixed behavior using the same pose.
@@ -204,21 +204,41 @@ async function rendererTest(root, output, actionName, motionFile, modelType) {
         while (plugin.player.active && guard++ < 1200) model.update(1 / 20);
         assert(!plugin.player.active, 'Body player did not finish');
         await plugin.work;
-        assert(!getBodyPlayer(model), 'Idle ownership not released');
-        assert(baseline.angleTo(upper.quaternion) < 0.001, 'Original pose not restored');
+        assert(getBodyPlayer(model) === plugin.player, 'Frozen pose ownership lost');
+        assert(plugin.player.holding, 'Tail was not held');
+        const frozen = plugin.player.retarget.capture();
+        const assertFrozen = () => {
+            for (const [name, pose] of Object.entries(frozen)) {
+                const bone = plugin.player.retarget.bones[name];
+                assert(bone.position.distanceTo(pose.position) < 1e-7, `Frozen position changed: ${name}`);
+                assert(bone.quaternion.angleTo(pose.quaternion) < 1e-6, `Frozen rotation changed: ${name}`);
+            }
+        };
+        for (let i=0;i<120;i++) model.update(1/60);
+        assertFrozen();
+        avatarFacade.setMouth(0.7);
+        if (modelType !== 'mmd') assert(model.vrm.expressionManager.getValue('aa') > 0.5, 'Mouth blocked while held');
+        avatarFacade.setMouth(0);
         manager.startLoop(); manager.stopLoop();
-        await ipcRenderer.invoke('body-actions-test:capture', 'restored');
-        // Cached replay must cancel immediately on the actual interrupt hook.
+        await ipcRenderer.invoke('body-actions-test:capture', 'held');
+        // The next reply must preserve the held tail and enter continuously.
         await plugin.onLLMResponse({ text: `[${actionName}]` });
         assert(plugin.player.active);
+        model.update(0);
+        assertFrozen();
         handlers.get('tts:interrupted')();
         await plugin.work;
+        assert(plugin.player.holding && !plugin.player.active);
+        assertFrozen();
+        await plugin.onStop();
         assert(!getBodyPlayer(model));
+        assert(baseline.angleTo(upper.quaternion) < 0.001, 'Shutdown did not restore original pose');
+        await ipcRenderer.invoke('body-actions-test:capture', 'restored');
         assert.equal(manager._frameErrorCount, 0);
         return { model: selected.name, fps: data.fps, frames: data.joints.length,
             generationSeconds: data.generation_seconds, actionPose, cameraCheck,
             checks: [motionFile ? 'recorded motion playback' : 'real inference', 'single-action rejection', 'tag filtering', 'prompt injection',
-                'body ownership', 'mouth during motion', 'pose restore', 'interrupt'] };
+                'body ownership', 'mouth during motion and hold', 'frozen tail', 'continuous entry', 'shutdown restore', 'interrupt hold'] };
     } finally {
         await plugin.onStop();
         await manager.dispose();
