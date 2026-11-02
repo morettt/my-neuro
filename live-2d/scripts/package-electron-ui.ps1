@@ -21,8 +21,36 @@ if (-not (Test-Path -LiteralPath (Join-Path $runtimeDir 'electron.exe') -PathTyp
         throw 'Electron npm package is missing. Run npm install in the project directory, then retry.'
     }
     Write-Host 'Downloading the Electron runtime (first build only)...'
-    & node.exe $electronInstaller
-    if ($LASTEXITCODE -ne 0) { throw 'Failed to download the Electron runtime. Check the download error above and retry.' }
+    $originalMirror = $env:ELECTRON_MIRROR
+    $originalCache = $env:electron_config_cache
+    $originalTemp = $env:TEMP
+    $originalTmp = $env:TMP
+    $downloadDir = Join-Path $buildDir 'electron-download'
+    New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
+    $mirrors = @('https://npmmirror.com/mirrors/electron/', 'https://github.com/electron/electron/releases/download/')
+    if ($originalMirror) { $mirrors = @($originalMirror) + $mirrors }
+    $installed = $false
+    try {
+        # Keep download cache and extraction temp files on the project drive.
+        $env:electron_config_cache = Join-Path $downloadDir 'cache'
+        $env:TEMP = $downloadDir
+        $env:TMP = $downloadDir
+        foreach ($mirror in ($mirrors | Select-Object -Unique)) {
+            $env:ELECTRON_MIRROR = $mirror
+            for ($attempt = 1; $attempt -le 2; $attempt++) {
+                Write-Host "Download source: $mirror (attempt $attempt/2)"
+                & node.exe $electronInstaller
+                if ($LASTEXITCODE -eq 0) { $installed = $true; break }
+            }
+            if ($installed) { break }
+        }
+    } finally {
+        $env:ELECTRON_MIRROR = $originalMirror
+        $env:electron_config_cache = $originalCache
+        $env:TEMP = $originalTemp
+        $env:TMP = $originalTmp
+    }
+    if (-not $installed) { throw 'Electron download failed from all sources. Check network/proxy settings and free disk space; then retry.' }
     if (-not (Test-Path -LiteralPath (Join-Path $runtimeDir 'electron.exe') -PathType Leaf) -or
         -not (Test-Path -LiteralPath (Join-Path $runtimeDir 'version') -PathType Leaf)) {
         throw 'Electron runtime installation did not produce electron.exe and version. Check the installation and retry.'
