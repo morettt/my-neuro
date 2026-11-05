@@ -21,7 +21,10 @@ function fixture(t) {
     const pluginDir = path.join(pluginsDir, 'built-in/local-bert');
     fs.mkdirSync(pluginDir, { recursive: true });
     for (const name of fs.readdirSync(path.join(root, 'plugins/built-in/local-bert'))) {
-        fs.copyFileSync(path.join(root, 'plugins/built-in/local-bert', name), path.join(pluginDir, name));
+        // Copy only plugin files: __pycache__ and other directories appear once
+        // the Python tests have run and copyFileSync cannot copy directories.
+        const source = path.join(root, 'plugins/built-in/local-bert', name);
+        if (fs.statSync(source).isFile()) fs.copyFileSync(source, path.join(pluginDir, name));
     }
     const setEnabled = enabled => fs.writeFileSync(path.join(pluginsDir, 'enabled_plugins.json'), JSON.stringify({ plugins: enabled }));
     setEnabled(['built-in/local-bert']);
@@ -502,6 +505,9 @@ test('BERT configuration opens only service controls and logs', () => {
 test('Linux service launch uses the selected Python and stopping never targets unrelated listeners', async t => {
     const { context, handlers, calls, event } = controlHarness(t);
     context.process.platform = 'linux';
+    // The harness builds the interpreter path for the host platform; a simulated
+    // Linux host must use env/bin/python, not the Windows env/python.exe.
+    context.projectEnvPython = projectPython(context.projectRoot, {}, 'linux');
     context.serviceInstalled = () => true;
     fs.mkdirSync(path.dirname(context.projectEnvPython), { recursive: true });
     fs.writeFileSync(context.projectEnvPython, 'test');
