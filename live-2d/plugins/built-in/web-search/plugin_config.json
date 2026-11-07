@@ -1,9 +1,23 @@
 {
+  "provider": {
+    "title": "搜索提供商",
+    "description": "auto：已有 Tavily Key 则继续用 Tavily，否则使用 Parallel；parallel：无需 Key；tavily：仅用 Tavily；disabled：关闭搜索",
+    "type": "string",
+    "default": "auto",
+    "value": "auto"
+  },
   "tavily_api_key": {
     "title": "Tavily API Key",
-    "description": "Tavily 搜索服务的 API Key，前往 https://tavily.com 获取",
+    "description": "仅使用 Tavily 时需要；留空且 provider 为 auto 时使用免费 Parallel Search MCP",
     "type": "string",
     "default": "",
-    "value": "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"
+    "value": ""
+  },
+  "timeout_ms": {
+    "title": "搜索超时（毫秒）",
+    "description": "搜索和网页读取的总超时，默认 30000 毫秒",
+    "type": "number",
+    "default": 30000,
+    "value": 30000
   }
 }

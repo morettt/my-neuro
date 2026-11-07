@@ -62,23 +62,25 @@
 
 ### 网络搜索
 
-让桌宠上网查资料，再根据结果回答。安装时默认已经启用，但没 Key 就搜不成。
+让桌宠上网查资料、读取网页，再根据来源回答。安装时默认已经启用插件；还需到 [基础配置](/config/basic) 打开 **启用 Function Call 工具**。
 
-#### 用之前要准备什么
-
-到 [Tavily](https://tavily.com) 申请 API Key。用你自己的，不要借用别人的。
-
-到 [基础配置](/config/basic) 打开 **启用 Function Call 工具**。
+未配置搜索服务时，默认使用免费的 [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp)，搜索采用 Fast 模式，无需账号或 API Key。搜索内容和要读取的网址会发送到 Parallel。免费服务有用量限制，超限或网络失败时会返回错误，不会自动切换提供商。
 
 #### 在插件配置里填什么
 
-| 界面标题 | 填什么 | 不填会怎样 | 默认 |
-| --- | --- | --- | --- |
-| Tavily API Key | 你自己申请的 Key | 模型一搜就会失败 | 空 |
+| 界面标题 | 填什么 | 默认 |
+| --- | --- | --- |
+| 搜索提供商 | `auto`、`parallel`、`tavily` 或 `disabled` | `auto` |
+| Tavily API Key | 仅使用 Tavily 时填写自己申请的 Key | 空 |
+| 搜索超时（毫秒） | 搜索/网页读取的总超时 | 30000 |
+
+`auto` 会继续使用已保存的 Tavily Key；没有 Key 时才用 Parallel。即使保留 Tavily Key，也可以填写 `parallel` 显式选择 Parallel。填写 `tavily` 时必须提供 Key，缺 Key 不会改用其他服务。`disabled` 或在插件管理中禁用网络搜索都会关闭这两个工具。
+
+Parallel 提供 `web_search` 和 `web_fetch`，后者能读取 1 到 20 个 HTTP(S) 网页的正文摘录；Tavily 保留原来的 `web_search` 和 AI 摘要。选择提供商、修改 Key 或超时后重启桌宠。新的默认配置不再附带 Tavily Key，已有个人 Key 仍由 `auto` 使用。
 
 #### 怎么知道生效了
 
-问一个今天才发生、模型不可能靠训练数据答准的问题。它会先去搜，再把结果说给你听。
+问一个需要最新资料的问题，再让桌宠读取搜索结果里的网页。模型支持工具调用时，会先查询来源，再根据结果回答。用户打断或卸载插件会取消进行中的请求。
 
 ### PC 屏幕控制
 

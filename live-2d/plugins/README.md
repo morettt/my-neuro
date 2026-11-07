@@ -184,6 +184,9 @@ this.context.removeSystemPromptPatch('patch-id');
 // 获取当前对话历史
 this.context.getMessages();
 
+// 当前对话的匿名 ID（裁剪上下文不改变；新对话/重启会更新；无对话时为 null）
+this.context.getConversationId();
+
 // 插件自己偷偷问 AI（不进入对话历史）
 const result = await this.context.callLLM('帮我总结一下');
 

@@ -60,7 +60,7 @@ Key 错误、URL 少了 `/v1`、或模型名和提供商控制台不一致。在
 
 ## 让它上网搜，却什么都搜不到
 
-到插件管理确认 [网络搜索](/plugins/built-in#网络搜索) 已启用，配置弹窗里的 Tavily Key 是你自己申请的，并且 [基础配置](/config/basic) 里打开了 **启用 Function Call 工具**。
+到插件管理确认 [网络搜索](/plugins/built-in#网络搜索) 已启用，并且 [基础配置](/config/basic) 里打开了 **启用 Function Call 工具**。提供商用 `auto` 且 Tavily Key 为空时无需 Key，默认走 Parallel；选择 `tavily` 时检查自己申请的 Key。修改后重启桌宠，网络失败或超限时查看工具返回的错误。
 
 ## 直播间有弹幕，桌宠不理
 

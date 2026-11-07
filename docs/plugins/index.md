@@ -46,7 +46,7 @@
 - [用户画像](/plugins/community#用户画像)
 - [晨昏之线](/plugins/community#晨昏之线)
 
-**网络搜索** 仍要自己去 [Tavily](https://tavily.com) 申请 Key 填进配置弹窗，否则等于开了个空开关。
+**网络搜索** 未配置 Key 时默认使用免费 Parallel Search MCP；已有 Tavily Key 会继续使用。到 [网络搜索](/plugins/built-in#网络搜索) 查看提供商选择与网页读取设置。
 
 ## 开完之后说话变了样
 

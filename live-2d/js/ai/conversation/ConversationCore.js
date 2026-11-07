@@ -1,5 +1,6 @@
 // ConversationCore.js - 核心对话管理
 const { appState } = require('../../core/app-state.js');
+const { randomUUID } = require('crypto');
 
 /**
  * 负责管理消息数组和系统提示词
@@ -7,6 +8,8 @@ const { appState } = require('../../core/app-state.js');
 class ConversationCore {
     constructor(systemPrompt, conversationHistory, config) {
         this.config = config;
+        // 属于本次对话；裁剪/压缩上下文不改变它，创建新对话时重新生成。
+        this.sessionId = randomUUID();
 
         // 初始化消息数组：系统消息 + AI可见的历史对话
         this.messages = [
