@@ -1,0 +1,91 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Node tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: live-2d
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Tests only need the plain-JS dependencies (three), so skip Electron's
+      # postinstall binary download to keep the job fast.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run unit tests
+        shell: bash
+        run: |
+          files=$(find js plugins -type f \( -name '*.test.js' -o -name '*.test.cjs' \) | sort)
+          printf '%s\n' "$files"
+          # Paths contain no spaces; word splitting is intentional.
+          node --test $files
+
+  # Covered: live-2d WebUI, built-in ASR/BERT/TTS plugins and the voice upload
+  # server. plugins-dlc/memos is not wired yet: its script test needs aiohttp and
+  # sentence-transformers, which are DLC-only runtime dependencies.
+  python:
+    name: Python tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # packaging: marketplace_updater parses requirement specifiers with it.
+      # python-multipart: FastAPI form parsing in the local ASR service.
+      - name: Install test dependencies
+        run: >-
+          python -m pip install --disable-pip-version-check
+          flask packaging fastapi httpx numpy python-multipart
+
+      - name: WebUI tests
+        working-directory: live-2d
+        run: python -m unittest discover -s webui -t . -p "test_*.py"
+
+      - name: Local ASR plugin tests
+        working-directory: live-2d/plugins/built-in/local-asr
+        run: python -m unittest discover -p "test_*.py"
+
+      - name: Local BERT plugin tests
+        working-directory: live-2d/plugins/built-in/local-bert
+        run: python -m unittest discover -p "test_*.py"
+
+      - name: Local TTS plugin tests
+        working-directory: live-2d/plugins/built-in/local-tts
+        run: python -m unittest discover -p "test_*.py"
+
+      - name: Voice upload server tests
+        working-directory: live-2d/scripts/voice-upload-server
+        run: python -m unittest discover -p "test_*.py"

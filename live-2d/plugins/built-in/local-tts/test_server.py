@@ -52,7 +52,7 @@ class ServerTests(unittest.TestCase):
         finally:
             os.chdir(original_cwd)
         launched = json.loads(output.read_text())
-        self.assertEqual(Path(launched['cwd']), self.bundle)
+        self.assertEqual(Path(launched['cwd']).resolve(), self.bundle.resolve())
         self.assertIn('cpu', launched['argv'])
         self.assertTrue(Path(launched['temp']).is_relative_to(Path(__file__).resolve().parents[3]))
 
